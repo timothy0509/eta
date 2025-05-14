@@ -198,10 +198,9 @@
         catch (e) { return "-"; }
       }
 
-      // New function to split route number and suffix
       function formatRouteNumberForDisplay(routeStr) {
         if (!routeStr) return '<span>-</span>';
-        const match = routeStr.match(/^([A-Z]*)(\d+)([A-Z]*)$/i); // Prefix(opt) Numbers Suffix(opt)
+        const match = routeStr.match(/^([A-Z]*)(\d+)([A-Z]*)$/i); 
         if (match) {
             const prefix = match[1] || "";
             const number = match[2];
@@ -212,7 +211,6 @@
             }
             return html;
         }
-        // Fallback for routes that don't match the pattern (e.g. all letters, or unusual formats)
         return `<span class="route-main">${routeStr}</span>`;
       }
 
@@ -269,7 +267,6 @@
                 let cellIndex = 0;
                 const routeCell = row.insertCell(cellIndex++);
                 routeCell.classList.add(getRouteColorClass(firstEta.route));
-                // Use new formatting function here
                 routeCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(firstEta.route)}</span>`;
                 
                 if (showPlatformColumn) {
@@ -309,7 +306,6 @@
                     let cellIndex = 0;
                     const remarkRouteCell = row.insertCell(cellIndex++);
                     remarkRouteCell.classList.add(getRouteColorClass(remarkEta.route));
-                    // Use new formatting function here
                     remarkRouteCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(remarkEta.route)}</span>`;
                     
                     if (showPlatformColumn) {

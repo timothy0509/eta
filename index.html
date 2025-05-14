@@ -190,11 +190,10 @@
         if (route.startsWith('E') || route.startsWith('S')) return 'route-ES';
         if (route.startsWith('P')) return 'route-P';
         if (route.startsWith('N') && !(route.startsWith('NA') || route.startsWith('NE') || route.startsWith('NP'))) return 'route-N';
-        
-        const numericMatch = route.match(/^[A-Z]*(\d+)[A-Z]*$/); // Extracts only the number part
+        const numericMatch = route.match(/^[A-Z]*(\d+)[A-Z]*$/);
         if (numericMatch) {
             const coreNumericPart = numericMatch[1];
-            if (coreNumericPart.length === 3) { // Only apply to 3-digit numbers
+            if (coreNumericPart.length === 3) {
                 const firstDigit = coreNumericPart.charAt(0);
                 if (['1', '3', '6'].includes(firstDigit)) return 'route-136xx';
                 if (firstDigit === '9') return 'route-9xx';
@@ -205,45 +204,48 @@
 
       function formatEtaTime(isoTimestamp) {
         if (!isoTimestamp) return "-";
-        try { return new Date(isoTimestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }); }
+        try { 
+            return new Date(isoTimestamp).toLocaleTimeString('en-GB', { 
+                hour: '2-digit', 
+                minute: '2-digit', 
+                second: '2-digit', // Added seconds
+                hour12: false 
+            }); 
+        }
         catch (e) { return "-"; }
       }
 
+      // Route number formatting (suffix same size as main)
       function formatRouteNumberForDisplay(routeStr) {
-        if (!routeStr) return '<span>-</span>';
-        const match = routeStr.match(/^([A-Z]*)(\d+)([A-Z]*)$/i); 
-        if (match) {
-            const prefix = match[1] || "";
-            const number = match[2];
-            const suffix = match[3] || "";
-            // Suffix is now part of route-main for same font size
-            return `<span class="route-main">${prefix}${number}${suffix}</span>`;
-        }
-        return `<span class="route-main">${routeStr}</span>`;
+        if (!routeStr) return '-';
+        return routeStr; // Display as is, CSS will handle font
       }
 
-      // Helper function to extract route components for sorting
-      function getRouteComponents(routeStr) {
-          if (!routeStr) return { prefix: '', mainNumberStr: '', mainNumberVal: Infinity, suffix: '', original: '' };
-          const upperRoute = routeStr.toUpperCase();
+      // Helper function to parse route string for sorting
+      function parseRouteForSorting(routeStr) {
+        if (!routeStr) return { prefix: '', mainNumStr: '', mainNumLen: 0, suffix: '', original: '' };
+        const upperRoute = routeStr.toUpperCase();
+        const match = upperRoute.match(/^([A-Z]*)(\d*)([A-Z]*)$/);
 
-          const match = upperRoute.match(/^([A-Z]*)(\d+)([A-Z]*)$/);
-          if (match) {
-              return {
-                  prefix: match[1] || '',
-                  mainNumberStr: match[2],
-                  mainNumberVal: parseInt(match[2], 10),
-                  suffix: match[3] || '',
-                  original: routeStr
-              };
-          } else {
-              // Fallback for routes that are all letters (e.g., "XHT") or don't fit the primary pattern
-              // Treat the whole string as a prefix if all letters, or as mainNumberStr otherwise for basic sorting
-              if (/^[A-Z]+$/.test(upperRoute)) {
-                  return { prefix: upperRoute, mainNumberStr: '', mainNumberVal: Infinity, suffix: '', original: routeStr };
-              }
-              return { prefix: '', mainNumberStr: upperRoute, mainNumberVal: Infinity, suffix: '', original: routeStr };
-          }
+        let prefix = '';
+        let mainNumStr = '';
+        let suffix = '';
+
+        if (match) {
+            prefix = match[1] || '';
+            mainNumStr = match[2] || '';
+            suffix = match[3] || '';
+        } else { // Fallback if no numbers (e.g., "N")
+            prefix = upperRoute;
+        }
+        
+        return {
+            prefix: prefix,
+            mainNumStr: mainNumStr,
+            mainNumLen: mainNumStr.length,
+            suffix: suffix,
+            original: routeStr // Keep original for display if needed elsewhere
+        };
       }
 
 
@@ -289,26 +291,36 @@
             }
         });
 
+        // Sort the groups of ETAs
         const sortedEtaGroups = Object.values(processedGroupedEtas).sort((groupA, groupB) => {
+            const routeA = parseRouteForSorting(groupA.details.route);
+            const routeB = parseRouteForSorting(groupB.details.route);
+
+            // Push remark-only groups to the bottom
             const hasTimedEtasA = groupA.timedEtas.length > 0;
             const hasTimedEtasB = groupB.timedEtas.length > 0;
 
-            if (hasTimedEtasA && !hasTimedEtasB) return -1;
-            if (!hasTimedEtasA && hasTimedEtasB) return 1;
+            if (hasTimedEtasA && !hasTimedEtasB) return -1; // A comes before B
+            if (!hasTimedEtasA && hasTimedEtasB) return 1;  // B comes before A
+            // If both are remark-only or both have timed ETAs, proceed with route sorting
 
-            const routeA = getRouteComponents(groupA.details.route);
-            const routeB = getRouteComponents(groupB.details.route);
+            // 1. Prefix (empty string first, then A-Z)
+            if (routeA.prefix < routeB.prefix) return -1;
+            if (routeA.prefix > routeB.prefix) return 1;
 
-            if (routeA.prefix.localeCompare(routeB.prefix) !== 0) {
-                return routeA.prefix.localeCompare(routeB.prefix);
-            }
-            if (routeA.mainNumberStr.length !== routeB.mainNumberStr.length) {
-                return routeA.mainNumberStr.length - routeB.mainNumberStr.length;
-            }
-            if (routeA.mainNumberVal !== routeB.mainNumberVal) {
-                return routeA.mainNumberVal - routeB.mainNumberVal;
-            }
-            return routeA.suffix.localeCompare(routeB.suffix);
+            // 2. Length of main numeric part (shorter first)
+            if (routeA.mainNumLen < routeB.mainNumLen) return -1;
+            if (routeA.mainNumLen > routeB.mainNumLen) return 1;
+
+            // 3. Main numeric part itself (lexicographical for same length)
+            if (routeA.mainNumStr < routeB.mainNumStr) return -1;
+            if (routeA.mainNumStr > routeB.mainNumStr) return 1;
+            
+            // 4. Suffix (A-Z)
+            if (routeA.suffix < routeB.suffix) return -1;
+            if (routeA.suffix > routeB.suffix) return 1;
+
+            return 0; // Should be identical if all above are same
         });
 
 
@@ -342,4 +354,122 @@
                             etaDisplay += `<span class="remark-symbol">${symbol}</span>`;
                             if (!allRemarksForDisplay.has(remarkText)) { allRemarksForDisplay.set(remarkText, symbol); remarkSymbolIndex++; }
                         }
-                        td.innerHTML 
+                        td.innerHTML = etaDisplay;
+                    } else td.textContent = "-";
+                }
+                const remarksCell = row.insertCell(cellIndex++);
+                let remarksContent = "";
+                allRemarksForDisplay.forEach((symbol, text) => { remarksContent += `<p style="margin:0; padding:0;">${symbol} ${text}</p>`; });
+                remarksCell.innerHTML = remarksContent || "-";
+            }
+
+            if (group.remarksOnly.length > 0) {
+                if (timedEtas.length > 0 && group.remarksOnly.some(r => r.rmk_en || r.rmk_tc || r.rmk_sc)) { // Add separator only if there are actual remarks
+                    const sepRow = tbody.insertRow();
+                    const sepCell = sepRow.insertCell(); sepCell.colSpan = headers.length; sepCell.classList.add("eta-separator");
+                }
+                group.remarksOnly.forEach(remarkEta => {
+                    if (!(remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc)) return; // Skip if no actual remark text
+
+                    const row = tbody.insertRow(); row.classList.add("remark-only-row");
+                    let cellIndex = 0;
+                    const remarkRouteCell = row.insertCell(cellIndex++);
+                    remarkRouteCell.classList.add(getRouteColorClass(remarkEta.route));
+                    remarkRouteCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(remarkEta.route)}</span>`;
+                    
+                    if (showPlatformColumn) {
+                        const originalStopDetails = stopNameCache[remarkEta.stop];
+                        row.insertCell(cellIndex++).textContent = originalStopDetails ? parsePlatformFromStopName(originalStopDetails.name_en).platform || '-' : '-';
+                    }
+                    row.insertCell(cellIndex++).textContent = remarkEta.dest_en;
+                    row.insertCell(cellIndex++).textContent = remarkEta.dest_tc;
+                    const remarkCell = row.insertCell(cellIndex++);
+                    remarkCell.colSpan = headersBase.length - 3; 
+                    remarkCell.textContent = remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc;
+                });
+            }
+        });
+        container.appendChild(table);
+        etaResultsAreaDiv.appendChild(container);
+      }
+      
+      async function handleSearch() {
+        const stopQuery = stopNameInput.value.trim();
+        const routeFilters = routeFilterInput.value.trim().toUpperCase().split(',').filter(r => r);
+        const useSmartGrouping = smartGroupingCheckbox.checked;
+
+        if (!stopQuery) { setStatus("Please enter a bus stop name.", "error"); return; }
+        etaResultsAreaDiv.innerHTML = ""; stopSelectionAreaDiv.innerHTML = ""; 
+        setStatus("Searching...", "loading");
+
+        try {
+          const allStops = await getStopList();
+          stopNameCache = {}; 
+          allStops.forEach(s => stopNameCache[s.stop] = {name_en: s.name_en, name_tc: s.name_tc});
+          const lowerStopQuery = stopQuery.toLowerCase();
+          let matchedStops = allStops.filter(stop => 
+            (stop.name_en && stop.name_en.toLowerCase().includes(lowerStopQuery)) ||
+            (stop.name_tc && stop.name_tc.includes(stopQuery)) || 
+            (stop.name_sc && stop.name_sc.includes(stopQuery))
+          );
+          matchedStops.sort((a,b) => (a.name_en || "").localeCompare(b.name_en || ""));
+
+          if (matchedStops.length === 0) { setStatus("No stops found matching your query.", "info"); return; }
+          
+          if (useSmartGrouping) {
+            const groupedByBaseName = {};
+            matchedStops.forEach(stop => {
+                const { baseName } = parsePlatformFromStopName(stop.name_en);
+                if (!groupedByBaseName[baseName]) groupedByBaseName[baseName] = { groupName: baseName, stops: [] };
+                groupedByBaseName[baseName].stops.push(stop);
+            });
+
+            for (const groupKey in groupedByBaseName) {
+                const group = groupedByBaseName[groupKey];
+                let allEtasForGroup = [];
+                setStatus(`Fetching ETAs for group: ${group.groupName}...`, "loading");
+                for (const stop of group.stops) {
+                    let etas = await getStopEta(stop.stop);
+                    if (routeFilters.length > 0) etas = etas.filter(eta => routeFilters.includes(eta.route.toUpperCase()));
+                    etas.forEach(e => e.original_stop_id = stop.stop); 
+                    allEtasForGroup.push(...etas);
+                }
+                if (allEtasForGroup.length > 0) renderEtaTable({ groupName: group.groupName }, allEtasForGroup, true, null);
+                else if (group.stops.length > 0) renderEtaTable({ groupName: group.groupName }, [], true, null);
+            }
+          } else {
+            for (const stop of matchedStops) {
+                setStatus(`Fetching ETAs for: ${stop.name_en}...`, "loading");
+                let etasFromApi = await getStopEta(stop.stop);
+                if (routeFilters.length > 0) etasFromApi = etasFromApi.filter(eta => routeFilters.includes(eta.route.toUpperCase()));
+                renderEtaTable(stop, etasFromApi, false);
+            }
+          }
+          
+          if (etaResultsAreaDiv.innerHTML === "") setStatus("No ETA data found for your query/filters.", "info");
+          else clearStatus();
+
+        } catch (error) {
+          console.error("Search failed:", error);
+          setStatus(`Error: ${error.message}. Could not fetch data. Check console.`, "error");
+        }
+      }
+
+      searchButton.addEventListener("click", handleSearch);
+      stopNameInput.addEventListener("keypress", (event) => { if (event.key === "Enter") handleSearch(); });
+      routeFilterInput.addEventListener("keypress", (event) => { if (event.key === "Enter") handleSearch(); });
+
+      function setDarkMode(isDark) {
+        if (isDark) { document.body.classList.add('dark-mode'); localStorage.setItem('theme', 'dark'); }
+        else { document.body.classList.remove('dark-mode'); localStorage.setItem('theme', 'light'); }
+        darkModeToggle.checked = isDark;
+      }
+      darkModeToggle.addEventListener('change', (event) => { setDarkMode(event.target.checked); });
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme) { setDarkMode(savedTheme === 'dark'); }
+      else { const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; setDarkMode(prefersDark); }
+
+      setStatus("Enter a stop name to begin.", "info");
+    </script>
+  </body>
+</html>

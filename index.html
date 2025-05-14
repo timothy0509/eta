@@ -4,164 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KMB Real-Time ETA</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        margin: 0;
-        padding: 20px;
-        background-color: #f4f4f4;
-        color: #333;
-      }
-      .container {
-        max-width: 1000px;
-        margin: auto;
-        background-color: #fff;
-        padding: 20px;
-        border-radius: 8px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      h1 {
-        text-align: center;
-        color: #d71920; /* KMB Red */
-      }
-      .controls {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 15px;
-        margin-bottom: 20px;
-        align-items: flex-end;
-      }
-      .controls label {
-        display: block;
-        margin-bottom: 5px;
-        font-weight: bold;
-      }
-      .controls input[type="text"],
-      .controls input[type="checkbox"] {
-        padding: 8px;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-      }
-      .controls input[type="text"] {
-        flex-grow: 1;
-        min-width: 200px;
-      }
-      .controls button {
-        padding: 10px 15px;
-        background-color: #d71920;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 1em;
-      }
-      .controls button:hover {
-        background-color: #b8141a;
-      }
-      .grouping-control {
-        display: flex;
-        align-items: center;
-        gap: 5px;
-      }
-
-      #status-messages {
-        margin-bottom: 15px;
-        padding: 10px;
-        border-radius: 4px;
-      }
-      .status-loading {
-        background-color: #eef;
-        border: 1px solid #ccf;
-      }
-      .status-error {
-        background-color: #fee;
-        border: 1px solid #fcc;
-        color: red;
-      }
-      .status-info {
-        background-color: #eff;
-        border: 1px solid #cff;
-      }
-
-      #stop-selection-area ul {
-        list-style-type: none;
-        padding: 0;
-      }
-      #stop-selection-area li {
-        padding: 8px;
-        border-bottom: 1px solid #eee;
-        cursor: pointer;
-      }
-      #stop-selection-area li:hover {
-        background-color: #f0f0f0;
-      }
-      #stop-selection-area li:last-child {
-        border-bottom: none;
-      }
-
-      .eta-table-container {
-        margin-bottom: 25px;
-        overflow-x: auto;
-      }
-      .eta-table-container h3 {
-        margin-top: 0;
-        color: #555;
-      }
-      table.eta-results {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.9em;
-        margin-bottom: 10px;
-      }
-      table.eta-results th,
-      table.eta-results td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        text-align: left;
-        white-space: nowrap;
-      }
-      table.eta-results th {
-        background-color: #f0f0f0;
-      }
-      .scheduled-eta {
-        color: grey;
-      }
-      .remark-symbol {
-        font-weight: bold;
-        margin-left: 2px;
-      }
-      .remark-only-row td {
-        text-align: center !important;
-        font-style: italic;
-        color: #555;
-      }
-      .eta-separator td {
-        border-top: 2px dotted #ccc !important;
-        height: 0;
-        padding: 0 !important;
-        line-height: 0;
-      }
-
-      /* Route Colors - Add more as needed */
-      .route-N { color: #000080; font-weight: bold; } /* Navy for N-routes */
-      .route-1xx, .route-3xx, .route-6xx { color: #800000; } /* Maroon for 1/3/6xx */
-      .route-9xx { color: #006400; } /* DarkGreen for 9xx */
-      .route-P { color: #800080; } /* Purple for P-routes */
-      .route-R { color: #ff8c00; } /* DarkOrange for R-routes */
-      .route-HK { color: #228B22; } /* ForestGreen for HK-routes */
-      .route-A, .route-E { color: #4682B4; } /* SteelBlue for Airport routes */
-      .route-default { color: #333; }
-
-      #legend {
-        margin-top: 20px;
-        padding: 10px;
-        background-color: #f9f9f9;
-        border: 1px solid #eee;
-        border-radius: 4px;
-        font-size: 0.9em;
-      }
-      #legend p { margin: 5px 0; }
-    </style>
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <div class="container">
@@ -193,14 +36,14 @@
 
       <div id="status-messages"></div>
       <div id="stop-selection-area">
-        <!-- Matching stops will be listed here if multiple -->
+        <!-- Matching stops will be listed here if multiple (though less used now) -->
       </div>
       <div id="eta-results-area">
         <!-- ETA tables will be rendered here -->
       </div>
       <div id="legend">
         <p><strong>Legend:</strong></p>
-        <p><span class="scheduled-eta">Grey Text</span>: Scheduled Bus</p>
+        <p><span class="scheduled-eta">Grey Text / Italic</span>: Scheduled Bus</p>
         <p>
           <span>*, !, ^</span>: See "Remarks" column for details.
         </p>
@@ -224,7 +67,7 @@
       const smartGroupingCheckbox = document.getElementById("smart-grouping-checkbox");
       const searchButton = document.getElementById("search-button");
       const statusMessagesDiv = document.getElementById("status-messages");
-      const stopSelectionAreaDiv = document.getElementById("stop-selection-area"); // Kept for potential future use or different scenarios
+      const stopSelectionAreaDiv = document.getElementById("stop-selection-area");
       const etaResultsAreaDiv = document.getElementById("eta-results-area");
       
       let stopNameCache = {}; // To resolve stop names for platform display in grouped ETAs
@@ -287,7 +130,6 @@
         let cached = loadFromCache(STOP_CACHE_KEY);
         if (cached && isCacheValid(cached)) {
           console.log("Using cached stop list.");
-          // Ensure cache is processed if it wasn't already
           return Array.isArray(cached.data) ? cached.data.map(entry => entry.name_en ? entry : processStopRouteEntry(entry)) : [];
         }
         console.log("Fetching fresh stop list.");
@@ -367,10 +209,22 @@
         statusMessagesDiv.textContent = message;
         statusMessagesDiv.className = `status-${type}`;
         statusMessagesDiv.style.display = "block";
+        setTimeout(() => {
+            statusMessagesDiv.classList.add("status-visible");
+        }, 10);
       }
+
       function clearStatus() {
-        statusMessagesDiv.textContent = "";
-        statusMessagesDiv.style.display = "none";
+        statusMessagesDiv.classList.remove("status-visible");
+        // Set a timeout to hide the element after the animation,
+        // but only if another status message hasn't immediately replaced it.
+        const currentMessage = statusMessagesDiv.textContent;
+        setTimeout(() => {
+            if (statusMessagesDiv.textContent === currentMessage && !statusMessagesDiv.classList.contains("status-visible")) {
+                statusMessagesDiv.textContent = "";
+                statusMessagesDiv.style.display = "none";
+            }
+        }, 300); // Match CSS animation duration
       }
       
       function getRouteColorClass(route) {
@@ -421,9 +275,8 @@
         const thead = table.createTHead();
         const headerRow = thead.insertRow();
         const headersBase = ["Rt.", "Dest(EN)", "目的地", "ETA 1", "ETA 2", "ETA 3", "Remarks"];
-        let headers = [...headersBase]; // Make a copy
+        let headers = [...headersBase]; 
         
-        // Add "Plat." column if it's a grouped view and we are not showing a specific platform in the title
         const showPlatformColumn = isGrouped && !platformForTitle;
         if (showPlatformColumn) {
             headers.splice(1, 0, "Plat.");
@@ -477,7 +330,7 @@
                 row.insertCell(cellIndex++).innerHTML = `<span class="${getRouteColorClass(firstEta.route)}">${firstEta.route}</span>`;
                 
                 if (showPlatformColumn) {
-                    const originalStopDetails = stopNameCache[firstEta.stop]; // 'stop' here is the stop_id from ETA
+                    const originalStopDetails = stopNameCache[firstEta.stop]; 
                     row.insertCell(cellIndex++).textContent = originalStopDetails ? parsePlatformFromStopName(originalStopDetails.name_en).platform || '-' : '-';
                 }
 
@@ -535,8 +388,7 @@
                     row.insertCell(cellIndex++).textContent = remarkEta.dest_tc;
                     
                     const remarkCell = row.insertCell(cellIndex++);
-                    // Calculate colspan correctly based on whether platform column is shown
-                    remarkCell.colSpan = headersBase.length - 3; // 3 fixed columns before ETAs (Rt, DestEN, DestTC)
+                    remarkCell.colSpan = headersBase.length - 3; 
                     remarkCell.textContent = remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc;
                 });
             }
@@ -598,6 +450,7 @@
             for (const groupKey in groupedByBaseName) {
                 const group = groupedByBaseName[groupKey];
                 let allEtasForGroup = [];
+                setStatus(`Fetching ETAs for group: ${group.groupName}...`, "loading");
                 for (const stop of group.stops) {
                     let etas = await getStopEta(stop.stop);
                     if (routeFilters.length > 0) {
@@ -606,20 +459,26 @@
                     etas.forEach(e => e.original_stop_id = stop.stop); 
                     allEtasForGroup.push(...etas);
                 }
+                clearStatus();
                 if (allEtasForGroup.length > 0) {
                     renderEtaTable({ groupName: group.groupName }, allEtasForGroup, true, null);
-                } else if (group.stops.length > 0) {
+                } else if (group.stops.length > 0) { // Still render table container if group existed but no ETAs
                      renderEtaTable({ groupName: group.groupName }, [], true, null);
                 }
             }
           } else { // No smart grouping - display all matched stops directly
             for (const stop of matchedStops) {
+                setStatus(`Fetching ETAs for: ${stop.name_en}...`, "loading");
                 let etasFromApi = await getStopEta(stop.stop);
+                clearStatus();
                 if (routeFilters.length > 0) {
                     etasFromApi = etasFromApi.filter(eta => routeFilters.includes(eta.route.toUpperCase()));
                 }
                 renderEtaTable(stop, etasFromApi, false);
             }
+          }
+          if (etaResultsAreaDiv.innerHTML === "") { // If after all processing, no tables were rendered
+            setStatus("No ETA data found for your query/filters.", "info");
           }
 
         } catch (error) {
@@ -642,6 +501,5 @@
 
       setStatus("Enter a stop name to begin.", "info");
     </script>
-
   </body>
 </html>

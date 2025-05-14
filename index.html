@@ -8,7 +8,16 @@
   </head>
   <body>
     <div class="container">
-      <h1>KMB Real-Time Bus ETA</h1>
+      <div class="header-controls">
+        <h1>KMB Real-Time Bus ETA</h1>
+        <div class="theme-switch-wrapper">
+          <label class="theme-switch" for="darkModeToggle">
+            <input type="checkbox" id="darkModeToggle" />
+            <span class="slider round"></span>
+          </label>
+          <span class="theme-label">Dark Mode</span>
+        </div>
+      </div>
 
       <div class="controls">
         <div>
@@ -66,6 +75,7 @@
       const statusMessagesDiv = document.getElementById("status-messages");
       const stopSelectionAreaDiv = document.getElementById("stop-selection-area");
       const etaResultsAreaDiv = document.getElementById("eta-results-area");
+      const darkModeToggle = document.getElementById('darkModeToggle');
       
       let stopNameCache = {};
 
@@ -176,19 +186,30 @@
       function getRouteColorClass(routeStr) {
         if (!routeStr) return 'route-normal';
         const route = routeStr.toUpperCase();
+
+        // Prefix-based rules take precedence
         if (route.startsWith('A')) return 'route-A';
-        if (route.startsWith('E') || route.startsWith('S')) return 'route-ES';
+        if (route.startsWith('E') || route.startsWith('S')) return 'route-ES'; // E and S share a style
         if (route.startsWith('P')) return 'route-P';
-        if (route.startsWith('N') && !(route.startsWith('NA') || route.startsWith('NE') || route.startsWith('NP'))) return 'route-N';
-        const numericPartMatch = route.match(/[A-Z]*(\d+[A-Z]*)/);
-        if (numericPartMatch) {
-            const numericString = numericPartMatch[1].replace(/[A-Z]+$/, '');
-            if (numericString.length > 0) {
-                const firstDigit = numericString.charAt(0);
+        // N routes, but ensure it's not part of a higher precedence prefix like NA, NE, NP
+        if (route.startsWith('N') && !(route.startsWith('NA') || route.startsWith('NE') || route.startsWith('NP'))) {
+             return 'route-N';
+        }
+        
+        // Digit-based rules for 3-digit numbers (hundreds digit)
+        // Extract the purely numeric part first.
+        // Regex: Optional leading letters, then digits, then optional trailing letters.
+        // We want the digits in the middle.
+        const numericMatch = route.match(/^[A-Z]*(\d+)[A-Z]*$/);
+        if (numericMatch) {
+            const coreNumericPart = numericMatch[1]; // This is the string of digits
+            if (coreNumericPart.length === 3) { // Only apply to 3-digit numbers
+                const firstDigit = coreNumericPart.charAt(0);
                 if (['1', '3', '6'].includes(firstDigit)) return 'route-136xx';
                 if (firstDigit === '9') return 'route-9xx';
             }
         }
+        // If none of the above specific rules match, it's a normal route.
         return 'route-normal';
       }
 
@@ -200,6 +221,7 @@
 
       function formatRouteNumberForDisplay(routeStr) {
         if (!routeStr) return '<span>-</span>';
+        // Match: Optional leading letters, then digits, then optional trailing letters
         const match = routeStr.match(/^([A-Z]*)(\d+)([A-Z]*)$/i); 
         if (match) {
             const prefix = match[1] || "";
@@ -211,6 +233,7 @@
             }
             return html;
         }
+        // Fallback for routes that don't match the pattern (e.g. all letters, or unusual formats)
         return `<span class="route-main">${routeStr}</span>`;
       }
 
@@ -389,6 +412,32 @@
       searchButton.addEventListener("click", handleSearch);
       stopNameInput.addEventListener("keypress", (event) => { if (event.key === "Enter") handleSearch(); });
       routeFilterInput.addEventListener("keypress", (event) => { if (event.key === "Enter") handleSearch(); });
+
+      // Dark Mode Toggle Logic
+      function setDarkMode(isDark) {
+        if (isDark) {
+            document.body.classList.add('dark-mode');
+            localStorage.setItem('theme', 'dark');
+        } else {
+            document.body.classList.remove('dark-mode');
+            localStorage.setItem('theme', 'light');
+        }
+        darkModeToggle.checked = isDark;
+      }
+
+      darkModeToggle.addEventListener('change', (event) => {
+        setDarkMode(event.target.checked);
+      });
+
+      // Check for saved theme preference or system preference
+      const savedTheme = localStorage.getItem('theme');
+      if (savedTheme) {
+        setDarkMode(savedTheme === 'dark');
+      } else {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setDarkMode(prefersDark);
+      }
+      // End Dark Mode Toggle Logic
 
       setStatus("Enter a stop name to begin.", "info");
     </script>

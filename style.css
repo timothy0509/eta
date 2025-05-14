@@ -3,7 +3,7 @@
 
 :root {
   --primary-color: #007bff;
-  --primary-color-dark-hover: #0056b3; /* For button hover */
+  --primary-color-dark-hover: #0056b3;
   --kmb-red: #d71920;
   
   /* Light Mode Variables */
@@ -26,10 +26,9 @@
   --legend-bg-dark: #2a2a2a;
   --shadow-color-dark: rgba(0, 0, 0, 0.3);
 
-  /* Universal Status Colors (adjust if needed for dark mode contrast) */
   --success-color: #d1e7dd;
   --success-border-color: #a3cfbb;
-  --success-text-color: #0f5132; /* Darker text for light bg */
+  --success-text-color: #0f5132;
   --info-color: #cff4fc;
   --info-border-color: #9eeaf9;
   --info-text-color: #055160;
@@ -45,11 +44,10 @@
   --animation-duration: 0.3s;
   --animation-timing-function: ease-in-out;
 
-  /* Route Colors (Light Mode Defaults) */
   --route-red-bg: #d71920;
   --route-green-bg: #28a745;
   --route-dark-blue-bg: #003366;
-  --route-yellow-text: #b38600; /* Darkened yellow for better contrast on light blue */
+  --route-yellow-text: #b38600; 
   --route-orange-bg: #fd7e14;
   --route-rose-gold-bg: #b76e79;
   --route-black-bg: #212529;
@@ -58,7 +56,6 @@
   --route-normal-bg: #e9ecef;
   --route-tag-base-font-size: 0.9em;
 
-  /* Default to light mode variables */
   --background-color: var(--background-color-light);
   --surface-color: var(--surface-color-light);
   --on-surface-color: var(--on-surface-color-light);
@@ -79,16 +76,14 @@ body.dark-mode {
   --legend-bg: var(--legend-bg-dark);
   --shadow-color: var(--shadow-color-dark);
 
-  /* Route Tag Dark Mode Adjustments */
   --route-normal-text: var(--on-surface-color-dark);
   --route-normal-bg: #333333;
-  --route-red-bg: #c62828; /* Slightly desaturated/darker red */
-  --route-green-bg: #1b5e20; /* Darker green */
-  --route-dark-blue-bg: #0d47a1; /* Slightly lighter dark blue for contrast */
-  --route-yellow-text: #ffee58; /* Brighter yellow for dark bg */
-  --route-orange-bg: #e65100; /* Darker orange */
-  --route-rose-gold-bg: #8c535d; /* Darker rose gold */
-  /* N-Route (black bg, white text) is fine for dark mode */
+  --route-red-bg: #c62828;
+  --route-green-bg: #1b5e20;
+  --route-dark-blue-bg: #0d47a1;
+  --route-yellow-text: #ffee58;
+  --route-orange-bg: #e65100;
+  --route-rose-gold-bg: #8c535d;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -98,7 +93,6 @@ body { font-family: "Roboto", sans-serif; background-color: var(--background-col
 .header-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 h1 { text-align: left; color: var(--kmb-red); margin-bottom: 0; font-weight: 500; flex-grow: 1; }
 
-/* Dark Mode Toggle Switch */
 .theme-switch-wrapper { display: flex; align-items: center; }
 .theme-label { margin-left: 8px; font-size: 0.9em; color: var(--on-surface-variant-color); }
 .theme-switch { position: relative; display: inline-block; width: 50px; height: 24px; }
@@ -147,13 +141,26 @@ table.eta-results tr:hover td { background-color: var(--table-row-hover); transi
 .remark-only-row td { text-align: left !important; font-style: italic; color: var(--on-surface-variant-color); padding-top: 15px !important; padding-bottom: 15px !important; }
 .eta-separator td { border-top: 2px dashed var(--outline-color) !important; height: 0; padding: 0 !important; line-height: 0; transition: border-color var(--animation-duration); }
 
-/* Route Tag Styling */
-td span.route-tag { display: inline-flex; align-items: flex-end; padding: 3px 7px; border-radius: var(--border-radius-small); font-weight: bold; line-height: 1; text-align: center; min-width: 40px; box-shadow: 0 1px 1px var(--shadow-color); vertical-align: middle; font-family: Arial, sans-serif; font-size: var(--route-tag-base-font-size); white-space: nowrap; transition: background-color var(--animation-duration), color var(--animation-duration), box-shadow var(--animation-duration); }
-span.route-tag .route-main { font-size: 1em; line-height: 1; display: inline-block; }
-span.route-tag .route-suffix { font-size: 0.6667em; margin-left: 1px; font-weight: normal; line-height: 1; display: inline-block; }
+/* Route Tag Styling - Suffix same size as main */
+td span.route-tag {
+  display: inline-block; /* Simpler display */
+  padding: 3px 7px;
+  border-radius: var(--border-radius-small);
+  font-weight: bold;
+  line-height: 1.3; /* Adjusted for better vertical centering */
+  text-align: center;
+  min-width: 40px;
+  box-shadow: 0 1px 1px var(--shadow-color);
+  vertical-align: middle;
+  font-family: Arial, sans-serif;
+  font-size: var(--route-tag-base-font-size);
+  white-space: nowrap;
+  transition: background-color var(--animation-duration), color var(--animation-duration), box-shadow var(--animation-duration);
+}
+/* No need for .route-main and .route-suffix specific font size styles anymore */
 
 td.route-normal span.route-tag { color: var(--route-normal-text); background-color: var(--route-normal-bg); }
-td.route-N span.route-tag { color: var(--route-white-text); background-color: var(--route-black-bg); } /* Black bg, white text is fine for dark mode */
+td.route-N span.route-tag { color: var(--route-white-text); background-color: var(--route-black-bg); }
 td.route-136xx span.route-tag { color: var(--route-white-text); background-color: var(--route-red-bg); }
 td.route-9xx span.route-tag { color: var(--route-white-text); background-color: var(--route-green-bg); }
 td.route-A span.route-tag { color: var(--route-yellow-text); background-color: var(--route-dark-blue-bg); }
@@ -168,7 +175,7 @@ td.route-P span.route-tag { color: var(--route-white-text); background-color: va
   .container { margin: 10px; padding: 15px 20px; }
   .header-controls { flex-direction: column; align-items: flex-start; gap: 10px; }
   h1 { margin-bottom: 10px; }
-  .theme-switch-wrapper { position: static; /* Revert absolute positioning */ margin-bottom: 15px; }
+  .theme-switch-wrapper { margin-bottom: 15px; }
   .controls { flex-direction: column; align-items: stretch; }
   .controls button { width: 100%; }
   .grouping-control { justify-content: flex-start; padding-bottom: 0; }

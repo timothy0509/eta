@@ -186,30 +186,20 @@
       function getRouteColorClass(routeStr) {
         if (!routeStr) return 'route-normal';
         const route = routeStr.toUpperCase();
-
-        // Prefix-based rules take precedence
         if (route.startsWith('A')) return 'route-A';
-        if (route.startsWith('E') || route.startsWith('S')) return 'route-ES'; // E and S share a style
+        if (route.startsWith('E') || route.startsWith('S')) return 'route-ES';
         if (route.startsWith('P')) return 'route-P';
-        // N routes, but ensure it's not part of a higher precedence prefix like NA, NE, NP
-        if (route.startsWith('N') && !(route.startsWith('NA') || route.startsWith('NE') || route.startsWith('NP'))) {
-             return 'route-N';
-        }
+        if (route.startsWith('N') && !(route.startsWith('NA') || route.startsWith('NE') || route.startsWith('NP'))) return 'route-N';
         
-        // Digit-based rules for 3-digit numbers (hundreds digit)
-        // Extract the purely numeric part first.
-        // Regex: Optional leading letters, then digits, then optional trailing letters.
-        // We want the digits in the middle.
-        const numericMatch = route.match(/^[A-Z]*(\d+)[A-Z]*$/);
+        const numericMatch = route.match(/^[A-Z]*(\d+)[A-Z]*$/); // Extracts only the number part
         if (numericMatch) {
-            const coreNumericPart = numericMatch[1]; // This is the string of digits
+            const coreNumericPart = numericMatch[1];
             if (coreNumericPart.length === 3) { // Only apply to 3-digit numbers
                 const firstDigit = coreNumericPart.charAt(0);
                 if (['1', '3', '6'].includes(firstDigit)) return 'route-136xx';
                 if (firstDigit === '9') return 'route-9xx';
             }
         }
-        // If none of the above specific rules match, it's a normal route.
         return 'route-normal';
       }
 
@@ -221,20 +211,39 @@
 
       function formatRouteNumberForDisplay(routeStr) {
         if (!routeStr) return '<span>-</span>';
-        // Match: Optional leading letters, then digits, then optional trailing letters
         const match = routeStr.match(/^([A-Z]*)(\d+)([A-Z]*)$/i); 
         if (match) {
             const prefix = match[1] || "";
             const number = match[2];
             const suffix = match[3] || "";
-            let html = `<span class="route-main">${prefix}${number}</span>`;
-            if (suffix) {
-                html += `<span class="route-suffix">${suffix}</span>`;
-            }
-            return html;
+            // Suffix is now part of route-main for same font size
+            return `<span class="route-main">${prefix}${number}${suffix}</span>`;
         }
-        // Fallback for routes that don't match the pattern (e.g. all letters, or unusual formats)
         return `<span class="route-main">${routeStr}</span>`;
+      }
+
+      // Helper function to extract route components for sorting
+      function getRouteComponents(routeStr) {
+          if (!routeStr) return { prefix: '', mainNumberStr: '', mainNumberVal: Infinity, suffix: '', original: '' };
+          const upperRoute = routeStr.toUpperCase();
+
+          const match = upperRoute.match(/^([A-Z]*)(\d+)([A-Z]*)$/);
+          if (match) {
+              return {
+                  prefix: match[1] || '',
+                  mainNumberStr: match[2],
+                  mainNumberVal: parseInt(match[2], 10),
+                  suffix: match[3] || '',
+                  original: routeStr
+              };
+          } else {
+              // Fallback for routes that are all letters (e.g., "XHT") or don't fit the primary pattern
+              // Treat the whole string as a prefix if all letters, or as mainNumberStr otherwise for basic sorting
+              if (/^[A-Z]+$/.test(upperRoute)) {
+                  return { prefix: upperRoute, mainNumberStr: '', mainNumberVal: Infinity, suffix: '', original: routeStr };
+              }
+              return { prefix: '', mainNumberStr: upperRoute, mainNumberVal: Infinity, suffix: '', original: routeStr };
+          }
       }
 
 
@@ -280,7 +289,30 @@
             }
         });
 
-        Object.values(processedGroupedEtas).forEach(group => {
+        const sortedEtaGroups = Object.values(processedGroupedEtas).sort((groupA, groupB) => {
+            const hasTimedEtasA = groupA.timedEtas.length > 0;
+            const hasTimedEtasB = groupB.timedEtas.length > 0;
+
+            if (hasTimedEtasA && !hasTimedEtasB) return -1;
+            if (!hasTimedEtasA && hasTimedEtasB) return 1;
+
+            const routeA = getRouteComponents(groupA.details.route);
+            const routeB = getRouteComponents(groupB.details.route);
+
+            if (routeA.prefix.localeCompare(routeB.prefix) !== 0) {
+                return routeA.prefix.localeCompare(routeB.prefix);
+            }
+            if (routeA.mainNumberStr.length !== routeB.mainNumberStr.length) {
+                return routeA.mainNumberStr.length - routeB.mainNumberStr.length;
+            }
+            if (routeA.mainNumberVal !== routeB.mainNumberVal) {
+                return routeA.mainNumberVal - routeB.mainNumberVal;
+            }
+            return routeA.suffix.localeCompare(routeB.suffix);
+        });
+
+
+        sortedEtaGroups.forEach(group => { // Iterate over sorted groups
             const timedEtas = group.timedEtas.sort((a, b) => a.eta_seq - b.eta_seq).slice(0, 3);
             const allRemarksForDisplay = new Map();
 
@@ -310,136 +342,4 @@
                             etaDisplay += `<span class="remark-symbol">${symbol}</span>`;
                             if (!allRemarksForDisplay.has(remarkText)) { allRemarksForDisplay.set(remarkText, symbol); remarkSymbolIndex++; }
                         }
-                        td.innerHTML = etaDisplay;
-                    } else td.textContent = "-";
-                }
-                const remarksCell = row.insertCell(cellIndex++);
-                let remarksContent = "";
-                allRemarksForDisplay.forEach((symbol, text) => { remarksContent += `<p style="margin:0; padding:0;">${symbol} ${text}</p>`; });
-                remarksCell.innerHTML = remarksContent || "-";
-            }
-
-            if (group.remarksOnly.length > 0) {
-                if (timedEtas.length > 0) {
-                    const sepRow = tbody.insertRow();
-                    const sepCell = sepRow.insertCell(); sepCell.colSpan = headers.length; sepCell.classList.add("eta-separator");
-                }
-                group.remarksOnly.forEach(remarkEta => {
-                    const row = tbody.insertRow(); row.classList.add("remark-only-row");
-                    let cellIndex = 0;
-                    const remarkRouteCell = row.insertCell(cellIndex++);
-                    remarkRouteCell.classList.add(getRouteColorClass(remarkEta.route));
-                    remarkRouteCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(remarkEta.route)}</span>`;
-                    
-                    if (showPlatformColumn) {
-                        const originalStopDetails = stopNameCache[remarkEta.stop];
-                        row.insertCell(cellIndex++).textContent = originalStopDetails ? parsePlatformFromStopName(originalStopDetails.name_en).platform || '-' : '-';
-                    }
-                    row.insertCell(cellIndex++).textContent = remarkEta.dest_en;
-                    row.insertCell(cellIndex++).textContent = remarkEta.dest_tc;
-                    const remarkCell = row.insertCell(cellIndex++);
-                    remarkCell.colSpan = headersBase.length - 3; 
-                    remarkCell.textContent = remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc;
-                });
-            }
-        });
-        container.appendChild(table);
-        etaResultsAreaDiv.appendChild(container);
-      }
-      
-      async function handleSearch() {
-        const stopQuery = stopNameInput.value.trim();
-        const routeFilters = routeFilterInput.value.trim().toUpperCase().split(',').filter(r => r);
-        const useSmartGrouping = smartGroupingCheckbox.checked;
-
-        if (!stopQuery) { setStatus("Please enter a bus stop name.", "error"); return; }
-        etaResultsAreaDiv.innerHTML = ""; stopSelectionAreaDiv.innerHTML = ""; 
-        setStatus("Searching...", "loading");
-
-        try {
-          const allStops = await getStopList();
-          stopNameCache = {}; 
-          allStops.forEach(s => stopNameCache[s.stop] = {name_en: s.name_en, name_tc: s.name_tc});
-          const lowerStopQuery = stopQuery.toLowerCase();
-          let matchedStops = allStops.filter(stop => 
-            (stop.name_en && stop.name_en.toLowerCase().includes(lowerStopQuery)) ||
-            (stop.name_tc && stop.name_tc.includes(stopQuery)) || 
-            (stop.name_sc && stop.name_sc.includes(stopQuery))
-          );
-          matchedStops.sort((a,b) => (a.name_en || "").localeCompare(b.name_en || ""));
-
-          if (matchedStops.length === 0) { setStatus("No stops found matching your query.", "info"); return; }
-          
-          if (useSmartGrouping) {
-            const groupedByBaseName = {};
-            matchedStops.forEach(stop => {
-                const { baseName } = parsePlatformFromStopName(stop.name_en);
-                if (!groupedByBaseName[baseName]) groupedByBaseName[baseName] = { groupName: baseName, stops: [] };
-                groupedByBaseName[baseName].stops.push(stop);
-            });
-
-            for (const groupKey in groupedByBaseName) {
-                const group = groupedByBaseName[groupKey];
-                let allEtasForGroup = [];
-                setStatus(`Fetching ETAs for group: ${group.groupName}...`, "loading");
-                for (const stop of group.stops) {
-                    let etas = await getStopEta(stop.stop);
-                    if (routeFilters.length > 0) etas = etas.filter(eta => routeFilters.includes(eta.route.toUpperCase()));
-                    etas.forEach(e => e.original_stop_id = stop.stop); 
-                    allEtasForGroup.push(...etas);
-                }
-                if (allEtasForGroup.length > 0) renderEtaTable({ groupName: group.groupName }, allEtasForGroup, true, null);
-                else if (group.stops.length > 0) renderEtaTable({ groupName: group.groupName }, [], true, null);
-            }
-          } else {
-            for (const stop of matchedStops) {
-                setStatus(`Fetching ETAs for: ${stop.name_en}...`, "loading");
-                let etasFromApi = await getStopEta(stop.stop);
-                if (routeFilters.length > 0) etasFromApi = etasFromApi.filter(eta => routeFilters.includes(eta.route.toUpperCase()));
-                renderEtaTable(stop, etasFromApi, false);
-            }
-          }
-          
-          if (etaResultsAreaDiv.innerHTML === "") setStatus("No ETA data found for your query/filters.", "info");
-          else clearStatus();
-
-        } catch (error) {
-          console.error("Search failed:", error);
-          setStatus(`Error: ${error.message}. Could not fetch data. Check console.`, "error");
-        }
-      }
-
-      searchButton.addEventListener("click", handleSearch);
-      stopNameInput.addEventListener("keypress", (event) => { if (event.key === "Enter") handleSearch(); });
-      routeFilterInput.addEventListener("keypress", (event) => { if (event.key === "Enter") handleSearch(); });
-
-      // Dark Mode Toggle Logic
-      function setDarkMode(isDark) {
-        if (isDark) {
-            document.body.classList.add('dark-mode');
-            localStorage.setItem('theme', 'dark');
-        } else {
-            document.body.classList.remove('dark-mode');
-            localStorage.setItem('theme', 'light');
-        }
-        darkModeToggle.checked = isDark;
-      }
-
-      darkModeToggle.addEventListener('change', (event) => {
-        setDarkMode(event.target.checked);
-      });
-
-      // Check for saved theme preference or system preference
-      const savedTheme = localStorage.getItem('theme');
-      if (savedTheme) {
-        setDarkMode(savedTheme === 'dark');
-      } else {
-        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-        setDarkMode(prefersDark);
-      }
-      // End Dark Mode Toggle Logic
-
-      setStatus("Enter a stop name to begin.", "info");
-    </script>
-  </body>
-</html>
+                        td.innerHTML 

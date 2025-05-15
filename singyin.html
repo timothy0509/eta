@@ -4,19 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pak Hung House - KMB ETA</title>
-    <link rel="stylesheet" href="style.css" /> <!-- Link to your existing style.css -->
+    <link rel="stylesheet" href="style.css" />
   </head>
-  <body class="dark-mode"> <!-- Always dark mode -->
+  <body class="dark-mode">
     <div class="container">
       <div class="header-controls">
         <h1>Pak Hung House - Bus ETA</h1>
-        <!-- Dark mode toggle removed -->
       </div>
 
       <div id="status-messages"></div>
-      <!-- Input controls removed -->
       <div id="eta-results-area">
-        <!-- ETA tables will be rendered here -->
       </div>
       <div id="legend">
         <p><strong>Legend:</strong></p>
@@ -29,16 +26,19 @@
     </div>
 
     <script>
+      // --- PASTE THE ENTIRE JAVASCRIPT FROM THE PREVIOUS `singyin.html` HERE ---
+      // It's the script block starting with:
+      // const API_BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb";
+      // ... and ending with ...
+      // document.addEventListener('DOMContentLoaded', loadSingYinEtas);
+      // -----------------------------------------------------------------------
       const API_BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb";
-      // Caching for stop list is still useful if you want to get full stop names
-      const STOP_CACHE_KEY = "kmb_stop_data_cache_singyin"; // Use a different key if needed
+      const STOP_CACHE_KEY = "kmb_stop_data_cache_singyin";
       const CACHE_EXPIRY_HOURS = 23;
-
 
       const statusMessagesDiv = document.getElementById("status-messages");
       const etaResultsAreaDiv = document.getElementById("eta-results-area");
       
-      // This will store full stop details (name_en, name_tc) if fetched
       let fullStopDetailsCache = {}; 
 
       const predefinedStopGroups = [
@@ -101,7 +101,6 @@
         }
       }
       
-      // Function to fetch the full stop list to get names (optional, but good for consistency)
       async function getFullStopList() {
         let cached = loadFromCache(STOP_CACHE_KEY);
         if (cached && isCacheValid(cached)) {
@@ -114,18 +113,16 @@
             const data = await fetchData(`${API_BASE_URL}/stop`);
             if (data && data.data) {
                 data.data.forEach(stop => fullStopDetailsCache[stop.stop] = {
-                    name_en: processName(stop.name_en), // Process names
+                    name_en: processName(stop.name_en),
                     name_tc: stop.name_tc 
                 });
-                saveToCache(STOP_CACHE_KEY, data.data); // Cache the raw data
+                saveToCache(STOP_CACHE_KEY, data.data);
                 console.log("Full stop list processed and cached for names.");
             }
         } catch (error) {
             console.error("Could not fetch full stop list for names:", error);
-            // Continue without full names if this fails, platform codes will still be used.
         }
       }
-
 
       async function getStopEta(stopId) {
         console.log(`Fetching ETA for stop ID: ${stopId}`);
@@ -134,24 +131,19 @@
             console.warn(`No ETA data received for stop ${stopId} or data.data is missing. Returning empty array.`);
             return [];
         }
-        // Process destination names if needed
         return data.data.map(eta => ({...eta, dest_en: processName(eta.dest_en)}));
       }
       
-      // Name processing (can be simplified if not fetching full stop list)
       function processName(name) {
         if (!name) return "";
-        // Basic processing, can be expanded if needed
         return name.replace(/(BBI)-/gi, "$1 - ").replace(/(轉車站)-/g, "$1 - ");
       }
-
 
       function setStatus(message, type = "info") {
         console.log(`UI Status: [${type}] ${message}`);
         statusMessagesDiv.textContent = message;
-        statusMessagesDiv.className = `status-${type}`; // Applies CSS class for styling
+        statusMessagesDiv.className = `status-${type}`;
         statusMessagesDiv.style.display = "block";
-        // Add class for animation trigger
         setTimeout(() => {
             statusMessagesDiv.classList.add("status-visible");
         }, 10);
@@ -166,7 +158,7 @@
                 statusMessagesDiv.textContent = "";
                 statusMessagesDiv.style.display = "none";
             }
-        }, 300); // Match CSS animation duration
+        }, 300);
       }
       
       function getRouteColorClass(routeStr) {
@@ -213,7 +205,7 @@
         let prefix = '', mainNumStr = '', suffix = '';
         if (match) { prefix = match[1] || ''; mainNumStr = match[2] || ''; suffix = match[3] || ''; }
         else { prefix = upperRoute; }
-        return { prefix: prefix, mainNumStr: mainNumStr, mainNumLen: mainNumStr.length, suffix: suffix, original: routeStr };
+        return { prefix: prefix, mainNumStr: mainNumStr, mainNumLen: mainNumLen.length, suffix: suffix, original: routeStr };
       }
 
       function renderEtaTable(groupDisplayName, etasFromApi, stopPlatformMap) {
@@ -236,7 +228,6 @@
         table.className = "eta-results";
         const thead = table.createTHead();
         const headerRow = thead.insertRow();
-        // Always include "Plat." column for this specific page
         const headersBase = ["Rt.", "Plat.", "Dest(EN)", "目的地", "ETA 1", "ETA 2", "ETA 3", "Remarks"];
         headersBase.forEach(text => { const th = document.createElement("th"); th.textContent = text; headerRow.appendChild(th); });
         
@@ -247,22 +238,12 @@
         const committedServiceTypes = {};
 
         etasFromApi.forEach(eta => {
-            // Key for grouping ETAs for the same bus arrival (route, dir, dest)
-            // Service type is handled to pick the first one providing data
             const primaryKey = `${eta.route}-${eta.dir}-${eta.dest_en}-${eta.dest_tc}`;
             if (!committedServiceTypes[primaryKey]) committedServiceTypes[primaryKey] = eta.service_type;
-            
             if (eta.service_type === committedServiceTypes[primaryKey]) {
-                // Use a slightly different key for processedGroupedEtas if we want to show platform per ETA line
-                // For now, we assume an ETA entry is unique enough by its primaryKey + stop_id for platform mapping
-                const displayKey = `${primaryKey}-${eta.stop}`; // Include stop_id for platform mapping
-
+                const displayKey = `${primaryKey}-${eta.stop}`;
                 if (!processedGroupedEtas[displayKey]) {
-                     processedGroupedEtas[displayKey] = { 
-                        details: { ...eta }, // Includes eta.stop for platform lookup
-                        timedEtas: [], 
-                        remarksOnly: [] 
-                    };
+                     processedGroupedEtas[displayKey] = { details: { ...eta }, timedEtas: [], remarksOnly: []  };
                 }
                 if (eta.eta) processedGroupedEtas[displayKey].timedEtas.push(eta);
                 else if (eta.rmk_en || eta.rmk_tc || eta.rmk_sc) processedGroupedEtas[displayKey].remarksOnly.push(eta);
@@ -280,7 +261,6 @@
             if (routeA.mainNumLen < routeB.mainNumLen) return -1; if (routeA.mainNumLen > routeB.mainNumLen) return 1;
             if (routeA.mainNumStr < routeB.mainNumStr) return -1; if (routeA.mainNumStr > routeB.mainNumStr) return 1;
             if (routeA.suffix < routeB.suffix) return -1; if (routeA.suffix > routeB.suffix) return 1;
-            // Fallback sort by platform if routes are identical
             const platformA = stopPlatformMap[groupA.details.stop] || '';
             const platformB = stopPlatformMap[groupB.details.stop] || '';
             if (platformA < platformB) return -1; if (platformA > platformB) return 1;
@@ -290,7 +270,7 @@
         sortedEtaGroups.forEach(group => {
             const timedEtas = group.timedEtas.sort((a, b) => a.eta_seq - b.eta_seq).slice(0, 3);
             const allRemarksForDisplay = new Map();
-            const platformCode = stopPlatformMap[group.details.stop] || '-'; // Get platform from map
+            const platformCode = stopPlatformMap[group.details.stop] || '-';
 
             if (timedEtas.length > 0) {
                 const row = tbody.insertRow();
@@ -299,9 +279,7 @@
                 const routeCell = row.insertCell(cellIndex++);
                 routeCell.classList.add(getRouteColorClass(firstEta.route));
                 routeCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(firstEta.route)}</span>`;
-                
-                row.insertCell(cellIndex++).textContent = platformCode; // Platform column
-
+                row.insertCell(cellIndex++).textContent = platformCode;
                 row.insertCell(cellIndex++).textContent = firstEta.dest_en;
                 row.insertCell(cellIndex++).textContent = firstEta.dest_tc;
                 for (let i = 0; i < 3; i++) {
@@ -335,13 +313,10 @@
                     const remarkRouteCell = row.insertCell(cellIndex++);
                     remarkRouteCell.classList.add(getRouteColorClass(remarkEta.route));
                     remarkRouteCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(remarkEta.route)}</span>`;
-                    
-                    row.insertCell(cellIndex++).textContent = platformCode; // Platform column
-
+                    row.insertCell(cellIndex++).textContent = platformCode;
                     row.insertCell(cellIndex++).textContent = remarkEta.dest_en;
                     row.insertCell(cellIndex++).textContent = remarkEta.dest_tc;
                     const remarkCell = row.insertCell(cellIndex++);
-                    // Colspan for remark-only: total headers - (Rt + Plat + DestEN + DestTC)
                     remarkCell.colSpan = headersBase.length - 4; 
                     remarkCell.textContent = remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc;
                 });
@@ -356,31 +331,26 @@
         etaResultsAreaDiv.innerHTML = ""; 
         setStatus("Loading Pak Hung House ETAs...", "loading");
 
-        // Optionally fetch full stop list for names, not strictly needed if only using platform codes
-        // await getFullStopList(); 
-
         try {
             for (const group of predefinedStopGroups) {
                 let allEtasForGroup = [];
-                const stopPlatformMap = {}; // To map stop_id to its hardcoded platform for this group
+                const stopPlatformMap = {}; 
 
                 console.log(`Fetching ETAs for group: ${group.groupName}`);
                 setStatus(`Fetching ETAs for ${group.groupName}...`, "loading");
 
                 for (const stop of group.stops) {
-                    stopPlatformMap[stop.id] = stop.platform; // Store platform for this stop ID
+                    stopPlatformMap[stop.id] = stop.platform;
                     try {
                         const etas = await getStopEta(stop.id);
-                        // Add the stop_id to each eta object so renderEtaTable can map it to a platform
                         etas.forEach(eta => eta.stop_id_for_platform = stop.id); 
                         allEtasForGroup.push(...etas);
                     } catch (stopError) {
                         console.error(`Failed to fetch ETAs for stop ${stop.id} in group ${group.groupName}:`, stopError);
-                        // Optionally add a placeholder or error message for this specific stop within the group
                     }
                 }
                 console.log(`ETAs fetched for group ${group.groupName}. Total raw ETAs: ${allEtasForGroup.length}`);
-                if (allEtasForGroup.length > 0 || group.stops.length > 0) { // Render even if no ETAs but group exists
+                if (allEtasForGroup.length > 0 || group.stops.length > 0) {
                     renderEtaTable(group.groupName, allEtasForGroup, stopPlatformMap);
                 }
             }
@@ -397,9 +367,11 @@
         }
       }
 
-      // Automatically load data when the page is ready
       document.addEventListener('DOMContentLoaded', loadSingYinEtas);
-
     </script>
+
+    <footer>
+      <p>Made by Timothy</p>
+    </footer>
   </body>
 </html>

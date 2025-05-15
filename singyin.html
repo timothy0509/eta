@@ -4,16 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pak Hung House - KMB ETA</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css" /> <!-- Link to your existing style.css -->
   </head>
-  <body class="dark-mode">
+  <body class="dark-mode"> <!-- Always dark mode -->
     <div class="container">
       <div class="header-controls">
         <h1>Pak Hung House - Bus ETA</h1>
+        <!-- Dark mode toggle removed -->
       </div>
 
       <div id="status-messages"></div>
+      <!-- Input controls removed -->
       <div id="eta-results-area">
+        <!-- ETA tables will be rendered here -->
       </div>
       <div id="legend">
         <p><strong>Legend:</strong></p>
@@ -26,14 +29,8 @@
     </div>
 
     <script>
-      // --- PASTE THE ENTIRE JAVASCRIPT FROM THE PREVIOUS `singyin.html` HERE ---
-      // It's the script block starting with:
-      // const API_BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb";
-      // ... and ending with ...
-      // document.addEventListener('DOMContentLoaded', loadSingYinEtas);
-      // -----------------------------------------------------------------------
       const API_BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb";
-      const STOP_CACHE_KEY = "kmb_stop_data_cache_singyin";
+      const STOP_CACHE_KEY = "kmb_stop_data_cache_singyin"; 
       const CACHE_EXPIRY_HOURS = 23;
 
       const statusMessagesDiv = document.getElementById("status-messages");
@@ -198,15 +195,17 @@
         return routeStr;
       }
 
+      // ***** ADDED THIS FUNCTION *****
       function parseRouteForSorting(routeStr) {
         if (!routeStr) return { prefix: '', mainNumStr: '', mainNumLen: 0, suffix: '', original: '' };
         const upperRoute = routeStr.toUpperCase();
         const match = upperRoute.match(/^([A-Z]*)(\d*)([A-Z]*)$/);
         let prefix = '', mainNumStr = '', suffix = '';
         if (match) { prefix = match[1] || ''; mainNumStr = match[2] || ''; suffix = match[3] || ''; }
-        else { prefix = upperRoute; }
-        return { prefix: prefix, mainNumStr: mainNumStr, mainNumLen: mainNumLen.length, suffix: suffix, original: routeStr };
+        else { prefix = upperRoute; } // Fallback if no numbers (e.g., "N")
+        return { prefix: prefix, mainNumStr: mainNumStr, mainNumLen: mainNumStr.length, suffix: suffix, original: routeStr };
       }
+      // *****************************
 
       function renderEtaTable(groupDisplayName, etasFromApi, stopPlatformMap) {
         console.log(`Rendering ETA table for: ${groupDisplayName}`);
@@ -251,8 +250,8 @@
         });
         
         const sortedEtaGroups = Object.values(processedGroupedEtas).sort((groupA, groupB) => {
-            const routeA = parseRouteForSorting(groupA.details.route);
-            const routeB = parseRouteForSorting(groupB.details.route);
+            const routeA = parseRouteForSorting(groupA.details.route); // Now defined
+            const routeB = parseRouteForSorting(groupB.details.route); // Now defined
             const hasTimedEtasA = groupA.timedEtas.length > 0;
             const hasTimedEtasB = groupB.timedEtas.length > 0;
             if (hasTimedEtasA && !hasTimedEtasB) return -1;

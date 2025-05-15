@@ -57,6 +57,12 @@
     </div>
 
     <script>
+      // --- PASTE THE ENTIRE JAVASCRIPT FROM THE PREVIOUS `index.html` HERE ---
+      // It's the long script block starting with:
+      // const API_BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb";
+      // ... and ending with ...
+      // setStatus("Enter a stop name to begin.", "info");
+      // -----------------------------------------------------------------------
       const API_BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb";
       const STOP_CACHE_KEY = "kmb_stop_data_cache";
       const ROUTE_CACHE_KEY = "kmb_route_data_cache";
@@ -108,16 +114,16 @@
         try {
           const response = await fetch(url);
           if (!response.ok) {
-            const errorBody = await response.text(); // Try to get error body
+            const errorBody = await response.text();
             console.error(`HTTP error! Status: ${response.status}, URL: ${url}, Body: ${errorBody}`);
             throw new Error(`API Error ${response.status} for ${url}. Check console.`);
           }
           const data = await response.json();
-          console.log(`Successfully fetched data from: ${url}`, data);
+          console.log(`Successfully fetched data from: ${url}`);
           return data;
         } catch (error) { 
             console.error(`Fetch error for URL ${url}:`, error); 
-            throw error; // Re-throw to be caught by caller
+            throw error;
         }
       }
 
@@ -127,7 +133,7 @@
           console.log("Using cached stop list.");
           return Array.isArray(cached.data) ? cached.data.map(entry => entry.name_en ? entry : processStopRouteEntry(entry)) : [];
         }
-        console.log("Fetching fresh stop list (this might take a moment)...");
+        console.log("Fetching fresh stop list...");
         const data = await fetchData(`${API_BASE_URL}/stop`);
         if (!data || !data.data) {
             console.error("No data received from /stop API or data.data is missing");
@@ -144,7 +150,7 @@
         const data = await fetchData(`${API_BASE_URL}/stop-eta/${stopId}`);
          if (!data || !data.data) {
             console.warn(`No ETA data received for stop ${stopId} or data.data is missing. Returning empty array.`);
-            return []; // Return empty array if no data to prevent errors downstream
+            return [];
         }
         return data.data.map(processEtaEntry);
       }
@@ -249,6 +255,7 @@
       }
 
       function renderEtaTable(stopIdentifier, etasFromApi, isGrouped = false, platformForTitle = null) {
+        console.log(`Rendering ETA table for: ${isGrouped ? stopIdentifier.groupName : stopIdentifier.name_en}, isGrouped: ${isGrouped}, platformForTitle: ${platformForTitle}`);
         const container = document.createElement("div");
         container.className = "eta-table-container";
         const title = document.createElement("h3");
@@ -271,6 +278,8 @@
         const headersBase = ["Rt.", "Dest(EN)", "目的地", "ETA 1", "ETA 2", "ETA 3", "Remarks"];
         let headers = [...headersBase]; 
         const showPlatformColumn = isGrouped && !platformForTitle;
+        console.log("showPlatformColumn:", showPlatformColumn);
+
         if (showPlatformColumn) headers.splice(1, 0, "Plat.");
         headers.forEach(text => { const th = document.createElement("th"); th.textContent = text; headerRow.appendChild(th); });
         
@@ -315,7 +324,7 @@
                 routeCell.classList.add(getRouteColorClass(firstEta.route));
                 routeCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(firstEta.route)}</span>`;
                 if (showPlatformColumn) {
-                    const originalStopDetails = stopNameCache[firstEta.stop]; 
+                    const originalStopDetails = stopNameCache[firstEta.stop];
                     row.insertCell(cellIndex++).textContent = originalStopDetails ? parsePlatformFromStopName(originalStopDetails.name_en).platform || '-' : '-';
                 }
                 row.insertCell(cellIndex++).textContent = firstEta.dest_en;
@@ -387,7 +396,7 @@
           const allStops = await getStopList();
           console.log(`Stop list retrieved. Count: ${allStops ? allStops.length : 'null/undefined'}`);
           
-          if (!allStops || allStops.length === 0) { // Added check for empty/null allStops
+          if (!allStops || allStops.length === 0) {
               console.error("Stop list is empty or failed to load.");
               setStatus("Failed to load stop data. Please try again.", "error");
               return;
@@ -410,8 +419,6 @@
             return; 
           }
           
-          // Don't clear "Searching..." here, let subsequent status updates or final clear take over.
-
           if (useSmartGrouping) {
             console.log("Smart grouping enabled.");
             const groupedByBaseName = {};
@@ -429,7 +436,6 @@
                 for (const stop of group.stops) {
                     let etas = await getStopEta(stop.stop);
                     if (routeFilters.length > 0) etas = etas.filter(eta => routeFilters.includes(eta.route.toUpperCase()));
-                    etas.forEach(e => e.original_stop_id = stop.stop); 
                     allEtasForGroup.push(...etas);
                 }
                 console.log(`ETAs fetched for group ${group.groupName}. Count: ${allEtasForGroup.length}`);
@@ -453,7 +459,7 @@
             setStatus("No ETA data found for your query/filters.", "info");
           } else {
             console.log("ETA results rendered, clearing final status.");
-            clearStatus(); // Clear the last "Fetching..." or "Searching..."
+            clearStatus();
           }
 
         } catch (error) {
@@ -478,5 +484,9 @@
 
       setStatus("Enter a stop name to begin.", "info");
     </script>
+
+    <footer>
+      <p>Made by Timothy</p>
+    </footer>
   </body>
 </html>

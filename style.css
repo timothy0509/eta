@@ -171,6 +171,19 @@ td.route-P span.route-tag { color: var(--route-white-text); background-color: va
 #legend p { margin: 5px 0; color: var(--on-surface-variant-color); transition: color var(--animation-duration); }
 #legend strong { color: var(--on-surface-color); transition: color var(--animation-duration); }
 
+footer {
+  text-align: center;
+  padding: 20px 0;
+  margin-top: 30px;
+  border-top: 1px solid var(--outline-color);
+  transition: border-color var(--animation-duration);
+}
+
+footer p {
+  color: var(--on-surface-variant-color);
+  font-size: 0.9em;
+  transition: color var(--animation-duration);
+}
 @media (max-width: 768px) {
   .container { margin: 10px; padding: 15px 20px; }
   .header-controls { flex-direction: column; align-items: flex-start; gap: 10px; }

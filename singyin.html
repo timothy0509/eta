@@ -195,17 +195,26 @@
         return routeStr;
       }
 
-      // ***** ADDED THIS FUNCTION *****
       function parseRouteForSorting(routeStr) {
         if (!routeStr) return { prefix: '', mainNumStr: '', mainNumLen: 0, suffix: '', original: '' };
         const upperRoute = routeStr.toUpperCase();
         const match = upperRoute.match(/^([A-Z]*)(\d*)([A-Z]*)$/);
         let prefix = '', mainNumStr = '', suffix = '';
-        if (match) { prefix = match[1] || ''; mainNumStr = match[2] || ''; suffix = match[3] || ''; }
-        else { prefix = upperRoute; } // Fallback if no numbers (e.g., "N")
-        return { prefix: prefix, mainNumStr: mainNumStr, mainNumLen: mainNumStr.length, suffix: suffix, original: routeStr };
+        if (match) { 
+            prefix = match[1] || ''; 
+            mainNumStr = match[2] || ''; 
+            suffix = match[3] || ''; 
+        } else { 
+            prefix = upperRoute; 
+        }
+        return { 
+            prefix: prefix, 
+            mainNumStr: mainNumStr, 
+            mainNumLen: mainNumStr.length, 
+            suffix: suffix, 
+            original: routeStr 
+        };
       }
-      // *****************************
 
       function renderEtaTable(groupDisplayName, etasFromApi, stopPlatformMap) {
         console.log(`Rendering ETA table for: ${groupDisplayName}`);
@@ -240,7 +249,7 @@
             const primaryKey = `${eta.route}-${eta.dir}-${eta.dest_en}-${eta.dest_tc}`;
             if (!committedServiceTypes[primaryKey]) committedServiceTypes[primaryKey] = eta.service_type;
             if (eta.service_type === committedServiceTypes[primaryKey]) {
-                const displayKey = `${primaryKey}-${eta.stop}`;
+                const displayKey = `${primaryKey}-${eta.stop}`; // eta.stop is the stop_id
                 if (!processedGroupedEtas[displayKey]) {
                      processedGroupedEtas[displayKey] = { details: { ...eta }, timedEtas: [], remarksOnly: []  };
                 }
@@ -250,16 +259,29 @@
         });
         
         const sortedEtaGroups = Object.values(processedGroupedEtas).sort((groupA, groupB) => {
-            const routeA = parseRouteForSorting(groupA.details.route); // Now defined
-            const routeB = parseRouteForSorting(groupB.details.route); // Now defined
+            // ***** DEBUGGING LOG ADDED HERE *****
+            const routeA = parseRouteForSorting(groupA.details.route);
+            const routeB = parseRouteForSorting(groupB.details.route);
+            console.log("Sorting routes:", groupA.details.route, "vs", groupB.details.route);
+            console.log("Parsed A:", routeA);
+            console.log("Parsed B:", routeB);
+            // ************************************
+
             const hasTimedEtasA = groupA.timedEtas.length > 0;
             const hasTimedEtasB = groupB.timedEtas.length > 0;
             if (hasTimedEtasA && !hasTimedEtasB) return -1;
             if (!hasTimedEtasA && hasTimedEtasB) return 1;
+
             if (routeA.prefix < routeB.prefix) return -1; if (routeA.prefix > routeB.prefix) return 1;
-            if (routeA.mainNumLen < routeB.mainNumLen) return -1; if (routeA.mainNumLen > routeB.mainNumLen) return 1;
+            
+            // Ensure mainNumLen exists before comparing
+            const mainNumLenA = routeA.mainNumLen !== undefined ? routeA.mainNumLen : 0;
+            const mainNumLenB = routeB.mainNumLen !== undefined ? routeB.mainNumLen : 0;
+            if (mainNumLenA < mainNumLenB) return -1; if (mainNumLenA > mainNumLenB) return 1;
+
             if (routeA.mainNumStr < routeB.mainNumStr) return -1; if (routeA.mainNumStr > routeB.mainNumStr) return 1;
             if (routeA.suffix < routeB.suffix) return -1; if (routeA.suffix > routeB.suffix) return 1;
+            
             const platformA = stopPlatformMap[groupA.details.stop] || '';
             const platformB = stopPlatformMap[groupB.details.stop] || '';
             if (platformA < platformB) return -1; if (platformA > platformB) return 1;
@@ -331,6 +353,7 @@
         setStatus("Loading Pak Hung House ETAs...", "loading");
 
         try {
+            // await getFullStopList(); // Optional: if you want full stop names for titles
             for (const group of predefinedStopGroups) {
                 let allEtasForGroup = [];
                 const stopPlatformMap = {}; 
@@ -342,7 +365,8 @@
                     stopPlatformMap[stop.id] = stop.platform;
                     try {
                         const etas = await getStopEta(stop.id);
-                        etas.forEach(eta => eta.stop_id_for_platform = stop.id); 
+                        // eta.stop is the stop_id from the API, which we need for platform mapping
+                        // No need to add stop_id_for_platform if eta.stop is used directly
                         allEtasForGroup.push(...etas);
                     } catch (stopError) {
                         console.error(`Failed to fetch ETAs for stop ${stop.id} in group ${group.groupName}:`, stopError);

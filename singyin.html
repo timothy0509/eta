@@ -32,11 +32,13 @@
       const API_BASE_URL = "https://data.etabus.gov.hk/v1/transport/kmb";
       const STOP_CACHE_KEY = "kmb_stop_data_cache_singyin"; 
       const CACHE_EXPIRY_HOURS = 23;
+      const ETA_REFRESH_INTERVAL = 60000; // 60000 ms = 1 minute
 
       const statusMessagesDiv = document.getElementById("status-messages");
       const etaResultsAreaDiv = document.getElementById("eta-results-area");
       
       let fullStopDetailsCache = {}; 
+      let etaRefreshTimer = null; // To store the interval timer
 
       const predefinedStopGroups = [
         {
@@ -136,8 +138,12 @@
         return name.replace(/(BBI)-/gi, "$1 - ").replace(/(轉車站)-/g, "$1 - ");
       }
 
-      function setStatus(message, type = "info") {
+      function setStatus(message, type = "info", isUpdate = false) {
         console.log(`UI Status: [${type}] ${message}`);
+        if (isUpdate && statusMessagesDiv.style.display === 'none' && type === 'loading') {
+            // Don't show "Loading..." for silent background updates if no error/info was previously shown
+            return;
+        }
         statusMessagesDiv.textContent = message;
         statusMessagesDiv.className = `status-${type}`;
         statusMessagesDiv.style.display = "block";
@@ -200,35 +206,34 @@
         const upperRoute = routeStr.toUpperCase();
         const match = upperRoute.match(/^([A-Z]*)(\d*)([A-Z]*)$/);
         let prefix = '', mainNumStr = '', suffix = '';
-        if (match) { 
-            prefix = match[1] || ''; 
-            mainNumStr = match[2] || ''; 
-            suffix = match[3] || ''; 
-        } else { 
-            prefix = upperRoute; 
-        }
-        return { 
-            prefix: prefix, 
-            mainNumStr: mainNumStr, 
-            mainNumLen: mainNumStr.length, 
-            suffix: suffix, 
-            original: routeStr 
-        };
+        if (match) { prefix = match[1] || ''; mainNumStr = match[2] || ''; suffix = match[3] || ''; }
+        else { prefix = upperRoute; }
+        return { prefix: prefix, mainNumStr: mainNumStr, mainNumLen: mainNumStr.length, suffix: suffix, original: routeStr };
       }
 
       function renderEtaTable(groupDisplayName, etasFromApi, stopPlatformMap) {
         console.log(`Rendering ETA table for: ${groupDisplayName}`);
-        const container = document.createElement("div");
-        container.className = "eta-table-container";
+        // Find or create the container for this specific group
+        let groupContainer = document.getElementById(`group-container-${groupDisplayName.replace(/\s+/g, '-')}`);
+        if (!groupContainer) {
+            groupContainer = document.createElement("div");
+            groupContainer.id = `group-container-${groupDisplayName.replace(/\s+/g, '-')}`;
+            etaResultsAreaDiv.appendChild(groupContainer);
+        }
+        groupContainer.innerHTML = ''; // Clear previous content for this group
+
+        const tableContainer = document.createElement("div");
+        tableContainer.className = "eta-table-container"; // This will have the animation
+        
         const title = document.createElement("h3");
         title.textContent = `ETAs for ${groupDisplayName}`;
-        container.appendChild(title);
+        tableContainer.appendChild(title);
 
         if (!etasFromApi || etasFromApi.length === 0) {
           const p = document.createElement("p");
           p.textContent = "No ETA data available for this group at the moment.";
-          container.appendChild(p);
-          etaResultsAreaDiv.appendChild(container);
+          tableContainer.appendChild(p);
+          groupContainer.appendChild(tableContainer);
           return;
         }
 
@@ -240,6 +245,7 @@
         headersBase.forEach(text => { const th = document.createElement("th"); th.textContent = text; headerRow.appendChild(th); });
         
         const tbody = table.createTBody();
+        const fragment = document.createDocumentFragment(); // Use DocumentFragment
         const remarkSymbols = ['*', '!', '^', '#', '$', '%'];
         let remarkSymbolIndex = 0;
         const processedGroupedEtas = {};
@@ -249,7 +255,7 @@
             const primaryKey = `${eta.route}-${eta.dir}-${eta.dest_en}-${eta.dest_tc}`;
             if (!committedServiceTypes[primaryKey]) committedServiceTypes[primaryKey] = eta.service_type;
             if (eta.service_type === committedServiceTypes[primaryKey]) {
-                const displayKey = `${primaryKey}-${eta.stop}`; // eta.stop is the stop_id
+                const displayKey = `${primaryKey}-${eta.stop}`;
                 if (!processedGroupedEtas[displayKey]) {
                      processedGroupedEtas[displayKey] = { details: { ...eta }, timedEtas: [], remarksOnly: []  };
                 }
@@ -259,29 +265,18 @@
         });
         
         const sortedEtaGroups = Object.values(processedGroupedEtas).sort((groupA, groupB) => {
-            // ***** DEBUGGING LOG ADDED HERE *****
             const routeA = parseRouteForSorting(groupA.details.route);
             const routeB = parseRouteForSorting(groupB.details.route);
-            console.log("Sorting routes:", groupA.details.route, "vs", groupB.details.route);
-            console.log("Parsed A:", routeA);
-            console.log("Parsed B:", routeB);
-            // ************************************
-
             const hasTimedEtasA = groupA.timedEtas.length > 0;
             const hasTimedEtasB = groupB.timedEtas.length > 0;
             if (hasTimedEtasA && !hasTimedEtasB) return -1;
             if (!hasTimedEtasA && hasTimedEtasB) return 1;
-
             if (routeA.prefix < routeB.prefix) return -1; if (routeA.prefix > routeB.prefix) return 1;
-            
-            // Ensure mainNumLen exists before comparing
             const mainNumLenA = routeA.mainNumLen !== undefined ? routeA.mainNumLen : 0;
             const mainNumLenB = routeB.mainNumLen !== undefined ? routeB.mainNumLen : 0;
             if (mainNumLenA < mainNumLenB) return -1; if (mainNumLenA > mainNumLenB) return 1;
-
             if (routeA.mainNumStr < routeB.mainNumStr) return -1; if (routeA.mainNumStr > routeB.mainNumStr) return 1;
             if (routeA.suffix < routeB.suffix) return -1; if (routeA.suffix > routeB.suffix) return 1;
-            
             const platformA = stopPlatformMap[groupA.details.stop] || '';
             const platformB = stopPlatformMap[groupB.details.stop] || '';
             if (platformA < platformB) return -1; if (platformA > platformB) return 1;
@@ -294,17 +289,29 @@
             const platformCode = stopPlatformMap[group.details.stop] || '-';
 
             if (timedEtas.length > 0) {
-                const row = tbody.insertRow();
+                const row = document.createElement("tr"); // Create row for fragment
                 const firstEta = timedEtas[0]; 
-                let cellIndex = 0;
-                const routeCell = row.insertCell(cellIndex++);
+                let cellIndex = 0; // Not used for direct cell creation with appendChild
+                
+                const routeCell = document.createElement("td");
                 routeCell.classList.add(getRouteColorClass(firstEta.route));
                 routeCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(firstEta.route)}</span>`;
-                row.insertCell(cellIndex++).textContent = platformCode;
-                row.insertCell(cellIndex++).textContent = firstEta.dest_en;
-                row.insertCell(cellIndex++).textContent = firstEta.dest_tc;
+                row.appendChild(routeCell);
+
+                const platCell = document.createElement("td");
+                platCell.textContent = platformCode;
+                row.appendChild(platCell);
+
+                const destEnCell = document.createElement("td");
+                destEnCell.textContent = firstEta.dest_en;
+                row.appendChild(destEnCell);
+                
+                const destTcCell = document.createElement("td");
+                destTcCell.textContent = firstEta.dest_tc;
+                row.appendChild(destTcCell);
+
                 for (let i = 0; i < 3; i++) {
-                    const td = row.insertCell(cellIndex++);
+                    const td = document.createElement("td");
                     if (timedEtas[i]) {
                         let etaDisplay = formatEtaTime(timedEtas[i].eta);
                         let remarkText = timedEtas[i].rmk_en || timedEtas[i].rmk_tc || "";
@@ -316,72 +323,106 @@
                         }
                         td.innerHTML = etaDisplay;
                     } else td.textContent = "-";
+                    row.appendChild(td);
                 }
-                const remarksCell = row.insertCell(cellIndex++);
+                const remarksCell = document.createElement("td");
                 let remarksContent = "";
                 allRemarksForDisplay.forEach((symbol, text) => { remarksContent += `<p style="margin:0; padding:0;">${symbol} ${text}</p>`; });
                 remarksCell.innerHTML = remarksContent || "-";
+                row.appendChild(remarksCell);
+                fragment.appendChild(row); // Append row to fragment
             }
             if (group.remarksOnly.length > 0) {
                 if (timedEtas.length > 0 && group.remarksOnly.some(r => r.rmk_en || r.rmk_tc || r.rmk_sc)) {
-                    const sepRow = tbody.insertRow();
-                    const sepCell = sepRow.insertCell(); sepCell.colSpan = headersBase.length; sepCell.classList.add("eta-separator");
+                    const sepRow = document.createElement("tr");
+                    const sepCell = document.createElement("td"); 
+                    sepCell.colSpan = headersBase.length; 
+                    sepCell.classList.add("eta-separator");
+                    sepRow.appendChild(sepCell);
+                    fragment.appendChild(sepRow);
                 }
                 group.remarksOnly.forEach(remarkEta => {
                     if (!(remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc)) return;
-                    const row = tbody.insertRow(); row.classList.add("remark-only-row");
-                    let cellIndex = 0;
-                    const remarkRouteCell = row.insertCell(cellIndex++);
+                    const row = document.createElement("tr"); 
+                    row.classList.add("remark-only-row");
+                    
+                    const remarkRouteCell = document.createElement("td");
                     remarkRouteCell.classList.add(getRouteColorClass(remarkEta.route));
                     remarkRouteCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(remarkEta.route)}</span>`;
-                    row.insertCell(cellIndex++).textContent = platformCode;
-                    row.insertCell(cellIndex++).textContent = remarkEta.dest_en;
-                    row.insertCell(cellIndex++).textContent = remarkEta.dest_tc;
-                    const remarkCell = row.insertCell(cellIndex++);
+                    row.appendChild(remarkRouteCell);
+
+                    const remarkPlatCell = document.createElement("td");
+                    remarkPlatCell.textContent = platformCode;
+                    row.appendChild(remarkPlatCell);
+                    
+                    const remarkDestEnCell = document.createElement("td");
+                    remarkDestEnCell.textContent = remarkEta.dest_en;
+                    row.appendChild(remarkDestEnCell);
+
+                    const remarkDestTcCell = document.createElement("td");
+                    remarkDestTcCell.textContent = remarkEta.dest_tc;
+                    row.appendChild(remarkDestTcCell);
+                    
+                    const remarkCell = document.createElement("td");
                     remarkCell.colSpan = headersBase.length - 4; 
                     remarkCell.textContent = remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc;
+                    row.appendChild(remarkCell);
+                    fragment.appendChild(row);
                 });
             }
         });
-        container.appendChild(table);
-        etaResultsAreaDiv.appendChild(container);
+        tbody.appendChild(fragment); // Append fragment to tbody
+        tableContainer.appendChild(table);
+        groupContainer.appendChild(tableContainer);
       }
       
-      async function loadSingYinEtas() {
-        console.log("loadSingYinEtas triggered.");
-        etaResultsAreaDiv.innerHTML = ""; 
-        setStatus("Loading Pak Hung House ETAs...", "loading");
+      async function loadSingYinEtas(isUpdate = false) {
+        console.log(isUpdate ? "Auto-refreshing ETAs..." : "Initial loadSingYinEtas triggered.");
+        if (!isUpdate) { // Only clear full area on initial load
+            etaResultsAreaDiv.innerHTML = ""; 
+            setStatus("Loading Pak Hung House ETAs...", "loading");
+        } else {
+            // For updates, we might want a more subtle loading indicator or none if it's quick
+            console.log("Background update in progress...");
+        }
 
         try {
-            // await getFullStopList(); // Optional: if you want full stop names for titles
+            // await getFullStopList(); // Optional
             for (const group of predefinedStopGroups) {
                 let allEtasForGroup = [];
                 const stopPlatformMap = {}; 
 
-                console.log(`Fetching ETAs for group: ${group.groupName}`);
-                setStatus(`Fetching ETAs for ${group.groupName}...`, "loading");
-
-                for (const stop of group.stops) {
-                    stopPlatformMap[stop.id] = stop.platform;
-                    try {
-                        const etas = await getStopEta(stop.id);
-                        // eta.stop is the stop_id from the API, which we need for platform mapping
-                        // No need to add stop_id_for_platform if eta.stop is used directly
-                        allEtasForGroup.push(...etas);
-                    } catch (stopError) {
-                        console.error(`Failed to fetch ETAs for stop ${stop.id} in group ${group.groupName}:`, stopError);
-                    }
+                if (!isUpdate) { // Show group-specific loading only on initial load
+                    console.log(`Fetching ETAs for group: ${group.groupName}`);
+                    setStatus(`Fetching ETAs for ${group.groupName}...`, "loading", isUpdate);
                 }
+
+                // Use Promise.all for concurrent fetching
+                const etaPromises = group.stops.map(stop => {
+                    stopPlatformMap[stop.id] = stop.platform;
+                    return getStopEta(stop.id).catch(err => {
+                        console.error(`Failed to fetch ETA for stop ${stop.id} in group ${group.groupName}:`, err);
+                        return []; // Return empty on error for this stop
+                    });
+                });
+
+                const etaResultsArray = await Promise.all(etaPromises);
+                etaResultsArray.forEach(etas => {
+                    allEtasForGroup.push(...etas);
+                });
+                
                 console.log(`ETAs fetched for group ${group.groupName}. Total raw ETAs: ${allEtasForGroup.length}`);
                 if (allEtasForGroup.length > 0 || group.stops.length > 0) {
                     renderEtaTable(group.groupName, allEtasForGroup, stopPlatformMap);
                 }
             }
             
-            if (etaResultsAreaDiv.innerHTML === "") {
+            if (etaResultsAreaDiv.innerHTML === "" && !isUpdate) {
                 setStatus("No ETA data found for Pak Hung House stops.", "info");
-            } else {
+            } else if (!isUpdate) { // Clear initial loading message if results were rendered
                 clearStatus();
+            } else {
+                console.log("Silent update complete."); // Log for background updates
             }
 
         } catch (error) {
@@ -390,7 +431,13 @@
         }
       }
 
-      document.addEventListener('DOMContentLoaded', loadSingYinEtas);
+      // Automatically load data when the page is ready
+      document.addEventListener('DOMContentLoaded', () => {
+        loadSingYinEtas(); // Initial load
+        // Set up the refresh timer
+        if (etaRefreshTimer) clearInterval(etaRefreshTimer); // Clear existing timer if any
+        etaRefreshTimer = setInterval(() => loadSingYinEtas(true), ETA_REFRESH_INTERVAL);
+      });
     </script>
 
     <footer>

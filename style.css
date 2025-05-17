@@ -1,4 +1,4 @@
-/* style.css - Enhanced with Google Sans Hierarchy */
+/* style.css - Final Version with All Enhancements */
 @import url("https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Google+Sans+Text:wght@400;500;700&family=Google+Sans:wght@400;500;700&family=Google+Sans+Display:wght@400;700&display=swap");
 /*
   NOTE: The above @import for Google Sans, Google Sans Display, and Google Sans Text
@@ -10,17 +10,16 @@
 :root {
   /* Accent Color - Google Blue */
   --primary-color: #4285F4;
-  --primary-color-dark-hover: #1a73e8;
+  --primary-color-dark-hover: #1a73e8; 
   --primary-color-light-focus: color-mix(in srgb, var(--primary-color) 15%, transparent);
   --primary-color-dark-focus: color-mix(in srgb, var(--primary-color) 25%, #000000a0);
 
   --kmb-red: #d71920;
   
   /* Font Families */
-  --font-family-display: "Google Sans Display", "Roboto", sans-serif; /* For large headlines */
-  --font-family-sans: "Google Sans", "Roboto", sans-serif;       /* For UI elements, subheads */
-  --font-family-text: "Google Sans Text", "Roboto", sans-serif;   /* For body copy, smaller text */
-
+  --font-family-display: "Google Sans Display", "Roboto", sans-serif;
+  --font-family-sans: "Google Sans", "Roboto", sans-serif;
+  --font-family-text: "Google Sans Text", "Roboto", sans-serif;
 
   /* Light Mode Variables */
   --background-color-light: #fdfdfe;
@@ -120,7 +119,7 @@ body.dark-mode {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 body { 
-  font-family: var(--font-family-text); /* Default to Google Sans Text */
+  font-family: var(--font-family-text);
   background-color: var(--background-color); 
   color: var(--on-surface-color); 
   line-height: 1.65; 
@@ -141,19 +140,19 @@ body {
 
 .header-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; padding-bottom: 15px; border-bottom: 1px solid var(--outline-color); transition: border-color var(--animation-duration); }
 h1 { 
-  font-family: var(--font-family-display); /* Google Sans Display for main heading */
+  font-family: var(--font-family-display);
   text-align: left; 
   color: var(--kmb-red); 
   margin-bottom: 0; 
-  font-weight: 700; /* Display fonts often look good bold */
-  font-size: 2.2em; /* Larger for display */
+  font-weight: 700;
+  font-size: 2.2em;
   letter-spacing: -0.5px; 
   flex-grow: 1; 
 }
 
 .theme-switch-wrapper { display: flex; align-items: center; }
 .theme-label { 
-  font-family: var(--font-family-sans); /* Google Sans for UI elements */
+  font-family: var(--font-family-sans);
   margin-left: 12px; 
   font-size: 0.9em; 
   color: var(--on-surface-variant-color); 
@@ -174,29 +173,29 @@ body.dark-mode input:checked + .slider { background-color: var(--primary-color);
 .controls { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 35px; align-items: flex-end; }
 .controls > div { flex: 1 1 220px; }
 .controls label { 
-  font-family: var(--font-family-text); /* Google Sans Text for labels */
+  font-family: var(--font-family-text);
   display: block; margin-bottom: 10px; font-weight: 500; color: var(--on-surface-variant-color); font-size: 0.875em; 
 }
 .controls input[type="text"] { 
-  font-family: var(--font-family-text); /* Google Sans Text for input content */
+  font-family: var(--font-family-text);
   width: 100%; padding: 14px 18px; border: 1.5px solid var(--outline-color); background-color: var(--surface-color); color: var(--on-surface-color); border-radius: var(--border-radius-medium); font-size: 1em; transition: border-color var(--animation-duration), box-shadow var(--animation-duration), background-color var(--animation-duration), color var(--animation-duration); 
 }
 .controls input[type="text"]:focus { outline: none; border-color: var(--primary-color); box-shadow: 0 0 0 3.5px var(--focus-ring-color); }
 .grouping-control { display: flex; align-items: center; gap: 10px; padding-bottom: 12px; flex-basis: auto !important; flex-grow: 0 !important; }
 .controls input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--primary-color); cursor: pointer; margin-top: 2px; }
 .grouping-control label { 
-  font-family: var(--font-family-text); /* Google Sans Text */
+  font-family: var(--font-family-text);
   margin-bottom: 0; font-weight: 400; color: var(--on-surface-color); font-size: 0.95em; 
 }
 .controls button { 
-  font-family: var(--font-family-sans); /* Google Sans for buttons */
-  padding: 14px 30px; background-color: var(--primary-color); color: white; border: none; border-radius: var(--border-radius-pill); cursor: pointer; font-size: 1em; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; /* Material buttons often uppercase */ transition: background-color var(--animation-duration), transform 0.15s var(--animation-timing-function), box-shadow var(--animation-duration); box-shadow: 0 3px 6px var(--shadow-color-strong); flex-grow: 0; flex-basis: auto; 
+  font-family: var(--font-family-sans);
+  padding: 14px 30px; background-color: var(--primary-color); color: white; border: none; border-radius: var(--border-radius-pill); cursor: pointer; font-size: 1em; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; transition: background-color var(--animation-duration), transform 0.15s var(--animation-timing-function), box-shadow var(--animation-duration); box-shadow: 0 3px 6px var(--shadow-color-strong); flex-grow: 0; flex-basis: auto; 
 }
 .controls button:hover { background-color: var(--primary-color-dark-hover); box-shadow: 0 5px 10px var(--shadow-color-strong); transform: translateY(-2px); }
 .controls button:active { transform: translateY(0px) scale(0.97); box-shadow: 0 1px 3px var(--shadow-color); }
 
 #status-messages { 
-  font-family: var(--font-family-text); /* Google Sans Text */
+  font-family: var(--font-family-text);
   margin-bottom: 25px; padding: 14px 18px; border-radius: var(--border-radius-medium); border: 1px solid; font-size: 0.95em; font-weight: 500; opacity: 0; transform: translateY(-15px) scale(0.98); transition: opacity var(--animation-duration) var(--animation-timing-function), transform var(--animation-duration) var(--animation-timing-function), background-color var(--animation-duration), border-color var(--animation-duration), color var(--animation-duration); 
 }
 #status-messages.status-visible { opacity: 1; transform: translateY(0) scale(1); }
@@ -207,28 +206,61 @@ body.dark-mode input:checked + .slider { background-color: var(--primary-color);
 .eta-table-container { margin-bottom: 35px; background-color: var(--surface-color); border-radius: var(--border-radius-medium); box-shadow: 0 3px 10px var(--shadow-color); padding: 25px; overflow-x: auto; opacity: 0; transform: scale(0.95); animation: fadeInScaleUp 0.4s var(--animation-timing-function) forwards; transition: background-color var(--animation-duration), box-shadow var(--animation-duration); }
 @keyframes fadeInScaleUp { to { opacity: 1; transform: scale(1); } }
 .eta-table-container h3 { 
-  font-family: var(--font-family-sans); /* Google Sans for table titles */
-  margin-top: 0; margin-bottom: 20px; color: var(--on-surface-color); font-weight: 500; font-size: 1.4em; /* Slightly larger */ border-bottom: 1.5px solid var(--outline-color); padding-bottom: 12px; transition: color var(--animation-duration), border-color var(--animation-duration); 
+  font-family: var(--font-family-sans);
+  margin-top: 0; margin-bottom: 20px; color: var(--on-surface-color); font-weight: 500; font-size: 1.4em; border-bottom: 1.5px solid var(--outline-color); padding-bottom: 12px; transition: color var(--animation-duration), border-color var(--animation-duration); 
 }
 table.eta-results { 
-  font-family: var(--font-family-text); /* Google Sans Text for table content */
+  font-family: var(--font-family-text);
   width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9em; 
 }
 table.eta-results th, table.eta-results td { padding: 12px 15px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--outline-color); transition: border-color var(--animation-duration), background-color 0.15s; }
 table.eta-results th { 
-  font-family: var(--font-family-sans); /* Google Sans for table headers */
+  font-family: var(--font-family-sans);
   font-weight: 700; color: var(--on-surface-variant-color); text-transform: uppercase; font-size: 0.8em; letter-spacing: 0.8px; border-bottom-width: 2px; transition: color var(--animation-duration); 
 }
 table.eta-results tr:last-child td { border-bottom: none; }
 table.eta-results tr:hover td { background-color: var(--table-row-hover); }
-.scheduled-eta { color: var(--on-surface-variant-color); font-style: italic; opacity: 0.8; }
+
+/* Countdown Specific Styling */
+td[data-eta-timestamp] {
+  font-weight: 500; 
+  min-width: 110px; /* Adjusted for "X min YY sec" */
+  font-variant-numeric: tabular-nums; /* Helps keep numbers aligned if width changes */
+}
+.eta-due {
+  color: var(--kmb-red) !important; 
+  font-weight: 700; /* Bolder "Due" */
+}
+.scheduled-eta-countdown { 
+  color: var(--on-surface-variant-color);
+  font-style: italic;
+  opacity: 0.9;
+}
+body.dark-mode .scheduled-eta-countdown {
+  opacity: 0.8;
+}
+.scheduled-time-original {
+  display: block; 
+  font-size: 0.8em;
+  color: var(--on-surface-variant-color);
+  opacity: 0.7;
+  margin-top: 3px; /* More space */
+  font-weight: 400; /* Lighter than countdown */
+  font-style: normal; 
+}
+td[data-eta-timestamp] .remark-symbol {
+  margin-left: 6px; /* More space for remark symbol */
+  font-size: 0.9em; /* Slightly smaller symbol */
+}
+
+
 .remark-symbol { font-weight: bold; margin-left: 5px; color: var(--primary-color); }
 .remark-only-row td { text-align: left !important; font-style: italic; color: var(--on-surface-variant-color); padding-top: 15px !important; padding-bottom: 15px !important; opacity: 0.9; }
 .eta-separator td { border-top: 2px dashed var(--outline-color) !important; height: 0; padding: 0 !important; line-height: 0; transition: border-color var(--animation-duration); }
 
 /* Route Tag Styling */
 td span.route-tag { 
-  font-family: "Google Sans", Arial, sans-serif; /* Prioritize Google Sans for route tags */
+  font-family: "Google Sans", Arial, sans-serif;
   display: inline-block; padding: 5px 10px; border-radius: var(--border-radius-small); font-weight: 700; line-height: 1.2; text-align: center; min-width: 50px; box-shadow: 0 1px 2px var(--shadow-color); vertical-align: middle; font-size: var(--route-tag-base-font-size); white-space: nowrap; transition: background-color var(--animation-duration), color var(--animation-duration), box-shadow var(--animation-duration); 
 }
 
@@ -241,62 +273,20 @@ td.route-ES span.route-tag { color: var(--route-white-text); background-color: v
 td.route-P span.route-tag { color: var(--route-white-text); background-color: var(--route-rose-gold-bg); }
 
 #legend { 
-  font-family: var(--font-family-text); /* Google Sans Text */
+  font-family: var(--font-family-text);
   margin-top: 35px; padding: 20px; background-color: var(--legend-bg); border: 1px solid var(--outline-color); border-radius: var(--border-radius-medium); font-size: 0.9em; transition: background-color var(--animation-duration), border-color var(--animation-duration); box-shadow: 0 2px 6px var(--shadow-color); 
 }
 #legend p { margin: 6px 0; color: var(--on-surface-variant-color); transition: color var(--animation-duration); }
 #legend strong { 
-  font-family: var(--font-family-sans); /* Google Sans */
+  font-family: var(--font-family-sans);
   color: var(--on-surface-color); transition: color var(--animation-duration); font-weight: 500; 
 }
 
 footer { 
-  font-family: var(--font-family-text); /* Google Sans Text */
+  font-family: var(--font-family-text);
   text-align: center; padding: 25px 0; margin-top: 40px; border-top: 1px solid var(--outline-color); transition: border-color var(--animation-duration); 
 }
 footer p { color: var(--on-surface-variant-color); font-size: 0.875em; transition: color var(--animation-duration); }
-/* style.css */
-/* ... (all previous CSS) ... */
-
-/* Countdown Specific Styling */
-td[data-eta-timestamp] {
-  font-weight: 500; /* Make countdowns slightly bolder */
-  min-width: 100px; /* Ensure enough space for "X min YY sec" */
-}
-
-.eta-due {
-  color: var(--kmb-red) !important; /* Make "Due" prominent */
-  font-weight: bold;
-}
-
-.scheduled-eta-countdown { /* For scheduled buses that now show countdown */
-  color: var(--on-surface-variant-color);
-  font-style: italic;
-  opacity: 0.9;
-}
-body.dark-mode .scheduled-eta-countdown {
-  opacity: 0.8;
-}
-
-
-.scheduled-time-original {
-  display: block; /* New line */
-  font-size: 0.8em;
-  color: var(--on-surface-variant-color);
-  opacity: 0.7;
-  margin-top: 2px;
-  font-weight: normal;
-  font-style: normal; /* Override if parent has italic */
-}
-
-/* Adjust remark symbol position if needed with countdowns */
-td[data-eta-timestamp] .remark-symbol {
-  margin-left: 5px;
-  /* vertical-align: middle; /* Might help if alignment is off */
-}
-
-
-/* ... (rest of your CSS, including media queries) ... */
 
 
 @media (max-width: 768px) {

@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pak Hung House - KMB ETA</title>
-    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="style.css" /> 
   </head>
-  <body class="dark-mode">
+  <body class="dark-mode"> 
     <div class="container">
       <div class="header-controls">
         <h1>Pak Hung House - Bus ETA</h1>
@@ -39,7 +39,6 @@
       const predefinedStopGroups = [
         {
             groupName: "Pak Hung House - East Bound",
-            // Platform info is still here, but won't be used in the table
             stops: [ 
                 { id: "942E95B4336BDFA7", platform: "Wt230" },
                 { id: "29740CCBBD82FC33", platform: "Wt231" },
@@ -55,34 +54,22 @@
         }
       ];
 
-      // --- Caching, Fetching, Processing, Status, Color, Time Formatting functions ---
-      // (These functions remain the same as in the previous full singyin.html)
-      // For brevity, I'll skip pasting them here, but ensure they are present.
-      // Make sure parseRouteForSorting is also present.
-      function saveToCache(key, data) { /* ... */ }
-      function loadFromCache(key) { /* ... */ }
-      function isCacheValid(cacheEntry, expiryHours = CACHE_EXPIRY_HOURS) { /* ... */ }
-      async function fetchData(url) { /* ... */ }
-      async function getStopEta(stopId) { /* ... */ }
-      function processName(name) { /* ... */ }
-      function setStatus(message, type = "info", isUpdate = false) { /* ... */ }
-      function clearStatus() { /* ... */ }
-      function getRouteColorClass(routeStr) { /* ... */ }
-      function formatEtaTime(isoTimestamp) { /* ... */ }
-      function formatRouteNumberForDisplay(routeStr) { /* ... */ }
-      function parseRouteForSorting(routeStr) {
-        if (!routeStr) return { prefix: '', mainNumStr: '', mainNumLen: 0, suffix: '', original: '' };
-        const upperRoute = routeStr.toUpperCase();
-        const match = upperRoute.match(/^([A-Z]*)(\d*)([A-Z]*)$/);
-        let prefix = '', mainNumStr = '', suffix = '';
-        if (match) { prefix = match[1] || ''; mainNumStr = match[2] || ''; suffix = match[3] || ''; }
-        else { prefix = upperRoute; }
-        return { prefix: prefix, mainNumStr: mainNumStr, mainNumLen: mainNumStr.length, suffix: suffix, original: routeStr };
-      }
-      // --- End of skipped functions ---
+      function saveToCache(key, data) { /* ... same ... */ }
+      function loadFromCache(key) { /* ... same ... */ }
+      function isCacheValid(cacheEntry, expiryHours = CACHE_EXPIRY_HOURS) { /* ... same ... */ }
+      async function fetchData(url) { /* ... same ... */ }
+      async function getStopEta(stopId) { /* ... same ... */ }
+      function processName(name) { /* ... same ... */ }
+      function setStatus(message, type = "info", isUpdate = false) { /* ... same ... */ }
+      function clearStatus() { /* ... same ... */ }
+      function getRouteColorClass(routeStr) { /* ... same ... */ }
+      function formatEtaTime(isoTimestamp) { /* ... same ... */ }
+      function formatRouteNumberForDisplay(routeStr) { /* ... same ... */ }
+      function parseRouteForSorting(routeStr) { /* ... same ... */ }
+      // Ensure all the above utility functions are pasted here from the previous correct version
 
-
-      function renderEtaTable(groupDisplayName, etasFromApi) { // Removed stopPlatformMap
+      // --- Corrected renderEtaTable for singyin.html ---
+      function renderEtaTable(groupDisplayName, etasFromApi, stopPlatformMap) {
         console.log(`Rendering ETA table for (singyin): ${groupDisplayName}`);
         let groupContainer = document.getElementById(`group-container-${groupDisplayName.replace(/\s+/g, '-')}`);
         if (!groupContainer) {
@@ -111,8 +98,7 @@
         table.className = "eta-results";
         const thead = table.createTHead();
         const headerRow = thead.insertRow();
-        // REMOVED "Plat." from headers
-        const headersBase = ["Rt.", "Dest(EN)", "目的地", "ETA 1", "ETA 2", "ETA 3", "Remarks"];
+        const headersBase = ["Rt.", "Plat.", "Dest(EN)", "目的地", "ETA 1", "ETA 2", "ETA 3", "Remarks"];
         headersBase.forEach(text => { const th = document.createElement("th"); th.textContent = text; headerRow.appendChild(th); });
         
         const tbody = table.createTBody();
@@ -126,12 +112,12 @@
             const primaryKey = `${eta.route}-${eta.dir}-${eta.dest_en}-${eta.dest_tc}`;
             if (!committedServiceTypes[primaryKey]) committedServiceTypes[primaryKey] = eta.service_type;
             if (eta.service_type === committedServiceTypes[primaryKey]) {
-                // Key for processedGroupedEtas doesn't need eta.stop if not showing platform per line
-                if (!processedGroupedEtas[primaryKey]) {
-                     processedGroupedEtas[primaryKey] = { details: { ...eta }, timedEtas: [], remarksOnly: []  };
+                const displayKey = `${primaryKey}-${eta.stop}`;
+                if (!processedGroupedEtas[displayKey]) {
+                     processedGroupedEtas[displayKey] = { details: { ...eta }, timedEtas: [], remarksOnly: []  };
                 }
-                if (eta.eta) processedGroupedEtas[primaryKey].timedEtas.push(eta);
-                else if (eta.rmk_en || eta.rmk_tc || eta.rmk_sc) processedGroupedEtas[primaryKey].remarksOnly.push(eta);
+                if (eta.eta) processedGroupedEtas[displayKey].timedEtas.push(eta);
+                else if (eta.rmk_en || eta.rmk_tc || eta.rmk_sc) processedGroupedEtas[displayKey].remarksOnly.push(eta);
             }
         });
         
@@ -148,31 +134,40 @@
             if (mainNumLenA < mainNumLenB) return -1; if (mainNumLenA > mainNumLenB) return 1;
             if (routeA.mainNumStr < routeB.mainNumStr) return -1; if (routeA.mainNumStr > routeB.mainNumStr) return 1;
             if (routeA.suffix < routeB.suffix) return -1; if (routeA.suffix > routeB.suffix) return 1;
-            // No platform fallback sort needed here as platform isn't displayed per ETA line
+            const platformA = stopPlatformMap[groupA.details.stop] || '';
+            const platformB = stopPlatformMap[groupB.details.stop] || '';
+            if (platformA < platformB) return -1; if (platformA > platformB) return 1;
             return 0;
         });
 
         sortedEtaGroups.forEach(group => {
             const timedEtas = group.timedEtas.sort((a, b) => a.eta_seq - b.eta_seq).slice(0, 3);
             const allRemarksForDisplay = new Map();
+            const platformCode = stopPlatformMap[group.details.stop] || '-';
 
             if (timedEtas.length > 0) {
-                const row = document.createElement("tr");
+                const row = document.createElement("tr"); // Create row for fragment
                 const firstEta = timedEtas[0]; 
                 
                 const routeCell = document.createElement("td");
                 routeCell.classList.add(getRouteColorClass(firstEta.route));
                 routeCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(firstEta.route)}</span>`;
                 row.appendChild(routeCell);
-                
-                // Platform cell REMOVED
-                const destEnCell = document.createElement("td"); destEnCell.textContent = firstEta.dest_en; row.appendChild(destEnCell);
-                const destTcCell = document.createElement("td"); destTcCell.textContent = firstEta.dest_tc; row.appendChild(destTcCell);
 
-                for (let i = 0; i < 3; i++) { /* ... ETA cells ... */ row.appendChild(document.createElement("td")); } // Placeholder for brevity
-                // (Copy the full ETA cell rendering logic from previous version)
+                const platCell = document.createElement("td");
+                platCell.textContent = platformCode;
+                row.appendChild(platCell);
+
+                const destEnCell = document.createElement("td");
+                destEnCell.textContent = firstEta.dest_en;
+                row.appendChild(destEnCell);
+                
+                const destTcCell = document.createElement("td");
+                destTcCell.textContent = firstEta.dest_tc;
+                row.appendChild(destTcCell);
+
                 for (let i = 0; i < 3; i++) {
-                    const td = row.cells[i + 3]; // Adjust index due to removed platform cell
+                    const td = document.createElement("td"); // Create each ETA cell
                     if (timedEtas[i]) {
                         let etaDisplay = formatEtaTime(timedEtas[i].eta);
                         let remarkText = timedEtas[i].rmk_en || timedEtas[i].rmk_tc || "";
@@ -184,9 +179,8 @@
                         }
                         td.innerHTML = etaDisplay;
                     } else td.textContent = "-";
+                    row.appendChild(td); // Append ETA cell to row
                 }
-
-
                 const remarksCell = document.createElement("td");
                 let remarksContent = "";
                 allRemarksForDisplay.forEach((symbol, text) => { remarksContent += `<p style="margin:0; padding:0;">${symbol} ${text}</p>`; });
@@ -197,25 +191,31 @@
             if (group.remarksOnly.length > 0) {
                 if (timedEtas.length > 0 && group.remarksOnly.some(r => r.rmk_en || r.rmk_tc || r.rmk_sc)) {
                     const sepRow = document.createElement("tr");
-                    const sepCell = document.createElement("td"); sepCell.colSpan = headersBase.length; sepCell.classList.add("eta-separator");
-                    sepRow.appendChild(sepCell); fragment.appendChild(sepRow);
+                    const sepCell = document.createElement("td"); 
+                    sepCell.colSpan = headersBase.length; 
+                    sepCell.classList.add("eta-separator");
+                    sepRow.appendChild(sepCell);
+                    fragment.appendChild(sepRow);
                 }
                 group.remarksOnly.forEach(remarkEta => {
                     if (!(remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc)) return;
-                    const row = document.createElement("tr"); row.classList.add("remark-only-row");
+                    const row = document.createElement("tr"); 
+                    row.classList.add("remark-only-row");
                     
                     const remarkRouteCell = document.createElement("td");
                     remarkRouteCell.classList.add(getRouteColorClass(remarkEta.route));
                     remarkRouteCell.innerHTML = `<span class="route-tag">${formatRouteNumberForDisplay(remarkEta.route)}</span>`;
                     row.appendChild(remarkRouteCell);
 
-                    // Platform cell REMOVED
+                    const remarkPlatCell = document.createElement("td");
+                    remarkPlatCell.textContent = platformCode;
+                    row.appendChild(remarkPlatCell);
+                    
                     const remarkDestEnCell = document.createElement("td"); remarkDestEnCell.textContent = remarkEta.dest_en; row.appendChild(remarkDestEnCell);
                     const remarkDestTcCell = document.createElement("td"); remarkDestTcCell.textContent = remarkEta.dest_tc; row.appendChild(remarkDestTcCell);
                     
                     const remarkContentCell = document.createElement("td");
-                    // Colspan for remark-only: total headers - (Rt + DestEN + DestTC)
-                    remarkContentCell.colSpan = headersBase.length - 3; 
+                    remarkContentCell.colSpan = headersBase.length - 4; 
                     remarkContentCell.textContent = remarkEta.rmk_en || remarkEta.rmk_tc || remarkEta.rmk_sc;
                     row.appendChild(remarkContentCell);
                     fragment.appendChild(row);
@@ -239,18 +239,20 @@
         try {
             for (const group of predefinedStopGroups) {
                 let allEtasForGroup = [];
-                // stopPlatformMap is no longer needed by renderEtaTable for singyin.html
+                const stopPlatformMap = {}; 
+
                 if (!isUpdate) {
                     console.log(`Fetching ETAs for group: ${group.groupName}`);
                     setStatus(`Fetching ETAs for ${group.groupName}...`, "loading", isUpdate);
                 }
 
-                const etaPromises = group.stops.map(stop => 
-                    getStopEta(stop.id).catch(err => {
+                const etaPromises = group.stops.map(stop => {
+                    stopPlatformMap[stop.id] = stop.platform;
+                    return getStopEta(stop.id).catch(err => {
                         console.error(`Failed to fetch ETA for stop ${stop.id} in group ${group.groupName}:`, err);
                         return [];
-                    })
-                );
+                    });
+                });
 
                 const etaResultsArray = await Promise.all(etaPromises);
                 etaResultsArray.forEach(etas => {
@@ -259,7 +261,7 @@
                 
                 console.log(`ETAs fetched for group ${group.groupName}. Total raw ETAs: ${allEtasForGroup.length}`);
                 if (allEtasForGroup.length > 0 || group.stops.length > 0) {
-                    renderEtaTable(group.groupName, allEtasForGroup); // Pass only 2 args
+                    renderEtaTable(group.groupName, allEtasForGroup, stopPlatformMap);
                 }
             }
             

@@ -395,6 +395,7 @@
         etaResultsAreaDiv.appendChild(container);
       }
       
+      // ***** THIS IS THE CORRECTED handleSearch FUNCTION *****
       async function handleSearch() {
         console.log("handleSearch triggered.");
         const stopQuery = stopNameInput.value.trim();
@@ -407,7 +408,7 @@
             return; 
         }
         etaResultsAreaDiv.innerHTML = ""; 
-        stopSelectionAreaDiv.innerHTML = "";
+        stopSelectionAreaDiv.innerHTML = ""; // Clear previous selection list if any
         console.log("Setting initial status to 'Searching...'");
         setStatus("Searching...", "loading");
 
@@ -456,7 +457,7 @@
                 
                 const etaPromises = group.stops.map(stop => 
                     getStopEta(stop.stop).catch(err => {
-                        console.error(`Failed to fetch ETA for stop ${stop.stop} in group ${group.groupName}:`, err);
+                        console.error(`Failed to fetch ETA for stop ${stop.id /* should be stop.stop */} in group ${group.groupName}:`, err);
                         return [];
                     })
                 );
@@ -497,46 +498,34 @@
           setStatus(`Search Error: ${error.message}. Check console.`, "error");
         }
       }
+      // *******************************************************
 
+
+      // NEW: Function to handle URL parameters
       function handleUrlParameters() {
         const urlParams = new URLSearchParams(window.location.search);
-        const query = urlParams.get('q'); 
+        const query = urlParams.get('q');
 
         if (query) {
             console.log("URL query parameter found:", query);
             const parts = query.split('@').map(part => part.trim());
-            let stopName = "";
-            let routeNumbers = "";
+            const stopName = parts[0];
+            const routeNumbers = parts.length > 1 ? parts[1] : "";
 
-            if (parts.length === 1) {
-                // If no "@", assume it's a stop name.
-                // Or, if it looks like only routes, treat it as routes and prompt for stop name.
-                // For simplicity now, if no "@", it's stopName.
-                stopName = parts[0];
-            } else if (parts.length > 1) {
-                routeNumbers = parts[0]; 
-                stopName = parts[1];     
-            }
-
-            if (stopName) {
-                stopNameInput.value = stopName;
-                console.log("Set stop name input to:", stopName);
-            }
-            if (routeNumbers) {
-                routeFilterInput.value = routeNumbers;
-                console.log("Set route filter input to:", routeNumbers);
-            }
+            if (stopName) stopNameInput.value = stopName;
+            if (routeNumbers) routeFilterInput.value = routeNumbers;
             
-            if (stopName) { 
+            if (stopName) {
                 setTimeout(() => {
                     console.log("Auto-triggering search from URL parameters.");
                     searchButton.click(); 
                 }, 100);
-                return true; 
+                return true; // Indicate that an auto-search was triggered
             }
         }
-        return false; 
+        return false; // Indicate no auto-search
       }
+
 
       searchButton.addEventListener("click", handleSearch);
       stopNameInput.addEventListener("keypress", (event) => { if (event.key === "Enter") handleSearch(); });
@@ -555,7 +544,7 @@
         else { const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; setDarkMode(prefersDark); }
         
         const autoSearched = handleUrlParameters(); 
-        if (!autoSearched) {
+        if (!autoSearched) { // Only set initial status if no auto-search happened
             setStatus("Enter a stop name to begin.", "info");
         }
       });

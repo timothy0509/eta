@@ -1,3 +1,4 @@
+// src/lr_stops.js
 // expose Light Rail stop → station_id map
 window.LR_STOPS = {
   'Tuen Mun Ferry Pier':1,'Melody Garden':10,'Butterfly':15,

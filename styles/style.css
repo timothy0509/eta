@@ -9,7 +9,6 @@
 
   --font-display: 'Google Sans Display', 'Google Sans Text', sans-serif;
   --font-sans: 'Google Sans', 'Google Sans Text', sans-serif;
-  /* Adjusted to use Google Sans for general sans-serif */
   --font-text: 'Google Sans Text', sans-serif;
 
   --bg-light: #fdfdfe;
@@ -20,12 +19,8 @@
   --hover-light: rgba(26, 115, 232, 0.08);
   --shadow-light: rgba(0, 0, 0, 0.08);
 
-  /* Material Design 3 related colors for segmented control (light mode) */
   --primary-container-light: rgba(66, 133, 244, 0.15);
-  /* Subtle blue tint */
   --on-primary-container-light: #1a1b1e;
-  /* Dark text on light container */
-
 
   --bg-dark: #1a1b1e;
   --surface-dark: #28292c;
@@ -35,12 +30,8 @@
   --hover-dark: rgba(26, 115, 232, 0.15);
   --shadow-dark: rgba(0, 0, 0, 0.3);
 
-  /* Material Design 3 related colors for segmented control (dark mode) */
   --primary-container-dark: rgba(66, 133, 244, 0.25);
-  /* Darker subtle blue tint */
   --on-primary-container-dark: #e3e3e3;
-  /* Light text on dark container */
-
 
   --radius-sm: 6px;
   --radius-md: 12px;
@@ -60,18 +51,13 @@
   --shadow-strong: rgba(0, 0, 0, 0.12);
   --focus-ring: rgba(26, 115, 232, 0.15);
 
-  /* Default MD3 container colors to light mode versions */
   --primary-container: var(--primary-container-light);
   --on-primary-container: var(--on-primary-container-light);
 
-
-  /* Dynamic CSS variables for mobile alignment */
   --max-route-col-width: 0px;
   --max-platform-col-width: 0px;
   --max-times-col-width: 0px;
-  /* New variable for ETA column width */
   --mobile-gap: 12px;
-  /* standard gap */
 }
 
 html.dark-mode {
@@ -83,8 +69,6 @@ html.dark-mode {
   --table-hover: var(--hover-dark);
   --shadow: var(--shadow-dark);
   --focus-ring: rgba(26, 115, 232, 0.25);
-
-  /* Apply dark mode MD3 container colors */
   --primary-container: var(--primary-container-dark);
   --on-primary-container: var(--on-primary-container-dark);
 }
@@ -106,8 +90,7 @@ body {
   color: var(--on-surface);
   line-height: 1.65;
   padding: 20px;
-  transition: background var(--anim-dur),
-    color var(--anim-dur);
+  transition: background var(--anim-dur), color var(--anim-dur);
 }
 
 /* 4) Container */
@@ -115,86 +98,18 @@ body {
   max-width: 1050px;
   margin: 25px auto;
   background: var(--surface);
-  padding: 30px 35px;
+  padding: 0 35px 30px; /* Adjusted padding for sticky header */
   border-radius: var(--radius-lg);
-  box-shadow:
-    0 4px 16px var(--shadow),
-    0 2px 8px var(--shadow);
-  transition:
-    background var(--anim-dur),
-    box-shadow var(--anim-dur);
+  box-shadow: 0 4px 16px var(--shadow), 0 2px 8px var(--shadow);
+  transition: background var(--anim-dur), box-shadow var(--anim-dur);
 }
 
 /* 5) Keyframes */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes scaleIn {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.95);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes popIn {
-  from {
-    opacity: 0;
-    transform: scale(0.8);
-  }
-
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  to {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-}
-
-@keyframes ripple {
-  to {
-    transform: translate(-50%, -50%) scale(4);
-    opacity: 0;
-  }
-}
-
-/* --- REMOVED UNUSED PULSE KEYFRAME --- */
-
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes scaleIn { from { opacity: 0; transform: translateY(8px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes popIn { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes ripple { to { transform: translate(-50%, -50%) scale(4); opacity: 0; } }
 
 /* 6) Utility classes */
 .fade-in {
@@ -206,10 +121,16 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 30px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid var(--outline);
   flex-wrap: wrap;
+  padding: 20px 0;
+  margin-bottom: 25px;
+  border-bottom: 1px solid var(--outline);
+  /* Sticky header styles */
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  z-index: 100;
+  transition: background var(--anim-dur);
 }
 
 h1 {
@@ -220,7 +141,6 @@ h1 {
   letter-spacing: -0.5px;
 }
 
-/* 7.1) Header controls wrapper */
 .header-controls {
   display: flex;
   flex-wrap: wrap;
@@ -229,577 +149,143 @@ h1 {
   justify-content: flex-end;
 }
 
-/* 7.2) Segmented control (mode & language) */
 .segmented-control {
   border: 1px solid var(--outline);
   border-radius: var(--radius-pill);
-  /* Make outer container pill-shaped */
   overflow: hidden;
-  /* Ensures inner buttons are clipped to the pill shape */
   display: inline-flex;
-  background: transparent;
-  /* Container itself is transparent */
 }
 
 .segmented-control button {
   border: none;
   background: transparent;
-  /* Buttons start transparent */
   color: var(--on-variant);
-  /* Unselected text color */
   padding: 8px 16px;
-  /* More horizontal padding typical for MD3 */
   cursor: pointer;
   font-family: var(--font-sans);
   font-weight: 500;
   position: relative;
-  /* For z-index to work */
   z-index: 1;
-  /* Ensure text is above active background if needed */
   transition: background var(--anim-dur), color var(--anim-dur);
-  /* Smooth transitions */
 }
 
-/* Active button state */
 .segmented-control button.active {
   background-color: var(--primary-container);
-  /* Subtle background fill for active state */
   color: var(--primary-color);
-  /* Primary color for selected text */
   font-weight: 700;
-  /* Active state often bold in MD3 */
 }
 
-/* Hover state for unselected buttons */
 .segmented-control button:not(.active):hover {
   background-color: var(--table-hover);
-  /* Existing subtle hover */
 }
 
-/* Focus visible state */
 .segmented-control button:focus-visible {
   outline: none;
   box-shadow: 0 0 0 2px var(--focus-ring);
-  /* Focus ring */
   z-index: 2;
-  /* Bring focused button slightly forward */
 }
-
 
 /* 8) Theme switch */
-.theme-switch-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.theme-switch {
-  position: relative;
-  width: 48px;
-  height: 28px;
-}
-
-.theme-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
-}
-
-.slider {
-  position: absolute;
-  inset: 0;
-  background: #bdc1c6;
-  border-radius: 28px;
-  transition: background var(--anim-dur);
-}
-
-.slider::before {
-  content: '';
-  position: absolute;
-  width: 22px;
-  height: 22px;
-  left: 3px;
-  bottom: 3px;
-  background: #fff;
-  border-radius: 50%;
-  transition: transform var(--anim-dur);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-}
-
-.theme-switch input:checked+.slider {
-  background: var(--primary-color);
-}
-
-.theme-switch input:checked+.slider::before {
-  transform: translateX(20px);
-}
-
-.theme-label {
-  font-size: 0.9em;
-  color: var(--on-variant);
-}
-
-/* 9) Material-select */
-.material-select {
-  padding: 10px 12px;
-  border: 1px solid var(--outline);
-  border-radius: var(--radius-md);
-  background: var(--surface);
-  color: var(--on-surface);
-  transition: border-color var(--anim-dur);
-}
-
-.material-select:focus {
-  outline: none;
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3px var(--focus-ring);
-}
+.theme-switch-wrapper { display: flex; align-items: center; gap: 8px; }
+.theme-switch { position: relative; width: 48px; height: 28px; }
+.theme-switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; inset: 0; background: #bdc1c6; border-radius: 28px; transition: background var(--anim-dur); }
+.slider::before { content: ''; position: absolute; width: 22px; height: 22px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: transform var(--anim-dur); box-shadow: 0 1px 3px rgba(0,0,0,0.3); }
+.theme-switch input:checked+.slider { background: var(--primary-color); }
+.theme-switch input:checked+.slider::before { transform: translateX(20px); }
+.theme-label { font-size: 0.9em; color: var(--on-variant); }
 
 /* 10) Search controls */
-.controls {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
-  margin-bottom: 25px;
-  align-items: flex-end;
-}
+.controls { display: flex; flex-wrap: wrap; gap: 24px; margin-bottom: 25px; align-items: flex-end; }
+.controls>div { flex: 1 1 220px; }
+.controls label { display: block; margin-bottom: 10px; font-weight: 500; color: var(--on-variant); font-size: 0.875em; }
+.controls input[type="text"] { width: 100%; padding: 14px 18px; border: 1.5px solid var(--outline); border-radius: var(--radius-md); background: var(--surface); color: var(--on-surface); transition: border-color var(--anim-dur), box-shadow var(--anim-dur); }
+.controls input[type="text"]:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3.5px var(--focus-ring); }
+.controls button { padding: 14px 30px; background: var(--primary-color); color: #fff; border: none; border-radius: var(--radius-pill); font-family: var(--font-sans); font-weight: 700; text-transform: uppercase; cursor: pointer; box-shadow: 0 3px 6px var(--shadow); transition: background var(--anim-dur), box-shadow var(--anim-dur), transform 0.15s var(--anim-ease); }
+.controls button:hover { background: #1a73e8; transform: translateY(-2px); }
+.controls button:active { transform: translateY(1px) scale(0.98); box-shadow: 0 1px 3px var(--shadow); }
 
-.controls>div {
-  flex: 1 1 220px;
-}
-
-.controls label {
-  display: block;
-  margin-bottom: 10px;
-  font-weight: 500;
-  color: var(--on-variant);
-  font-size: 0.875em;
-}
-
-.controls input[type="text"] {
-  width: 100%;
-  padding: 14px 18px;
-  border: 1.5px solid var(--outline);
-  border-radius: var(--radius-md);
+.controls button.btn-secondary {
   background: var(--surface);
   color: var(--on-surface);
-  transition:
-    border-color var(--anim-dur),
-    box-shadow var(--anim-dur);
+  border: 1.5px solid var(--outline);
+  box-shadow: none;
 }
 
-.controls input[type="text"]:focus {
-  border-color: var(--primary-color);
-  box-shadow: 0 0 0 3.5px var(--focus-ring);
-}
-
-.controls button {
-  padding: 14px 30px;
-  background: var(--primary-color);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-pill);
-  font-family: var(--font-sans);
-  font-weight: 700;
-  text-transform: uppercase;
-  cursor: pointer;
-  box-shadow: 0 3px 6px var(--shadow);
-  transition:
-    background var(--anim-dur),
-    box-shadow var(--anim-dur),
-    transform 0.15s var(--anim-ease);
-}
-
-.controls button:hover {
-  background: #1a73e8;
+.controls button.btn-secondary:hover {
+  background: var(--table-hover);
   transform: translateY(-2px);
 }
 
-.controls button:active {
-  transform: translateY(1px) scale(0.98);
-  box-shadow: 0 1px 3px var(--shadow);
-}
-
 /* 11) Ripple */
-.ripple {
-  position: relative;
-  overflow: hidden;
-}
-
-.ripple::after {
-  content: '';
-  position: absolute;
-  width: 100px;
-  height: 100px;
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: 50%;
-  transform: translate(-50%, -50%) scale(0);
-  opacity: 0;
-  transition: transform var(--anim-dur), opacity var(--anim-dur);
-}
-
-.ripple.animate::after {
-  animation: ripple 0.6s ease-out;
-}
+.ripple { position: relative; overflow: hidden; }
+.ripple::after { content: ''; position: absolute; width: 100px; height: 100px; background: rgba(255,255,255,0.4); border-radius: 50%; transform: translate(-50%,-50%) scale(0); opacity: 0; transition: transform .6s, opacity .6s; }
+.ripple.animate::after { animation: ripple 0.6s ease-out; }
 
 /* 12) Desktop table */
-.eta-table-container {
-  margin-bottom: 35px;
-  background: var(--surface);
-  border-radius: var(--radius-md);
-  box-shadow:
-    0 3px 10px var(--shadow),
-    0 2px 5px var(--shadow);
-  padding: 25px;
-  overflow-x: auto;
-  /* --- FIX START: Ensure desktop tables are visible by default and animate in --- */
-  opacity: 0;
-  transform: translateY(8px) scale(0.95);
-  animation: scaleIn var(--anim-dur) var(--anim-ease) forwards;
-  /* --- FIX END --- */
-  transition:
-    background var(--anim-dur),
-    box-shadow var(--anim-dur);
-}
-
-.eta-table-container:hover {
-  transform: translateY(-4px) scale(1.01);
-  box-shadow: 0 6px 12px var(--shadow-strong);
-}
-
-.eta-table-container h3,
-.eta-table-container h4 {
-  font-family: var(--font-sans);
-  font-size: 1.4em;
-  font-weight: 500;
-  color: var(--on-surface);
-  border-bottom: 1.5px solid var(--outline);
-  padding-bottom: 12px;
-  margin: 0 0 20px;
-}
-
-/* For MTR line-tag */
-h3 span.line-tag {
-  display: inline-block;
-  padding: 0.2em 0.5em;
-  border-radius: 4px;
-  margin-right: 0.5em;
-}
+.eta-table-container { margin-bottom: 35px; background: var(--surface); border-radius: var(--radius-md); box-shadow: 0 3px 10px var(--shadow), 0 2px 5px var(--shadow); padding: 25px; overflow-x: auto; opacity: 0; transform: translateY(8px) scale(0.95); animation: scaleIn var(--anim-dur) var(--anim-ease) forwards; transition: background var(--anim-dur), box-shadow var(--anim-dur); }
+.eta-table-container:hover { transform: translateY(-4px) scale(1.01); box-shadow: 0 6px 12px var(--shadow-strong); }
+.eta-table-container h3, .eta-table-container h4 { font-family: var(--font-sans); font-size: 1.4em; font-weight: 500; color: var(--on-surface); border-bottom: 1.5px solid var(--outline); padding-bottom: 12px; margin: 0 0 20px; }
+h3 span.line-tag { display: inline-block; padding: .2em .5em; border-radius: 4px; margin-right: .5em; }
 
 /* 13) Table rows */
-table.eta-results {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: var(--font-text);
-  font-size: 0.9em;
-}
+table.eta-results { width: 100%; border-collapse: collapse; font-family: var(--font-text); font-size: 0.9em; }
+table.eta-results th, table.eta-results td { padding: 12px 15px; border-bottom: 1px solid var(--outline); white-space: nowrap; transition: background .15s, transform .15s; }
+table.eta-results th { text-align: left; font-family: var(--font-sans); font-weight: 700; font-size: .8em; color: var(--on-variant); text-transform: uppercase; letter-spacing: .8px; }
+table.eta-results tr.eta-data-row:hover td { background: var(--table-hover); }
+/* Zebra-striping */
+table.eta-results tbody tr:nth-child(odd) td { background-color: rgba(0,0,0,0.02); }
+html.dark-mode table.eta-results tbody tr:nth-child(odd) td { background-color: rgba(255,255,255,0.02); }
 
-table.eta-results th,
-table.eta-results td {
-  padding: 12px 15px;
-  border-bottom: 1px solid var(--outline);
-  white-space: nowrap;
-  transition: background 0.15s;
-}
+.scheduled-eta { font-style: italic; color: var(--on-variant); opacity: .8; }
 
-table.eta-results th {
-  text-align: left;
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.8em;
-  color: var(--on-variant);
-  text-transform: uppercase;
-  letter-spacing: 0.8px;
-}
+/* 14) Route-tag */
+.route-tag { display: inline-block; padding: 6px 8px; border-radius: var(--radius-sm); font-family: var(--font-sans); font-weight: 700; font-size: .875em; line-height: 1.2; box-shadow: 0 1px 2px var(--shadow); white-space: nowrap; transition: background var(--anim-dur), color var(--anim-dur); animation: popIn var(--anim-dur) var(--anim-ease) forwards; }
+.route-tag.route-A { background: #1967d2; color: #fdd663; }
+.route-tag.route-ES { background: #e8710a; color: #fff; }
+.route-tag.route-HK { background: #fff; color: #00aeee; }
+.route-tag.route-N { background: #000; color: #fff; }
+.route-tag.route-1XX, .route-tag.route-3XX, .route-tag.route-6XX { background: #d71920; color: #fff; }
+.route-tag.route-9XX { background: #1e8e3e; color: #fff; }
+.route-tag.route-P9XX { background: #b76e79; color: #fff; }
+.route-tag.route-normal { background: #fff; color: #000; }
 
-table.eta-results tr.eta-data-row:hover td {
-  background: var(--table-hover);
-}
-
-.scheduled-eta {
-  font-style: italic;
-  color: var(--on-variant);
-  opacity: 0.8;
-}
-
-/* 14) Route-tag popIn */
-.route-tag {
-  display: inline-block;
-  padding: 6px 8px;
-  border-radius: var(--radius-sm);
-  font-family: var(--font-sans);
-  font-weight: 700;
-  font-size: 0.875em;
-  /* Base size, will be overridden for mobile */
-  line-height: 1.2;
-  box-shadow: 0 1px 2px var(--shadow);
-  white-space: nowrap;
-  transition:
-    background var(--anim-dur),
-    color var(--anim-dur);
-  animation: popIn var(--anim-dur) var(--anim-ease) forwards;
-}
-
-.route-tag.route-A {
-  background: #1967d2;
-  color: #fdd663;
-}
-
-.route-tag.route-ES {
-  background: #e8710a;
-  color: #fff;
-}
-
-.route-tag.route-HK {
-  background: #fff;
-  color: #00aeee;
-}
-
-.route-tag.route-N {
-  background: #000;
-  color: #fff;
-}
-
-.route-tag.route-1XX,
-.route-tag.route-3XX,
-.route-tag.route-6XX {
-  background: #d71920;
-  color: #fff;
-}
-
-.route-tag.route-9XX {
-  background: #1e8e3e;
-  color: #fff;
-}
-
-.route-tag.route-P9XX {
-  background: #b76e79;
-  color: #fff;
-}
-
-.route-tag.route-normal {
-  background: #fff;
-  color: #000;
-}
-
-/* 15) Platform circle styling (for LR and MTR) */
-.platform-circle {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  line-height: 1;
-  /* helps perfect vertical centering */
-  flex-shrink: 0;
-  box-shadow: 0 1px 2px var(--shadow);
-}
-
+/* 15) Platform circle */
+.platform-circle { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; line-height: 1; flex-shrink: 0; box-shadow: 0 1px 2px var(--shadow); }
 
 /* 16) Footer */
-.app-footer {
-  margin-top: 25px;
-  text-align: center;
-  font-size: 0.9em;
-  color: var(--on-variant);
-}
+.app-footer { margin-top: 25px; text-align: center; font-size: .8em; color: var(--on-variant); opacity: .7; }
 
-/* 17) Loading */
-.loading {
-  text-align: center;
-  font-style: italic;
-  padding: 20px;
-}
-
-/* --- REMOVED UNUSED PULSE CLASS --- */
-
+/* 17) Loading & Feedback */
+.initial-state { text-align: center; padding: 40px; color: var(--on-variant); }
+.initial-state h2 { font-family: var(--font-display); font-size: 1.8em; margin-bottom: 10px; color: var(--on-surface); }
+.loading-spinner { border: 4px solid var(--outline); border-top: 4px solid var(--primary-color); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 40px auto; }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.no-results { text-align: center; padding: 40px; color: var(--on-variant); font-style: italic; }
 
 /* 19) Scroll-progress */
-.progress-bar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  height: 4px;
-  background: var(--primary-color);
-  width: 0%;
-  z-index: 1000;
-  transition: width 0.2s ease-out;
-}
+.progress-bar { position: fixed; top: 0; left: 0; height: 4px; background: var(--primary-color); width: 0%; z-index: 1000; transition: width .2s ease-out; }
 
-/* 20) Scroll-reveal */
-.reveal {
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.6s ease, transform 0.6s ease;
-}
-
-.reveal.in-view {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-
-/* === 21) Mobile Card Base Styling (Applies to all cards) === */
-.mobile-card {
-  box-shadow:
-    0 3px 10px var(--shadow),
-    0 2px 5px var(--shadow);
-  margin-bottom: 16px;
-  /* Spacing between cards */
-  background: var(--surface);
-  /* White background for cards */
-  border-radius: var(--radius-md);
-  /* Rounded corners for cards */
-  position: relative;
-  opacity: 0;
-  animation: scaleIn var(--anim-dur) var(--anim-ease) forwards;
-  transition: box-shadow var(--anim-dur) var(--anim-ease);
-}
-
-/* === 22) Mobile Card Layout & Specific Mode Styling === */
+/* === Mobile-specific styles === */
 @media (max-width: 576px) {
-  .eta-table-container {
-    /* --- FIX: Hide desktop tables on mobile --- */
-    display: none;
-  }
-
-  .mobile-card {
-    display: flex;
-    align-items: center;
-    padding: 12px;
-  }
-
-  /* 22.1) ROUTE column styling */
-  .mobile-card .mobile-route {
-    /* Applies to all modes to ensure sizing */
-    flex-shrink: 0;
-    /* Prevent shrinking */
-    margin-right: 8px;
-    /* Standard gap between route and destination */
-  }
-
-  /* Specific: KMB and LR route number size */
-  .mobile-kmb .mobile-route .route-tag,
-  .mobile-lr .mobile-route .route-tag {
-    font-size: 1.2em;
-    /* Increase font size for KMB and LR route numbers */
-  }
-
-  /* MTR: collapse the route column completely */
-  .mobile-card.mobile-mtr .mobile-route {
-    flex-basis: 0;
-    /* Set initial size to 0 */
-    margin-right: 0;
-    overflow: hidden;
-    /* Hide the route content entirely */
-  }
-
-  /* Dynamically set route column width after all elements are rendered (JS sets --max-route-col-width) */
-  .mobile-card:not(.mobile-mtr) .mobile-route {
-    flex-basis: var(--max-route-col-width);
-  }
-
-
-  /* 22.2) DESTINATION column */
-  .mobile-dest {
-    flex-grow: 1;
-    /* Allow it to grow and take available space */
-    flex-shrink: 1;
-    min-width: 0;
-    /* Allow text to wrap within available space */
-  }
-
-  /* 22.3) PLATFORM element */
-  .mobile-platform {
-    flex-shrink: 0;
-    /* Prevent shrinking */
-    flex-basis: var(--max-platform-col-width);
-    /* Fixed width based on measurement */
-    margin-left: var(--mobile-gap);
-    /* Gap from destination */
-    display: flex;
-    justify-content: flex-end;
-    /* Right-align content (the circle) within its fixed space */
-    align-items: center;
-  }
-
-  /* 22.4) ETA Times (or warning button for no-ETA) */
-  .mobile-times,
-  .mobile-toggle-btn {
-    /* Apply common flex properties to both */
-    flex-shrink: 0;
-    /* Prevent shrinking */
-    flex-basis: var(--max-times-col-width);
-    /* Fixed width based on measurement */
-    margin-left: var(--mobile-gap);
-    /* Gap from platform/dest for button */
-  }
-
-  .mobile-times {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-end;
-    /* Right-align ETA times if multi-line */
-    row-gap: 4px;
-    /* Vertical spacing between ETA lines */
-  }
-
-  /* Specific: KMB ETA size & first ETA color */
-  .mobile-kmb .mobile-times .eta-time {
-    font-size: 0.9em;
-    /* Decrease ETA font size for KMB */
-  }
-
-  /* Specific: MTR/LR ETA size */
-  .mobile-mtr .mobile-times .eta-time,
-  .mobile-lr .mobile-times .eta-time {
-    font-size: 1.1em;
-    /* Standard ETA font for MTR/LR (as per previous versions) */
-  }
-
-  /* KMB: First ETA blue text (already exists, ensuring it applies) */
-  .mobile-kmb .mobile-times .eta-time.eta-first:not(.scheduled-eta) {
-    color: var(--primary-color);
-    font-weight: 700;
-  }
-
-
-  /* 22.5) Warning Button (re-style for fixed width) */
-  .mobile-toggle-btn {
-    width: auto;
-    /* Allow flex-basis to control width */
-    height: 28px;
-    border: none;
-    background: rgba(0, 0, 0, 0.08);
-    color: var(--on-surface);
-    border-radius: var(--radius-pill);
-    font-size: 1.1em;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    transition: background var(--anim-dur), transform var(--anim-ease);
-    animation: popIn var(--anim-dur) var(--anim-ease) forwards;
-    z-index: 1;
-    padding: 0 8px;
-    /* Add some padding back to the button itself */
-  }
-
-  .mobile-toggle-btn.warning {
-    background: var(--kmb-red);
-    color: #fff;
-  }
-
-  .mobile-toggle-btn:hover {
-    transform: none;
-    /* Override potential hover transforms from generic button styles */
-  }
-
-
-  /* Expanded details panel (always below the main card content) */
-  .mobile-details {
-    margin-top: 8px;
-  }
+  .eta-table-container { display: none; }
+  .mobile-card { display: flex; align-items: center; padding: 12px; box-shadow: 0 2px 8px var(--shadow); margin-bottom: 16px; background: var(--surface); border-radius: var(--radius-md); position: relative; opacity: 0; animation: scaleIn var(--anim-dur) var(--anim-ease) forwards; transition: box-shadow var(--anim-dur) var(--anim-ease); }
+  .mobile-card .mobile-route { flex-shrink: 0; margin-right: 8px; }
+  .mobile-kmb .mobile-route .route-tag, .mobile-lr .mobile-route .route-tag { font-size: 1.2em; }
+  .mobile-card.mobile-mtr .mobile-route { flex-basis: 0; margin-right: 0; overflow: hidden; }
+  .mobile-card:not(.mobile-mtr) .mobile-route { flex-basis: var(--max-route-col-width); }
+  .mobile-dest { flex-grow: 1; flex-shrink: 1; min-width: 0; }
+  .mobile-platform { flex-shrink: 0; flex-basis: var(--max-platform-col-width); margin-left: var(--mobile-gap); display: flex; justify-content: flex-end; align-items: center; }
+  .mobile-times, .mobile-toggle-btn { flex-shrink: 0; flex-basis: var(--max-times-col-width); margin-left: var(--mobile-gap); }
+  .mobile-times { display: flex; flex-direction: column; align-items: flex-end; row-gap: 4px; }
+  .mobile-kmb .mobile-times .eta-time { font-size: .9em; }
+  .mobile-mtr .mobile-times .eta-time, .mobile-lr .mobile-times .eta-time { font-size: 1.1em; }
+  .mobile-card .mobile-times .eta-time.eta-first { color: var(--primary-color); font-weight: 700; }
+  .mobile-toggle-btn { width: auto; height: 28px; border: none; background: rgba(0,0,0,.08); color: var(--on-surface); border-radius: var(--radius-pill); font-size: 1.1em; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background var(--anim-dur),transform var(--anim-ease); animation: popIn var(--anim-dur) var(--anim-ease) forwards; z-index: 1; padding: 0 8px; }
+  .mobile-toggle-btn.warning { background: var(--kmb-red); color: #fff; }
+  .mobile-toggle-btn:hover { transform: none; }
+  .mobile-card.expanded { margin-bottom: 0; border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
+  .mobile-details { padding: 12px 16px; background: var(--bg); border-top: 1px solid var(--outline); animation: slideDown var(--anim-dur) var(--anim-ease); font-size: .9em; color: var(--on-variant); margin-bottom: 16px; border-bottom-left-radius: var(--radius-md); border-bottom-right-radius: var(--radius-md); box-shadow: 0 4px 8px var(--shadow); }
+  .mobile-details div { margin-bottom: 4px; }
+  .mobile-details strong { color: var(--on-surface); }
 }

@@ -1,5 +1,5 @@
 // expose full MTR station dictionary & name→code map
-window.MTR_STATIONS = {
+window.TimoETA.MTR_STATIONS = {
   AEL:{name:'Airport Express Line',type:'line'},
   TCL:{name:'Tung Chung Line',type:'line'},
   TML:{name:'Tuen Ma Line',type:'line'},
@@ -109,7 +109,7 @@ window.MTR_STATIONS = {
   CHW:{name:'Chai Wan',lines:['ISL']},
   DIS:{name:'Disneyland Resort',lines:['DRL']}
 };
-window.MTR_NAME_TO_CODE = Object.entries(window.MTR_STATIONS)
+window.TimoETA.MTR_NAME_TO_CODE = Object.entries(window.TimoETA.MTR_STATIONS)
   .reduce((m,[c,i]) => {
     if (i.lines) m[i.name.toLowerCase()] = c;
     return m;

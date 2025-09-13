@@ -1,12 +1,10 @@
 // src/lr.js
 ;(function(){
-  // Removed LANGS block, now managed globally in app.js
-
   const API = id =>
     `https://rt.data.gov.hk/v1/transport/mtr/lrt/getSchedule?station_id=${encodeURIComponent(id)}`;
 
-  const STOPS = window.LR_STOPS;
-  const NAME_TO_ID = window.LR_NAME_TO_ID;
+  const STOPS = window.TimoETA.LR_STOPS;
+  const NAME_TO_ID = window.TimoETA.LR_NAME_TO_ID;
 
   const COLORS = {
     '505':'#da2128','507':'#25a650','507P':'#25a650','610':'#551b14','614':'#44c0f3',
@@ -20,14 +18,12 @@
     return (0.299*r+0.587*g+0.114*b)>186?'#000':'#fff';
   }
 
-  function getLang(){ return document.querySelector('.lang-switch button.active').dataset.value; }
+  function getLang(){ return TimoETA.getLang(); }
   function isMobile(){ return window.innerWidth<=576; }
 
-  // Removed updateLRText, now managed globally in app.js
-
-  window.buildLR = async function(){
-    const currentLang=getLang(); // Get current lang from app.js global
-    const L=window.ALL_LANGS_DATA.lr[currentLang]; // Access centralized lang data
+  window.TimoETA.buildLR = async function(){
+    const currentLang=getLang();
+    const L=TimoETA.ALL_LANGS_DATA.lr[currentLang];
 
     const raw = document.getElementById('stopName').value.trim().toLowerCase();
     const results = document.getElementById('results');
@@ -35,7 +31,7 @@
 
     const stationId = NAME_TO_ID[raw];
     if (stationId == null) {
-      results.textContent = L.noData; // L.noData from specific lang
+      results.innerHTML = `<div class="no-results">${L.stopNotFound}</div>`;
       return;
     }
 
@@ -43,7 +39,7 @@
       const res = await fetch(API(stationId)),
             j   = await res.json();
       if (j.status!==1 || !j.platform_list?.length) {
-        results.textContent = L.noData;
+        results.innerHTML = `<div class="no-results">${L.noData}</div>`;
         return;
       }
 
@@ -53,82 +49,39 @@
         results.appendChild(h3);
 
         if(isMobile()){
-          p.route_list.forEach(e=>{
-            const card = document.createElement('div');
-            card.className='mobile-card fade-in mobile-lr';
-
-            const cRoute=document.createElement('div');
-            cRoute.className='mobile-route';
-            const tag=document.createElement('span');
-            tag.className='route-tag';
-            tag.textContent=e.route_no;
-            const bg=COLORS[e.route_no], fg=bg?contrastColor(bg):'#000';
-            if(bg){tag.style.backgroundColor=bg;tag.style.color=fg;}
-            cRoute.appendChild(tag);
-
-            const cDest=document.createElement('div');
-            cDest.className='mobile-dest';
-            cDest.textContent=currentLang==='en'?e.dest_en:e.dest_ch; // Use currentLang here
-
-            // PLATFORM: The wrapper div
-            const cPlatform=document.createElement('div');
-            cPlatform.className='mobile-platform';
-            const circle=document.createElement('span'); // The actual circle content
-            circle.className='platform-circle';
-            circle.textContent=p.platform_id;
-            if(bg){circle.style.backgroundColor=bg;circle.style.color=fg;}
-            cPlatform.appendChild(circle); // Add circle to its wrapper div
-
-            const cTimes=document.createElement('div');
-            cTimes.className='mobile-times';
-            const tspan=document.createElement('span');
-            tspan.className='eta-time';
-            tspan.textContent=currentLang==='en'?e.time_en:e.time_ch; // Use currentLang here
-            cTimes.appendChild(tspan);
-
-            // Card now appends elements directly
-            card.append(cRoute,cDest,cPlatform,cTimes);
-            results.appendChild(card);
+          const mobileCards = p.route_list.map(e => {
+            const bg = COLORS[e.route_no];
+            const cardData = {
+              mode: 'lr',
+              route: e.route_no,
+              routeBgColor: bg,
+              routeColor: bg ? contrastColor(bg) : '#000',
+              dest: currentLang==='en'?e.dest_en:e.dest_ch,
+              platform: p.platform_id,
+              etas: [{ time: currentLang==='en'?e.time_en:e.time_ch }]
+            };
+            return TimoETA.createMobileCard(cardData);
           });
-
-          window.alignMobileColumns(); // Align columns after all cards are in DOM
+          mobileCards.forEach(card => results.appendChild(card));
+          TimoETA.alignMobileColumns();
         } else {
-          const wrap=document.createElement('div');
-          wrap.className='eta-table-container';
-          const table=document.createElement('table');
-          table.className='eta-results';
-          const hdrs=[L.tableHeaders.Route,L.tableHeaders.Destination,L.tableHeaders.Time]; // Access desktop headers via specific lang
-          table.innerHTML=`<thead><tr>${
-            hdrs.map(h=>`<th>${h}</th>`).join('')
-          }</tr></thead>`;
-          const tbody=document.createElement('tbody');
-          p.route_list.forEach(e=>{
-            const tr=document.createElement('tr');
-            const tdR=document.createElement('td'), sp=document.createElement('span');
-            sp.className='route-tag';
-            sp.textContent=e.route_no;
-            const bg=COLORS[e.route_no], fg=bg?contrastColor(bg):'#000';
-            if(bg){sp.style.backgroundColor=bg;sp.style.color=fg;}
-            tdR.appendChild(sp); tr.appendChild(tdR);
-
-            const tdD=document.createElement('td');
-            tdD.textContent=currentLang==='en'?e.dest_en:e.dest_ch; // Use currentLang here
-            tr.appendChild(tdD);
-
-            const tdT=document.createElement('td');
-            tdT.textContent=currentLang==='en'?e.time_en:e.time_ch; // Use currentLang here
-            tr.appendChild(tdT);
-
-            tbody.appendChild(tr);
+          const desktopHeaders = [L.tableHeaders.Route, L.tableHeaders.Destination, L.tableHeaders.Time];
+          const desktopRows = p.route_list.map(e => {
+            const bg = COLORS[e.route_no];
+            const fg = bg ? contrastColor(bg) : '#000';
+            return [
+              { html: `<span class="route-tag" style="background-color:${bg};color:${fg};">${e.route_no}</span>` },
+              currentLang==='en'?e.dest_en:e.dest_ch,
+              currentLang==='en'?e.time_en:e.time_ch
+            ];
           });
-          table.appendChild(tbody);
-          wrap.appendChild(table);
-          results.appendChild(wrap);
+          const table = TimoETA.createDesktopTable(desktopHeaders, desktopRows);
+          results.appendChild(table);
         }
       });
     } catch(err){
       console.error(err);
-      results.textContent = L.noData;
+      results.innerHTML = `<div class="no-results">${L.noData}</div>`;
     }
   };
 })();

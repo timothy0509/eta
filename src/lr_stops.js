@@ -1,6 +1,5 @@
-// src/lr_stops.js
 // expose Light Rail stop → station_id map
-window.LR_STOPS = {
+window.TimoETA.LR_STOPS = {
   'Tuen Mun Ferry Pier':1,'Melody Garden':10,'Butterfly':15,
   'Light Rail Depot':20,'Lung Mun':30,'Tsing Shan Tsuen':40,
   'Tsing Wun':50,'Kin On':60,'Ho Tin':70,'Choy Yee Bridge':75,
@@ -21,7 +20,7 @@ window.LR_STOPS = {
   'Fung Nin Road':570,'Hong Lok Road':580,'Tai Tong Road':590,
   'Yuen Long':600,'Sam Shing':920
 };
-window.LR_NAME_TO_ID = Object.entries(window.LR_STOPS)
+window.TimoETA.LR_NAME_TO_ID = Object.entries(window.TimoETA.LR_STOPS)
   .reduce((m,[n,i]) => {
     m[n.toLowerCase()] = i;
     return m;

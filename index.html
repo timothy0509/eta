@@ -1,4 +1,3 @@
-<!-- index.html-->
 <!DOCTYPE html>
 <html lang="en">
 
@@ -65,10 +64,18 @@
         <button type="submit" class="btn-primary ripple">
           Search ETAs
         </button>
+        <button type="button" id="clearButton" class="btn-secondary ripple">
+          Clear
+        </button>
       </div>
     </form>
 
-    <div id="results"></div>
+    <div id="results" aria-live="polite">
+      <div class="initial-state">
+        <h2>Welcome to TimoETA</h2>
+        <p>Select a transport mode and start searching for real-time ETAs.</p>
+      </div>
+    </div>
 
     <footer class="app-footer fade-in">
       Made by Timothy

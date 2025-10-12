@@ -14,15 +14,11 @@
     ISL:'#347dc5',TCL:'#f7943e',TKL:'#7e459b',TML:'#923011',
     DRL:'#f173ac',SIL:'#b5bd01'
   };
-  function contrastColor(hex){
-    const r=parseInt(hex.substr(1,2),16),
-          g=parseInt(hex.substr(3,2),16),
-          b=parseInt(hex.substr(5,2),16);
-    return (0.299*r+0.587*g+0.114*b)>186?'#000':'#fff';
-  }
 
+  // Use shared utilities from TimoETA namespace
+  function contrastColor(hex){ return TimoETA.contrastColor(hex); }
   function getLang(){ return TimoETA.getLang(); }
-  function isMobile(){ return window.innerWidth<=576; }
+  function isMobile(){ return TimoETA.isMobile(); }
 
   window.TimoETA.buildMTR = async function(){
     const currentLang=getLang();

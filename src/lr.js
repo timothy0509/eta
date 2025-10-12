@@ -11,15 +11,11 @@
     '614P':'#f4858d','615':'#f9dd07','615P':'#256684','705':'#72bf44','706':'#b27ab4',
     '751':'#f5821f','761P':'#6f2b91'
   };
-  function contrastColor(hex){
-    const r=parseInt(hex.substr(1,2),16),
-          g=parseInt(hex.substr(3,2),16),
-          b=parseInt(hex.substr(5,2),16);
-    return (0.299*r+0.587*g+0.114*b)>186?'#000':'#fff';
-  }
 
+  // Use shared utilities from TimoETA namespace
+  function contrastColor(hex){ return TimoETA.contrastColor(hex); }
   function getLang(){ return TimoETA.getLang(); }
-  function isMobile(){ return window.innerWidth<=576; }
+  function isMobile(){ return TimoETA.isMobile(); }
 
   window.TimoETA.buildLR = async function(){
     const currentLang=getLang();

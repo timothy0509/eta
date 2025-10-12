@@ -3,6 +3,22 @@
   // Create a single global namespace
   window.TimoETA = {};
 
+  // Constants
+  const MOBILE_BREAKPOINT = 576;
+
+  // Utility functions
+  TimoETA.isMobile = function() {
+    return window.innerWidth <= MOBILE_BREAKPOINT;
+  };
+
+  TimoETA.contrastColor = function(hex) {
+    if (!hex || hex.length < 7) return '#000';
+    const r = parseInt(hex.substring(1, 3), 16),
+          g = parseInt(hex.substring(3, 5), 16),
+          b = parseInt(hex.substring(5, 7), 16);
+    return (0.299 * r + 0.587 * g + 0.114 * b) > 186 ? '#000' : '#fff';
+  };
+
   // Centralized language data for all modes
   window.TimoETA.ALL_LANGS_DATA = {
     kmb: {
@@ -93,18 +109,19 @@
 
   // Return active language code
   TimoETA.getLang = function(){
-    return document.querySelector('.lang-switch button.active').dataset.value;
+    const activeBtn = document.querySelector('.lang-switch button.active');
+    return activeBtn ? activeBtn.dataset.value : 'en';
   };
 
   // Return active mode code
   TimoETA.getMode = function(){
-    return document.querySelector('.mode-switch button.active').dataset.value;
+    const activeBtn = document.querySelector('.mode-switch button.active');
+    return activeBtn ? activeBtn.dataset.value : 'kmb';
   };
 
-  // Immediately apply saved theme and set toggle
+  // Set theme toggle checkbox state on load
   (function(){
     const t = localStorage.getItem('theme');
-    if (t === 'dark') document.documentElement.classList.add('dark-mode');
     const chk = document.getElementById('themeToggle');
     if (chk) chk.checked = (t === 'dark');
   })();
@@ -151,19 +168,49 @@
     }
 
     // Mode & language segmented controls
-    document.querySelectorAll('.mode-switch button').forEach(btn=>{
+    document.querySelectorAll('.mode-switch button').forEach((btn, idx, arr)=>{
       btn.addEventListener('click', ()=>{
-        document.querySelectorAll('.mode-switch button').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.mode-switch button').forEach(b=>{
+          b.classList.remove('active');
+          b.setAttribute('aria-pressed', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
         TimoETA.updateUITextAndInputs();
+      });
+      // Add keyboard navigation
+      btn.addEventListener('keydown', (e)=>{
+        if(e.key === 'ArrowRight' || e.key === 'ArrowLeft'){
+          e.preventDefault();
+          const nextIdx = e.key === 'ArrowRight' ? 
+            (idx + 1) % arr.length : 
+            (idx - 1 + arr.length) % arr.length;
+          arr[nextIdx].click();
+          arr[nextIdx].focus();
+        }
       });
     });
 
-    document.querySelectorAll('.lang-switch button').forEach(btn=>{
+    document.querySelectorAll('.lang-switch button').forEach((btn, idx, arr)=>{
       btn.addEventListener('click', ()=>{
-        document.querySelectorAll('.lang-switch button').forEach(b=>b.classList.remove('active'));
+        document.querySelectorAll('.lang-switch button').forEach(b=>{
+          b.classList.remove('active');
+          b.setAttribute('aria-pressed', 'false');
+        });
         btn.classList.add('active');
+        btn.setAttribute('aria-pressed', 'true');
         TimoETA.updateUITextAndInputs();
+      });
+      // Add keyboard navigation
+      btn.addEventListener('keydown', (e)=>{
+        if(e.key === 'ArrowRight' || e.key === 'ArrowLeft'){
+          e.preventDefault();
+          const nextIdx = e.key === 'ArrowRight' ? 
+            (idx + 1) % arr.length : 
+            (idx - 1 + arr.length) % arr.length;
+          arr[nextIdx].click();
+          arr[nextIdx].focus();
+        }
       });
     });
 
@@ -227,8 +274,13 @@
 
     if (mode && stop) {
       document.querySelectorAll('.mode-switch button').forEach(b => {
-        if (b.dataset.value === mode) b.classList.add('active');
-        else b.classList.remove('active');
+        if (b.dataset.value === mode) {
+          b.classList.add('active');
+          b.setAttribute('aria-pressed', 'true');
+        } else {
+          b.classList.remove('active');
+          b.setAttribute('aria-pressed', 'false');
+        }
       });
 
       document.getElementById('stopName').value = stop;
@@ -253,16 +305,23 @@
   // Scroll-progress bar
   window.addEventListener('scroll', function(){
     const doc = document.documentElement;
-    const pct = (doc.scrollTop) /
-      (doc.scrollHeight - doc.clientHeight) * 100;
+    const scrollHeight = doc.scrollHeight - doc.clientHeight;
+    const pct = scrollHeight > 0 ? (doc.scrollTop / scrollHeight * 100) : 0;
     const progressBar = document.querySelector('.progress-bar');
-    if(progressBar) progressBar.style.width = pct + '%';
+    if(progressBar) progressBar.style.width = Math.min(100, Math.max(0, pct)) + '%';
   });
 
   // UI Component Generation
+  // Helper function to sanitize HTML strings
+  TimoETA.sanitizeHTML = function(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  };
+
   TimoETA.createMobileCard = function(data) {
     const card = document.createElement('div');
-    card.className = `mobile-card fade-in mobile-${data.mode}`;
+    card.className = `mobile-card fade-in mobile-${data.mode || 'default'}`;
 
     const cRoute = document.createElement('div');
     cRoute.className = 'mobile-route';
@@ -272,7 +331,7 @@
       tag.textContent = data.route;
       if (data.routeBgColor) {
         tag.style.backgroundColor = data.routeBgColor;
-        tag.style.color = data.routeColor;
+        tag.style.color = data.routeColor || '#000';
       }
       cRoute.appendChild(tag);
     }
@@ -280,7 +339,7 @@
 
     const cDest = document.createElement('div');
     cDest.className = 'mobile-dest';
-    cDest.textContent = data.dest;
+    cDest.textContent = data.dest || '';
     card.appendChild(cDest);
 
     const cPlatform = document.createElement('div');
@@ -392,6 +451,19 @@
     } else {
       results.appendChild(content);
     }
+  };
+
+  // Debounce helper
+  TimoETA.debounce = function(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
   };
 
   // Mobile column alignment

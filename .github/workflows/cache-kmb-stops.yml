@@ -3,25 +3,50 @@ name: Cache KMB Stop List
 on:
   schedule:
     # 05:00 HKT = 21:00 UTC previous day
-    - cron: '0 21 * * *'
+    - cron: "0 21 * * *"
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   update-stops:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
 
       - name: Fetch KMB stop list
+        id: fetch
         run: |
           mkdir -p cache
-          curl -sSf https://data.etabus.gov.hk/v1/transport/kmb/stop \
-            -o cache/kmb_stops.json
+          # Download to a temporary file and follow redirects. Compare with existing cache
+          # to avoid committing when there are no changes.
+          curl -sSfL https://data.etabus.gov.hk/v1/transport/kmb/stop \
+            -o cache/kmb_stops.json.new
+          if [ -f cache/kmb_stops.json ]; then
+            if cmp -s cache/kmb_stops.json cache/kmb_stops.json.new; then
+              echo "No changes detected"
+              rm cache/kmb_stops.json.new
+              echo "changed=false" >> $GITHUB_OUTPUT
+              exit 0
+            else
+              mv cache/kmb_stops.json.new cache/kmb_stops.json
+              echo "changed=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            mv cache/kmb_stops.json.new cache/kmb_stops.json
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Commit & push updated cache
+        if: steps.fetch.outputs.changed == 'true'
         uses: EndBug/add-and-commit@v9
         with:
+          token: ${{ secrets.GITHUB_TOKEN }}
           author_name: github-actions[bot]
           author_email: github-actions[bot]@users.noreply.github.com
           message: update cached KMB stop list

@@ -64,12 +64,13 @@
   }
 
   function formatTimeOnly(iso){
-    return iso
-      ? new Date(iso).toLocaleTimeString('en-GB',{
-          hour12:false, hour:'2-digit',
-          minute:'2-digit', second:'2-digit'
-        })
-      : '';
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString('en-GB',{
+      hour12:false, hour:'2-digit',
+      minute:'2-digit', second:'2-digit'
+    });
   }
   window.TimoETA.formatTimeOnly = formatTimeOnly;
 
@@ -119,9 +120,9 @@
 
     const allStops=await getStops();
     const matches=allStops.filter(s=>
-      s.name_en.toLowerCase().includes(stopIn)||
-      s.name_tc.toLowerCase().includes(stopIn)||
-      s.name_sc.toLowerCase().includes(stopIn)
+      (s.name_en && s.name_en.toLowerCase().includes(stopIn))||
+      (s.name_tc && s.name_tc.toLowerCase().includes(stopIn))||
+      (s.name_sc && s.name_sc.toLowerCase().includes(stopIn))
     );
 
     if(!matches.length){
@@ -202,9 +203,9 @@
               time: TimoETA.formatTimeOnly(e.eta),
               isScheduled: e.rmk_en?.includes('Scheduled Bus')
             })),
-            details: `<div><strong>Stop Code:</strong> ${r.stopCode || 'N/A'}</div>
-                      <div><strong>Platform:</strong> ${r.platform || 'N/A'}</div>
-                      <div><strong>Remarks:</strong> ${r.etas.some(e => e.eta) ? r.numberedRemarks.join('; ') : (r.noetaRemarks.join('; ') || L.noEtas)}</div>`
+            details: `<div><strong>Stop Code:</strong> ${TimoETA.sanitizeHTML(r.stopCode || 'N/A')}</div>
+                      <div><strong>Platform:</strong> ${TimoETA.sanitizeHTML(r.platform || 'N/A')}</div>
+                      <div><strong>Remarks:</strong> ${TimoETA.sanitizeHTML(r.etas.some(e => e.eta) ? r.numberedRemarks.join('; ') : (r.noetaRemarks.join('; ') || L.noEtas))}</div>`
           };
           return TimoETA.createMobileCard(cardData);
         });

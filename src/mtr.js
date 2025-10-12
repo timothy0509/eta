@@ -69,12 +69,12 @@
     const L=TimoETA.ALL_LANGS_DATA.mtr[currentLang];
     const results=document.getElementById('results');
     const bg=LINE_COLOR[line]||'#000', fg=contrastColor(bg);
-    const lineName=STATIONS[line].name;
+    const lineName=STATIONS[line]?.name || line;
 
     ['UP','DOWN'].forEach(dir=>{
       const arr=block[dir]||[];
       if(!arr.length) return;
-      const dests=Array.from(new Set(arr.map(e=>e.dest)))
+      const dests=Array.from(new Set(arr.map(e=>e.dest).filter(Boolean)))
         .map(d=>STATIONS[d]?.name||d).join(' / ');
 
       const h3=document.createElement('h3');
@@ -91,11 +91,11 @@
         const mobileCards = arr.map(e => {
           const cardData = {
             mode: 'mtr',
-            dest: STATIONS[e.dest]?.name || e.dest,
-            platform: e.plat,
+            dest: STATIONS[e.dest]?.name || e.dest || 'Unknown',
+            platform: e.plat || '',
             routeBgColor: bg,
             routeColor: fg,
-            etas: [{ time: (e.time||'').split(' ')[1]||e.time }]
+            etas: [{ time: (e.time||'').split(' ')[1]||e.time||'' }]
           };
           return TimoETA.createMobileCard(cardData);
         });
@@ -104,9 +104,9 @@
         const desktopHeaders = [L.tableHeaders.Destination, L.tableHeaders.Platform, L.tableHeaders.Time];
         const desktopRows = arr.map(e => {
           return [
-            STATIONS[e.dest]?.name || e.dest,
-            e.plat,
-            (e.time||'').split(' ')[1]||e.time
+            STATIONS[e.dest]?.name || e.dest || 'Unknown',
+            e.plat || '',
+            (e.time||'').split(' ')[1]||e.time||''
           ];
         });
         const table = TimoETA.createDesktopTable(desktopHeaders, desktopRows);

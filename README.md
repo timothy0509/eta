@@ -33,6 +33,15 @@ It supports English, Traditional Chinese, and Simplified Chinese, plus light/dar
   - Platform circles on mobile  
   - High‐contrast text on colored backgrounds  
 
+- **Material Design Enhancements**  
+  - Material Design 3 elevation system with shadows
+  - Smooth animations and micro-interactions
+  - Enhanced ripple effects on buttons
+  - Staggered list item entrance animations
+  - Theme toggle with system preference detection
+  - Floating Action Button (FAB) support
+  - Accessibility features (reduced motion, high contrast)
+
 ---
 
 ## Getting Started
@@ -91,12 +100,14 @@ Push to GitHub, enable Pages on `main` (or `gh-pages`) branch.
 ├── index.html
 ├── README.md
 ├── styles/
-│   └── style.css
+│   ├── style.css       # main styles, theme variables, responsive layout
+│   └── material.css    # Material Design enhancements, animations, elevations
 └── src/
-    ├── app.js      # orchestrator: UI controls, theming, segmented logic
-    ├── kmb.js      # KMB bus ETA logic & rendering
-    ├── mtr.js      # MTR heavy-rail next train logic & rendering
-    └── lr.js       # MTR Light Rail logic & rendering
+    ├── app.js          # orchestrator: UI controls, theming, segmented logic
+    ├── ui-animations.js # UI animations, ripple effects, micro-interactions
+    ├── kmb.js          # KMB bus ETA logic & rendering
+    ├── mtr.js          # MTR heavy-rail next train logic & rendering
+    └── lr.js           # MTR Light Rail logic & rendering
 ```
 
 - **index.html**  
@@ -105,12 +116,30 @@ Push to GitHub, enable Pages on `main` (or `gh-pages`) branch.
 - **styles/style.css**  
   Theme variables, responsive layout, tables, cards, route tags, platform circles.
 
+- **styles/material.css**  
+  Material Design 3 enhancements:
+  - Elevation system (5 levels with light/dark mode)
+  - Card, button, and FAB components
+  - Ripple effect animations
+  - List item entrance animations
+  - Page transitions
+  - Accessibility features
+
 - **src/app.js**  
   Handles:
   - Mode & language segmented controls  
   - Dark mode toggle  
   - Search form submission & `localStorage`  
   - Calling `buildKMB()`, `buildMTR()`, or `buildLR()`  
+
+- **src/ui-animations.js**  
+  Provides:
+  - Enhanced ripple effect on interactive elements
+  - FAB animations with scroll behavior
+  - List item staggered entrance animations
+  - Theme toggle with system preference detection
+  - Hover elevation effects
+  - Automatic animation of new content
 
 - **src/kmb.js**  
   Fetches KMB stop list & ETAs, groups by stop, renders tables/cards, handles mobile vs desktop and auto-refresh.

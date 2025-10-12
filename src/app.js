@@ -20,7 +20,9 @@
         removeFromFavorites: 'Remove from Favorites',
         noFavorites: 'No favorites yet',
         favoriteAdded: 'Added to favorites',
-        favoriteRemoved: 'Removed from favorites'
+        favoriteRemoved: 'Removed from favorites',
+        clearAll: 'Clear All',
+        clearAllConfirm: 'Are you sure you want to clear all favorites?'
       },
       tc: {
         stopNameLabel: '巴士站名稱 (部分字串)',
@@ -36,7 +38,9 @@
         removeFromFavorites: '從最愛移除',
         noFavorites: '尚未加入最愛',
         favoriteAdded: '已加入最愛',
-        favoriteRemoved: '已從最愛移除'
+        favoriteRemoved: '已從最愛移除',
+        clearAll: '全部清除',
+        clearAllConfirm: '確定要清除所有最愛嗎？'
       },
       sc: {
         stopNameLabel: '巴士站名稱 (部分字串)',
@@ -52,7 +56,9 @@
         removeFromFavorites: '从收藏移除',
         noFavorites: '尚未加入收藏',
         favoriteAdded: '已加入收藏',
-        favoriteRemoved: '已从收藏移除'
+        favoriteRemoved: '已从收藏移除',
+        clearAll: '全部清除',
+        clearAllConfirm: '确定要清除所有收藏吗？'
       }
     },
     mtr: {
@@ -68,7 +74,9 @@
         removeFromFavorites: 'Remove from Favorites',
         noFavorites: 'No favorites yet',
         favoriteAdded: 'Added to favorites',
-        favoriteRemoved: 'Removed from favorites'
+        favoriteRemoved: 'Removed from favorites',
+        clearAll: 'Clear All',
+        clearAllConfirm: 'Are you sure you want to clear all favorites?'
       },
       tc: {
         inputLabel: '站點代號 / 名稱',
@@ -82,7 +90,9 @@
         removeFromFavorites: '從最愛移除',
         noFavorites: '尚未加入最愛',
         favoriteAdded: '已加入最愛',
-        favoriteRemoved: '已從最愛移除'
+        favoriteRemoved: '已從最愛移除',
+        clearAll: '全部清除',
+        clearAllConfirm: '確定要清除所有最愛嗎？'
       },
       sc: {
         inputLabel: '站点编号 / 名称',
@@ -96,7 +106,9 @@
         removeFromFavorites: '从收藏移除',
         noFavorites: '尚未加入收藏',
         favoriteAdded: '已加入收藏',
-        favoriteRemoved: '已从收藏移除'
+        favoriteRemoved: '已从收藏移除',
+        clearAll: '全部清除',
+        clearAllConfirm: '确定要清除所有收藏吗？'
       }
     },
     lr: {
@@ -112,7 +124,9 @@
         removeFromFavorites: 'Remove from Favorites',
         noFavorites: 'No favorites yet',
         favoriteAdded: 'Added to favorites',
-        favoriteRemoved: 'Removed from favorites'
+        favoriteRemoved: 'Removed from favorites',
+        clearAll: 'Clear All',
+        clearAllConfirm: 'Are you sure you want to clear all favorites?'
       },
       tc: {
         inputLabel: '輕鐵站名',
@@ -126,7 +140,9 @@
         removeFromFavorites: '從最愛移除',
         noFavorites: '尚未加入最愛',
         favoriteAdded: '已加入最愛',
-        favoriteRemoved: '已從最愛移除'
+        favoriteRemoved: '已從最愛移除',
+        clearAll: '全部清除',
+        clearAllConfirm: '確定要清除所有最愛嗎？'
       },
       sc: {
         inputLabel: '轻铁站名',
@@ -140,7 +156,9 @@
         removeFromFavorites: '从收藏移除',
         noFavorites: '尚未加入收藏',
         favoriteAdded: '已加入收藏',
-        favoriteRemoved: '已从收藏移除'
+        favoriteRemoved: '已从收藏移除',
+        clearAll: '全部清除',
+        clearAllConfirm: '确定要清除所有收藏吗？'
       }
     }
   };
@@ -218,6 +236,7 @@
     const clearButton = document.getElementById('clearButton');
     const viewFavoritesButton = document.getElementById('viewFavoritesButton');
     const favoritesTitle = document.getElementById('favoritesTitle');
+    const clearAllFavorites = document.getElementById('clearAllFavorites');
 
     labelStopName.textContent = modeSpecificLangData.inputLabel || modeSpecificLangData.stopNameLabel;
     stopNameInput.placeholder = modeSpecificLangData.inputPlaceholder || modeSpecificLangData.stopNamePlaceholder;
@@ -225,6 +244,7 @@
     if(clearButton) clearButton.textContent = 'Clear'; // Or add to lang data
     if(viewFavoritesButton) viewFavoritesButton.textContent = modeSpecificLangData.favorites;
     if(favoritesTitle) favoritesTitle.textContent = modeSpecificLangData.favorites;
+    if(clearAllFavorites) clearAllFavorites.textContent = modeSpecificLangData.clearAll;
 
     if (currentMode === 'kmb') {
       routeNumbersDiv.style.display = '';
@@ -461,6 +481,23 @@
       favoritesModal.addEventListener('click', function(e) {
         if (e.target === favoritesModal) {
           favoritesModal.style.display = 'none';
+        }
+      });
+    }
+
+    // Clear all favorites button
+    const clearAllFavorites = document.getElementById('clearAllFavorites');
+    if(clearAllFavorites) {
+      clearAllFavorites.addEventListener('click', function() {
+        const currentMode = TimoETA.getMode();
+        const currentLang = TimoETA.getLang();
+        const L = TimoETA.ALL_LANGS_DATA[currentMode][currentLang];
+        
+        if (confirm(L.clearAllConfirm)) {
+          TimoETA.saveFavorites([]);
+          renderFavoritesList();
+          updateFavButton();
+          showToast(L.favoriteRemoved);
         }
       });
     }

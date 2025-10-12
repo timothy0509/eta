@@ -14,7 +14,13 @@
         searchButton: 'Search ETAs',
         noEtas: 'No ETAs available',
         stopNotFound: 'Stop not found',
-        tableHeaders: { Route: 'Route', Destination: 'Destination', Platform: 'Platform', StopCode: 'StopCode', ETA1: 'ETA1', ETA2: 'ETA2', ETA3: 'ETA3', Remarks: 'Remarks' }
+        tableHeaders: { Route: 'Route', Destination: 'Destination', Platform: 'Platform', StopCode: 'StopCode', ETA1: 'ETA1', ETA2: 'ETA2', ETA3: 'ETA3', Remarks: 'Remarks' },
+        favorites: 'Favorites',
+        addToFavorites: 'Add to Favorites',
+        removeFromFavorites: 'Remove from Favorites',
+        noFavorites: 'No favorites yet',
+        favoriteAdded: 'Added to favorites',
+        favoriteRemoved: 'Removed from favorites'
       },
       tc: {
         stopNameLabel: '巴士站名稱 (部分字串)',
@@ -24,7 +30,13 @@
         searchButton: '查詢到站時間',
         noEtas: '沒有到站時間',
         stopNotFound: '找不到巴士站',
-        tableHeaders: { Route: '路線', Destination: '目的地', Platform: '月台', StopCode: '站號', ETA1: '到站1', ETA2: '到站2', ETA3: '到站3', Remarks: '備註' }
+        tableHeaders: { Route: '路線', Destination: '目的地', Platform: '月台', StopCode: '站號', ETA1: '到站1', ETA2: '到站2', ETA3: '到站3', Remarks: '備註' },
+        favorites: '我的最愛',
+        addToFavorites: '加入最愛',
+        removeFromFavorites: '從最愛移除',
+        noFavorites: '尚未加入最愛',
+        favoriteAdded: '已加入最愛',
+        favoriteRemoved: '已從最愛移除'
       },
       sc: {
         stopNameLabel: '巴士站名稱 (部分字串)',
@@ -34,7 +46,13 @@
         searchButton: '查询到站时间',
         noEtas: '没有到站时间',
         stopNotFound: '找不到巴士站',
-        tableHeaders: { Route: '路线', Destination: '目的地', Platform: '站台', StopCode: '站号', ETA1: '到站1', ETA2: '到站2', ETA3: '到站3', Remarks: '备注' }
+        tableHeaders: { Route: '路线', Destination: '目的地', Platform: '站台', StopCode: '站号', ETA1: '到站1', ETA2: '到站2', ETA3: '到站3', Remarks: '备注' },
+        favorites: '我的收藏',
+        addToFavorites: '加入收藏',
+        removeFromFavorites: '从收藏移除',
+        noFavorites: '尚未加入收藏',
+        favoriteAdded: '已加入收藏',
+        favoriteRemoved: '已从收藏移除'
       }
     },
     mtr: {
@@ -44,7 +62,13 @@
         searchButton: 'Search Trains',
         noData: 'No train data available',
         stationNotFound: 'Station not found',
-        tableHeaders: { Destination: 'Destination', Platform: 'Platform', Time: 'Time' }
+        tableHeaders: { Destination: 'Destination', Platform: 'Platform', Time: 'Time' },
+        favorites: 'Favorites',
+        addToFavorites: 'Add to Favorites',
+        removeFromFavorites: 'Remove from Favorites',
+        noFavorites: 'No favorites yet',
+        favoriteAdded: 'Added to favorites',
+        favoriteRemoved: 'Removed from favorites'
       },
       tc: {
         inputLabel: '站點代號 / 名稱',
@@ -52,7 +76,13 @@
         searchButton: '查詢列車',
         noData: '沒有列車資料',
         stationNotFound: '找不到車站',
-        tableHeaders: { Destination: '目的地', Platform: '月台', Time: '時間' }
+        tableHeaders: { Destination: '目的地', Platform: '月台', Time: '時間' },
+        favorites: '我的最愛',
+        addToFavorites: '加入最愛',
+        removeFromFavorites: '從最愛移除',
+        noFavorites: '尚未加入最愛',
+        favoriteAdded: '已加入最愛',
+        favoriteRemoved: '已從最愛移除'
       },
       sc: {
         inputLabel: '站点编号 / 名称',
@@ -60,7 +90,13 @@
         searchButton: '查询列车',
         noData: '没有列车资料',
         stationNotFound: '找不到车站',
-        tableHeaders: { Destination: '目的地', Platform: '站台', Time: '时间' }
+        tableHeaders: { Destination: '目的地', Platform: '站台', Time: '时间' },
+        favorites: '我的收藏',
+        addToFavorites: '加入收藏',
+        removeFromFavorites: '从收藏移除',
+        noFavorites: '尚未加入收藏',
+        favoriteAdded: '已加入收藏',
+        favoriteRemoved: '已从收藏移除'
       }
     },
     lr: {
@@ -70,7 +106,13 @@
         searchButton: 'Search Trains',
         noData: 'No train data available',
         stopNotFound: 'Stop not found',
-        tableHeaders: { Route: 'Route', Destination: 'Destination', Time: 'Time' }
+        tableHeaders: { Route: 'Route', Destination: 'Destination', Time: 'Time' },
+        favorites: 'Favorites',
+        addToFavorites: 'Add to Favorites',
+        removeFromFavorites: 'Remove from Favorites',
+        noFavorites: 'No favorites yet',
+        favoriteAdded: 'Added to favorites',
+        favoriteRemoved: 'Removed from favorites'
       },
       tc: {
         inputLabel: '輕鐵站名',
@@ -78,7 +120,13 @@
         searchButton: '查詢列車',
         noData: '沒有列車資料',
         stopNotFound: '找不到輕鐵站',
-        tableHeaders: { Route: '路線', Destination: '目的地', Time: '時間' }
+        tableHeaders: { Route: '路線', Destination: '目的地', Time: '時間' },
+        favorites: '我的最愛',
+        addToFavorites: '加入最愛',
+        removeFromFavorites: '從最愛移除',
+        noFavorites: '尚未加入最愛',
+        favoriteAdded: '已加入最愛',
+        favoriteRemoved: '已從最愛移除'
       },
       sc: {
         inputLabel: '轻铁站名',
@@ -86,7 +134,13 @@
         searchButton: '查询列车',
         noData: '没有列车资料',
         stopNotFound: '找不到轻铁站',
-        tableHeaders: { Route: '路线', Destination: '目的地', Time: '时间' }
+        tableHeaders: { Route: '路线', Destination: '目的地', Time: '时间' },
+        favorites: '我的收藏',
+        addToFavorites: '加入收藏',
+        removeFromFavorites: '从收藏移除',
+        noFavorites: '尚未加入收藏',
+        favoriteAdded: '已加入收藏',
+        favoriteRemoved: '已从收藏移除'
       }
     }
   };
@@ -99,6 +153,46 @@
   // Return active mode code
   TimoETA.getMode = function(){
     return document.querySelector('.mode-switch button.active').dataset.value;
+  };
+
+  // Favorites management
+  TimoETA.getFavorites = function() {
+    const stored = localStorage.getItem('timoeta-favorites');
+    return stored ? JSON.parse(stored) : [];
+  };
+
+  TimoETA.saveFavorites = function(favorites) {
+    localStorage.setItem('timoeta-favorites', JSON.stringify(favorites));
+  };
+
+  TimoETA.addFavorite = function(mode, stop, routes) {
+    const favorites = TimoETA.getFavorites();
+    const newFav = { mode, stop, routes: routes || '', timestamp: Date.now() };
+    
+    // Check if already exists
+    const exists = favorites.some(f => 
+      f.mode === mode && f.stop === stop && f.routes === routes
+    );
+    
+    if (!exists) {
+      favorites.push(newFav);
+      TimoETA.saveFavorites(favorites);
+      return true;
+    }
+    return false;
+  };
+
+  TimoETA.removeFavorite = function(index) {
+    const favorites = TimoETA.getFavorites();
+    favorites.splice(index, 1);
+    TimoETA.saveFavorites(favorites);
+  };
+
+  TimoETA.isFavorite = function(mode, stop, routes) {
+    const favorites = TimoETA.getFavorites();
+    return favorites.some(f => 
+      f.mode === mode && f.stop === stop && f.routes === (routes || '')
+    );
   };
 
   // Immediately apply saved theme and set toggle
@@ -122,11 +216,15 @@
     const routeNumbersDiv = routeNumbersInput.parentElement;
     const searchButton = document.querySelector('#searchForm button[type="submit"]');
     const clearButton = document.getElementById('clearButton');
+    const viewFavoritesButton = document.getElementById('viewFavoritesButton');
+    const favoritesTitle = document.getElementById('favoritesTitle');
 
     labelStopName.textContent = modeSpecificLangData.inputLabel || modeSpecificLangData.stopNameLabel;
     stopNameInput.placeholder = modeSpecificLangData.inputPlaceholder || modeSpecificLangData.stopNamePlaceholder;
     searchButton.textContent = modeSpecificLangData.searchButton;
     if(clearButton) clearButton.textContent = 'Clear'; // Or add to lang data
+    if(viewFavoritesButton) viewFavoritesButton.textContent = modeSpecificLangData.favorites;
+    if(favoritesTitle) favoritesTitle.textContent = modeSpecificLangData.favorites;
 
     if (currentMode === 'kmb') {
       routeNumbersDiv.style.display = '';
@@ -196,6 +294,174 @@
         document.getElementById('routeNumbers').value = '';
         document.getElementById('results').innerHTML = '';
         history.replaceState({}, '', window.location.pathname);
+        updateFavButton();
+      });
+    }
+
+    // Favorite button handler
+    const favButton = document.getElementById('favButton');
+    const updateFavButton = function() {
+      if (!favButton) return;
+      const mode = TimoETA.getMode();
+      const stop = document.getElementById('stopName').value.trim();
+      const routes = document.getElementById('routeNumbers').value.trim();
+      const currentLang = TimoETA.getLang();
+      const L = TimoETA.ALL_LANGS_DATA[mode][currentLang];
+      
+      if (!stop) {
+        favButton.disabled = true;
+        favButton.title = '';
+        return;
+      }
+      
+      favButton.disabled = false;
+      const isFav = TimoETA.isFavorite(mode, stop, routes);
+      favButton.textContent = isFav ? '★' : '☆';
+      favButton.title = isFav ? L.removeFromFavorites : L.addToFavorites;
+      favButton.classList.toggle('favorited', isFav);
+    };
+
+    if(favButton) {
+      favButton.addEventListener('click', function() {
+        const mode = TimoETA.getMode();
+        const stop = document.getElementById('stopName').value.trim();
+        const routes = document.getElementById('routeNumbers').value.trim();
+        const currentLang = TimoETA.getLang();
+        const L = TimoETA.ALL_LANGS_DATA[mode][currentLang];
+        
+        if (!stop) return;
+        
+        if (TimoETA.isFavorite(mode, stop, routes)) {
+          const favorites = TimoETA.getFavorites();
+          const index = favorites.findIndex(f => 
+            f.mode === mode && f.stop === stop && f.routes === routes
+          );
+          if (index !== -1) {
+            TimoETA.removeFavorite(index);
+            showToast(L.favoriteRemoved);
+          }
+        } else {
+          TimoETA.addFavorite(mode, stop, routes);
+          showToast(L.favoriteAdded);
+        }
+        updateFavButton();
+      });
+      
+      document.getElementById('stopName').addEventListener('input', updateFavButton);
+      document.getElementById('routeNumbers').addEventListener('input', updateFavButton);
+    }
+
+    // Toast notification
+    function showToast(message) {
+      const toast = document.createElement('div');
+      toast.className = 'toast';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.classList.add('show'), 10);
+      setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+      }, 2000);
+    }
+
+    // View favorites button handler
+    const viewFavoritesButton = document.getElementById('viewFavoritesButton');
+    const favoritesModal = document.getElementById('favoritesModal');
+    const closeFavoritesModal = document.getElementById('closeFavoritesModal');
+
+    function renderFavoritesList() {
+      const favorites = TimoETA.getFavorites();
+      const favoritesList = document.getElementById('favoritesList');
+      const currentLang = TimoETA.getLang();
+      const currentMode = TimoETA.getMode();
+      const L = TimoETA.ALL_LANGS_DATA[currentMode][currentLang];
+      
+      if (favorites.length === 0) {
+        favoritesList.innerHTML = `<div class="no-favorites">${L.noFavorites}</div>`;
+        return;
+      }
+      
+      favoritesList.innerHTML = '';
+      favorites.forEach((fav, index) => {
+        const favItem = document.createElement('div');
+        favItem.className = 'favorite-item';
+        
+        const favInfo = document.createElement('div');
+        favInfo.className = 'favorite-info';
+        
+        const modeLabel = document.createElement('span');
+        modeLabel.className = 'favorite-mode';
+        modeLabel.textContent = fav.mode.toUpperCase();
+        favInfo.appendChild(modeLabel);
+        
+        const stopLabel = document.createElement('span');
+        stopLabel.className = 'favorite-stop';
+        stopLabel.textContent = fav.stop;
+        favInfo.appendChild(stopLabel);
+        
+        if (fav.routes) {
+          const routesLabel = document.createElement('span');
+          routesLabel.className = 'favorite-routes';
+          routesLabel.textContent = `Routes: ${fav.routes}`;
+          favInfo.appendChild(routesLabel);
+        }
+        
+        favItem.appendChild(favInfo);
+        
+        const favActions = document.createElement('div');
+        favActions.className = 'favorite-actions';
+        
+        const loadBtn = document.createElement('button');
+        loadBtn.className = 'btn-fav-load';
+        loadBtn.textContent = '→';
+        loadBtn.title = 'Load and search';
+        loadBtn.addEventListener('click', () => {
+          document.querySelectorAll('.mode-switch button').forEach(b => {
+            if (b.dataset.value === fav.mode) b.classList.add('active');
+            else b.classList.remove('active');
+          });
+          document.getElementById('stopName').value = fav.stop;
+          document.getElementById('routeNumbers').value = fav.routes;
+          TimoETA.updateUITextAndInputs();
+          favoritesModal.style.display = 'none';
+          document.getElementById('searchForm').dispatchEvent(new Event('submit', { bubbles: true }));
+        });
+        favActions.appendChild(loadBtn);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'btn-fav-delete';
+        deleteBtn.textContent = '×';
+        deleteBtn.title = 'Delete';
+        deleteBtn.addEventListener('click', () => {
+          TimoETA.removeFavorite(index);
+          renderFavoritesList();
+          updateFavButton();
+        });
+        favActions.appendChild(deleteBtn);
+        
+        favItem.appendChild(favActions);
+        favoritesList.appendChild(favItem);
+      });
+    }
+
+    if(viewFavoritesButton) {
+      viewFavoritesButton.addEventListener('click', function() {
+        renderFavoritesList();
+        favoritesModal.style.display = 'flex';
+      });
+    }
+
+    if(closeFavoritesModal) {
+      closeFavoritesModal.addEventListener('click', function() {
+        favoritesModal.style.display = 'none';
+      });
+    }
+
+    if(favoritesModal) {
+      favoritesModal.addEventListener('click', function(e) {
+        if (e.target === favoritesModal) {
+          favoritesModal.style.display = 'none';
+        }
       });
     }
 

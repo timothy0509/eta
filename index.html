@@ -64,8 +64,14 @@
         <button type="submit" class="btn-primary ripple">
           Search ETAs
         </button>
+        <button type="button" id="favButton" class="btn-secondary ripple" title="Add to Favorites">
+          ★
+        </button>
         <button type="button" id="clearButton" class="btn-secondary ripple">
           Clear
+        </button>
+        <button type="button" id="viewFavoritesButton" class="btn-secondary ripple">
+          Favorites
         </button>
       </div>
     </form>
@@ -74,6 +80,17 @@
       <div class="initial-state">
         <h2>Welcome to TimoETA</h2>
         <p>Select a transport mode and start searching for real-time ETAs.</p>
+      </div>
+    </div>
+
+    <!-- Favorites Modal -->
+    <div id="favoritesModal" class="modal" style="display: none;">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2 id="favoritesTitle">Favorites</h2>
+          <button id="closeFavoritesModal" class="modal-close">&times;</button>
+        </div>
+        <div id="favoritesList" class="favorites-list"></div>
       </div>
     </div>
 

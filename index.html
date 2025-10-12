@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0" />
   <title>TimoETA</title>
-  <!-- immediately apply saved theme -->
+  <!-- immediately apply saved theme to prevent FOUC -->
   <script>
     (function () {
       const t = localStorage.getItem('theme');
@@ -23,16 +23,16 @@
       <h1>TimoETA</h1>
       <div class="header-controls">
         <!-- Mode segmented control -->
-        <div class="segmented-control mode-switch">
-          <button data-value="kmb" class="active">KMB</button>
-          <button data-value="mtr">MTR</button>
-          <button data-value="lr">Light Rail</button>
+        <div class="segmented-control mode-switch" role="group" aria-label="Transport mode selection">
+          <button data-value="kmb" class="active" role="button" aria-pressed="true">KMB</button>
+          <button data-value="mtr" role="button" aria-pressed="false">MTR</button>
+          <button data-value="lr" role="button" aria-pressed="false">Light Rail</button>
         </div>
         <!-- Language segmented control -->
-        <div class="segmented-control lang-switch">
-          <button data-value="en" class="active">EN</button>
-          <button data-value="tc">繁體</button>
-          <button data-value="sc">简体</button>
+        <div class="segmented-control lang-switch" role="group" aria-label="Language selection">
+          <button data-value="en" class="active" role="button" aria-pressed="true">EN</button>
+          <button data-value="tc" role="button" aria-pressed="false">繁體</button>
+          <button data-value="sc" role="button" aria-pressed="false">简体</button>
         </div>
         <!-- Dark-mode toggle -->
         <div class="theme-switch-wrapper">

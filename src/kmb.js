@@ -16,20 +16,39 @@
           getStops.cache=j.data||j;
           return getStops.cache;
         }
-      }catch{}
-      const r=await fetch(API.STOP_LIST), j=await r.json();
-      getStops.cache=j.data||[];
+      }catch(e){
+        console.warn('Failed to load cached stops, fetching from API:', e);
+      }
+      try{
+        const r=await fetch(API.STOP_LIST);
+        if(!r.ok) throw new Error(`API returned ${r.status}`);
+        const j=await r.json();
+        getStops.cache=j.data||[];
+      }catch(e){
+        console.error('Failed to fetch stops from API:', e);
+        getStops.cache=[];
+      }
     }
     return getStops.cache;
   }
   window.TimoETA.getStops=getStops;
 
   async function getETAs(stopId){
-    const r=await fetch(API.STOP_ETA(stopId)), j=await r.json();
-    return j.data||[];
+    try{
+      const r=await fetch(API.STOP_ETA(stopId));
+      if(!r.ok) throw new Error(`API returned ${r.status}`);
+      const j=await r.json();
+      return j.data||[];
+    }catch(e){
+      console.error(`Failed to fetch ETAs for stop ${stopId}:`, e);
+      return [];
+    }
   }
 
   function parseStopInfo(name){
+    if (!name || typeof name !== 'string') {
+      return { title: '', platform: '', stopCode: '' };
+    }
     let title=name, platform='', stopCode='';
     const rx=/[\(（]([^\)）]*)[\)）]/g;
     let m;
@@ -45,16 +64,20 @@
   }
 
   function formatTimeOnly(iso){
-    return iso
-      ? new Date(iso).toLocaleTimeString('en-GB',{
-          hour12:false, hour:'2-digit',
-          minute:'2-digit', second:'2-digit'
-        })
-      : '';
+    if (!iso) return '';
+    const date = new Date(iso);
+    if (isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString('en-GB',{
+      hour12:false, hour:'2-digit',
+      minute:'2-digit', second:'2-digit'
+    });
   }
   window.TimoETA.formatTimeOnly = formatTimeOnly;
 
   function parseRouteStr(r){
+    if (!r || typeof r !== 'string') {
+      return {prefix:'',num:0,suffix:''};
+    }
     const m=r.match(/^([A-Za-z]*)(\d+)([A-Za-z]*)$/);
     return m?{prefix:m[1],num:+m[2],suffix:m[3]}:{prefix:r,num:0,suffix:''};
   }
@@ -81,7 +104,8 @@
   }
   window.TimoETA.routeTagClass = routeTagClass;
 
-  function isMobile(){ return window.innerWidth<=576; }
+  // Use shared utility from TimoETA namespace
+  function isMobile(){ return TimoETA.isMobile(); }
 
   window.TimoETA.buildKMB=async function(){
     const currentLang=TimoETA.getLang();
@@ -96,9 +120,9 @@
 
     const allStops=await getStops();
     const matches=allStops.filter(s=>
-      s.name_en.toLowerCase().includes(stopIn)||
-      s.name_tc.toLowerCase().includes(stopIn)||
-      s.name_sc.toLowerCase().includes(stopIn)
+      (s.name_en && s.name_en.toLowerCase().includes(stopIn))||
+      (s.name_tc && s.name_tc.toLowerCase().includes(stopIn))||
+      (s.name_sc && s.name_sc.toLowerCase().includes(stopIn))
     );
 
     if(!matches.length){
@@ -179,9 +203,9 @@
               time: TimoETA.formatTimeOnly(e.eta),
               isScheduled: e.rmk_en?.includes('Scheduled Bus')
             })),
-            details: `<div><strong>Stop Code:</strong> ${r.stopCode || 'N/A'}</div>
-                      <div><strong>Platform:</strong> ${r.platform || 'N/A'}</div>
-                      <div><strong>Remarks:</strong> ${r.etas.some(e => e.eta) ? r.numberedRemarks.join('; ') : (r.noetaRemarks.join('; ') || L.noEtas)}</div>`
+            details: `<div><strong>Stop Code:</strong> ${TimoETA.sanitizeHTML(r.stopCode || 'N/A')}</div>
+                      <div><strong>Platform:</strong> ${TimoETA.sanitizeHTML(r.platform || 'N/A')}</div>
+                      <div><strong>Remarks:</strong> ${TimoETA.sanitizeHTML(r.etas.some(e => e.eta) ? r.numberedRemarks.join('; ') : (r.noetaRemarks.join('; ') || L.noEtas))}</div>`
           };
           return TimoETA.createMobileCard(cardData);
         });

@@ -11,15 +11,11 @@
     '614P':'#f4858d','615':'#f9dd07','615P':'#256684','705':'#72bf44','706':'#b27ab4',
     '751':'#f5821f','761P':'#6f2b91'
   };
-  function contrastColor(hex){
-    const r=parseInt(hex.substr(1,2),16),
-          g=parseInt(hex.substr(3,2),16),
-          b=parseInt(hex.substr(5,2),16);
-    return (0.299*r+0.587*g+0.114*b)>186?'#000':'#fff';
-  }
 
+  // Use shared utilities from TimoETA namespace
+  function contrastColor(hex){ return TimoETA.contrastColor(hex); }
   function getLang(){ return TimoETA.getLang(); }
-  function isMobile(){ return window.innerWidth<=576; }
+  function isMobile(){ return TimoETA.isMobile(); }
 
   window.TimoETA.buildLR = async function(){
     const currentLang=getLang();
@@ -45,20 +41,20 @@
 
       j.platform_list.forEach(p=>{
         const h3 = document.createElement('h3');
-        h3.textContent = `Platform ${p.platform_id}`;
+        h3.textContent = `Platform ${p.platform_id || 'Unknown'}`;
         results.appendChild(h3);
 
         if(isMobile()){
-          const mobileCards = p.route_list.map(e => {
+          const mobileCards = (p.route_list || []).map(e => {
             const bg = COLORS[e.route_no];
             const cardData = {
               mode: 'lr',
-              route: e.route_no,
+              route: e.route_no || '',
               routeBgColor: bg,
               routeColor: bg ? contrastColor(bg) : '#000',
-              dest: currentLang==='en'?e.dest_en:e.dest_ch,
-              platform: p.platform_id,
-              etas: [{ time: currentLang==='en'?e.time_en:e.time_ch }]
+              dest: (currentLang==='en'?e.dest_en:e.dest_ch) || '',
+              platform: p.platform_id || '',
+              etas: [{ time: (currentLang==='en'?e.time_en:e.time_ch) || '' }]
             };
             return TimoETA.createMobileCard(cardData);
           });
@@ -66,13 +62,13 @@
           TimoETA.alignMobileColumns();
         } else {
           const desktopHeaders = [L.tableHeaders.Route, L.tableHeaders.Destination, L.tableHeaders.Time];
-          const desktopRows = p.route_list.map(e => {
+          const desktopRows = (p.route_list || []).map(e => {
             const bg = COLORS[e.route_no];
             const fg = bg ? contrastColor(bg) : '#000';
             return [
-              { html: `<span class="route-tag" style="background-color:${bg};color:${fg};">${e.route_no}</span>` },
-              currentLang==='en'?e.dest_en:e.dest_ch,
-              currentLang==='en'?e.time_en:e.time_ch
+              { html: `<span class="route-tag" style="background-color:${bg};color:${fg};">${e.route_no || ''}</span>` },
+              (currentLang==='en'?e.dest_en:e.dest_ch) || '',
+              (currentLang==='en'?e.time_en:e.time_ch) || ''
             ];
           });
           const table = TimoETA.createDesktopTable(desktopHeaders, desktopRows);

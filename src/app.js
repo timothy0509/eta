@@ -148,7 +148,10 @@
     if (chk) chk.checked = (t === 'dark');
   })();
 
-  // Main function to update all dynamic UI text and input attributes
+  /**
+   * Updates all dynamic UI text and input attributes based on selected mode and language
+   * Called when mode or language changes to refresh labels, placeholders, and visibility
+   */
   TimoETA.updateUITextAndInputs = function() {
     const currentMode = TimoETA.getMode();
     const currentLang = TimoETA.getLang();
@@ -239,22 +242,39 @@
     // Search form handler
     document.getElementById('searchForm').addEventListener('submit', function(e){
       e.preventDefault();
-      const results = document.getElementById('results');
-      results.innerHTML = '<div class="loading-spinner"></div>';
       
       const mode = TimoETA.getMode();
-      const stopName = document.getElementById('stopName').value;
-      const routeNumbers = document.getElementById('routeNumbers').value;
+      const stopName = document.getElementById('stopName').value.trim();
+      const routeNumbers = document.getElementById('routeNumbers').value.trim();
+      const results = document.getElementById('results');
 
+      // Validate input
+      if (!stopName) {
+        const currentLang = TimoETA.getLang();
+        const L = TimoETA.ALL_LANGS_DATA[mode][currentLang];
+        results.innerHTML = `<div class="no-results">${L.stopNotFound || 'Please enter a search term'}</div>`;
+        return;
+      }
+
+      // Show loading indicator
+      results.innerHTML = '<div class="loading-spinner"></div>';
+      
+      // Update URL with search parameters
       const params = new URLSearchParams();
       params.set('mode', mode);
       params.set('stop', stopName);
       if (routeNumbers) params.set('routes', routeNumbers);
       history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
 
-      if (mode==='kmb') TimoETA.buildKMB();
-      else if (mode==='mtr') TimoETA.buildMTR();
-      else if (mode==='lr') TimoETA.buildLR();
+      // Execute search based on mode
+      try {
+        if (mode === 'kmb') TimoETA.buildKMB();
+        else if (mode === 'mtr') TimoETA.buildMTR();
+        else if (mode === 'lr') TimoETA.buildLR();
+      } catch (error) {
+        console.error('Search error:', error);
+        results.innerHTML = '<div class="no-results">An error occurred. Please try again.</div>';
+      }
     });
 
     // Clear button handler
@@ -268,19 +288,24 @@
       });
     }
 
-    // Populate KMB stops datalist
+    // Populate KMB stops datalist (deferred for better initial load performance)
     (async function() {
       if (typeof TimoETA.getStops === 'function') {
         try {
           const stops = await TimoETA.getStops();
           const dl = document.getElementById('stopsList');
-          if(dl) {
-            dl.innerHTML = '';
-            stops.forEach(s=>{
-              const opt = document.createElement('option');
-              opt.value = s.name_en;
-              dl.appendChild(opt);
+          if(dl && Array.isArray(stops)) {
+            // Use document fragment for better performance
+            const fragment = document.createDocumentFragment();
+            stops.forEach(s => {
+              if (s.name_en) {
+                const opt = document.createElement('option');
+                opt.value = s.name_en;
+                fragment.appendChild(opt);
+              }
             });
+            dl.innerHTML = '';
+            dl.appendChild(fragment);
           }
         } catch (e) {
           console.error("Failed to populate KMB datalist:", e);
@@ -522,14 +547,27 @@
     return wrap;
   };
 
+  /**
+   * Displays results with a title heading in the results container
+   * @param {string} title - Section title to display
+   * @param {HTMLElement|Array<HTMLElement>} content - Element(s) to append
+   */
   TimoETA.displayResults = function(title, content) {
     const results = document.getElementById('results');
+    if (!results) {
+      console.warn('Results container not found');
+      return;
+    }
+    
     const h3 = document.createElement('h3');
     h3.textContent = title;
     results.appendChild(h3);
+    
     if (Array.isArray(content)) {
-      content.forEach(el => results.appendChild(el));
-    } else {
+      content.forEach(el => {
+        if (el instanceof HTMLElement) results.appendChild(el);
+      });
+    } else if (content instanceof HTMLElement) {
       results.appendChild(content);
     }
   };

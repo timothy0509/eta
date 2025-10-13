@@ -189,21 +189,38 @@
   // Use shared utility from TimoETA namespace
   function isMobile(){ return TimoETA.isMobile(); }
 
-  window.TimoETA.buildKMB=async function(){
-    const currentLang=TimoETA.getLang();
-    const L=TimoETA.ALL_LANGS_DATA.kmb[currentLang];
-    const suffix=SUFFIX[currentLang];
+  /**
+   * Main function to fetch and display KMB bus ETAs for stops matching search criteria
+   * Supports partial stop name matching and optional route filtering
+   * Groups results by stop name and displays in mobile cards or desktop tables
+   */
+  window.TimoETA.buildKMB = async function(){
+    const currentLang = TimoETA.getLang();
+    const L = TimoETA.ALL_LANGS_DATA.kmb[currentLang];
+    const suffix = SUFFIX[currentLang];
 
-    const stopIn=document.getElementById('stopName').value.trim().toLowerCase();
-    const rawR=document.getElementById('routeNumbers').value.trim().toUpperCase();
-    const filter=rawR.split(',').map(r=>r.trim()).filter(Boolean);
-    const results=document.getElementById('results');
-    results.innerHTML='';
+    const stopIn = document.getElementById('stopName').value.trim().toLowerCase();
+    const rawR = document.getElementById('routeNumbers').value.trim().toUpperCase();
+    const filter = rawR.split(',').map(r => r.trim()).filter(Boolean);
+    const results = document.getElementById('results');
+    results.innerHTML = '';
 
-    const allStops=await getStops();
-    const matches=allStops.filter(s=>
-      (s.name_en && s.name_en.toLowerCase().includes(stopIn))||
-      (s.name_tc && s.name_tc.toLowerCase().includes(stopIn))||
+    // Validate input
+    if (!stopIn) {
+      results.innerHTML = `<div class="no-results">${L.stopNotFound}</div>`;
+      return;
+    }
+
+    // Fetch all stops and filter by name
+    const allStops = await getStops();
+    if (!Array.isArray(allStops) || allStops.length === 0) {
+      results.innerHTML = `<div class="no-results">${L.stopNotFound}</div>`;
+      return;
+    }
+
+    const matches = allStops.filter(s =>
+      (s.name_en && s.name_en.toLowerCase().includes(stopIn)) ||
+      (s.name_tc && s.name_tc.toLowerCase().includes(stopIn)) ||
       (s.name_sc && s.name_sc.toLowerCase().includes(stopIn))
     );
 
@@ -212,65 +229,96 @@
       return;
     }
 
-    const groups={};
-    matches.forEach(s=>{
-      const full=s[`name_${currentLang}`],
-            info=parseStopInfo(full);
-      if(!info.stopCode) info.stopCode=parseStopInfo(s.name_en).stopCode;
-      (groups[info.title]=groups[info.title]||[]).push({
-        stopId:s.stop, platform:info.platform, stopCode:info.stopCode
+    // Group stops by name (removing platform/code info)
+    const groups = {};
+    matches.forEach(s => {
+      const full = s[`name_${currentLang}`] || s.name_en || '';
+      const info = parseStopInfo(full);
+      // Fallback to English name if stop code not found in current language
+      if(!info.stopCode) {
+        info.stopCode = parseStopInfo(s.name_en).stopCode;
+      }
+      (groups[info.title] = groups[info.title] || []).push({
+        stopId: s.stop,
+        platform: info.platform,
+        stopCode: info.stopCode
       });
     });
 
-    for(const [title,infos] of Object.entries(groups)){
-      const etasArr=await Promise.all(infos.map(i=>getETAs(i.stopId)));
-      const rows=[];
-      infos.forEach((info,idx)=>{
-        let data=etasArr[idx];
+    // Process each stop group
+    for(const [title, infos] of Object.entries(groups)){
+      // Fetch ETAs for all stops in this group in parallel
+      const etasArr = await Promise.all(infos.map(i => getETAs(i.stopId)));
+      const rows = [];
+      
+      infos.forEach((info, idx) => {
+        let data = etasArr[idx];
+        
+        // Apply route filter if specified
         if(filter.length){
-          data=data.filter(e=>filter.includes(e.route.toUpperCase()));
+          data = data.filter(e => filter.includes(e.route.toUpperCase()));
         }
-        const byKey={};
-        data.forEach(e=>{
-          const key=`${e.route}|${e.dest_en}`;
-          (byKey[key]=byKey[key]||[]).push(e);
+        
+        // Group ETAs by route and destination
+        const byKey = {};
+        data.forEach(e => {
+          const key = `${e.route}|${e.dest_en}`;
+          (byKey[key] = byKey[key] || []).push(e);
         });
-        Object.values(byKey).forEach(ent=>{
-          ent.sort((a,b)=>a.eta_seq-b.eta_seq);
-          const svcOrder=['1','2','3'], chosen=[];
+        
+        // Process each route-destination group
+        Object.values(byKey).forEach(ent => {
+          ent.sort((a, b) => a.eta_seq - b.eta_seq);
+          
+          // Select best service type (prefer 1, then 2, then 3)
+          const svcOrder = ['1', '2', '3'];
+          const chosen = [];
           for(const svc of svcOrder){
-            const tmp=ent.filter(x=>String(x.service_type)===svc&&x.eta);
-            if(tmp.length){ chosen.push(...tmp); break; }
+            const tmp = ent.filter(x => String(x.service_type) === svc && x.eta);
+            if(tmp.length){ 
+              chosen.push(...tmp);
+              break;
+            }
           }
-          if(!chosen.length) chosen.push(...ent.filter(x=>x.eta));
-          const sliced=[chosen[0]||{},chosen[1]||{},chosen[2]||{}];
-          const base=chosen[0]||ent[0]||{};
-          const numberedRemarks=sliced
-            .filter(x=>x.eta&&x[`rmk_${suffix}`])
-            .map(x=>`ETA${x.eta_seq}: ${x[`rmk_${suffix}`]}`);
-          const noetaRemarks=ent
-            .filter(x=>x[`rmk_${suffix}`])
-            .map(x=>x[`rmk_${suffix}`]);
+          if(!chosen.length) chosen.push(...ent.filter(x => x.eta));
+          
+          // Take up to 3 ETAs
+          const sliced = [chosen[0] || {}, chosen[1] || {}, chosen[2] || {}];
+          const base = chosen[0] || ent[0] || {};
+          
+          // Extract remarks
+          const numberedRemarks = sliced
+            .filter(x => x.eta && x[`rmk_${suffix}`])
+            .map(x => `ETA${x.eta_seq}: ${x[`rmk_${suffix}`]}`);
+          const noetaRemarks = ent
+            .filter(x => x[`rmk_${suffix}`])
+            .map(x => x[`rmk_${suffix}`]);
 
           rows.push({
-            stopId:info.stopId, route:base.route,
-            dest:base[`dest_${suffix}`], platform:info.platform,
-            stopCode:info.stopCode, etas:sliced,
-            numberedRemarks, noetaRemarks,
-            serviceType:base.service_type
+            stopId: info.stopId,
+            route: base.route,
+            dest: base[`dest_${suffix}`],
+            platform: info.platform,
+            stopCode: info.stopCode,
+            etas: sliced,
+            numberedRemarks,
+            noetaRemarks,
+            serviceType: base.service_type
           });
         });
       });
 
-      rows.sort((a,b)=>{
-        const aHas=a.etas.some(e=>e.eta),
-              bHas=b.etas.some(e=>e.eta);
-        if(aHas!==bHas) return aHas?-1:1;
-        return compareRoute(a,b);
+      // Sort: routes with ETAs first, then alphabetically
+      rows.sort((a, b) => {
+        const aHas = a.etas.some(e => e.eta);
+        const bHas = b.etas.some(e => e.eta);
+        if(aHas !== bHas) return aHas ? -1 : 1;
+        return compareRoute(a, b);
       });
 
-      const h3=document.createElement('h3');
-      h3.textContent=title;
+      // Create stop title heading
+      const h3 = document.createElement('h3');
+      h3.textContent = title;
       results.appendChild(h3);
 
       if(isMobile()){

@@ -4,7 +4,8 @@
 
   /**
    * Enhanced ripple effect handler
-   * Creates a ripple animation on clickable elements with .ripple class
+   * Creates a Material Design ripple animation on elements with .ripple class
+   * The ripple emanates from the click position and expands outward
    */
   function initRippleEffect() {
     document.addEventListener('click', function(e) {
@@ -29,11 +30,11 @@
       const x = e.clientX - rect.left;
       const y = e.clientY - rect.top;
 
-      // Set ripple position
+      // Set ripple position centered on click point
       ripple.style.left = x + 'px';
       ripple.style.top = y + 'px';
 
-      // Calculate ripple size (should cover the entire element)
+      // Calculate ripple size to cover entire element diagonal
       const size = Math.max(rect.width, rect.height) * 2;
       ripple.style.width = size + 'px';
       ripple.style.height = size + 'px';
@@ -41,11 +42,11 @@
       // Add ripple to container
       rippleContainer.appendChild(ripple);
 
-      // Remove ripple after animation completes
+      // Remove ripple after animation completes to prevent memory leaks
       ripple.addEventListener('animationend', function() {
         ripple.remove();
-      });
-    });
+      }, { once: true });
+    }, { passive: true });
   }
 
   /**
@@ -92,20 +93,26 @@
   /**
    * List item entrance animations
    * Adds staggered entrance animations to dynamically added list items
+   * Creates a cascading effect where items appear sequentially
+   * @param {HTMLElement} container - The container element with list items
    */
   function animateListItems(container) {
     if (!container) return;
 
     const items = container.querySelectorAll('.mobile-card, .eta-table-container, tr.eta-data-row');
+    const STAGGER_DELAY_MS = 50; // Delay between each item animation
     
     items.forEach(function(item, index) {
+      // Skip items that are already animated
+      if (item.classList.contains('list-item-enter')) return;
+      
       // Add entrance animation class
       item.classList.add('list-item-enter');
       
       // Set animation delay for stagger effect
-      item.style.animationDelay = (index * 50) + 'ms';
+      item.style.animationDelay = (index * STAGGER_DELAY_MS) + 'ms';
       
-      // Clean up after animation
+      // Clean up after animation to avoid performance issues
       item.addEventListener('animationend', function() {
         item.style.animationDelay = '';
       }, { once: true });
@@ -178,22 +185,32 @@
   /**
    * Observe results container for new content
    * Automatically animates new items when they're added to the results
+   * Uses MutationObserver for efficient DOM change detection
+   * @returns {MutationObserver|undefined} The observer instance
    */
   function observeResultsContainer() {
     const resultsContainer = document.getElementById('results');
-    if (!resultsContainer) return;
+    if (!resultsContainer) {
+      console.warn('Results container not found');
+      return;
+    }
 
     // Create a MutationObserver to watch for new content
     const observer = new MutationObserver(function(mutations) {
       mutations.forEach(function(mutation) {
         if (mutation.addedNodes.length) {
-          // Animate newly added items
-          animateListItems(resultsContainer);
+          // Debounce animation calls to avoid performance issues
+          if (observeResultsContainer.animationTimeout) {
+            clearTimeout(observeResultsContainer.animationTimeout);
+          }
+          observeResultsContainer.animationTimeout = setTimeout(function() {
+            animateListItems(resultsContainer);
+          }, 100);
         }
       });
     });
 
-    // Start observing
+    // Start observing with optimized config
     observer.observe(resultsContainer, {
       childList: true,
       subtree: true

@@ -5,18 +5,34 @@
 
   // Constants
   const MOBILE_BREAKPOINT = 576;
+  const LUMINANCE_THRESHOLD = 186;
+  const LUMINANCE_WEIGHTS = { R: 0.299, G: 0.587, B: 0.114 };
 
-  // Utility functions
+  /**
+   * Determines if the current viewport is mobile-sized
+   * @returns {boolean} True if viewport width is at or below mobile breakpoint
+   */
   TimoETA.isMobile = function() {
     return window.innerWidth <= MOBILE_BREAKPOINT;
   };
 
+  /**
+   * Calculates optimal text color (black or white) for a given background color
+   * Uses perceived luminance formula to ensure WCAG contrast compliance
+   * @param {string} hex - Hex color code (e.g., '#FF5733')
+   * @returns {string} '#000' for dark text or '#fff' for light text
+   */
   TimoETA.contrastColor = function(hex) {
-    if (!hex || hex.length < 7) return '#000';
-    const r = parseInt(hex.substring(1, 3), 16),
-          g = parseInt(hex.substring(3, 5), 16),
-          b = parseInt(hex.substring(5, 7), 16);
-    return (0.299 * r + 0.587 * g + 0.114 * b) > 186 ? '#000' : '#fff';
+    if (!hex || typeof hex !== 'string' || hex.length < 7) return '#000';
+    const r = parseInt(hex.substring(1, 3), 16);
+    const g = parseInt(hex.substring(3, 5), 16);
+    const b = parseInt(hex.substring(5, 7), 16);
+    
+    // Guard against NaN from invalid hex values
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return '#000';
+    
+    const luminance = LUMINANCE_WEIGHTS.R * r + LUMINANCE_WEIGHTS.G * g + LUMINANCE_WEIGHTS.B * b;
+    return luminance > LUMINANCE_THRESHOLD ? '#000' : '#fff';
   };
 
   // Centralized language data for all modes
@@ -107,13 +123,19 @@
     }
   };
 
-  // Return active language code
+  /**
+   * Gets the currently active language code
+   * @returns {string} Language code ('en', 'tc', or 'sc'), defaults to 'en'
+   */
   TimoETA.getLang = function(){
     const activeBtn = document.querySelector('.lang-switch button.active');
     return activeBtn ? activeBtn.dataset.value : 'en';
   };
 
-  // Return active mode code
+  /**
+   * Gets the currently active transport mode
+   * @returns {string} Mode code ('kmb', 'mtr', or 'lr'), defaults to 'kmb'
+   */
   TimoETA.getMode = function(){
     const activeBtn = document.querySelector('.mode-switch button.active');
     return activeBtn ? activeBtn.dataset.value : 'kmb';
@@ -126,7 +148,10 @@
     if (chk) chk.checked = (t === 'dark');
   })();
 
-  // Main function to update all dynamic UI text and input attributes
+  /**
+   * Updates all dynamic UI text and input attributes based on selected mode and language
+   * Called when mode or language changes to refresh labels, placeholders, and visibility
+   */
   TimoETA.updateUITextAndInputs = function() {
     const currentMode = TimoETA.getMode();
     const currentLang = TimoETA.getLang();
@@ -217,22 +242,39 @@
     // Search form handler
     document.getElementById('searchForm').addEventListener('submit', function(e){
       e.preventDefault();
-      const results = document.getElementById('results');
-      results.innerHTML = '<div class="loading-spinner"></div>';
       
       const mode = TimoETA.getMode();
-      const stopName = document.getElementById('stopName').value;
-      const routeNumbers = document.getElementById('routeNumbers').value;
+      const stopName = document.getElementById('stopName').value.trim();
+      const routeNumbers = document.getElementById('routeNumbers').value.trim();
+      const results = document.getElementById('results');
 
+      // Validate input
+      if (!stopName) {
+        const currentLang = TimoETA.getLang();
+        const L = TimoETA.ALL_LANGS_DATA[mode][currentLang];
+        results.innerHTML = `<div class="no-results">${L.stopNotFound || 'Please enter a search term'}</div>`;
+        return;
+      }
+
+      // Show loading indicator
+      results.innerHTML = '<div class="loading-spinner"></div>';
+      
+      // Update URL with search parameters
       const params = new URLSearchParams();
       params.set('mode', mode);
       params.set('stop', stopName);
       if (routeNumbers) params.set('routes', routeNumbers);
       history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
 
-      if (mode==='kmb') TimoETA.buildKMB();
-      else if (mode==='mtr') TimoETA.buildMTR();
-      else if (mode==='lr') TimoETA.buildLR();
+      // Execute search based on mode
+      try {
+        if (mode === 'kmb') TimoETA.buildKMB();
+        else if (mode === 'mtr') TimoETA.buildMTR();
+        else if (mode === 'lr') TimoETA.buildLR();
+      } catch (error) {
+        console.error('Search error:', error);
+        results.innerHTML = '<div class="no-results">An error occurred. Please try again.</div>';
+      }
     });
 
     // Clear button handler
@@ -246,19 +288,24 @@
       });
     }
 
-    // Populate KMB stops datalist
+    // Populate KMB stops datalist (deferred for better initial load performance)
     (async function() {
       if (typeof TimoETA.getStops === 'function') {
         try {
           const stops = await TimoETA.getStops();
           const dl = document.getElementById('stopsList');
-          if(dl) {
-            dl.innerHTML = '';
-            stops.forEach(s=>{
-              const opt = document.createElement('option');
-              opt.value = s.name_en;
-              dl.appendChild(opt);
+          if(dl && Array.isArray(stops)) {
+            // Use document fragment for better performance
+            const fragment = document.createDocumentFragment();
+            stops.forEach(s => {
+              if (s.name_en) {
+                const opt = document.createElement('option');
+                opt.value = s.name_en;
+                fragment.appendChild(opt);
+              }
             });
+            dl.innerHTML = '';
+            dl.appendChild(fragment);
           }
         } catch (e) {
           console.error("Failed to populate KMB datalist:", e);
@@ -312,17 +359,44 @@
   });
 
   // UI Component Generation
-  // Helper function to sanitize HTML strings
+  /**
+   * Sanitizes a string for safe HTML insertion by escaping special characters
+   * Prevents XSS attacks by converting text to HTML entities
+   * @param {string} str - The string to sanitize
+   * @returns {string} HTML-safe string with escaped special characters
+   */
   TimoETA.sanitizeHTML = function(str) {
+    if (str == null) return '';
+    if (typeof str !== 'string') str = String(str);
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
   };
 
+  /**
+   * Creates a mobile-optimized card component for displaying ETA information
+   * @param {Object} data - Card configuration object
+   * @param {string} data.mode - Transport mode ('kmb', 'mtr', 'lr')
+   * @param {string} [data.route] - Route number/code
+   * @param {string} [data.routeClass] - CSS class for route styling
+   * @param {string} [data.routeBgColor] - Background color for route tag
+   * @param {string} [data.routeColor] - Text color for route tag
+   * @param {string} [data.dest] - Destination name
+   * @param {string} [data.platform] - Platform identifier
+   * @param {Array<{time: string, isScheduled: boolean}>} [data.etas] - Array of ETA times
+   * @param {string} [data.details] - HTML string for expandable details section
+   * @returns {HTMLElement} The constructed mobile card element
+   */
   TimoETA.createMobileCard = function(data) {
+    if (!data || typeof data !== 'object') {
+      console.warn('Invalid data passed to createMobileCard');
+      return document.createElement('div');
+    }
+
     const card = document.createElement('div');
     card.className = `mobile-card fade-in mobile-${data.mode || 'default'}`;
 
+    // Route tag section
     const cRoute = document.createElement('div');
     cRoute.className = 'mobile-route';
     if (data.route) {
@@ -337,11 +411,13 @@
     }
     card.appendChild(cRoute);
 
+    // Destination section
     const cDest = document.createElement('div');
     cDest.className = 'mobile-dest';
     cDest.textContent = data.dest || '';
     card.appendChild(cDest);
 
+    // Platform section
     const cPlatform = document.createElement('div');
     cPlatform.className = 'mobile-platform';
     if (data.platform) {
@@ -356,6 +432,7 @@
     }
     card.appendChild(cPlatform);
 
+    // ETA times or warning button
     if (data.etas && data.etas.length > 0) {
       const cTimes = document.createElement('div');
       cTimes.className = 'mobile-times';
@@ -375,6 +452,7 @@
       card.appendChild(btn);
     }
     
+    // Expandable details functionality
     if (data.details) {
       const toggleDetails = (evt) => {
         if(evt) evt.stopPropagation();
@@ -382,17 +460,21 @@
         if(nx && nx.classList.contains('mobile-details')){
           nx.remove();
           card.classList.remove('expanded');
+          card.setAttribute('aria-expanded', 'false');
         } else {
           const md = document.createElement('div');
           md.className = 'mobile-details';
           md.innerHTML = data.details;
           card.insertAdjacentElement('afterend', md);
           card.classList.add('expanded');
+          card.setAttribute('aria-expanded', 'true');
         }
       };
 
+      card.setAttribute('aria-expanded', 'false');
       if (data.etas && data.etas.length > 0) {
         card.addEventListener('dblclick', toggleDetails);
+        card.style.cursor = 'pointer';
       } else {
         const btn = card.querySelector('.mobile-toggle-btn');
         if (btn) btn.addEventListener('click', toggleDetails);
@@ -402,35 +484,59 @@
     return card;
   };
 
+  /**
+   * Creates a desktop-optimized HTML table for displaying ETA information
+   * @param {Array<string>} headers - Array of column header labels
+   * @param {Array<Array<string|Object>>} rows - 2D array of table data
+   *   Each cell can be a string or an object with properties:
+   *   - {string} text - Cell text content
+   *   - {string} html - Raw HTML content (use with caution)
+   *   - {string} class - CSS class for the cell
+   *   - {number} colspan - Number of columns to span
+   * @returns {HTMLElement} The constructed table container element
+   */
   TimoETA.createDesktopTable = function(headers, rows) {
+    if (!Array.isArray(headers) || !Array.isArray(rows)) {
+      console.warn('Invalid arguments passed to createDesktopTable');
+      return document.createElement('div');
+    }
+
     const wrap = document.createElement('div');
     wrap.className = 'eta-table-container';
     const table = document.createElement('table');
     table.className = 'eta-results';
+    table.setAttribute('role', 'table');
     
+    // Create table header
     const thead = document.createElement('thead');
     const trHead = document.createElement('tr');
+    trHead.setAttribute('role', 'row');
     headers.forEach(h => {
       const th = document.createElement('th');
+      th.setAttribute('role', 'columnheader');
       th.textContent = h;
       trHead.appendChild(th);
     });
     thead.appendChild(trHead);
     table.appendChild(thead);
 
+    // Create table body
     const tbody = document.createElement('tbody');
     rows.forEach(rowData => {
+      if (!Array.isArray(rowData)) return;
       const tr = document.createElement('tr');
       tr.className = 'eta-data-row';
+      tr.setAttribute('role', 'row');
       rowData.forEach(cellData => {
         const td = document.createElement('td');
+        td.setAttribute('role', 'cell');
         if (typeof cellData === 'object' && cellData !== null) {
           if (cellData.html) td.innerHTML = cellData.html;
-          else td.textContent = cellData.text;
+          else td.textContent = cellData.text || '';
           if (cellData.class) td.className = cellData.class;
           if (cellData.colspan) td.colSpan = cellData.colspan;
         } else {
-          td.textContent = cellData;
+          td.textContent = cellData != null ? String(cellData) : '';
         }
         tr.appendChild(td);
       });
@@ -441,20 +547,42 @@
     return wrap;
   };
 
+  /**
+   * Displays results with a title heading in the results container
+   * @param {string} title - Section title to display
+   * @param {HTMLElement|Array<HTMLElement>} content - Element(s) to append
+   */
   TimoETA.displayResults = function(title, content) {
     const results = document.getElementById('results');
+    if (!results) {
+      console.warn('Results container not found');
+      return;
+    }
+    
     const h3 = document.createElement('h3');
     h3.textContent = title;
     results.appendChild(h3);
+    
     if (Array.isArray(content)) {
-      content.forEach(el => results.appendChild(el));
-    } else {
+      content.forEach(el => {
+        if (el instanceof HTMLElement) results.appendChild(el);
+      });
+    } else if (content instanceof HTMLElement) {
       results.appendChild(content);
     }
   };
 
-  // Debounce helper
+  /**
+   * Debounces a function to limit how often it can be called
+   * Useful for optimizing expensive operations triggered by frequent events
+   * @param {Function} func - The function to debounce
+   * @param {number} wait - Milliseconds to wait before executing
+   * @returns {Function} Debounced function
+   */
   TimoETA.debounce = function(func, wait) {
+    if (typeof func !== 'function') {
+      throw new TypeError('Expected a function');
+    }
     let timeout;
     return function executedFunction(...args) {
       const later = () => {
@@ -466,39 +594,52 @@
     };
   };
 
-  // Mobile column alignment
+  /**
+   * Aligns mobile card columns by calculating and setting CSS custom properties
+   * Ensures consistent column widths across all mobile cards for better visual alignment
+   * Should be called after new cards are added to the DOM
+   */
   TimoETA.alignMobileColumns = function(){
     const currentMode = TimoETA.getMode();
     const rootStyle = document.documentElement.style;
+    const EXTRA_ETA_PADDING = (currentMode === 'mtr' || currentMode === 'lr') ? 15 : 0;
 
+    // Align route column width
     const routeEls = document.querySelectorAll('.mobile-card:not(.mobile-mtr) .mobile-route');
     let maxRouteW = 0;
     rootStyle.setProperty('--max-route-col-width', 'auto');
-    routeEls.forEach(el=>{
+    routeEls.forEach(el => {
       const w = el.getBoundingClientRect().width;
       if (w > maxRouteW) maxRouteW = w;
     });
-    rootStyle.setProperty('--max-route-col-width', maxRouteW + 'px');
+    if (maxRouteW > 0) {
+      rootStyle.setProperty('--max-route-col-width', maxRouteW + 'px');
+    }
 
+    // Align platform column width
     const platEls = document.querySelectorAll('.mobile-card .mobile-platform');
     let maxPlatW = 0;
     rootStyle.setProperty('--max-platform-col-width', 'auto');
-    platEls.forEach(el=>{
+    platEls.forEach(el => {
       if (el.children.length > 0) {
         const w = el.offsetWidth;
         if (w > maxPlatW) maxPlatW = w;
       }
     });
-    rootStyle.setProperty('--max-platform-col-width', maxPlatW + 'px');
+    if (maxPlatW > 0) {
+      rootStyle.setProperty('--max-platform-col-width', maxPlatW + 'px');
+    }
 
+    // Align ETA times column width
     const timesButtonEls = document.querySelectorAll('.mobile-card .mobile-times, .mobile-card .mobile-toggle-btn');
     let maxTimesW = 0;
-    let EXTRA_ETA_PADDING = (currentMode === 'mtr' || currentMode === 'lr') ? 15 : 0;
     rootStyle.setProperty('--max-times-col-width', 'auto');
-    timesButtonEls.forEach(el=>{
+    timesButtonEls.forEach(el => {
       const w = el.offsetWidth;
       if (w > maxTimesW) maxTimesW = w;
     });
-    rootStyle.setProperty('--max-times-col-width', (maxTimesW + EXTRA_ETA_PADDING) + 'px');
+    if (maxTimesW > 0) {
+      rootStyle.setProperty('--max-times-col-width', (maxTimesW + EXTRA_ETA_PADDING) + 'px');
+    }
   };
 })();

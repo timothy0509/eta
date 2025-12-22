@@ -27,11 +27,6 @@
 
   const API_TIMEOUT_MS = 10000; // 10 seconds
 
-  // Use shared utilities from TimoETA namespace
-  function contrastColor(hex){ return TimoETA.contrastColor(hex); }
-  function getLang(){ return TimoETA.getLang(); }
-  function isMobile(){ return TimoETA.isMobile(); }
-
   /**
    * Main function to fetch and display Light Rail train schedules for a station
    * Accepts station name and displays schedules organized by platform
@@ -74,14 +69,14 @@
         const routes = p.route_list || [];
         if (!routes.length) return;
 
-        if(isMobile()){
+        if(TimoETA.isMobile()){
           const mobileCards = routes.map(e => {
             const bg = COLORS[e.route_no];
             const cardData = {
               mode: 'lr',
               route: e.route_no || '',
               routeBgColor: bg,
-              routeColor: bg ? contrastColor(bg) : '#000',
+              routeColor: bg ? TimoETA.contrastColor(bg) : '#000',
               dest: (currentLang === 'en' ? e.dest_en : e.dest_ch) || '',
               platform: p.platform_id || '',
               etas: [{ time: (currentLang === 'en' ? e.time_en : e.time_ch) || '' }]
@@ -94,7 +89,7 @@
           const desktopHeaders = [L.tableHeaders.Route, L.tableHeaders.Destination, L.tableHeaders.Time];
           const desktopRows = routes.map(e => {
             const bg = COLORS[e.route_no];
-            const fg = bg ? contrastColor(bg) : '#000';
+            const fg = bg ? TimoETA.contrastColor(bg) : '#000';
             return [
               { html: `<span class="route-tag" style="background-color:${bg};color:${fg};">${e.route_no || ''}</span>` },
               (currentLang === 'en' ? e.dest_en : e.dest_ch) || '',

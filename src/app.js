@@ -464,7 +464,14 @@
         } else {
           const md = document.createElement('div');
           md.className = 'mobile-details';
-          md.innerHTML = data.details;
+          
+          // data.details can be an HTML string or a DocumentFragment
+          if (data.details instanceof DocumentFragment || data.details instanceof HTMLElement) {
+            md.appendChild(data.details);
+          } else {
+            md.innerHTML = data.details;
+          }
+          
           card.insertAdjacentElement('afterend', md);
           card.classList.add('expanded');
           card.setAttribute('aria-expanded', 'true');
@@ -597,49 +604,56 @@
   /**
    * Aligns mobile card columns by calculating and setting CSS custom properties
    * Ensures consistent column widths across all mobile cards for better visual alignment
-   * Should be called after new cards are added to the DOM
+   * Optimized to prevent layout thrashing by batching reads and writes
    */
   TimoETA.alignMobileColumns = function(){
     const currentMode = TimoETA.getMode();
     const rootStyle = document.documentElement.style;
     const EXTRA_ETA_PADDING = (currentMode === 'mtr' || currentMode === 'lr') ? 15 : 0;
 
-    // Align route column width
+    // 1. Batch Reads
     const routeEls = document.querySelectorAll('.mobile-card:not(.mobile-mtr) .mobile-route');
     let maxRouteW = 0;
-    rootStyle.setProperty('--max-route-col-width', 'auto');
     routeEls.forEach(el => {
       const w = el.getBoundingClientRect().width;
       if (w > maxRouteW) maxRouteW = w;
     });
-    if (maxRouteW > 0) {
-      rootStyle.setProperty('--max-route-col-width', maxRouteW + 'px');
-    }
 
-    // Align platform column width
     const platEls = document.querySelectorAll('.mobile-card .mobile-platform');
     let maxPlatW = 0;
-    rootStyle.setProperty('--max-platform-col-width', 'auto');
     platEls.forEach(el => {
       if (el.children.length > 0) {
         const w = el.offsetWidth;
         if (w > maxPlatW) maxPlatW = w;
       }
     });
-    if (maxPlatW > 0) {
-      rootStyle.setProperty('--max-platform-col-width', maxPlatW + 'px');
-    }
 
-    // Align ETA times column width
     const timesButtonEls = document.querySelectorAll('.mobile-card .mobile-times, .mobile-card .mobile-toggle-btn');
     let maxTimesW = 0;
-    rootStyle.setProperty('--max-times-col-width', 'auto');
     timesButtonEls.forEach(el => {
       const w = el.offsetWidth;
       if (w > maxTimesW) maxTimesW = w;
     });
-    if (maxTimesW > 0) {
-      rootStyle.setProperty('--max-times-col-width', (maxTimesW + EXTRA_ETA_PADDING) + 'px');
-    }
+
+    // 2. Batch Writes using requestAnimationFrame
+    requestAnimationFrame(() => {
+      if (maxRouteW > 0) {
+        rootStyle.setProperty('--max-route-col-width', maxRouteW + 'px');
+      } else {
+        rootStyle.setProperty('--max-route-col-width', 'auto');
+      }
+
+      if (maxPlatW > 0) {
+        rootStyle.setProperty('--max-platform-col-width', maxPlatW + 'px');
+      } else {
+        rootStyle.setProperty('--max-platform-col-width', 'auto');
+      }
+
+      if (maxTimesW > 0) {
+        rootStyle.setProperty('--max-times-col-width', (maxTimesW + EXTRA_ETA_PADDING) + 'px');
+      } else {
+        rootStyle.setProperty('--max-times-col-width', 'auto');
+      }
+    });
   };
 })();

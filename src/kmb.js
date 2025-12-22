@@ -186,8 +186,7 @@
   }
   window.TimoETA.routeTagClass = routeTagClass;
 
-  // Use shared utility from TimoETA namespace
-  function isMobile(){ return TimoETA.isMobile(); }
+  // No changes needed here, just removing the wrapper line if it was redundant but it's used as a local shorthand. Actually, looking at the code, it's fine. Wait, the instructions said to remove redundant utility wrappers. Let's see.
 
   /**
    * Main function to fetch and display KMB bus ETAs for stops matching search criteria
@@ -321,7 +320,7 @@
       h3.textContent = title;
       results.appendChild(h3);
 
-      if(isMobile()){
+      if(TimoETA.isMobile()){
         const mobileCards = rows.map(r => {
           const cardData = {
             mode: 'kmb',
@@ -333,9 +332,23 @@
               time: TimoETA.formatTimeOnly(e.eta),
               isScheduled: e.rmk_en?.includes('Scheduled Bus')
             })),
-            details: `<div><strong>Stop Code:</strong> ${TimoETA.sanitizeHTML(r.stopCode || 'N/A')}</div>
-                      <div><strong>Platform:</strong> ${TimoETA.sanitizeHTML(r.platform || 'N/A')}</div>
-                      <div><strong>Remarks:</strong> ${TimoETA.sanitizeHTML(r.etas.some(e => e.eta) ? r.numberedRemarks.join('; ') : (r.noetaRemarks.join('; ') || L.noEtas))}</div>`
+            details: (() => {
+              const frag = document.createDocumentFragment();
+              const items = [
+                { label: 'Stop Code', value: r.stopCode || 'N/A' },
+                { label: 'Platform', value: r.platform || 'N/A' },
+                { label: 'Remarks', value: r.etas.some(e => e.eta) ? r.numberedRemarks.join('; ') : (r.noetaRemarks.join('; ') || L.noEtas) }
+              ];
+              items.forEach(item => {
+                const div = document.createElement('div');
+                const strong = document.createElement('strong');
+                strong.textContent = `${item.label}: `;
+                div.appendChild(strong);
+                div.append(item.value);
+                frag.appendChild(div);
+              });
+              return frag;
+            })()
           };
           return TimoETA.createMobileCard(cardData);
         });

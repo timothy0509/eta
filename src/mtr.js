@@ -28,11 +28,6 @@
 
   const API_TIMEOUT_MS = 10000; // 10 seconds
 
-  // Use shared utilities from TimoETA namespace
-  function contrastColor(hex){ return TimoETA.contrastColor(hex); }
-  function getLang(){ return TimoETA.getLang(); }
-  function isMobile(){ return TimoETA.isMobile(); }
-
   /**
    * Main function to fetch and display MTR train schedules for a station
    * Accepts either a 3-letter station code or station name
@@ -72,10 +67,9 @@
       return;
     }
 
-    // Fetch schedules for all lines serving this station
-    let any = false;
-    for(const line of lines){
-      try{
+    // Fetch schedules for all lines serving this station in parallel
+    const fetchPromises = lines.map(async (line) => {
+      try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
         
@@ -83,25 +77,35 @@
         clearTimeout(timeoutId);
         
         const j = await res.json();
-        const key = `${line}-${sta}`;
-        if(j.status === 1 && j.data?.[key]){
-          any = true;
-          renderBlock(j.data[key], line);
-        }
-      }catch(e){
+        return { line, data: j };
+      } catch (e) {
         if (e.name === 'AbortError') {
           console.warn(`Request timeout for line ${line} at station ${sta}`);
         } else {
           console.warn(`Failed to fetch MTR data for ${line}-${sta}:`, e);
         }
+        return { line, error: e };
       }
-    }
+    });
+
+    const responses = await Promise.all(fetchPromises);
+    let any = false;
+
+    responses.forEach(res => {
+      if (res.data) {
+        const key = `${res.line}-${sta}`;
+        if (res.data.status === 1 && res.data.data?.[key]) {
+          any = true;
+          renderBlock(res.data.data[key], res.line);
+        }
+      }
+    });
     
     if(!any) {
       results.innerHTML = `<div class="no-results">${L.noData}</div>`;
     }
 
-    if(isMobile()) TimoETA.alignMobileColumns();
+    if(TimoETA.isMobile()) TimoETA.alignMobileColumns();
   };
 
   /**
@@ -116,11 +120,11 @@
       return;
     }
 
-    const currentLang = getLang();
+    const currentLang = TimoETA.getLang();
     const L = TimoETA.ALL_LANGS_DATA.mtr[currentLang];
     const results = document.getElementById('results');
     const bg = LINE_COLOR[line] || '#000';
-    const fg = contrastColor(bg);
+    const fg = TimoETA.contrastColor(bg);
     const lineName = STATIONS[line]?.name || line;
 
     ['UP', 'DOWN'].forEach(dir => {
@@ -144,7 +148,7 @@
       results.appendChild(h3);
 
       // Render mobile or desktop view
-      if(isMobile()){
+      if(TimoETA.isMobile()){
         const mobileCards = arr.map(e => {
           const cardData = {
             mode: 'mtr',

@@ -29,7 +29,7 @@
     } catch (e) {
       if (retries <= 0 || signal?.aborted) throw e;
       console.warn(`Request failed, retrying... (${retries} attempts left)`, e);
-      await new Promise(resolve => setTimeout(resolve, 1000 * (MAX_RETRIES - retries + 1)));
+      await new Promise(resolve => setTimeout(() => resolve(), 1000 * (MAX_RETRIES - retries + 1)));
       return fetchWithRetry(fetchFn, retries - 1, signal);
     }
   }

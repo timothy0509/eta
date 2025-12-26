@@ -569,6 +569,28 @@
   };
 
   /**
+   * Debounces a function to limit how often it can be called
+   * Useful for optimizing expensive operations triggered by frequent events
+   * @param {Function} func - The function to debounce
+   * @param {number} wait - Milliseconds to wait before executing
+   * @returns {Function} Debounced function
+   */
+  TimoETA.debounce = function(func, wait) {
+    if (typeof func !== 'function') {
+      throw new TypeError('Expected a function');
+    }
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  };
+
+  /**
    * Creates a desktop-optimized HTML table for displaying ETA information
    * @param {Array<string>} headers - Array of column header labels
    * @param {Array<Array<string|Object>>} rows - 2D array of table data
@@ -662,28 +684,6 @@
     } else if (content instanceof HTMLElement) {
       results.appendChild(content);
     }
-  };
-
-  /**
-   * Debounces a function to limit how often it can be called
-   * Useful for optimizing expensive operations triggered by frequent events
-   * @param {Function} func - The function to debounce
-   * @param {number} wait - Milliseconds to wait before executing
-   * @returns {Function} Debounced function
-   */
-  TimoETA.debounce = function(func, wait) {
-    if (typeof func !== 'function') {
-      throw new TypeError('Expected a function');
-    }
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
   };
 
   /**

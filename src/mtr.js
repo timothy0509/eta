@@ -38,7 +38,7 @@
    */
   window.TimoETA.buildMTR = async function(){
     const controller = TimoETA.createRequestController();
-    const currentLang = getLang();
+    const currentLang = TimoETA.getLang();
     const L = TimoETA.ALL_LANGS_DATA.mtr[currentLang];
 
     const inp = document.getElementById('stopName').value.trim();

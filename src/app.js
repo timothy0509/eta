@@ -349,14 +349,16 @@
     el.classList.add('animate');
   });
 
-  // Scroll-progress bar
-  window.addEventListener('scroll', function(){
+  // Scroll-progress bar with debouncing for performance
+  const updateProgressBar = TimoETA.debounce(function(){
     const doc = document.documentElement;
     const scrollHeight = doc.scrollHeight - doc.clientHeight;
     const pct = scrollHeight > 0 ? (doc.scrollTop / scrollHeight * 100) : 0;
     const progressBar = document.querySelector('.progress-bar');
     if(progressBar) progressBar.style.width = Math.min(100, Math.max(0, pct)) + '%';
-  });
+  }, 100);
+  
+  window.addEventListener('scroll', updateProgressBar, { passive: true });
 
   // UI Component Generation
   /**

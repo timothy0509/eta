@@ -211,6 +211,26 @@
   })();
 
   /**
+   * Adds keyboard navigation to a set of buttons
+   * Allows navigation with arrow keys (left/right)
+   * @param {NodeList} buttons - Collection of buttons to enhance
+   */
+  function addKeyboardNav(buttons) {
+    buttons.forEach((btn, idx, arr) => {
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const nextIdx = e.key === 'ArrowRight' 
+            ? (idx + 1) % arr.length 
+            : (idx - 1 + arr.length) % arr.length;
+          arr[nextIdx].click();
+          arr[nextIdx].focus();
+        }
+      });
+    });
+  }
+
+  /**
    * Updates all dynamic UI text and input attributes based on selected mode and language
    * Called when mode or language changes to refresh labels, placeholders, and visibility
    */
@@ -283,18 +303,10 @@
         
         TimoETA.updateUITextAndInputs();
       });
-      // Add keyboard navigation
-      btn.addEventListener('keydown', (e)=>{
-        if(e.key === 'ArrowRight' || e.key === 'ArrowLeft'){
-          e.preventDefault();
-          const nextIdx = e.key === 'ArrowRight' ? 
-            (idx + 1) % arr.length : 
-            (idx - 1 + arr.length) % arr.length;
-          arr[nextIdx].click();
-          arr[nextIdx].focus();
-        }
-      });
     });
+    
+    // Add keyboard navigation to mode switch buttons
+    addKeyboardNav(document.querySelectorAll('.mode-switch button'));
 
     document.querySelectorAll('.lang-switch button').forEach((btn, idx, arr)=>{
       btn.addEventListener('click', ()=>{
@@ -306,18 +318,10 @@
         btn.setAttribute('aria-pressed', 'true');
         TimoETA.updateUITextAndInputs();
       });
-      // Add keyboard navigation
-      btn.addEventListener('keydown', (e)=>{
-        if(e.key === 'ArrowRight' || e.key === 'ArrowLeft'){
-          e.preventDefault();
-          const nextIdx = e.key === 'ArrowRight' ? 
-            (idx + 1) % arr.length : 
-            (idx - 1 + arr.length) % arr.length;
-          arr[nextIdx].click();
-          arr[nextIdx].focus();
-        }
-      });
     });
+    
+    // Add keyboard navigation to language switch buttons
+    addKeyboardNav(document.querySelectorAll('.lang-switch button'));
 
     // Search form handler
     document.getElementById('searchForm').addEventListener('submit', function(e){

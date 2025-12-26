@@ -602,12 +602,7 @@
           td.setAttribute('role', 'cell');
           if (typeof cellData === 'object' && cellData !== null) {
             if (cellData.html) {
-              td.textContent = '';
-              const tempDiv = document.createElement('div');
-              tempDiv.textContent = cellData.html;
-              while (tempDiv.firstChild) {
-                td.appendChild(tempDiv.firstChild);
-              }
+              td.innerHTML = cellData.html;
             } else {
               td.textContent = cellData.text || '';
             }

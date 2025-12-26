@@ -214,6 +214,7 @@
    * Groups results by stop name and displays in mobile cards or desktop tables
    */
   window.TimoETA.buildKMB = async function(){
+    const controller = TimoETA.createRequestController();
     const currentLang = TimoETA.getLang();
     const L = TimoETA.ALL_LANGS_DATA.kmb[currentLang];
     const suffix = SUFFIX[currentLang];

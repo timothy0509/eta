@@ -37,6 +37,7 @@
    * Accepts either a 3-letter station code or station name
    */
   window.TimoETA.buildMTR = async function(){
+    const controller = TimoETA.createRequestController();
     const currentLang = getLang();
     const L = TimoETA.ALL_LANGS_DATA.mtr[currentLang];
 

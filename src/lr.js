@@ -36,6 +36,7 @@
    * Accepts station name and displays schedules organized by platform
    */
   window.TimoETA.buildLR = async function(){
+    const controller = TimoETA.createRequestController();
     const currentLang = getLang();
     const L = TimoETA.ALL_LANGS_DATA.lr[currentLang];
 

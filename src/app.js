@@ -35,6 +35,24 @@
     return luminance > LUMINANCE_THRESHOLD ? '#000' : '#fff';
   };
 
+  // AbortController for cancelling pending requests on mode change
+  let currentRequestController = null;
+  
+  // Cancel any pending requests
+  TimoETA.cancelPendingRequests = function() {
+    if (currentRequestController) {
+      currentRequestController.abort();
+      currentRequestController = null;
+    }
+  };
+
+  // Create new request controller
+  TimoETA.createRequestController = function() {
+    TimoETA.cancelPendingRequests();
+    currentRequestController = new AbortController();
+    return currentRequestController;
+  };
+
   // Centralized language data for all modes
   window.TimoETA.ALL_LANGS_DATA = {
     kmb: {
@@ -201,6 +219,7 @@
         });
         btn.classList.add('active');
         btn.setAttribute('aria-pressed', 'true');
+        TimoETA.cancelPendingRequests();
         TimoETA.updateUITextAndInputs();
       });
       // Add keyboard navigation

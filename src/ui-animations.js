@@ -109,11 +109,32 @@
   }
 
   /**
-   * List item entrance animations
+   * List item entrance animations using Intersection Observer
    * Adds staggered entrance animations to dynamically added list items
    * Creates a cascading effect where items appear sequentially
    * @param {HTMLElement} container - The container element with list items
    */
+  const listObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        const item = entry.target;
+        if (item.dataset.animating === 'true') return;
+        
+        item.dataset.animating = 'true';
+        item.classList.add('list-item-enter');
+        
+        // Clean up after animation completes
+        item.addEventListener('animationend', function() {
+          item.style.animationDelay = '';
+          listObserver.unobserve(item);
+        }, { once: true });
+      }
+    });
+  }, {
+    threshold: 0.01,
+    rootMargin: '0px 0px -50px 0px'
+  });
+
   function animateListItems(container) {
     if (!container) return;
 
@@ -122,18 +143,13 @@
     
     items.forEach(function(item, index) {
       // Skip items that are already animated
-      if (item.classList.contains('list-item-enter')) return;
-      
-      // Add entrance animation class
-      item.classList.add('list-item-enter');
+      if (item.dataset.animating === 'true') return;
       
       // Set animation delay for stagger effect
       item.style.animationDelay = (index * STAGGER_DELAY_MS) + 'ms';
       
-      // Clean up after animation to avoid performance issues
-      item.addEventListener('animationend', function() {
-        item.style.animationDelay = '';
-      }, { once: true });
+      // Observe item for viewport intersection
+      listObserver.observe(item);
     });
   }
 

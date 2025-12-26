@@ -35,6 +35,42 @@
     return luminance > LUMINANCE_THRESHOLD ? '#000' : '#fff';
   };
 
+  // AbortController for cancelling pending requests on mode change
+  let currentRequestController = null;
+  
+  // Safe localStorage operations with error handling
+  function safeGetItem(key, defaultValue = null) {
+    try {
+      return localStorage.getItem(key) || defaultValue;
+    } catch (e) {
+      console.warn('localStorage getItem failed:', e);
+      return defaultValue;
+    }
+  }
+
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn('localStorage setItem failed:', e);
+    }
+  }
+
+  // Cancel any pending requests
+  TimoETA.cancelPendingRequests = function() {
+    if (currentRequestController) {
+      currentRequestController.abort();
+      currentRequestController = null;
+    }
+  };
+
+  // Create new request controller
+  TimoETA.createRequestController = function() {
+    TimoETA.cancelPendingRequests();
+    currentRequestController = new AbortController();
+    return currentRequestController;
+  };
+
   // Centralized language data for all modes
   window.TimoETA.ALL_LANGS_DATA = {
     kmb: {
@@ -143,10 +179,30 @@
 
   // Set theme toggle checkbox state on load
   (function(){
-    const t = localStorage.getItem('theme');
+    const t = safeGetItem('theme');
     const chk = document.getElementById('themeToggle');
     if (chk) chk.checked = (t === 'dark');
   })();
+
+  /**
+   * Adds keyboard navigation to a set of buttons
+   * Allows navigation with arrow keys (left/right)
+   * @param {NodeList} buttons - Collection of buttons to enhance
+   */
+  function addKeyboardNav(buttons) {
+    buttons.forEach((btn, idx, arr) => {
+      btn.addEventListener('keydown', (e) => {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+          e.preventDefault();
+          const nextIdx = e.key === 'ArrowRight' 
+            ? (idx + 1) % arr.length 
+            : (idx - 1 + arr.length) % arr.length;
+          arr[nextIdx].click();
+          arr[nextIdx].focus();
+        }
+      });
+    });
+  }
 
   /**
    * Updates all dynamic UI text and input attributes based on selected mode and language
@@ -181,6 +237,28 @@
     }
   };
 
+  /**
+   * Debounces a function to limit how often it can be called
+   * Useful for optimizing expensive operations triggered by frequent events
+   * @param {Function} func - The function to debounce
+   * @param {number} wait - Milliseconds to wait before executing
+   * @returns {Function} Debounced function
+   */
+  TimoETA.debounce = function(func, wait) {
+    if (typeof func !== 'function') {
+      throw new TypeError('Expected a function');
+    }
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  };
+
   // Consolidated DOMContentLoaded listener
   document.addEventListener('DOMContentLoaded', function(){
     // Theme toggle listener
@@ -188,33 +266,26 @@
     if(chk) {
       chk.addEventListener('change', function(){
         document.documentElement.classList.toggle('dark-mode', this.checked);
-        localStorage.setItem('theme', this.checked ? 'dark' : 'light');
+        safeSetItem('theme', this.checked ? 'dark' : 'light');
       });
     }
 
     // Mode & language segmented controls
     document.querySelectorAll('.mode-switch button').forEach((btn, idx, arr)=>{
-      btn.addEventListener('click', ()=>{
+      btn.addEventListener('click', async ()=>{
         document.querySelectorAll('.mode-switch button').forEach(b=>{
           b.classList.remove('active');
           b.setAttribute('aria-pressed', 'false');
         });
         btn.classList.add('active');
         btn.setAttribute('aria-pressed', 'true');
+        TimoETA.cancelPendingRequests();
         TimoETA.updateUITextAndInputs();
       });
-      // Add keyboard navigation
-      btn.addEventListener('keydown', (e)=>{
-        if(e.key === 'ArrowRight' || e.key === 'ArrowLeft'){
-          e.preventDefault();
-          const nextIdx = e.key === 'ArrowRight' ? 
-            (idx + 1) % arr.length : 
-            (idx - 1 + arr.length) % arr.length;
-          arr[nextIdx].click();
-          arr[nextIdx].focus();
-        }
-      });
     });
+    
+    // Add keyboard navigation to mode switch buttons
+    addKeyboardNav(document.querySelectorAll('.mode-switch button'));
 
     document.querySelectorAll('.lang-switch button').forEach((btn, idx, arr)=>{
       btn.addEventListener('click', ()=>{
@@ -226,18 +297,10 @@
         btn.setAttribute('aria-pressed', 'true');
         TimoETA.updateUITextAndInputs();
       });
-      // Add keyboard navigation
-      btn.addEventListener('keydown', (e)=>{
-        if(e.key === 'ArrowRight' || e.key === 'ArrowLeft'){
-          e.preventDefault();
-          const nextIdx = e.key === 'ArrowRight' ? 
-            (idx + 1) % arr.length : 
-            (idx - 1 + arr.length) % arr.length;
-          arr[nextIdx].click();
-          arr[nextIdx].focus();
-        }
-      });
     });
+    
+    // Add keyboard navigation to language switch buttons
+    addKeyboardNav(document.querySelectorAll('.lang-switch button'));
 
     // Search form handler
     document.getElementById('searchForm').addEventListener('submit', function(e){
@@ -340,23 +403,16 @@
     }
   });
 
-  // Ripple effect
-  document.addEventListener('click', function(e){
-    const el = e.target.closest('.ripple');
-    if (!el) return;
-    el.classList.remove('animate');
-    void el.offsetWidth;
-    el.classList.add('animate');
-  });
-
-  // Scroll-progress bar
-  window.addEventListener('scroll', function(){
+  // Scroll-progress bar with debouncing for performance
+  const updateProgressBar = TimoETA.debounce(function(){
     const doc = document.documentElement;
     const scrollHeight = doc.scrollHeight - doc.clientHeight;
     const pct = scrollHeight > 0 ? (doc.scrollTop / scrollHeight * 100) : 0;
     const progressBar = document.querySelector('.progress-bar');
     if(progressBar) progressBar.style.width = Math.min(100, Math.max(0, pct)) + '%';
-  });
+  }, 100);
+  
+  window.addEventListener('scroll', updateProgressBar, { passive: true });
 
   // UI Component Generation
   /**
@@ -534,19 +590,22 @@
       const tr = document.createElement('tr');
       tr.className = 'eta-data-row';
       tr.setAttribute('role', 'row');
-      rowData.forEach(cellData => {
-        const td = document.createElement('td');
-        td.setAttribute('role', 'cell');
-        if (typeof cellData === 'object' && cellData !== null) {
-          if (cellData.html) td.innerHTML = cellData.html;
-          else td.textContent = cellData.text || '';
-          if (cellData.class) td.className = cellData.class;
-          if (cellData.colspan) td.colSpan = cellData.colspan;
-        } else {
-          td.textContent = cellData != null ? String(cellData) : '';
-        }
-        tr.appendChild(td);
-      });
+        rowData.forEach(cellData => {
+          const td = document.createElement('td');
+          td.setAttribute('role', 'cell');
+          if (typeof cellData === 'object' && cellData !== null) {
+            if (cellData.html) {
+              td.innerHTML = cellData.html;
+            } else {
+              td.textContent = cellData.text || '';
+            }
+            if (cellData.class) td.className = cellData.class;
+            if (cellData.colspan) td.colSpan = cellData.colspan;
+          } else {
+            td.textContent = cellData != null ? String(cellData) : '';
+          }
+          tr.appendChild(td);
+        });
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);
@@ -577,28 +636,6 @@
     } else if (content instanceof HTMLElement) {
       results.appendChild(content);
     }
-  };
-
-  /**
-   * Debounces a function to limit how often it can be called
-   * Useful for optimizing expensive operations triggered by frequent events
-   * @param {Function} func - The function to debounce
-   * @param {number} wait - Milliseconds to wait before executing
-   * @returns {Function} Debounced function
-   */
-  TimoETA.debounce = function(func, wait) {
-    if (typeof func !== 'function') {
-      throw new TypeError('Expected a function');
-    }
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
   };
 
   /**

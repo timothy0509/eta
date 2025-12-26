@@ -27,13 +27,18 @@
   };
 
   const API_TIMEOUT_MS = 10000; // 10 seconds
+  const CACHE_TTL = 60000; // 1 minute for caching
+
+  // In-memory cache for MTR API requests
+  const mtrCache = new Map();
 
   /**
    * Main function to fetch and display MTR train schedules for a station
    * Accepts either a 3-letter station code or station name
    */
   window.TimoETA.buildMTR = async function(){
-    const currentLang = getLang();
+    const controller = TimoETA.createRequestController();
+    const currentLang = TimoETA.getLang();
     const L = TimoETA.ALL_LANGS_DATA.mtr[currentLang];
 
     const inp = document.getElementById('stopName').value.trim();
@@ -67,8 +72,15 @@
       return;
     }
 
-    // Fetch schedules for all lines serving this station in parallel
+    // Fetch schedules for all lines serving this station in parallel with caching
     const fetchPromises = lines.map(async (line) => {
+      const cacheKey = `${line}-${sta}-${currentLang}`;
+      const cached = mtrCache.get(cacheKey);
+      
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        return { line, data: cached.data, cached: true };
+      }
+
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -77,6 +89,13 @@
         clearTimeout(timeoutId);
         
         const j = await res.json();
+        
+        // Cache the result
+        mtrCache.set(cacheKey, {
+          timestamp: Date.now(),
+          data: j
+        });
+        
         return { line, data: j };
       } catch (e) {
         if (e.name === 'AbortError') {

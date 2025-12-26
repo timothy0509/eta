@@ -10,6 +10,35 @@
   };
   const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
   const API_TIMEOUT_MS = 10000; // 10 seconds
+  const CACHE_TTL = 60000; // 1 minute for ETA caching
+  const MAX_RETRIES = 2; // Maximum retry attempts
+
+  // In-memory cache for ETA requests
+  const etaCache = new Map();
+
+  // Periodically clear ETA cache to prevent unbounded memory growth
+  setInterval(function () {
+    if (etaCache.size > 0) {
+      etaCache.clear();
+    }
+  }, CACHE_TTL);
+  /**
+   * Helper function to retry failed fetch requests
+   * @param {Function} fetchFn - Function that returns a fetch promise
+   * @param {number} retries - Number of retry attempts remaining
+   * @param {AbortSignal} signal - AbortSignal for request cancellation
+   * @returns {Promise} Resolved fetch response
+   */
+  async function fetchWithRetry(fetchFn, retries = MAX_RETRIES, signal = null) {
+    try {
+      return await fetchFn();
+    } catch (e) {
+      if (retries <= 0 || signal?.aborted) throw e;
+      console.warn(`Request failed, retrying... (${retries} attempts left)`, e);
+      await new Promise(resolve => setTimeout(() => resolve(), 1000 * Math.pow(2, MAX_RETRIES - retries)));
+      return fetchWithRetry(fetchFn, retries - 1, signal);
+    }
+  }
 
   /**
    * Fetches and caches the complete list of KMB bus stops
@@ -32,9 +61,9 @@
         console.warn('Failed to load cached stops, fetching from API:', e);
       }
       
-      // Fallback to API
+      // Fallback to API with retry logic
       try{
-        const r = await fetch(API.STOP_LIST);
+        const r = await fetchWithRetry(() => fetch(API.STOP_LIST));
         if(!r.ok) throw new Error(`API returned ${r.status}`);
         const j = await r.json();
         getStops.cache = Array.isArray(j.data) ? j.data : [];
@@ -48,7 +77,7 @@
   window.TimoETA.getStops = getStops;
 
   /**
-   * Fetches ETA data for a specific KMB stop
+   * Fetches ETA data for a specific KMB stop with caching
    * @param {string} stopId - The unique stop identifier
    * @returns {Promise<Array>} Array of ETA objects containing route, destination, and timing info
    */
@@ -57,17 +86,37 @@
       console.warn('getETAs called with empty stopId');
       return [];
     }
-    try{
+
+    // Check cache first
+    const cacheKey = stopId;
+    const cached = etaCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+
+    try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
       
-      const r = await fetch(API.STOP_ETA(stopId), { signal: controller.signal });
+      const r = await fetchWithRetry(
+        () => fetch(API.STOP_ETA(stopId), { signal: controller.signal }),
+        MAX_RETRIES,
+        controller.signal
+      );
       clearTimeout(timeoutId);
       
       if(!r.ok) throw new Error(`API returned ${r.status}`);
       const j = await r.json();
-      return Array.isArray(j.data) ? j.data : [];
-    }catch(e){
+      const data = Array.isArray(j.data) ? j.data : [];
+      
+      // Cache result
+      etaCache.set(cacheKey, {
+        timestamp: Date.now(),
+        data: data
+      });
+      
+      return data;
+    } catch(e){
       if (e.name === 'AbortError') {
         console.error(`Request timeout for stop ${stopId}`);
       } else {
@@ -194,6 +243,7 @@
    * Groups results by stop name and displays in mobile cards or desktop tables
    */
   window.TimoETA.buildKMB = async function(){
+    const controller = TimoETA.createRequestController();
     const currentLang = TimoETA.getLang();
     const L = TimoETA.ALL_LANGS_DATA.kmb[currentLang];
     const suffix = SUFFIX[currentLang];

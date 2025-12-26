@@ -2,6 +2,24 @@
 ;(function() {
   'use strict';
 
+  // Safe localStorage operations with error handling
+  function safeGetItem(key, defaultValue = null) {
+    try {
+      return localStorage.getItem(key) || defaultValue;
+    } catch (e) {
+      console.warn('localStorage getItem failed:', e);
+      return defaultValue;
+    }
+  }
+
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn('localStorage setItem failed:', e);
+    }
+  }
+
   /**
    * Enhanced ripple effect handler
    * Creates a Material Design ripple animation on elements with .ripple class
@@ -91,11 +109,32 @@
   }
 
   /**
-   * List item entrance animations
+   * List item entrance animations using Intersection Observer
    * Adds staggered entrance animations to dynamically added list items
    * Creates a cascading effect where items appear sequentially
    * @param {HTMLElement} container - The container element with list items
    */
+  const listObserver = new IntersectionObserver(function(entries) {
+    entries.forEach(function(entry) {
+      if (entry.isIntersecting) {
+        const item = entry.target;
+        if (item.dataset.animating === 'true') return;
+        
+        item.dataset.animating = 'true';
+        item.classList.add('list-item-enter');
+        
+        // Clean up after animation completes
+        item.addEventListener('animationend', function() {
+          item.style.animationDelay = '';
+          listObserver.unobserve(item);
+        }, { once: true });
+      }
+    });
+  }, {
+    threshold: 0.01,
+    rootMargin: '0px 0px -50px 0px'
+  });
+
   function animateListItems(container) {
     if (!container) return;
 
@@ -104,18 +143,13 @@
     
     items.forEach(function(item, index) {
       // Skip items that are already animated
-      if (item.classList.contains('list-item-enter')) return;
-      
-      // Add entrance animation class
-      item.classList.add('list-item-enter');
+      if (item.dataset.animating === 'true') return;
       
       // Set animation delay for stagger effect
       item.style.animationDelay = (index * STAGGER_DELAY_MS) + 'ms';
       
-      // Clean up after animation to avoid performance issues
-      item.addEventListener('animationend', function() {
-        item.style.animationDelay = '';
-      }, { once: true });
+      // Observe item for viewport intersection
+      listObserver.observe(item);
     });
   }
 
@@ -128,7 +162,7 @@
     if (!themeToggle) return;
 
     // Get saved theme from localStorage
-    const savedTheme = localStorage.getItem('theme');
+    const savedTheme = safeGetItem('theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
     // Set initial theme based on saved preference or system preference
@@ -145,7 +179,7 @@
       document.documentElement.classList.toggle('dark-mode', isDarkMode);
       
       // Save preference
-      localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+      safeSetItem('theme', isDarkMode ? 'dark' : 'light');
       
       // Remove transition after it completes to avoid affecting other animations
       setTimeout(function() {
@@ -161,7 +195,7 @@
     // Listen for system theme preference changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
       // Only auto-switch if user hasn't set a preference
-      if (!localStorage.getItem('theme')) {
+      if (!safeGetItem('theme')) {
         themeToggle.checked = e.matches;
         document.documentElement.classList.toggle('dark-mode', e.matches);
       }

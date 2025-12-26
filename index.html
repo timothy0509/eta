@@ -4,15 +4,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self' https://data.etabus.gov.hk https://rt.data.gov.hk https://fonts.googleapis.com https://fonts.gstatic.com; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; script-src 'self' 'nonce-abc123nonceValue' https://fonts.googleapis.com;">
   <title>TimoETA</title>
   <!-- immediately apply saved theme to prevent FOUC -->
-  <script>
+  <script nonce="abc123nonceValue">
     (function () {
       const t = localStorage.getItem('theme');
       if (t === 'dark')
         document.documentElement.classList.add('dark-mode');
     })();
   </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Google+Sans+Text:wght@400;500;700&family=Google+Sans:wght@440;500;700&family=Google+Sans+Display:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/style.css" />
   <link rel="stylesheet" href="styles/material.css" />
 </head>
@@ -85,9 +89,10 @@
 
   <!-- Load app.js first to define global helper functions -->
   <script src="src/app.js"></script>
-  <!-- Then load mode-specific scripts -->
+  <!-- Load station data before mode scripts -->
   <script src="src/mtr_stations.js"></script>
   <script src="src/lr_stops.js"></script>
+  <!-- Load mode scripts -->
   <script src="src/kmb.js"></script>
   <script src="src/mtr.js"></script>
   <script src="src/lr.js"></script>

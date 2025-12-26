@@ -420,15 +420,6 @@
     }
   });
 
-  // Ripple effect
-  document.addEventListener('click', function(e){
-    const el = e.target.closest('.ripple');
-    if (!el) return;
-    el.classList.remove('animate');
-    void el.offsetWidth;
-    el.classList.add('animate');
-  });
-
   // Scroll-progress bar with debouncing for performance
   const updateProgressBar = TimoETA.debounce(function(){
     const doc = document.documentElement;

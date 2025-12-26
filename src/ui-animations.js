@@ -2,6 +2,24 @@
 ;(function() {
   'use strict';
 
+  // Safe localStorage operations with error handling
+  function safeGetItem(key, defaultValue = null) {
+    try {
+      return localStorage.getItem(key) || defaultValue;
+    } catch (e) {
+      console.warn('localStorage getItem failed:', e);
+      return defaultValue;
+    }
+  }
+
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn('localStorage setItem failed:', e);
+    }
+  }
+
   /**
    * Enhanced ripple effect handler
    * Creates a Material Design ripple animation on elements with .ripple class
@@ -128,7 +146,7 @@
     if (!themeToggle) return;
 
     // Get saved theme from localStorage
-    const savedTheme = localStorage.getItem('theme');
+    const savedTheme = safeGetItem('theme');
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     
     // Set initial theme based on saved preference or system preference
@@ -145,7 +163,7 @@
       document.documentElement.classList.toggle('dark-mode', isDarkMode);
       
       // Save preference
-      localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+      safeSetItem('theme', isDarkMode ? 'dark' : 'light');
       
       // Remove transition after it completes to avoid affecting other animations
       setTimeout(function() {
@@ -161,7 +179,7 @@
     // Listen for system theme preference changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
       // Only auto-switch if user hasn't set a preference
-      if (!localStorage.getItem('theme')) {
+      if (!safeGetItem('theme')) {
         themeToggle.checked = e.matches;
         document.documentElement.classList.toggle('dark-mode', e.matches);
       }

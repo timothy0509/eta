@@ -38,6 +38,24 @@
   // AbortController for cancelling pending requests on mode change
   let currentRequestController = null;
   
+  // Safe localStorage operations with error handling
+  function safeGetItem(key, defaultValue = null) {
+    try {
+      return localStorage.getItem(key) || defaultValue;
+    } catch (e) {
+      console.warn('localStorage getItem failed:', e);
+      return defaultValue;
+    }
+  }
+
+  function safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn('localStorage setItem failed:', e);
+    }
+  }
+
   // Cancel any pending requests
   TimoETA.cancelPendingRequests = function() {
     if (currentRequestController) {
@@ -161,7 +179,7 @@
 
   // Set theme toggle checkbox state on load
   (function(){
-    const t = localStorage.getItem('theme');
+    const t = safeGetItem('theme');
     const chk = document.getElementById('themeToggle');
     if (chk) chk.checked = (t === 'dark');
   })();
@@ -206,7 +224,7 @@
     if(chk) {
       chk.addEventListener('change', function(){
         document.documentElement.classList.toggle('dark-mode', this.checked);
-        localStorage.setItem('theme', this.checked ? 'dark' : 'light');
+        safeSetItem('theme', this.checked ? 'dark' : 'light');
       });
     }
 

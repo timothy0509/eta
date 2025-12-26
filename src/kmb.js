@@ -88,7 +88,7 @@
       return cached.data;
     }
 
-    try{
+    try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
       
@@ -110,14 +110,12 @@
       });
       
       return data;
-    }catch(e){
+    } catch(e){
       if (e.name === 'AbortError') {
         console.error(`Request timeout for stop ${stopId}`);
       } else {
         console.error(`Failed to fetch ETAs for stop ${stopId}:`, e);
       }
-      return [];
-    }
       return [];
     }
   }

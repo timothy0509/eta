@@ -89,9 +89,11 @@
 
   <!-- Load app.js first to define global helper functions -->
   <script src="src/app.js"></script>
-  <!-- Load KMB immediately as it's the default mode -->
+  <!-- Load station data before mode scripts -->
+  <script src="src/mtr_stations.js"></script>
+  <script src="src/lr_stops.js"></script>
+  <!-- Load mode scripts -->
   <script src="src/kmb.js"></script>
-  <!-- MTR and LR scripts will be loaded lazily when needed -->
   <script src="src/mtr.js"></script>
   <script src="src/lr.js"></script>
   <!-- Load UI animations last -->

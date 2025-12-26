@@ -71,32 +71,6 @@
     return currentRequestController;
   };
 
-  // Track loaded scripts to avoid duplicate loading
-  const loadedScripts = new Set();
-
-  /**
-   * Dynamically load a JavaScript file
-   * @param {string} src - Path to the script file
-   * @returns {Promise<void>} Resolves when script is loaded
-   */
-  TimoETA.loadScript = function(src) {
-    return new Promise((resolve, reject) => {
-      if (loadedScripts.has(src)) {
-        resolve();
-        return;
-      }
-
-      const script = document.createElement('script');
-      script.src = src;
-      script.onload = () => {
-        loadedScripts.add(src);
-        resolve();
-      };
-      script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
-      document.body.appendChild(script);
-    });
-  };
-
   // Centralized language data for all modes
   window.TimoETA.ALL_LANGS_DATA = {
     kmb: {
@@ -263,6 +237,28 @@
     }
   };
 
+  /**
+   * Debounces a function to limit how often it can be called
+   * Useful for optimizing expensive operations triggered by frequent events
+   * @param {Function} func - The function to debounce
+   * @param {number} wait - Milliseconds to wait before executing
+   * @returns {Function} Debounced function
+   */
+  TimoETA.debounce = function(func, wait) {
+    if (typeof func !== 'function') {
+      throw new TypeError('Expected a function');
+    }
+    let timeout;
+    return function executedFunction(...args) {
+      const later = () => {
+        clearTimeout(timeout);
+        func(...args);
+      };
+      clearTimeout(timeout);
+      timeout = setTimeout(later, wait);
+    };
+  };
+
   // Consolidated DOMContentLoaded listener
   document.addEventListener('DOMContentLoaded', function(){
     // Theme toggle listener
@@ -284,23 +280,6 @@
         btn.classList.add('active');
         btn.setAttribute('aria-pressed', 'true');
         TimoETA.cancelPendingRequests();
-        
-        // Lazy load mode-specific data
-        const mode = btn.dataset.value;
-        if (mode === 'mtr' && !loadedScripts.has('src/mtr_stations.js')) {
-          try {
-            await TimoETA.loadScript('src/mtr_stations.js');
-          } catch (e) {
-            console.error('Failed to load MTR stations:', e);
-          }
-        } else if (mode === 'lr' && !loadedScripts.has('src/lr_stops.js')) {
-          try {
-            await TimoETA.loadScript('src/lr_stops.js');
-          } catch (e) {
-            console.error('Failed to load LR stops:', e);
-          }
-        }
-        
         TimoETA.updateUITextAndInputs();
       });
     });
@@ -574,24 +553,9 @@
    * @param {Function} func - The function to debounce
    * @param {number} wait - Milliseconds to wait before executing
    * @returns {Function} Debounced function
-   */
-  TimoETA.debounce = function(func, wait) {
-    if (typeof func !== 'function') {
-      throw new TypeError('Expected a function');
-    }
-    let timeout;
-    return function executedFunction(...args) {
-      const later = () => {
-        clearTimeout(timeout);
-        func(...args);
-      };
-      clearTimeout(timeout);
-      timeout = setTimeout(later, wait);
-    };
-  };
-
-  /**
-   * Creates a desktop-optimized HTML table for displaying ETA information
+    */
+   /**
+    * Creates a desktop-optimized HTML table for displaying ETA information
    * @param {Array<string>} headers - Array of column header labels
    * @param {Array<Array<string|Object>>} rows - 2D array of table data
    *   Each cell can be a string or an object with properties:

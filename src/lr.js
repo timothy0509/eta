@@ -26,6 +26,10 @@
   };
 
   const API_TIMEOUT_MS = 10000; // 10 seconds
+  const CACHE_TTL = 60000; // 1 minute for caching
+
+  // In-memory cache for Light Rail API requests
+  const lrCache = new Map();
 
   /**
    * Main function to fetch and display Light Rail train schedules for a station
@@ -47,13 +51,28 @@
     }
 
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+      // Check cache first
+      const cacheKey = stationId;
+      const cached = lrCache.get(cacheKey);
+      let j;
       
-      const res = await fetch(API(stationId), { signal: controller.signal });
-      clearTimeout(timeoutId);
-      
-      const j = await res.json();
+      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+        j = cached.data;
+      } else {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
+        
+        const res = await fetch(API(stationId), { signal: controller.signal });
+        clearTimeout(timeoutId);
+        
+        j = await res.json();
+        
+        // Cache the result
+        lrCache.set(cacheKey, {
+          timestamp: Date.now(),
+          data: j
+        });
+      }
       
       if (j.status !== 1 || !j.platform_list?.length) {
         results.innerHTML = `<div class="no-results">${L.noData}</div>`;

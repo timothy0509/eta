@@ -10,6 +10,10 @@
   };
   const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutes
   const API_TIMEOUT_MS = 10000; // 10 seconds
+  const CACHE_TTL = 60000; // 1 minute for ETA caching
+
+  // In-memory cache for ETA requests
+  const etaCache = new Map();
 
   /**
    * Fetches and caches the complete list of KMB bus stops
@@ -48,7 +52,7 @@
   window.TimoETA.getStops = getStops;
 
   /**
-   * Fetches ETA data for a specific KMB stop
+   * Fetches ETA data for a specific KMB stop with caching
    * @param {string} stopId - The unique stop identifier
    * @returns {Promise<Array>} Array of ETA objects containing route, destination, and timing info
    */
@@ -57,6 +61,14 @@
       console.warn('getETAs called with empty stopId');
       return [];
     }
+
+    // Check cache first
+    const cacheKey = stopId;
+    const cached = etaCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return cached.data;
+    }
+
     try{
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
@@ -66,7 +78,15 @@
       
       if(!r.ok) throw new Error(`API returned ${r.status}`);
       const j = await r.json();
-      return Array.isArray(j.data) ? j.data : [];
+      const data = Array.isArray(j.data) ? j.data : [];
+      
+      // Cache the result
+      etaCache.set(cacheKey, {
+        timestamp: Date.now(),
+        data: data
+      });
+      
+      return data;
     }catch(e){
       if (e.name === 'AbortError') {
         console.error(`Request timeout for stop ${stopId}`);

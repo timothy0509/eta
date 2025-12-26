@@ -1,3 +1,4 @@
 
 .env
 /api_docs
+.sessions

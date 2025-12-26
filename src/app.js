@@ -71,6 +71,32 @@
     return currentRequestController;
   };
 
+  // Track loaded scripts to avoid duplicate loading
+  const loadedScripts = new Set();
+
+  /**
+   * Dynamically load a JavaScript file
+   * @param {string} src - Path to the script file
+   * @returns {Promise<void>} Resolves when script is loaded
+   */
+  TimoETA.loadScript = function(src) {
+    return new Promise((resolve, reject) => {
+      if (loadedScripts.has(src)) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = src;
+      script.onload = () => {
+        loadedScripts.add(src);
+        resolve();
+      };
+      script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+      document.body.appendChild(script);
+    });
+  };
+
   // Centralized language data for all modes
   window.TimoETA.ALL_LANGS_DATA = {
     kmb: {
@@ -230,7 +256,7 @@
 
     // Mode & language segmented controls
     document.querySelectorAll('.mode-switch button').forEach((btn, idx, arr)=>{
-      btn.addEventListener('click', ()=>{
+      btn.addEventListener('click', async ()=>{
         document.querySelectorAll('.mode-switch button').forEach(b=>{
           b.classList.remove('active');
           b.setAttribute('aria-pressed', 'false');
@@ -238,6 +264,23 @@
         btn.classList.add('active');
         btn.setAttribute('aria-pressed', 'true');
         TimoETA.cancelPendingRequests();
+        
+        // Lazy load mode-specific data
+        const mode = btn.dataset.value;
+        if (mode === 'mtr' && !loadedScripts.has('src/mtr_stations.js')) {
+          try {
+            await TimoETA.loadScript('src/mtr_stations.js');
+          } catch (e) {
+            console.error('Failed to load MTR stations:', e);
+          }
+        } else if (mode === 'lr' && !loadedScripts.has('src/lr_stops.js')) {
+          try {
+            await TimoETA.loadScript('src/lr_stops.js');
+          } catch (e) {
+            console.error('Failed to load LR stops:', e);
+          }
+        }
+        
         TimoETA.updateUITextAndInputs();
       });
       // Add keyboard navigation

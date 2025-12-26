@@ -16,6 +16,12 @@
   // In-memory cache for ETA requests
   const etaCache = new Map();
 
+  // Periodically clear ETA cache to prevent unbounded memory growth
+  setInterval(function () {
+    if (etaCache.size > 0) {
+      etaCache.clear();
+    }
+  }, CACHE_TTL);
   /**
    * Helper function to retry failed fetch requests
    * @param {Function} fetchFn - Function that returns a fetch promise

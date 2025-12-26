@@ -548,14 +548,7 @@
   };
 
   /**
-   * Debounces a function to limit how often it can be called
-   * Useful for optimizing expensive operations triggered by frequent events
-   * @param {Function} func - The function to debounce
-   * @param {number} wait - Milliseconds to wait before executing
-   * @returns {Function} Debounced function
-    */
-   /**
-    * Creates a desktop-optimized HTML table for displaying ETA information
+   * Creates a desktop-optimized HTML table for displaying ETA information
    * @param {Array<string>} headers - Array of column header labels
    * @param {Array<Array<string|Object>>} rows - 2D array of table data
    *   Each cell can be a string or an object with properties:

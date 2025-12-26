@@ -536,19 +536,27 @@
       const tr = document.createElement('tr');
       tr.className = 'eta-data-row';
       tr.setAttribute('role', 'row');
-      rowData.forEach(cellData => {
-        const td = document.createElement('td');
-        td.setAttribute('role', 'cell');
-        if (typeof cellData === 'object' && cellData !== null) {
-          if (cellData.html) td.innerHTML = cellData.html;
-          else td.textContent = cellData.text || '';
-          if (cellData.class) td.className = cellData.class;
-          if (cellData.colspan) td.colSpan = cellData.colspan;
-        } else {
-          td.textContent = cellData != null ? String(cellData) : '';
-        }
-        tr.appendChild(td);
-      });
+        rowData.forEach(cellData => {
+          const td = document.createElement('td');
+          td.setAttribute('role', 'cell');
+          if (typeof cellData === 'object' && cellData !== null) {
+            if (cellData.html) {
+              td.textContent = '';
+              const tempDiv = document.createElement('div');
+              tempDiv.textContent = cellData.html;
+              while (tempDiv.firstChild) {
+                td.appendChild(tempDiv.firstChild);
+              }
+            } else {
+              td.textContent = cellData.text || '';
+            }
+            if (cellData.class) td.className = cellData.class;
+            if (cellData.colspan) td.colSpan = cellData.colspan;
+          } else {
+            td.textContent = cellData != null ? String(cellData) : '';
+          }
+          tr.appendChild(td);
+        });
       tbody.appendChild(tr);
     });
     table.appendChild(tbody);

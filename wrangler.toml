@@ -1,4 +1,4 @@
-name = "TimoETA"
+name = "timoeta"
 main = ".open-next/worker.js"
 compatibility_date = "2025-12-01"
 

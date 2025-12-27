@@ -5,6 +5,19 @@ export type LrtStation = {
 };
 
 export const LRT_STATIONS: LrtStation[] = [
+  // Source: `API Docs/LR_Next_Train_DataDictionary_v1.0.pdf` Station ID table.
+  { stationId: "1", nameEn: "Tuen Mun Ferry Pier", nameZh: "屯門碼頭" },
+  { stationId: "10", nameEn: "Melody Garden", nameZh: "美樂" },
+  { stationId: "15", nameEn: "Butterfly", nameZh: "蝴蝶" },
+  { stationId: "20", nameEn: "Light Rail Depot", nameZh: "輕鐵車廠" },
+  { stationId: "30", nameEn: "Lung Mun", nameZh: "龍門" },
+  { stationId: "40", nameEn: "Tsing Shan Tsuen", nameZh: "青山村" },
+  { stationId: "50", nameEn: "Tsing Wun", nameZh: "青雲" },
+  { stationId: "60", nameEn: "Kin On", nameZh: "建安" },
+  { stationId: "70", nameEn: "Ho Tin", nameZh: "河田" },
+  { stationId: "75", nameEn: "Choy Yee Bridge", nameZh: "蔡意橋" },
+  { stationId: "80", nameEn: "Affluence", nameZh: "澤豐" },
+  { stationId: "90", nameEn: "Tuen Mun Hospital", nameZh: "屯門醫院" },
   { stationId: "100", nameEn: "Siu Hong", nameZh: "兆康" },
   { stationId: "110", nameEn: "Kei Lun", nameZh: "麒麟" },
   { stationId: "120", nameEn: "Ching Chung", nameZh: "青松" },

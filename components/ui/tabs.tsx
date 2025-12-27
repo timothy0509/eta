@@ -21,11 +21,14 @@ function Tabs({
 type TabsListProps = React.ComponentProps<typeof TabsPrimitive.List> & {
   /** Renders an animated pill behind the active trigger. */
   withIndicator?: boolean
+  /** Optional className for the indicator pill. */
+  indicatorClassName?: string
 }
 
 function TabsList({
   className,
   withIndicator = false,
+  indicatorClassName,
   ...props
 }: TabsListProps) {
   const listRef = React.useRef<HTMLDivElement>(null)
@@ -105,7 +108,10 @@ function TabsList({
       {withIndicator && indicator.visible ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-0 top-0 z-0 rounded-md border border-transparent bg-background shadow-sm transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none dark:border-input dark:bg-input/30"
+          className={cn(
+            "pointer-events-none absolute left-0 top-0 z-0 rounded-md border border-transparent bg-background shadow-sm transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none dark:border-input dark:bg-input/30",
+            indicatorClassName
+          )}
           style={{
             width: indicator.width,
             height: indicator.height,

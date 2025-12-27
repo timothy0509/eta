@@ -23,7 +23,11 @@ type Props = {
 export function ModeTabs({ value, onChange }: Props) {
   return (
     <Tabs value={value} onValueChange={(nextValue) => onChange(nextValue as TransportMode)}>
-      <TabsList withIndicator className="grid w-full grid-cols-3 rounded-2xl">
+      <TabsList
+        withIndicator
+        indicatorClassName="rounded-xl"
+        className="grid w-full grid-cols-3 rounded-2xl"
+      >
         {MODES.map((m) => {
           const Icon = m.icon;
           return (

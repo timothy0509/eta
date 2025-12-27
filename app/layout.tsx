@@ -33,6 +33,9 @@ const notoSansSC = Noto_Sans_SC({
 export const metadata: Metadata = {
   title: "TimoETA",
   description: "Fast ETAs for KMB, MTR and Light Rail",
+  icons: {
+    icon: "/timoeta_new.png",
+  },
 };
 
 export default function RootLayout({

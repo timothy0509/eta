@@ -63,6 +63,47 @@ function formatEtaLabel(seq: number, lang: UiLanguage) {
   return `第${seq}班`;
 }
 
+function hasValidEta(items: KmbEtaEntry[]): boolean {
+  return items.some((entry) => entry.eta && !isNaN(Date.parse(entry.eta)));
+}
+
+function getGroupRemark(items: KmbEtaEntry[], lang: UiLanguage): string | null {
+  for (const entry of items) {
+    const remark = pickLang(
+      { en: entry.rmk_en ?? "", tc: entry.rmk_tc ?? "", sc: entry.rmk_sc ?? "" },
+      lang
+    );
+    if (remark?.trim()) return remark.trim();
+  }
+  return null;
+}
+
+/**
+ * Parse a KMB stop name to extract the code from parentheses.
+ * e.g., "Chuk Yuen Estate Bus Terminus (WT916)" → { name: "Chuk Yuen Estate Bus Terminus", code: "WT916" }
+ */
+function parseStopCode(fullName: string): string | null {
+  const match = fullName.match(/\(([A-Z]{1,2}\d+)\)\s*$/);
+  return match ? match[1] : null;
+}
+
+function pickStopName(
+  stop: { nameEn: string; nameTc: string; nameSc: string } | undefined,
+  lang: UiLanguage
+): string {
+  if (!stop) return "";
+  if (lang === "sc") return stop.nameSc;
+  if (lang === "en") return stop.nameEn;
+  return stop.nameTc;
+}
+
+type StopInfo = {
+  stopId: string;
+  nameEn: string;
+  nameTc: string;
+  nameSc: string;
+};
+
 type Props = {
   lang: UiLanguage;
   title?: string;
@@ -73,6 +114,10 @@ type Props = {
   hasQuery: boolean;
   onRefresh: () => void;
   loading?: boolean;
+  /** For showing stop codes next to routes when multiple stops are selected */
+  stops?: StopInfo[];
+  /** Whether multiple stops are selected (grouped stops mode) */
+  multipleStops?: boolean;
 };
 
 export function KmbResults({
@@ -85,8 +130,16 @@ export function KmbResults({
   hasQuery,
   onRefresh,
   loading,
+  stops,
+  multipleStops,
 }: Props) {
   const now = new Date();
+
+  // Create a lookup map for stops by ID
+  const stopLookup = React.useMemo(() => {
+    if (!stops) return new Map<string, StopInfo>();
+    return new Map(stops.map((s) => [s.stopId, s]));
+  }, [stops]);
 
   const grouped = React.useMemo(() => {
     const byVariant = new Map<string, KmbEtaEntry[]>();
@@ -101,17 +154,28 @@ export function KmbResults({
       byVariant.set(key, items);
     }
 
-    return Array.from(byVariant.entries())
-      .map(([key, items]) => {
-        const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq);
-        return { key, items: sorted };
-      })
-      .sort((a, b) => {
-        const [routeA] = a.key.split("|");
-        const [routeB] = b.key.split("|");
-        return routeA.localeCompare(routeB, undefined, { numeric: true });
-      });
-  }, [eta]);
+    const groups = Array.from(byVariant.entries()).map(([key, items]) => {
+      const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq);
+      // Find the stop code for this route (from the first entry)
+      const stopId = sorted[0]?.stop;
+      const stop = stopId ? stopLookup.get(stopId) : undefined;
+      const routeStopCode = stop ? parseStopCode(pickStopName(stop, lang)) : null;
+      return { key, items: sorted, hasEta: hasValidEta(sorted), stopCode: routeStopCode };
+    });
+
+    // Sort alphabetically by route number
+    const sortByRoute = (a: { key: string }, b: { key: string }) => {
+      const [routeA] = a.key.split("|");
+      const [routeB] = b.key.split("|");
+      return routeA.localeCompare(routeB, undefined, { numeric: true });
+    };
+
+    // Routes with ETAs first, then routes without ETAs
+    const withEtas = groups.filter((g) => g.hasEta).sort(sortByRoute);
+    const withoutEtas = groups.filter((g) => !g.hasEta).sort(sortByRoute);
+
+    return [...withEtas, ...withoutEtas];
+  }, [eta, stopLookup, lang]);
 
   return (
     <Card className="rounded-3xl border bg-card/60 shadow-sm">
@@ -160,6 +224,32 @@ export function KmbResults({
             const first = g.items[0];
             const label = formatRouteVariantLabel(routeInfos[g.key], first, lang);
 
+            // Routes without valid ETAs get a simplified display
+            if (!g.hasEta) {
+              const remark = getGroupRemark(g.items, lang);
+              return (
+                <div key={g.key} className="rounded-2xl border bg-background/40 p-4 opacity-70">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="rounded-xl">
+                        {route}
+                      </Badge>
+                      {multipleStops && g.stopCode ? (
+                        <Badge variant="outline" className="rounded-lg font-mono text-xs">
+                          {g.stopCode}
+                        </Badge>
+                      ) : null}
+                      <div className="text-sm font-medium">{label || "Route"}</div>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
+                    <Info className="h-4 w-4 shrink-0" />
+                    {remark || formatNoScheduledText(lang)}
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div key={g.key} className="rounded-2xl border bg-background/40 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
@@ -167,6 +257,11 @@ export function KmbResults({
                     <Badge variant="secondary" className="rounded-xl">
                       {route}
                     </Badge>
+                    {multipleStops && g.stopCode ? (
+                      <Badge variant="outline" className="rounded-lg font-mono text-xs">
+                        {g.stopCode}
+                      </Badge>
+                    ) : null}
                     <div className="text-sm font-medium">{label || "Route"}</div>
                   </div>
                 </div>

@@ -12,6 +12,7 @@ type Props = {
 
 /**
  * A single-line text container that scrolls horizontally when content overflows.
+ * Uses duplicate content approach for seamless infinite scroll.
  * - Only animates when overflow is detected (scrollWidth > clientWidth)
  * - Pauses animation on hover / touch
  */
@@ -19,7 +20,7 @@ export function Marquee({ children, className, speed = 30 }: Props) {
   const containerRef = React.useRef<HTMLDivElement>(null);
   const contentRef = React.useRef<HTMLSpanElement>(null);
   const [overflow, setOverflow] = React.useState(false);
-  const [duration, setDuration] = React.useState(0);
+  const [duration, setDuration] = React.useState(5);
 
   React.useEffect(() => {
     const container = containerRef.current;
@@ -30,11 +31,10 @@ export function Marquee({ children, className, speed = 30 }: Props) {
       const isOverflowing = content.scrollWidth > container.clientWidth;
       setOverflow(isOverflowing);
       if (isOverflowing && speed > 0) {
-        // Calculate duration based on overflow amount
-        const overflowAmount = content.scrollWidth - container.clientWidth;
-        // Add some extra for the gap between repeated content
-        const totalDistance = overflowAmount + 40;
-        setDuration(totalDistance / speed);
+        // Duration based on full content width (one copy) + gap
+        const contentWidth = content.scrollWidth;
+        const gap = 32; // 2rem gap between copies
+        setDuration((contentWidth + gap) / speed);
       }
     };
 
@@ -47,25 +47,41 @@ export function Marquee({ children, className, speed = 30 }: Props) {
     return () => observer.disconnect();
   }, [children, speed]);
 
+  // Non-overflowing: just render content normally
+  if (!overflow) {
+    return (
+      <div
+        ref={containerRef}
+        className={cn("overflow-hidden whitespace-nowrap", className)}
+      >
+        <span ref={contentRef} className="inline-block">
+          {children}
+        </span>
+      </div>
+    );
+  }
+
+  // Overflowing: render with duplicate content for seamless scroll
   return (
     <div
       ref={containerRef}
-      className={cn(
-        "overflow-hidden whitespace-nowrap",
-        overflow && "marquee-container",
-        className
-      )}
+      className={cn("marquee-container overflow-hidden whitespace-nowrap", className)}
     >
-      <span
-        ref={contentRef}
-        className={cn(
-          "inline-block",
-          overflow && "marquee-content"
-        )}
-        style={overflow ? { "--marquee-duration": `${duration}s` } as React.CSSProperties : undefined}
-      >
+      {/* Hidden span for measuring content width */}
+      <span ref={contentRef} className="invisible absolute whitespace-nowrap">
         {children}
       </span>
+
+      {/* Animated track with two copies */}
+      <div
+        className="marquee-track inline-flex"
+        style={{ "--marquee-duration": `${duration}s` } as React.CSSProperties}
+      >
+        <span className="shrink-0 pr-8">{children}</span>
+        <span className="shrink-0 pr-8" aria-hidden="true">
+          {children}
+        </span>
+      </div>
     </div>
   );
 }

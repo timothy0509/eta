@@ -140,7 +140,8 @@
     transform: translateX(0);
   }
   100% {
-    transform: translateX(calc(-100% - 2rem));
+    /* Scroll by exactly half (one copy) for seamless loop */
+    transform: translateX(-50%);
   }
 }
 
@@ -155,12 +156,11 @@
   );
 }
 
-.marquee-content {
-  padding-right: 2rem;
+.marquee-track {
   animation: marquee-scroll var(--marquee-duration, 5s) linear infinite;
 }
 
-.marquee-container:hover .marquee-content,
-.marquee-container:active .marquee-content {
+.marquee-container:hover .marquee-track,
+.marquee-container:active .marquee-track {
   animation-play-state: paused;
 }

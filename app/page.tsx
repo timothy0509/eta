@@ -49,6 +49,12 @@ type KmbQuery =
       serviceType?: string;
     }
   | {
+      mode: "stops";
+      stopIds: string[];
+      route?: string;
+      serviceType?: string;
+    }
+  | {
       mode: "contains";
       query: string;
       route?: string;
@@ -247,12 +253,14 @@ export default function Home() {
       const stopIds =
         query.mode === "stop"
           ? [query.stopId]
-          : query.query.trim().length >= 3
-            ? kmbStops
-                .filter((stop) => stopNameContains(stop, query.query))
-                .slice(0, 20)
-                .map((stop) => stop.stopId)
-            : [];
+          : query.mode === "stops"
+            ? query.stopIds
+            : query.query.trim().length >= 3
+              ? kmbStops
+                  .filter((stop) => stopNameContains(stop, query.query))
+                  .slice(0, 20)
+                  .map((stop) => stop.stopId)
+              : [];
 
       if (!stopIds.length) return;
 
@@ -449,6 +457,11 @@ export default function Home() {
       return [kmbDraftStopSelection.stopId];
     }
 
+    if (kmbDraftStopSelection.type === "stops") {
+      return kmbDraftStopSelection.stopIds;
+    }
+
+    // type === "contains"
     const trimmed = kmbDraftStopSelection.query.trim();
     if (trimmed.length < 3) return [];
 
@@ -577,7 +590,11 @@ export default function Home() {
       prev.type === kmbDraftStopSelection.type &&
       (prev.type === "stop"
         ? prev.stopId === (kmbDraftStopSelection as { type: "stop"; stopId: string }).stopId
-        : prev.query === (kmbDraftStopSelection as { type: "contains"; query: string }).query);
+        : prev.type === "stops"
+          ? JSON.stringify((prev as { type: "stops"; stopIds: string[] }).stopIds) ===
+            JSON.stringify((kmbDraftStopSelection as { type: "stops"; stopIds: string[] }).stopIds)
+          : (prev as { type: "contains"; query: string }).query ===
+            (kmbDraftStopSelection as { type: "contains"; query: string }).query);
 
     if (isSame) return;
 
@@ -591,12 +608,19 @@ export default function Home() {
             route: routeInput || undefined,
             serviceType: "1",
           }
-        : {
-            mode: "contains",
-            query: kmbDraftStopSelection.query,
-            route: routeInput || undefined,
-            serviceType: "1",
-          };
+        : kmbDraftStopSelection.type === "stops"
+          ? {
+              mode: "stops",
+              stopIds: kmbDraftStopSelection.stopIds,
+              route: routeInput || undefined,
+              serviceType: "1",
+            }
+          : {
+              mode: "contains",
+              query: kmbDraftStopSelection.query,
+              route: routeInput || undefined,
+              serviceType: "1",
+            };
 
     setKmbQuery(nextQuery);
     void refreshKmbEtaRef.current(nextQuery);
@@ -622,7 +646,9 @@ export default function Home() {
     const nextQuery: KmbQuery =
       kmbDraftStopSelection.type === "stop"
         ? { mode: "stop", stopId: kmbDraftStopSelection.stopId, serviceType: "1" }
-        : { mode: "contains", query: kmbDraftStopSelection.query, serviceType: "1" };
+        : kmbDraftStopSelection.type === "stops"
+          ? { mode: "stops", stopIds: kmbDraftStopSelection.stopIds, serviceType: "1" }
+          : { mode: "contains", query: kmbDraftStopSelection.query, serviceType: "1" };
 
     setKmbQuery(nextQuery);
     void refreshKmbEtaRef.current(nextQuery);
@@ -647,7 +673,9 @@ export default function Home() {
     const nextQuery: KmbQuery =
       kmbDraftStopSelection.type === "stop"
         ? { mode: "stop", stopId: kmbDraftStopSelection.stopId, route: routeInput || undefined, serviceType: "1" }
-        : { mode: "contains", query: kmbDraftStopSelection.query, route: routeInput || undefined, serviceType: "1" };
+        : kmbDraftStopSelection.type === "stops"
+          ? { mode: "stops", stopIds: kmbDraftStopSelection.stopIds, route: routeInput || undefined, serviceType: "1" }
+          : { mode: "contains", query: kmbDraftStopSelection.query, route: routeInput || undefined, serviceType: "1" };
 
     setKmbQuery(nextQuery);
     void refreshKmbEtaRef.current(nextQuery);
@@ -677,6 +705,16 @@ export default function Home() {
         return { title: parsed.name, code: parsed.code };
       }
       return { title: `Stop ${kmbQuery.stopId}`, code: null };
+    }
+    if (kmbQuery.mode === "stops") {
+      // For grouped stops, find first stop to get base name
+      const firstStop = kmbStops.find((s) => kmbQuery.stopIds.includes(s.stopId));
+      if (firstStop) {
+        const fullName = pickKmbStopTitle(firstStop, lang);
+        const parsed = parseStopNameAndCode(fullName);
+        return { title: parsed.name, code: null }; // No single code for grouped stops
+      }
+      return { title: lang === "en" ? "Selected stops" : "已選車站", code: null };
     }
     return { title: lang === "en" ? `Stops containing "${kmbQuery.query.trim()}"` : `包含「${kmbQuery.query.trim()}」的車站`, code: null };
   }, [kmbQuery, kmbStops, lang]);
@@ -917,6 +955,22 @@ export default function Home() {
                             stopId: stop.stopId,
                           });
                         }}
+                        onSelectStops={(stops) => {
+                          const stopIds = stops.map((s) => s.stopId);
+                          setKmbDraftStopSelection({ type: "stops", stopIds });
+                          // Use first stop's name for the recent entry
+                          if (stops.length > 0) {
+                            const firstStop = stops[0];
+                            const fullName = pickKmbStopTitle(firstStop, lang);
+                            const { name } = parseStopNameAndCode(fullName);
+                            addRecent({
+                              id: `kmb:${stopIds.join(",")}:__stops__`,
+                              mode: "kmb",
+                              title: name,
+                              stopId: stopIds[0], // Primary stop ID for compatibility
+                            });
+                          }
+                        }}
                         onSelectContains={(query) => {
                           setKmbDraftStopSelection({ type: "contains", query });
                         }}
@@ -1017,6 +1071,8 @@ export default function Home() {
                     hasQuery={Boolean(kmbQuery)}
                     onRefresh={() => void refreshKmbEta(kmbQuery)}
                     loading={kmbEtaLoading}
+                    stops={kmbStops}
+                    multipleStops={kmbQuery?.mode === "stops" || kmbQuery?.mode === "contains"}
                   />
               ) : null}
 

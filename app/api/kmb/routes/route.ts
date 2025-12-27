@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
-import { getKmbStops } from "@/lib/eta/kmb";
+import { getKmbRouteList } from "@/lib/eta/kmb";
 
 export async function GET() {
-  const stops = await getKmbStops();
+  const routes = await getKmbRouteList();
   const revalidateSeconds = secondsUntilNextKmbDailyUpdate();
 
   return NextResponse.json(
     {
-      stops,
+      routes,
     },
     {
       headers: {

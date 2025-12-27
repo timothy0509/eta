@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
 import { getKmbRouteInfo } from "@/lib/eta/kmb";
 
 export async function GET(request: Request) {
@@ -21,5 +22,14 @@ export async function GET(request: Request) {
   }
 
   const data = await getKmbRouteInfo({ route, direction, serviceType });
-  return NextResponse.json({ data });
+  const revalidateSeconds = secondsUntilNextKmbDailyUpdate();
+
+  return NextResponse.json(
+    { data },
+    {
+      headers: {
+        "Cache-Control": kmbDailyCacheControlHeader(revalidateSeconds),
+      },
+    }
+  );
 }

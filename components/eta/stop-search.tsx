@@ -368,7 +368,7 @@ export function StopSearch({
                 </CommandItem>
               ) : trimmedQuery.length ? (
                 <div className="px-2 py-1 text-xs text-muted-foreground">
-                  Type 3+ characters for "contains" search.
+                  Type 3+ characters for &quot;contains&quot; search.
                 </div>
               ) : null}
 

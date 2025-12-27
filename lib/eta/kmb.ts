@@ -1,3 +1,4 @@
+import { secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
 import { fetchJson } from "@/lib/eta/http";
 
 const KMB_BASE_URL = "https://data.etabus.gov.hk";
@@ -41,7 +42,7 @@ export async function getKmbStops(): Promise<KmbStop[]> {
     `${KMB_BASE_URL}/v1/transport/kmb/stop`,
     {
       next: {
-        revalidate: 60 * 60 * 12,
+        revalidate: secondsUntilNextKmbDailyUpdate(),
       },
     }
   );
@@ -75,7 +76,7 @@ export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
     `${KMB_BASE_URL}/v1/transport/kmb/route-stop`,
     {
       next: {
-        revalidate: 60 * 60 * 12,
+        revalidate: secondsUntilNextKmbDailyUpdate(),
       },
     }
   );
@@ -94,6 +95,33 @@ export type KmbRouteInfo = {
   dest_sc: string;
 };
 
+export type KmbRouteListEntry = {
+  co: string;
+  route: string;
+  bound: "I" | "O" | string;
+  service_type: number | string;
+  orig_en: string;
+  orig_tc: string;
+  orig_sc: string;
+  dest_en: string;
+  dest_tc: string;
+  dest_sc: string;
+  data_timestamp?: string;
+};
+
+export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
+  const json = await fetchJson<KmbApiEnvelope<KmbRouteListEntry[]>>(
+    `${KMB_BASE_URL}/v1/transport/kmb/route/`,
+    {
+      next: {
+        revalidate: secondsUntilNextKmbDailyUpdate(),
+      },
+    }
+  );
+
+  return json.data;
+}
+
 export async function getKmbRouteInfo(params: {
   route: string;
   direction: "I" | "O" | "inbound" | "outbound" | string;
@@ -110,7 +138,7 @@ export async function getKmbRouteInfo(params: {
     `${KMB_BASE_URL}/v1/transport/kmb/route/${encodeURIComponent(params.route)}/${encodeURIComponent(direction)}/${encodeURIComponent(params.serviceType)}`,
     {
       next: {
-        revalidate: 60 * 60 * 24,
+        revalidate: secondsUntilNextKmbDailyUpdate(),
       },
     }
   );

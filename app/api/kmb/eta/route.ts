@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
 import { getKmbEta } from "@/lib/eta/kmb";
 
 export async function GET(request: Request) {
@@ -16,13 +17,19 @@ export async function GET(request: Request) {
       },
       {
         status: 400,
+        headers: KMB_NO_STORE_HEADERS,
       }
     );
   }
 
   const eta = await getKmbEta({ stopId, route, serviceType });
 
-  return NextResponse.json({
-    eta,
-  });
+  return NextResponse.json(
+    {
+      eta,
+    },
+    {
+      headers: KMB_NO_STORE_HEADERS,
+    }
+  );
 }

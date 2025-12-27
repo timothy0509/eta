@@ -46,6 +46,10 @@ export function StopSearch({ lang, stops, value, onSelectStop, onSelectContains 
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
 
+  // Defer the search query to keep input responsive during typing
+  const deferredQuery = React.useDeferredValue(query);
+  const isSearching = query !== deferredQuery;
+
   const selectedStop = React.useMemo(() => {
     if (!value) return undefined;
     if (value.type !== "stop") return undefined;
@@ -66,10 +70,10 @@ export function StopSearch({ lang, stops, value, onSelectStop, onSelectContains 
   }, [stops]);
 
   const results = React.useMemo(() => {
-    if (!query.trim()) return [] as KmbStopSearchItem[];
-    const hits = fuse.search(query.trim()).slice(0, 40);
+    if (!deferredQuery.trim()) return [] as KmbStopSearchItem[];
+    const hits = fuse.search(deferredQuery.trim()).slice(0, 40);
     return hits.map((h) => h.item);
-  }, [fuse, query]);
+  }, [fuse, deferredQuery]);
 
   const trimmedQuery = query.trim();
   const canSearchContains = trimmedQuery.length >= 3;
@@ -102,7 +106,7 @@ export function StopSearch({ lang, stops, value, onSelectStop, onSelectContains 
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList>
+          <CommandList className={cn(isSearching && "opacity-60 transition-opacity")}>
             <CommandEmpty>No results.</CommandEmpty>
             <CommandGroup heading="Stops">
               {canSearchContains ? (

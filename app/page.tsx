@@ -1016,7 +1016,7 @@ export default function Home() {
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
             <div className="space-y-4">
-              <Card className="rounded-3xl border bg-card/60 shadow-sm">
+              <Card className="rounded-3xl border bg-card/60 p-0 shadow-sm">
                 <CardContent className="space-y-4 p-5">
                   <ModeTabs value={mode} onChange={setMode} />
 

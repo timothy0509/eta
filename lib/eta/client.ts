@@ -1,0 +1,128 @@
+import type { KmbStopSearchItem } from "@/lib/eta/types";
+import type { KmbStop } from "@/lib/eta/kmb";
+
+export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
+  const response = await fetch("/api/kmb/stops", {
+    cache: "force-cache",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load stops: ${response.status}`);
+  }
+
+  const json = (await response.json()) as { stops: KmbStop[] };
+
+  return json.stops
+    .map((s) => ({
+      stopId: s.stop,
+      nameEn: (s.name_en ?? "").trim(),
+      nameTc: (s.name_tc ?? "").trim(),
+      nameSc: (s.name_sc ?? "").trim(),
+      lat: typeof s.lat === "string" ? Number(s.lat) : s.lat,
+      lng: typeof s.long === "string" ? Number(s.long) : s.long,
+    }))
+    .filter((s) => s.stopId && s.nameEn);
+}
+
+export type KmbRouteStopLite = {
+  route: string;
+  bound: "I" | "O" | string;
+  serviceType: string;
+  seq: number;
+  stopId: string;
+};
+
+export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
+  const response = await fetch("/api/kmb/route-stop", {
+    cache: "force-cache",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load route-stop: ${response.status}`);
+  }
+
+  const json = (await response.json()) as {
+    data: Array<{
+      route: string;
+      bound: "I" | "O" | string;
+      service_type: number | string;
+      seq: number | string;
+      stop: string;
+    }>;
+  };
+
+  return json.data
+    .map((entry) => ({
+      route: entry.route,
+      bound: entry.bound,
+      serviceType: String(entry.service_type),
+      seq: typeof entry.seq === "string" ? Number(entry.seq) : entry.seq,
+      stopId: entry.stop,
+    }))
+    .filter((entry) => entry.route && entry.stopId);
+}
+
+export type KmbRouteInfoLite = {
+  route: string;
+  bound: "I" | "O" | string;
+  serviceType: string;
+  origin: {
+    en: string;
+    tc: string;
+    sc: string;
+  };
+  destination: {
+    en: string;
+    tc: string;
+    sc: string;
+  };
+};
+
+export async function fetchKmbRouteInfo(params: {
+  route: string;
+  direction: "I" | "O" | string;
+  serviceType: string;
+}): Promise<KmbRouteInfoLite> {
+  const query = new URLSearchParams();
+  query.set("route", params.route);
+  query.set("direction", params.direction);
+  query.set("serviceType", params.serviceType);
+
+  const response = await fetch(`/api/kmb/route?${query.toString()}`, {
+    cache: "force-cache",
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load route info: ${response.status}`);
+  }
+
+  const json = (await response.json()) as {
+    data: {
+      route: string;
+      bound: "I" | "O" | string;
+      service_type: number | string;
+      orig_en: string;
+      orig_tc: string;
+      orig_sc: string;
+      dest_en: string;
+      dest_tc: string;
+      dest_sc: string;
+    };
+  };
+
+  return {
+    route: json.data.route,
+    bound: json.data.bound,
+    serviceType: String(json.data.service_type),
+    origin: {
+      en: (json.data.orig_en ?? "").trim(),
+      tc: (json.data.orig_tc ?? "").trim(),
+      sc: (json.data.orig_sc ?? "").trim(),
+    },
+    destination: {
+      en: (json.data.dest_en ?? "").trim(),
+      tc: (json.data.dest_tc ?? "").trim(),
+      sc: (json.data.dest_sc ?? "").trim(),
+    },
+  };
+}

@@ -1,0 +1,114 @@
+"use client";
+
+import { create } from "zustand";
+import { persist } from "zustand/middleware";
+
+import type { TransportMode, UiLanguage } from "@/lib/eta/types";
+
+export type RouteFilterMode = "simple" | "advanced";
+
+export type FavoritesItem =
+  | {
+      id: string;
+      mode: "kmb";
+      title: string;
+      stopId: string;
+      route?: string;
+      serviceType?: string;
+    }
+  | {
+      id: string;
+      mode: "mtr";
+      title: string;
+      line: string;
+      sta: string;
+    }
+  | {
+      id: string;
+      mode: "lrt";
+      title: string;
+      stationId: string;
+    };
+
+export type RecentItem = FavoritesItem & {
+  at: number;
+};
+
+type AppState = {
+  mode: TransportMode;
+  lang: UiLanguage;
+  routeFilterMode: RouteFilterMode;
+  autoRefreshSeconds: number;
+
+  favorites: FavoritesItem[];
+  recents: RecentItem[];
+
+  setMode: (mode: TransportMode) => void;
+  setLang: (lang: UiLanguage) => void;
+  setRouteFilterMode: (mode: RouteFilterMode) => void;
+  setAutoRefreshSeconds: (seconds: number) => void;
+
+  addFavorite: (item: FavoritesItem) => void;
+  removeFavorite: (id: string) => void;
+
+  addRecent: (item: FavoritesItem) => void;
+  clearRecents: () => void;
+};
+
+const RECENTS_LIMIT = 12;
+
+export const useAppStore = create<AppState>()(
+  persist(
+    (set) => ({
+      mode: "kmb",
+      lang: "tc",
+      routeFilterMode: "simple",
+      autoRefreshSeconds: 15,
+
+      favorites: [],
+      recents: [],
+
+      setMode: (mode) => set({ mode }),
+      setLang: (lang) => set({ lang }),
+      setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
+      setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
+
+      addFavorite: (item) =>
+        set((state) => {
+          if (state.favorites.some((f) => f.id === item.id)) return state;
+          return { favorites: [item, ...state.favorites] };
+        }),
+
+      removeFavorite: (id) =>
+        set((state) => ({
+          favorites: state.favorites.filter((f) => f.id !== id),
+        })),
+
+      addRecent: (item) =>
+        set((state) => {
+          const now = Date.now();
+          const recent: RecentItem = { ...item, at: now };
+
+          const updated = [
+            recent,
+            ...state.recents.filter((r) => r.id !== item.id),
+          ].slice(0, RECENTS_LIMIT);
+
+          return { recents: updated };
+        }),
+
+      clearRecents: () => set({ recents: [] }),
+    }),
+    {
+      name: "hk-eta",
+      partialize: (state) => ({
+        mode: state.mode,
+        lang: state.lang,
+        routeFilterMode: state.routeFilterMode,
+        autoRefreshSeconds: state.autoRefreshSeconds,
+        favorites: state.favorites,
+        recents: state.recents,
+      }),
+    }
+  )
+);

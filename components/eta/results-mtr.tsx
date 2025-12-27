@@ -218,7 +218,7 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
                                       {platform}
                                     </Badge>
                                   ) : null}
-                                  <Badge className="rounded-xl" variant="outline">
+                                  <Badge className="font-tabular rounded-xl" variant="outline">
                                     {formatMinutes(t.ttnt, lang)}
                                   </Badge>
                                 </div>

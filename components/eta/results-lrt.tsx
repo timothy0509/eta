@@ -100,7 +100,7 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
                           </div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className="text-lg font-semibold">
+                          <div className="font-tabular text-lg font-semibold">
                             {lang === "en" ? r.time_en : r.time_ch}
                           </div>
                           {r.stop ? (

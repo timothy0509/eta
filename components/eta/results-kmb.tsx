@@ -180,7 +180,7 @@ export function KmbResults({
                         )}
                       >
                         <div className="text-xs text-muted-foreground">{formatEtaLabel(entry.eta_seq, lang)}</div>
-                        <div className="mt-1 text-2xl font-semibold tracking-tight">
+                        <div className="mt-1 font-tabular text-2xl font-semibold tracking-tight">
                           {minutes === null || Number.isNaN(minutes)
                             ? "—"
                             : minutes <= 0

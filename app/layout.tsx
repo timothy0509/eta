@@ -1,19 +1,33 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { DM_Sans, Rubik, Noto_Sans_HK, Noto_Sans_SC } from "next/font/google";
 
 import "./globals.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/toaster";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const dmSans = DM_Sans({
+  variable: "--font-dm-sans",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const rubik = Rubik({
+  variable: "--font-rubik",
   subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const notoSansHK = Noto_Sans_HK({
+  variable: "--font-noto-sans-hk",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+});
+
+const notoSansSC = Noto_Sans_SC({
+  variable: "--font-noto-sans-sc",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
@@ -29,7 +43,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} min-h-dvh antialiased`}
+        className={`${dmSans.variable} ${rubik.variable} ${notoSansHK.variable} ${notoSansSC.variable} min-h-dvh antialiased`}
       >
         <ThemeProvider
           attribute="class"

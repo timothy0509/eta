@@ -482,7 +482,7 @@ export default function Home() {
     let cancelled = false;
     const load = async () => {
       const fetched = await Promise.allSettled(
-        missing.slice(0, 30).map(async (key) => {
+        missing.map(async (key) => {
           const [route, direction, serviceType] = key.split("|");
           const info = await fetchKmbRouteInfo({
             route,

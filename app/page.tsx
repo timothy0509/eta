@@ -244,10 +244,11 @@ export default function Home() {
 
       if (!stopIds.length) return;
 
-      const advancedKeys =
-        routeFilterMode === "advanced"
-          ? new Set((routeFilter.entries ?? []).map((e) => e.variantKey).filter(Boolean))
-          : null;
+      // Advanced filter: only apply if there are entries; empty = show all
+      const advancedEntries = routeFilterMode === "advanced" ? (routeFilter.entries ?? []) : [];
+      const advancedKeys = advancedEntries.length
+        ? new Set(advancedEntries.map((e) => e.variantKey).filter(Boolean))
+        : null;
 
       const requestedRoutes = normalizeKmbRoutesInput(query.route?.trim() ?? "");
       const requestedSet = requestedRoutes ? new Set(requestedRoutes) : null;
@@ -259,11 +260,13 @@ export default function Home() {
             .filter((entry) => entry.stopId === stopId)
             .filter((entry) => {
               const route = entry.route.toUpperCase();
+              // Advanced mode with entries: filter to selected variants only
               if (advancedKeys) {
                 const key = `${route}|${entry.bound}|${entry.serviceType}`;
                 return advancedKeys.has(key);
               }
 
+              // Simple mode: filter by route name if specified
               if (!requestedSet) return true;
               return requestedSet.has(route);
             });
@@ -528,14 +531,40 @@ export default function Home() {
     setKmbEta(null);
   }, [kmbAvailableRouteVariants, routeFilter.entries, routeFilterMode]);
 
-  const submitKmbSearch = React.useCallback(() => {
+  React.useEffect(() => {
+    if (mode !== "mtr") return;
+    if (!mtrQuery.sta) return;
+    void refreshMtr();
+  }, [mode, mtrQuery.sta, refreshMtr]);
 
+  React.useEffect(() => {
+    if (mode !== "lrt") return;
+    if (!lrtQuery.stationId) return;
+    void refreshLrt();
+  }, [mode, lrtQuery.stationId, refreshLrt]);
+
+  // Auto-fetch KMB ETAs when stop selection changes (immediate)
+  const prevStopSelectionRef = React.useRef<StopSearchSelection | undefined>(undefined);
+  React.useEffect(() => {
     if (mode !== "kmb") return;
     if (!kmbDraftStopSelection) return;
+    if (!kmbRouteStops.length) return;
 
-     const routeInput = routeFilterMode === "simple" ? routeFilter.routes?.trim() ?? "" : "";
+    // Only trigger on actual change
+    const prev = prevStopSelectionRef.current;
+    prevStopSelectionRef.current = kmbDraftStopSelection;
 
+    const isSame =
+      prev &&
+      prev.type === kmbDraftStopSelection.type &&
+      (prev.type === "stop"
+        ? prev.stopId === (kmbDraftStopSelection as { type: "stop"; stopId: string }).stopId
+        : prev.query === (kmbDraftStopSelection as { type: "contains"; query: string }).query);
 
+    if (isSame) return;
+
+    // Build query based on current state
+    const routeInput = routeFilterMode === "simple" ? routeFilter.routes?.trim() ?? "" : "";
     const nextQuery: KmbQuery =
       kmbDraftStopSelection.type === "stop"
         ? {
@@ -553,20 +582,58 @@ export default function Home() {
 
     setKmbQuery(nextQuery);
     void refreshKmbEta(nextQuery);
-   }, [kmbDraftStopSelection, mode, refreshKmbEta, routeFilter.routes, routeFilterMode]);
+  }, [mode, kmbDraftStopSelection, kmbRouteStops.length, refreshKmbEta, routeFilter.routes, routeFilterMode]);
 
+  // Auto-fetch KMB ETAs when advanced filter entries change (immediate)
+  const prevEntriesRef = React.useRef<typeof routeFilter.entries>([]);
+  React.useEffect(() => {
+    if (mode !== "kmb") return;
+    if (routeFilterMode !== "advanced") return;
+    if (!kmbDraftStopSelection) return;
+    if (!kmbRouteStops.length) return;
+
+    const prev = prevEntriesRef.current ?? [];
+    const curr = routeFilter.entries ?? [];
+    prevEntriesRef.current = curr;
+
+    // Check if entries actually changed
+    const prevKeys = new Set(prev.map((e) => e.variantKey));
+    const currKeys = new Set(curr.map((e) => e.variantKey));
+    if (prevKeys.size === currKeys.size && [...prevKeys].every((k) => currKeys.has(k))) return;
+
+    const nextQuery: KmbQuery =
+      kmbDraftStopSelection.type === "stop"
+        ? { mode: "stop", stopId: kmbDraftStopSelection.stopId, serviceType: "1" }
+        : { mode: "contains", query: kmbDraftStopSelection.query, serviceType: "1" };
+
+    setKmbQuery(nextQuery);
+    void refreshKmbEta(nextQuery);
+  }, [mode, routeFilterMode, routeFilter.entries, kmbDraftStopSelection, kmbRouteStops.length, refreshKmbEta]);
+
+  // Debounced auto-fetch for simple route filter input (1s delay)
+  const [debouncedRoutes, setDebouncedRoutes] = React.useState(routeFilter.routes ?? "");
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedRoutes(routeFilter.routes ?? "");
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [routeFilter.routes]);
 
   React.useEffect(() => {
-    if (mode !== "mtr") return;
-    if (!mtrQuery.sta) return;
-    void refreshMtr();
-  }, [mode, mtrQuery.sta, refreshMtr]);
+    if (mode !== "kmb") return;
+    if (routeFilterMode !== "simple") return;
+    if (!kmbDraftStopSelection) return;
+    if (!kmbRouteStops.length) return;
 
-  React.useEffect(() => {
-    if (mode !== "lrt") return;
-    if (!lrtQuery.stationId) return;
-    void refreshLrt();
-  }, [mode, lrtQuery.stationId, refreshLrt]);
+    const routeInput = debouncedRoutes.trim();
+    const nextQuery: KmbQuery =
+      kmbDraftStopSelection.type === "stop"
+        ? { mode: "stop", stopId: kmbDraftStopSelection.stopId, route: routeInput || undefined, serviceType: "1" }
+        : { mode: "contains", query: kmbDraftStopSelection.query, route: routeInput || undefined, serviceType: "1" };
+
+    setKmbQuery(nextQuery);
+    void refreshKmbEta(nextQuery);
+  }, [mode, routeFilterMode, debouncedRoutes, kmbDraftStopSelection, kmbRouteStops.length, refreshKmbEta]);
 
   const lrtStations: LrtStationSearchItem[] = React.useMemo(
     () =>
@@ -790,8 +857,6 @@ export default function Home() {
                         value={kmbDraftStopSelection}
                         onSelectStop={(stop) => {
                           setKmbDraftStopSelection({ type: "stop", stopId: stop.stopId });
-                          setKmbQuery(null);
-                          setKmbEta(null);
                           addRecent({
                             id: `kmb:${stop.stopId}:__stop__`,
                             mode: "kmb",
@@ -801,38 +866,18 @@ export default function Home() {
                         }}
                         onSelectContains={(query) => {
                           setKmbDraftStopSelection({ type: "contains", query });
-                          setKmbQuery(null);
-                          setKmbEta(null);
                         }}
                       />
-
-                      <div className="flex items-center justify-between gap-2">
-                        <Button
-                          size="sm"
-                          className="rounded-xl"
-                          onClick={submitKmbSearch}
-                          disabled={!kmbDraftStopSelection}
-                        >
-                          Search
-                        </Button>
-                        <div className="text-xs text-muted-foreground">
-                          Leave routes blank to show everything.
-                        </div>
-                      </div>
 
                         <RouteFilter
                           mode={routeFilterMode}
                           onModeChange={(nextMode) => {
                             setRouteFilterMode(nextMode);
-                            setKmbQuery(null);
-                            setKmbEta(null);
                           }}
                           value={routeFilter}
                           options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
                           onChange={(next) => {
                             setRouteFilter(next);
-                            setKmbQuery(null);
-                            setKmbEta(null);
                           }}
                         />
 
@@ -900,10 +945,6 @@ export default function Home() {
                       <Heart className="mr-2 h-4 w-4" />
                       Save
                     </Button>
-                     <div className="text-xs text-muted-foreground">
-                       {mode === "kmb" ? "Tip: press Search to fetch ETAs." : ""}
-                     </div>
-
                   </div>
                 </CardContent>
               </Card>

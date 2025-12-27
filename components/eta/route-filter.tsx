@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/command";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Marquee } from "@/components/ui/marquee";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
@@ -43,19 +44,6 @@ type Props = {
   onChange: (value: RouteFilterState) => void;
   options?: RouteFilterOption[];
 };
-
-function normalizeRoutesText(raw: string) {
-  const hasTrailingComma = raw.trimEnd().endsWith(",");
-
-  const parts = raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean)
-    .map((s) => s.toUpperCase());
-
-  const normalized = parts.join(", ");
-  return hasTrailingComma ? `${normalized}, ` : normalized;
-}
 
 function normalizeAdvancedEntries(entries: RouteFilterEntry[] | undefined) {
   const list = entries ?? [];
@@ -90,13 +78,13 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
   return (
     <div className="rounded-2xl border bg-card/50 p-4">
       <div className="flex items-center justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <div className="text-sm font-medium">Routes</div>
           <div className="text-xs text-muted-foreground">
             Optional. Leave blank to show all routes at the stop.
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           <Switch
             checked={mode === "advanced"}
             onCheckedChange={(checked) => onModeChange(checked ? "advanced" : "simple")}
@@ -115,8 +103,7 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
            <Label className="text-xs text-muted-foreground">Route numbers (comma-separated)</Label>
             <Input
               value={value.routes ?? ""}
-              onChange={(e) => onChange({ ...value, routes: normalizeRoutesText(e.target.value) })}
-              onBlur={(e) => onChange({ ...value, routes: normalizeRoutesText(e.target.value) })}
+              onChange={(e) => onChange({ ...value, routes: e.target.value })}
               placeholder="e.g. 40, 68X"
               className="mt-1 rounded-xl"
               disabled={mode === "advanced"}
@@ -131,7 +118,7 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
                  type="button"
                  size="sm"
                  variant="outline"
-                 className="h-8 rounded-xl"
+                 className="h-8 shrink-0 rounded-xl"
                  onClick={() => {
                    if (!opts.length) return;
                    const firstKey = opts[0]?.key;
@@ -155,11 +142,11 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
 
              {!opts.length ? (
                <div className="rounded-xl border bg-background/40 p-3 text-xs text-muted-foreground">
-                 Pick a stop and press Search first.
+                 Pick a stop first.
                </div>
              ) : entries.length === 0 ? (
                <div className="rounded-xl border bg-background/40 p-3 text-xs text-muted-foreground">
-                 Add one or more route variants.
+                 No filter added. All routes at the stop will be shown.
                </div>
              ) : null}
 
@@ -167,20 +154,20 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
                const selected = findOption(opts, entry.variantKey);
 
                return (
-                 <div key={entry.id} className="flex items-center gap-2">
+                 <div key={entry.id} className="flex min-w-0 items-center gap-2">
                    <Popover>
                      <PopoverTrigger asChild>
                        <Button
                          type="button"
                          variant="outline"
                          className={cn(
-                           "h-9 flex-1 justify-between rounded-xl",
+                           "h-9 min-w-0 flex-1 justify-between rounded-xl",
                            !selected && "text-muted-foreground"
                          )}
                        >
-                         <span className="truncate">
+                         <Marquee className="min-w-0 flex-1 text-left">
                            {selected ? `${selected.route} · ${selected.label}` : "Select route…"}
-                         </span>
+                         </Marquee>
                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                        </Button>
                      </PopoverTrigger>
@@ -209,12 +196,12 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
                                  >
                                    <Check
                                      className={cn(
-                                       "mr-2 h-4 w-4",
+                                       "mr-2 h-4 w-4 shrink-0",
                                        picked ? "opacity-100" : "opacity-0"
                                      )}
                                    />
-                                   <span className="truncate">{opt.route}</span>
-                                   <span className="ml-2 truncate text-muted-foreground">
+                                   <span className="shrink-0">{opt.route}</span>
+                                   <span className="ml-2 min-w-0 truncate text-muted-foreground">
                                      {opt.label}
                                    </span>
                                  </CommandItem>
@@ -230,7 +217,7 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
                      type="button"
                      size="icon-sm"
                      variant="outline"
-                     className="rounded-xl"
+                     className="shrink-0 rounded-xl"
                      onClick={() => {
                        const next = entries.filter((row) => row.id !== entry.id);
                        onChange({ ...value, entries: next });

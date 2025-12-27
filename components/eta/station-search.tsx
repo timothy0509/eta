@@ -29,9 +29,22 @@ function formatStationName(station: MtrStationSearchItem, lang: UiLanguage) {
   return station.nameEn;
 }
 
+function formatStationSecondary(station: MtrStationSearchItem, lang: UiLanguage) {
+  // Secondary label shows the "other" language; for English UI, always use Chinese (TC).
+  if (lang === "en") return station.nameTc;
+  return station.nameEn;
+}
+
+function isStationCodeQuery(query: string) {
+  return /^[A-Z]{3}$/i.test(query.trim());
+}
+
 export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+
+  const trimmedQuery = query.trim();
+  const showStationCode = isStationCodeQuery(trimmedQuery);
 
   const selectedStation = React.useMemo(() => {
     if (!selectedSta) return undefined;
@@ -51,10 +64,17 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
   }, [stations]);
 
   const results = React.useMemo(() => {
-    if (!query.trim()) return [] as MtrStationSearchItem[];
-    const hits = fuse.search(query.trim()).slice(0, 40);
+    if (!trimmedQuery) return [] as MtrStationSearchItem[];
+
+    if (showStationCode) {
+      return stations
+        .filter((s) => s.sta.toUpperCase().startsWith(trimmedQuery.toUpperCase()))
+        .slice(0, 40);
+    }
+
+    const hits = fuse.search(trimmedQuery).slice(0, 40);
     return hits.map((h) => h.item);
-  }, [fuse, query]);
+  }, [fuse, showStationCode, stations, trimmedQuery]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -70,9 +90,7 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
           )}
         >
           <Search className="mr-2 h-4 w-4" />
-          {selectedStation
-            ? `${formatStationName(selectedStation, lang)} (${selectedStation.lines.join("/")}/${selectedStation.sta})`
-            : "Search station name…"}
+          {selectedStation ? formatStationName(selectedStation, lang) : "Search station name…"}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
@@ -103,7 +121,9 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
                       {formatStationName(station, lang)}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      {station.nameEn} · {station.lines.join("/")}/{station.sta}
+                      {formatStationSecondary(station, lang)}
+                      {` · Lines: ${station.lines.join("/")}`}
+                      {showStationCode ? ` · Code: ${station.sta}` : null}
                     </div>
                   </div>
                 </CommandItem>

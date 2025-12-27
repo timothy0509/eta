@@ -29,6 +29,17 @@ function formatStationName(station: LrtStationSearchItem, lang: UiLanguage) {
   return station.nameZh;
 }
 
+function formatStationSecondary(station: LrtStationSearchItem, lang: UiLanguage) {
+  // Secondary label shows the "other" language; for English UI, always use Chinese (TC).
+  if (lang === "en") return station.nameZh;
+  return station.nameEn;
+}
+
+function isStationIdQuery(query: string) {
+  // Station IDs are niche; show them only when user searches for them.
+  return /^\d+$/.test(query.trim());
+}
+
 export function LrtStationSearch({
   lang,
   stations,
@@ -37,6 +48,9 @@ export function LrtStationSearch({
 }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+
+  const trimmedQuery = query.trim();
+  const showStationId = isStationIdQuery(trimmedQuery);
 
   const selected = React.useMemo(
     () => stations.find((s) => s.stationId === selectedStationId),
@@ -56,10 +70,17 @@ export function LrtStationSearch({
   }, [stations]);
 
   const results = React.useMemo(() => {
-    if (!query.trim()) return [] as LrtStationSearchItem[];
-    const hits = fuse.search(query.trim()).slice(0, 40);
+    if (!trimmedQuery) return [] as LrtStationSearchItem[];
+
+    if (showStationId) {
+      return stations
+        .filter((s) => s.stationId.startsWith(trimmedQuery))
+        .slice(0, 40);
+    }
+
+    const hits = fuse.search(trimmedQuery).slice(0, 40);
     return hits.map((h) => h.item);
-  }, [fuse, query]);
+  }, [fuse, showStationId, stations, trimmedQuery]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -75,9 +96,7 @@ export function LrtStationSearch({
           )}
         >
           <Search className="mr-2 h-4 w-4" />
-          {selected
-            ? `${formatStationName(selected, lang)} (${selected.stationId})`
-            : "Search LRT stop…"}
+          {selected ? formatStationName(selected, lang) : "Search LRT stop…"}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
@@ -108,7 +127,8 @@ export function LrtStationSearch({
                       {formatStationName(station, lang)}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      {station.nameEn} · {station.stationId}
+                      {formatStationSecondary(station, lang)}
+                      {showStationId ? ` · ${station.stationId}` : null}
                     </div>
                   </div>
                 </CommandItem>

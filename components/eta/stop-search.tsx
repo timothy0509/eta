@@ -35,6 +35,13 @@ function formatStopName(stop: KmbStopSearchItem, lang: UiLanguage) {
   return stop.nameTc;
 }
 
+function formatStopSecondary(stop: KmbStopSearchItem, lang: UiLanguage) {
+  // KMB stop IDs are API-internal and should never be shown.
+  // Secondary label shows the "other" language; for English UI, always use TC.
+  if (lang === "en") return stop.nameTc;
+  return stop.nameEn;
+}
+
 export function StopSearch({ lang, stops, value, onSelectStop, onSelectContains }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
@@ -143,9 +150,7 @@ export function StopSearch({ lang, stops, value, onSelectStop, onSelectContains 
                       {formatStopName(stop, lang)}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      {stop.nameEn}
-                      {stop.nameEn ? " · " : ""}
-                      {stop.stopId}
+                      {formatStopSecondary(stop, lang)}
                     </div>
                   </div>
                 </CommandItem>

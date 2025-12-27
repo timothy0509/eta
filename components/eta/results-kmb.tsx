@@ -43,6 +43,26 @@ function formatRouteVariantLabel(
   );
 }
 
+function formatArrivingText(lang: UiLanguage) {
+  if (lang === "en") return "Now";
+  return "即將到達";
+}
+
+function formatNoScheduledText(lang: UiLanguage) {
+  if (lang === "en") return "No scheduled buses";
+  return "暫時沒有預定班次";
+}
+
+function formatEtaLabel(seq: number, lang: UiLanguage) {
+  if (lang === "en") {
+    if (seq === 1) return "1st";
+    if (seq === 2) return "2nd";
+    if (seq === 3) return "3rd";
+    return `${seq}th`;
+  }
+  return `第${seq}班`;
+}
+
 type Props = {
   lang: UiLanguage;
   title?: string;
@@ -116,12 +136,12 @@ export function KmbResults({
         {!hasQuery ? (
           <div className="flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
-            Search to load ETAs.
+            {lang === "en" ? "Select a stop to load ETAs." : "選擇車站以載入到站時間"}
           </div>
         ) : grouped.length === 0 ? (
           <div className="flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
-            No ETA data available.
+            {formatNoScheduledText(lang)}
           </div>
         ) : (
           grouped.map((g) => {
@@ -159,12 +179,12 @@ export function KmbResults({
                           entry.eta_seq === 1 && "bg-card/60"
                         )}
                       >
-                        <div className="text-xs text-muted-foreground">Next {entry.eta_seq}</div>
+                        <div className="text-xs text-muted-foreground">{formatEtaLabel(entry.eta_seq, lang)}</div>
                         <div className="mt-1 text-2xl font-semibold tracking-tight">
                           {minutes === null || Number.isNaN(minutes)
                             ? "—"
                             : minutes <= 0
-                              ? "Arriving"
+                              ? formatArrivingText(lang)
                               : `${minutes} min`}
                         </div>
                         {remark ? (

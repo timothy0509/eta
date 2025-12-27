@@ -648,6 +648,40 @@ export default function Home() {
   const heading =
     mode === "kmb" ? "KMB bus ETAs" : mode === "mtr" ? "MTR Next Train" : "Light Rail";
 
+  // Compute KMB results title using stop name
+  const kmbResultsTitle = React.useMemo(() => {
+    if (!kmbQuery) return "KMB ETAs";
+    if (kmbQuery.mode === "stop") {
+      const stop = kmbStops.find((s) => s.stopId === kmbQuery.stopId);
+      if (stop) {
+        const name = pickKmbStopTitle(stop, lang);
+        return name;
+      }
+      return `Stop ${kmbQuery.stopId}`;
+    }
+    return `Stops containing "${kmbQuery.query.trim()}"`;
+  }, [kmbQuery, kmbStops, lang]);
+
+  // Compute MTR results title using localized station name
+  const mtrResultsTitle = React.useMemo(() => {
+    if (!mtrQuery.sta) return "MTR";
+    const station = mtrStations.find((s) => s.sta === mtrQuery.sta);
+    if (station) {
+      return lang === "en" ? station.nameEn : station.nameTc;
+    }
+    return `Station ${mtrQuery.sta}`;
+  }, [mtrQuery.sta, mtrStations, lang]);
+
+  // Compute LRT results title using localized station name
+  const lrtResultsTitle = React.useMemo(() => {
+    if (!lrtQuery.stationId) return "Light Rail";
+    const station = lrtStations.find((s) => s.stationId === lrtQuery.stationId);
+    if (station) {
+      return lang === "en" ? station.nameEn : station.nameZh;
+    }
+    return `Station ${lrtQuery.stationId}`;
+  }, [lrtQuery.stationId, lrtStations, lang]);
+
   const canFavorite =
     (mode === "kmb" &&
       ((kmbQuery?.mode === "stop" && kmbQuery.stopId) ||
@@ -956,13 +990,7 @@ export default function Home() {
               {mode === "kmb" ? (
                   <KmbResults
                     lang={lang}
-                    title={
-                      kmbQuery
-                        ? kmbQuery.mode === "stop"
-                          ? `Stop ${kmbQuery.stopId}`
-                          : `Stops containing “${kmbQuery.query.trim()}”`
-                        : "KMB ETAs"
-                    }
+                    title={kmbResultsTitle}
                     routesFilter={routeFilter.routes ?? ""}
                     eta={kmbEta ?? []}
                     routeInfos={kmbRouteInfos}
@@ -970,6 +998,26 @@ export default function Home() {
                     onRefresh={() => void refreshKmbEta(kmbQuery)}
                     loading={kmbEtaLoading}
                   />
+              ) : null}
+
+              {mode === "mtr" ? (
+                <MtrResults
+                  title={mtrResultsTitle}
+                  lang={lang}
+                  schedule={mtrSchedule}
+                  onRefresh={refreshMtr}
+                  loading={mtrLoading}
+                />
+              ) : null}
+
+              {mode === "lrt" ? (
+                <LrtResults
+                  title={lrtResultsTitle}
+                  lang={lang}
+                  schedule={lrtSchedule}
+                  onRefresh={refreshLrt}
+                  loading={lrtLoading}
+                />
               ) : null}
 
               {mode === "mtr" ? (

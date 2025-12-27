@@ -1,0 +1,11 @@
+name = "TimoETA"
+main = ".open-next/worker.js"
+compatibility_date = "2025-12-01"
+
+assets = { directory = ".open-next/assets" }
+
+# Map your Worker to the custom domain.
+# This requires the domain to be added to Cloudflare and DNS proxied.
+routes = [
+  { pattern = "eta.hkjc.uk/*", zone_name = "hkjc.uk" }
+]

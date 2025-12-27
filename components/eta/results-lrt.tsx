@@ -5,9 +5,20 @@ import { Info, RefreshCw, TramFront } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Marquee } from "@/components/ui/marquee";
 import type { LrtScheduleResponse } from "@/lib/eta/lrt";
 import type { UiLanguage } from "@/lib/eta/types";
 import { getLineColor } from "@/lib/eta/line-colors";
+
+function formatTrainLength(length: number, lang: UiLanguage) {
+  if (lang === "en") return `${length}-car`;
+  return `${length}卡`;
+}
+
+function formatArrivalDeparture(code: string, lang: UiLanguage) {
+  if (lang === "en") return code === "A" ? "Arriving" : "Departing";
+  return code === "A" ? "到達" : "離開";
+}
 
 type Props = {
   title: string;
@@ -25,7 +36,7 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
           <CardTitle className="text-base">{title}</CardTitle>
           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
             <TramFront className="h-3.5 w-3.5" />
-            Light Rail
+            {lang === "en" ? "Light Rail" : "輕鐵"}
           </div>
         </div>
         <Button
@@ -36,14 +47,14 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
           disabled={loading}
         >
           <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
+          {lang === "en" ? "Refresh" : "重新整理"}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {!schedule ? (
           <div className="flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
-            Select a stop to view trains.
+            {lang === "en" ? "Select a station to view trains." : "選擇車站以查看班次"}
           </div>
         ) : (
           <>
@@ -58,9 +69,11 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
                   className="rounded-2xl border bg-background/40 p-4"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <div className="text-sm font-medium">Platform {p.platform_id}</div>
+                    <div className="text-sm font-medium">
+                      {lang === "en" ? `Platform ${p.platform_id}` : `${p.platform_id}號月台`}
+                    </div>
                     <Badge variant="secondary" className="rounded-xl">
-                      {(p.route_list ?? []).length} routes
+                      {(p.route_list ?? []).length} {lang === "en" ? "routes" : "條路線"}
                     </Badge>
                   </div>
 
@@ -70,28 +83,30 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
                         key={`${p.platform_id}-${r.route_no}-${idx}`}
                         className="flex items-start justify-between gap-3 rounded-2xl border bg-card/30 p-3"
                       >
-                        <div className="min-w-0">
+                        <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <Badge
-                              className="rounded-xl text-white"
+                              className="shrink-0 rounded-xl text-white"
                               style={{ backgroundColor: getLineColor(String(r.route_no ?? "")) }}
                             >
                               {r.route_no}
                             </Badge>
-                            <div className="truncate text-sm font-medium">
+                            <Marquee className="text-sm font-medium">
                               {lang === "en" ? r.dest_en : r.dest_ch}
-                            </div>
+                            </Marquee>
                           </div>
                           <div className="mt-1 text-xs text-muted-foreground">
-                            {r.arrival_departure === "A" ? "Arrive" : "Depart"} · Train {r.train_length}
+                            {formatArrivalDeparture(r.arrival_departure, lang)} · {formatTrainLength(r.train_length, lang)}
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="shrink-0 text-right">
                           <div className="text-lg font-semibold">
                             {lang === "en" ? r.time_en : r.time_ch}
                           </div>
                           {r.stop ? (
-                            <div className="text-xs text-destructive">Stopped</div>
+                            <div className="text-xs text-destructive">
+                              {lang === "en" ? "Stopped" : "暫停服務"}
+                            </div>
                           ) : null}
                         </div>
                       </div>

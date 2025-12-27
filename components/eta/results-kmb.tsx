@@ -66,6 +66,7 @@ function formatEtaLabel(seq: number, lang: UiLanguage) {
 type Props = {
   lang: UiLanguage;
   title?: string;
+  stopCode?: string | null;
   routesFilter?: string;
   eta: KmbEtaEntry[];
   routeInfos: Record<string, KmbRouteInfoLite>;
@@ -77,6 +78,7 @@ type Props = {
 export function KmbResults({
   lang,
   title,
+  stopCode,
   routesFilter,
   eta,
   routeInfos,
@@ -114,22 +116,31 @@ export function KmbResults({
   return (
     <Card className="rounded-3xl border bg-card/60 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between gap-6">
-        <div>
-          <CardTitle className="text-base">{title || "KMB ETAs"}</CardTitle>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <CardTitle className="truncate text-base">{title || "KMB ETAs"}</CardTitle>
+            {stopCode ? (
+              <Badge variant="outline" className="shrink-0 rounded-lg font-mono text-xs">
+                {stopCode}
+              </Badge>
+            ) : null}
+          </div>
           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" />
-            {routesFilter?.trim() ? `Filtered: ${routesFilter}` : "All routes at this stop"}
+            {routesFilter?.trim()
+              ? (lang === "en" ? `Filtered: ${routesFilter}` : `篩選: ${routesFilter}`)
+              : (lang === "en" ? "All routes at this stop" : "此站所有路線")}
           </div>
         </div>
         <Button
           size="sm"
           variant="outline"
-          className="rounded-xl"
+          className="shrink-0 rounded-xl"
           onClick={onRefresh}
           disabled={loading}
         >
           <RefreshCw className="mr-2 h-4 w-4" />
-          Refresh
+          {lang === "en" ? "Refresh" : "重新整理"}
         </Button>
       </CardHeader>
       <CardContent className="space-y-5">

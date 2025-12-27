@@ -69,6 +69,18 @@ function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
   return stop.nameTc;
 }
 
+/**
+ * Parse a KMB stop name to extract the code from parentheses.
+ * e.g., "Chuk Yuen Estate Bus Terminus (WT916)" → { name: "Chuk Yuen Estate Bus Terminus", code: "WT916" }
+ */
+function parseStopNameAndCode(fullName: string): { name: string; code: string | null } {
+  const match = fullName.match(/^(.+?)\s*\(([A-Z0-9]+)\)\s*$/);
+  if (match) {
+    return { name: match[1].trim(), code: match[2] };
+  }
+  return { name: fullName, code: null };
+}
+
 export default function Home() {
   const mode = useAppStore((s) => s.mode);
   const setMode = useAppStore((s) => s.setMode);
@@ -648,18 +660,19 @@ export default function Home() {
   const heading =
     mode === "kmb" ? "KMB bus ETAs" : mode === "mtr" ? "MTR Next Train" : "Light Rail";
 
-  // Compute KMB results title using stop name
-  const kmbResultsTitle = React.useMemo(() => {
-    if (!kmbQuery) return "KMB ETAs";
+  // Compute KMB results title using stop name, with code parsed out
+  const kmbResultsInfo = React.useMemo(() => {
+    if (!kmbQuery) return { title: "KMB ETAs", code: null };
     if (kmbQuery.mode === "stop") {
       const stop = kmbStops.find((s) => s.stopId === kmbQuery.stopId);
       if (stop) {
-        const name = pickKmbStopTitle(stop, lang);
-        return name;
+        const fullName = pickKmbStopTitle(stop, lang);
+        const parsed = parseStopNameAndCode(fullName);
+        return { title: parsed.name, code: parsed.code };
       }
-      return `Stop ${kmbQuery.stopId}`;
+      return { title: `Stop ${kmbQuery.stopId}`, code: null };
     }
-    return `Stops containing "${kmbQuery.query.trim()}"`;
+    return { title: lang === "en" ? `Stops containing "${kmbQuery.query.trim()}"` : `包含「${kmbQuery.query.trim()}」的車站`, code: null };
   }, [kmbQuery, kmbStops, lang]);
 
   // Compute MTR results title using localized station name
@@ -990,7 +1003,8 @@ export default function Home() {
               {mode === "kmb" ? (
                   <KmbResults
                     lang={lang}
-                    title={kmbResultsTitle}
+                    title={kmbResultsInfo.title}
+                    stopCode={kmbResultsInfo.code}
                     routesFilter={routeFilter.routes ?? ""}
                     eta={kmbEta ?? []}
                     routeInfos={kmbRouteInfos}

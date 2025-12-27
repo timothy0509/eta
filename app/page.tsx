@@ -37,6 +37,7 @@ import type {
   UiLanguage,
 } from "@/lib/eta/types";
 import { isLanguageSupported } from "@/lib/eta/types";
+import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import { useAutoRefresh } from "@/lib/eta/use-auto-refresh";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
 import { cn } from "@/lib/utils";
@@ -75,17 +76,6 @@ function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
   return stop.nameTc;
 }
 
-/**
- * Parse a KMB stop name to extract the code from parentheses.
- * e.g., "Chuk Yuen Estate Bus Terminus (WT916)" → { name: "Chuk Yuen Estate Bus Terminus", code: "WT916" }
- */
-function parseStopNameAndCode(fullName: string): { name: string; code: string | null } {
-  const match = fullName.match(/^(.+?)\s*\(([A-Z0-9]+)\)\s*$/);
-  if (match) {
-    return { name: match[1].trim(), code: match[2] };
-  }
-  return { name: fullName, code: null };
-}
 
 export default function Home() {
   const mode = useAppStore((s) => s.mode);
@@ -701,8 +691,8 @@ export default function Home() {
       const stop = kmbStops.find((s) => s.stopId === kmbQuery.stopId);
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang);
-        const parsed = parseStopNameAndCode(fullName);
-        return { title: parsed.name, code: parsed.code };
+        const parsed = parseKmbStopName(fullName);
+        return { title: parsed.name, code: parsed.stopCode };
       }
       return { title: `Stop ${kmbQuery.stopId}`, code: null };
     }
@@ -711,7 +701,7 @@ export default function Home() {
       const firstStop = kmbStops.find((s) => kmbQuery.stopIds.includes(s.stopId));
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang);
-        const parsed = parseStopNameAndCode(fullName);
+        const parsed = parseKmbStopName(fullName);
         return { title: parsed.name, code: null }; // No single code for grouped stops
       }
       return { title: lang === "en" ? "Selected stops" : "已選車站", code: null };
@@ -802,7 +792,7 @@ export default function Home() {
         // Single stop favorite
         const stop = kmbStops.find((s) => s.stopId === stopId);
         const fullName = stop ? pickKmbStopTitle(stop, lang) : "KMB";
-        const { name } = parseStopNameAndCode(fullName);
+        const { name } = parseKmbStopName(fullName);
         const title = `${name}${routeSuffix}`;
 
         const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? "__all__");
@@ -820,7 +810,7 @@ export default function Home() {
         // Grouped stops favorite
         const firstStop = kmbStops.find((s) => stopIds.includes(s.stopId));
         const fullName = firstStop ? pickKmbStopTitle(firstStop, lang) : "Selected Stops";
-        const { name } = parseStopNameAndCode(fullName);
+        const { name } = parseKmbStopName(fullName);
         const title = `${name}${routeSuffix}`;
 
         const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? "__all__");
@@ -1058,7 +1048,7 @@ export default function Home() {
                           if (stops.length > 0) {
                             const firstStop = stops[0];
                             const fullName = pickKmbStopTitle(firstStop, lang);
-                            const { name } = parseStopNameAndCode(fullName);
+                            const { name } = parseKmbStopName(fullName);
                             addRecent({
                               id: `kmb:${stopIds.join(",")}:__stops__`,
                               mode: "kmb",

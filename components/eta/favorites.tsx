@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LRT_STATIONS } from "@/lib/data/lrt-stations";
 import { findMtrStationBySta } from "@/lib/data/mtr-stations";
 import { getLineColor } from "@/lib/eta/line-colors";
+import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
 
@@ -18,16 +19,6 @@ type Props = {
   onSelect: (item: FavoritesItem) => void;
 };
 
-/**
- * Parse a KMB stop name to extract the code from parentheses.
- */
-function parseStopNameAndCode(fullName: string): { name: string; code: string | null } {
-  const match = fullName.match(/^(.+?)\s*\(([A-Z0-9]+)\)\s*$/);
-  if (match) {
-    return { name: match[1].trim(), code: match[2] };
-  }
-  return { name: fullName, code: null };
-}
 
 function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
   if (lang === "en") return stop.nameEn;
@@ -90,7 +81,7 @@ function FavoriteItemDisplay({
       const stop = kmbStops?.find((s) => s.stopId === item.stopId);
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang);
-        const { name } = parseStopNameAndCode(fullName);
+        const { name } = parseKmbStopName(fullName);
         
         // Build suffix from saved data
         let suffix = "";
@@ -110,7 +101,7 @@ function FavoriteItemDisplay({
       const firstStop = kmbStops?.find((s) => item.stopIds.includes(s.stopId));
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang);
-        const { name } = parseStopNameAndCode(fullName);
+        const { name } = parseKmbStopName(fullName);
         
         // Build suffix from saved data
         let suffix = "";

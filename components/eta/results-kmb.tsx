@@ -11,6 +11,7 @@ import type { UiLanguage } from "@/lib/eta/types";
 import type { KmbEtaEntry } from "@/lib/eta/kmb";
 import type { KmbRouteInfoLite } from "@/lib/eta/client";
 import { formatRelativeMinutes } from "@/lib/eta/format";
+import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import { cn } from "@/lib/utils";
 
 function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
@@ -77,14 +78,6 @@ function getGroupRemark(items: KmbEtaEntry[], lang: UiLanguage): string | null {
   return null;
 }
 
-/**
- * Parse a KMB stop name to extract the code from parentheses.
- * e.g., "Chuk Yuen Estate Bus Terminus (WT916)" → { name: "Chuk Yuen Estate Bus Terminus", code: "WT916" }
- */
-function parseStopCode(fullName: string): string | null {
-  const match = fullName.match(/\(([A-Z]{1,2}\d+)\)\s*$/);
-  return match ? match[1] : null;
-}
 
 function pickStopName(
   stop: { nameEn: string; nameTc: string; nameSc: string } | undefined,
@@ -146,7 +139,8 @@ export function KmbResults({
       const route = (entry.route ?? "").toUpperCase();
       const dir = String(entry.dir ?? "");
       const serviceType = String(entry.service_type ?? "");
-      const key = `${route}|${dir}|${serviceType}`;
+      const baseKey = `${route}|${dir}|${serviceType}`;
+      const key = multipleStops ? `${baseKey}|${entry.stop ?? ""}` : baseKey;
 
       const items = byVariant.get(key) ?? [];
       items.push(entry);
@@ -155,11 +149,15 @@ export function KmbResults({
 
     const groups = Array.from(byVariant.entries()).map(([key, items]) => {
       const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq);
+      const [route, dir, serviceType, keyStopId] = key.split("|");
+      const baseKey = `${route}|${dir}|${serviceType}`;
+
       // Find the stop code for this route (from the first entry)
-      const stopId = sorted[0]?.stop;
+      const stopId = keyStopId || sorted[0]?.stop;
       const stop = stopId ? stopLookup.get(stopId) : undefined;
-      const routeStopCode = stop ? parseStopCode(pickStopName(stop, lang)) : null;
-      return { key, items: sorted, hasEta: hasValidEta(sorted), stopCode: routeStopCode };
+      const parsed = stop ? parseKmbStopName(pickStopName(stop, lang)) : null;
+      const routeStopLabel = parsed?.platform ?? parsed?.stopCode ?? null;
+      return { key, baseKey, items: sorted, hasEta: hasValidEta(sorted), stopCode: routeStopLabel };
     });
 
     // Sort alphabetically by route number
@@ -174,7 +172,7 @@ export function KmbResults({
     const withoutEtas = groups.filter((g) => !g.hasEta).sort(sortByRoute);
 
     return [...withEtas, ...withoutEtas];
-  }, [eta, stopLookup, lang]);
+  }, [eta, stopLookup, lang, multipleStops]);
 
   return (
     <Card className="rounded-3xl border bg-card/60 shadow-sm">
@@ -219,9 +217,9 @@ export function KmbResults({
           </div>
         ) : (
           grouped.map((g, idx) => {
-            const [route] = g.key.split("|");
+            const [route] = g.baseKey.split("|");
             const first = g.items[0];
-            const label = formatRouteVariantLabel(routeInfos[g.key], first, lang);
+            const label = formatRouteVariantLabel(routeInfos[g.baseKey], first, lang);
             const staggerClass =
               idx === 0
                 ? "ui-stagger-1"
@@ -280,7 +278,7 @@ export function KmbResults({
                 </div>
 
                 <div className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
-                  {g.items.slice(0, 3).map((entry) => {
+                  {g.items.slice(0, 3).map((entry, entryIdx) => {
                     const minutes = entry.eta ? formatRelativeMinutes(entry.eta, now) : null;
                     const remark = pickLang(
                       {
@@ -292,7 +290,7 @@ export function KmbResults({
                     );
                     return (
                       <div
-                        key={`${g.key}:${entry.eta_seq}`}
+                        key={`${g.key}:${entry.eta_seq}:${entry.eta ?? ""}:${entry.data_timestamp ?? ""}:${entryIdx}`}
                         className={cn(
                           "ui-lift min-w-[150px] shrink-0 rounded-2xl border bg-card/40 p-3 sm:min-w-0",
                           entry.eta_seq === 1 && "bg-card/60"

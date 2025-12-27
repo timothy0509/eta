@@ -15,6 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
+import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import { cn } from "@/lib/utils";
 
 export type StopSearchSelection =
@@ -44,15 +45,6 @@ function formatStopSecondary(stop: KmbStopSearchItem, lang: UiLanguage) {
   return stop.nameEn;
 }
 
-/**
- * Parse a KMB stop name to extract the code from parentheses.
- * e.g., "Chuk Yuen Estate Bus Terminus (WT916)" → { name: "Chuk Yuen Estate Bus Terminus", code: "WT916" }
- */
-function parseStopNameAndCode(fullName: string): { name: string; code: string | null } {
-  const match = fullName.match(/^(.+?)\s*\(([A-Z]{1,2}\d+)\)\s*$/);
-  if (match) return { name: match[1].trim(), code: match[2] };
-  return { name: fullName, code: null };
-}
 
 /**
  * Parse a stop code into prefix and numeric parts.
@@ -126,7 +118,9 @@ function groupStopsByName(stops: KmbStopSearchItem[], lang: UiLanguage): StopGro
 
   for (const stop of stops) {
     const fullName = formatStopName(stop, lang);
-    const { name: baseName, code } = parseStopNameAndCode(fullName);
+    const parsed = parseKmbStopName(fullName);
+    const baseName = parsed.name;
+    const code = parsed.stopCode;
 
     if (!byBaseName.has(baseName)) {
       byBaseName.set(baseName, []);
@@ -246,8 +240,8 @@ export function StopSearch({
       const stop = stops.find((s) => s.stopId === value.stopId);
       if (stop) {
         const fullName = formatStopName(stop, lang);
-        const { name, code } = parseStopNameAndCode(fullName);
-        return code ? `${name} (${code})` : name;
+        const parsed = parseKmbStopName(fullName);
+        return parsed.stopCode ? `${parsed.name} (${parsed.stopCode})` : parsed.name;
       }
       return null;
     }
@@ -257,15 +251,15 @@ export function StopSearch({
       if (!firstStop) return null;
 
       const fullName = formatStopName(firstStop, lang);
-      const { name: baseName } = parseStopNameAndCode(fullName);
+      const { name: baseName } = parseKmbStopName(fullName);
 
       // Collect all codes for selected stops
       const codes: string[] = [];
       for (const stopId of value.stopIds) {
         const stop = stops.find((s) => s.stopId === stopId);
         if (stop) {
-          const { code } = parseStopNameAndCode(formatStopName(stop, lang));
-          if (code) codes.push(code);
+          const parsed = parseKmbStopName(formatStopName(stop, lang));
+          if (parsed.stopCode) codes.push(parsed.stopCode);
         }
       }
 

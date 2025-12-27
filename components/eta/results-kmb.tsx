@@ -6,6 +6,7 @@ import { Clock, Info, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RouteBadge } from "@/components/eta/route-badge";
 import type { UiLanguage } from "@/lib/eta/types";
 import type { KmbEtaEntry } from "@/lib/eta/kmb";
 import type { KmbRouteInfoLite } from "@/lib/eta/client";
@@ -24,23 +25,21 @@ function formatRouteVariantLabel(
   lang: UiLanguage
 ) {
   if (info) {
-    const origin = pickLang(info.origin, lang);
     const destination = pickLang(info.destination, lang);
-    if (origin && destination) return `${origin} → ${destination}`;
+    if (destination) return `→ ${destination}`;
   }
 
   if (!etaFallback) return "";
 
-  return (
-    pickLang(
-      {
-        en: etaFallback.dest_en ?? "",
-        tc: etaFallback.dest_tc ?? "",
-        sc: etaFallback.dest_sc ?? "",
-      },
-      lang
-    ) || ""
+  const dest = pickLang(
+    {
+      en: etaFallback.dest_en ?? "",
+      tc: etaFallback.dest_tc ?? "",
+      sc: etaFallback.dest_sc ?? "",
+    },
+    lang
   );
+  return dest ? `→ ${dest}` : "";
 }
 
 function formatArrivingText(lang: UiLanguage) {
@@ -230,17 +229,15 @@ export function KmbResults({
               return (
                 <div key={g.key} className="rounded-2xl border bg-background/40 p-4 opacity-70">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="rounded-xl">
-                        {route}
-                      </Badge>
-                      {multipleStops && g.stopCode ? (
-                        <Badge variant="outline" className="rounded-lg font-mono text-xs">
-                          {g.stopCode}
-                        </Badge>
-                      ) : null}
-                      <div className="text-sm font-medium">{label || "Route"}</div>
+                    <div className="flex min-w-0 items-center gap-2">
+                      <RouteBadge route={route} size="lg" />
+                      <div className="min-w-0 truncate text-sm font-medium">{label || "Route"}</div>
                     </div>
+                    {multipleStops && g.stopCode ? (
+                      <Badge variant="outline" className="shrink-0 rounded-lg font-mono text-xs">
+                        {g.stopCode}
+                      </Badge>
+                    ) : null}
                   </div>
                   <div className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
                     <Info className="h-4 w-4 shrink-0" />
@@ -253,17 +250,15 @@ export function KmbResults({
             return (
               <div key={g.key} className="rounded-2xl border bg-background/40 p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="rounded-xl">
-                      {route}
-                    </Badge>
-                    {multipleStops && g.stopCode ? (
-                      <Badge variant="outline" className="rounded-lg font-mono text-xs">
-                        {g.stopCode}
-                      </Badge>
-                    ) : null}
-                    <div className="text-sm font-medium">{label || "Route"}</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <RouteBadge route={route} size="lg" />
+                    <div className="min-w-0 truncate text-sm font-medium">{label || "Route"}</div>
                   </div>
+                  {multipleStops && g.stopCode ? (
+                    <Badge variant="outline" className="shrink-0 rounded-lg font-mono text-xs">
+                      {g.stopCode}
+                    </Badge>
+                  ) : null}
                 </div>
 
                 <div className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">

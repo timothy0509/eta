@@ -325,13 +325,15 @@ export function StopSearch({
           role="combobox"
           aria-expanded={open}
           className={cn(
-            "w-full justify-start rounded-2xl border bg-card/70 text-left shadow-sm",
+            "w-full min-w-0 justify-start rounded-2xl border bg-card/70 text-left shadow-sm",
             "hover:bg-card",
             !selectedLabel && "text-muted-foreground"
           )}
         >
-          <Search className="mr-2 h-4 w-4" />
-          {selectedLabel || "Search stop name..."}
+          <Search className="mr-2 h-4 w-4 shrink-0" />
+          <span className="truncate">
+            {selectedLabel || "Search stop name..."}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">

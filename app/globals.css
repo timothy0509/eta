@@ -140,8 +140,8 @@
     transform: translateX(0);
   }
   100% {
-    /* Scroll by exactly half (one copy) for seamless loop */
-    transform: translateX(-50%);
+    /* Scroll by exactly one copy (content + gap) using pixel value */
+    transform: translateX(calc(-1 * var(--marquee-distance, 100px)));
   }
 }
 

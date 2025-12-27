@@ -742,8 +742,10 @@ export default function Home() {
   const canFavorite =
     (mode === "kmb" &&
       ((kmbQuery?.mode === "stop" && kmbQuery.stopId) ||
+        (kmbQuery?.mode === "stops" && kmbQuery.stopIds.length > 0) ||
         (kmbQuery?.mode === "contains" && kmbQuery.query.trim().length >= 3) ||
         kmbDraftStopSelection?.type === "stop" ||
+        (kmbDraftStopSelection?.type === "stops" && kmbDraftStopSelection.stopIds.length > 0) ||
         (kmbDraftStopSelection?.type === "contains" &&
           kmbDraftStopSelection.query.trim().length >= 3))) ||
     (mode === "mtr" && mtrQuery.sta) ||
@@ -755,10 +757,24 @@ export default function Home() {
     let item: FavoritesItem | null = null;
 
     if (mode === "kmb") {
-      const routeInput = routeFilterMode === "simple" ? (routeFilter.routes?.trim() ?? "") : "";
+      const isAdvanced = routeFilterMode === "advanced";
+      const routeInput = isAdvanced ? "" : (routeFilter.routes?.trim() ?? "");
       const route = routeInput || undefined;
-      const routeSuffix = route ? ` · ${route}` : "";
+      
+      // Prepare entries for advanced mode (strip id, keep only variantKey)
+      const entriesForSave = isAdvanced && routeFilter.entries?.length
+        ? routeFilter.entries.map((e) => ({ variantKey: e.variantKey }))
+        : undefined;
 
+      // Build route suffix for title
+      const routeCount = isAdvanced ? (routeFilter.entries?.length ?? 0) : 0;
+      const routeSuffix = isAdvanced && routeCount > 0
+        ? ` · ${routeCount} ${routeCount === 1 ? "route" : "routes"}`
+        : route
+          ? ` · ${route}`
+          : "";
+
+      // Single stop
       const stopId =
         kmbQuery?.mode === "stop"
           ? kmbQuery.stopId
@@ -766,6 +782,15 @@ export default function Home() {
             ? kmbDraftStopSelection.stopId
             : null;
 
+      // Grouped stops
+      const stopIds =
+        kmbQuery?.mode === "stops"
+          ? kmbQuery.stopIds
+          : kmbDraftStopSelection?.type === "stops"
+            ? kmbDraftStopSelection.stopIds
+            : null;
+
+      // Contains query
       const containsQuery =
         kmbQuery?.mode === "contains"
           ? kmbQuery.query.trim()
@@ -774,25 +799,54 @@ export default function Home() {
             : "";
 
       if (stopId) {
+        // Single stop favorite
         const stop = kmbStops.find((s) => s.stopId === stopId);
-        const title = stop ? `${pickKmbStopTitle(stop, lang)}${routeSuffix}` : `KMB${routeSuffix}`;
+        const fullName = stop ? pickKmbStopTitle(stop, lang) : "KMB";
+        const { name } = parseStopNameAndCode(fullName);
+        const title = `${name}${routeSuffix}`;
 
+        const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? "__all__");
         item = {
-          id: `kmb:${stopId}:${route ?? "__all__"}:1`,
+          id: `kmb:${stopId}:${idPart}:1`,
           mode: "kmb",
           title,
           stopId,
+          routeFilterMode: routeFilterMode,
           route,
           serviceType: "1",
+          entries: entriesForSave,
+        };
+      } else if (stopIds && stopIds.length > 0) {
+        // Grouped stops favorite
+        const firstStop = kmbStops.find((s) => stopIds.includes(s.stopId));
+        const fullName = firstStop ? pickKmbStopTitle(firstStop, lang) : "Selected Stops";
+        const { name } = parseStopNameAndCode(fullName);
+        const title = `${name}${routeSuffix}`;
+
+        const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? "__all__");
+        item = {
+          id: `kmb:stops:${stopIds.join(",")}:${idPart}`,
+          mode: "kmb",
+          title,
+          stopIds,
+          routeFilterMode: routeFilterMode,
+          route,
+          entries: entriesForSave,
         };
       } else if (containsQuery.length >= 3) {
+        // Contains query favorite
+        const title = `Contains: ${containsQuery}${routeSuffix}`;
+
+        const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? "__all__");
         item = {
-          id: `kmb:contains:${containsQuery}:${route ?? "__all__"}:1`,
+          id: `kmb:contains:${containsQuery}:${idPart}:1`,
           mode: "kmb",
-          title: `Contains: ${containsQuery}${routeSuffix}`,
+          title,
           query: containsQuery,
+          routeFilterMode: routeFilterMode,
           route,
           serviceType: "1",
+          entries: entriesForSave,
         };
       }
     }
@@ -831,7 +885,19 @@ export default function Home() {
     setMode(item.mode);
 
     if (item.mode === "kmb") {
+      // Restore route filter mode and entries if present
+      if (item.routeFilterMode) {
+        setRouteFilterMode(item.routeFilterMode);
+      }
+
+      // Convert stored entries to RouteFilterEntry format (add id if missing)
+      const restoredEntries = (item.entries ?? []).map((e, idx) => ({
+        id: `restored-${idx}`,
+        variantKey: e.variantKey,
+      }));
+      
       if ("stopId" in item) {
+        // Single stop
         setKmbDraftStopSelection({ type: "stop", stopId: item.stopId });
         const nextQuery: KmbQuery = {
           mode: "stop",
@@ -840,23 +906,53 @@ export default function Home() {
           serviceType: item.serviceType,
         };
         setKmbQuery(nextQuery);
-        setRouteFilter({ ...routeFilter, routes: item.route ?? "" });
+        setRouteFilter({
+          routes: item.route ?? "",
+          entries: restoredEntries,
+        });
         setKmbEta(null);
         void refreshKmbEta(nextQuery);
         return;
       }
 
-      setKmbDraftStopSelection({ type: "contains", query: item.query });
-      const nextQuery: KmbQuery = {
-        mode: "contains",
-        query: item.query,
-        route: item.route,
-        serviceType: item.serviceType,
-      };
-      setKmbQuery(nextQuery);
-      setRouteFilter({ ...routeFilter, routes: item.route ?? "" });
-      setKmbEta(null);
-      void refreshKmbEta(nextQuery);
+      if ("stopIds" in item) {
+        // Grouped stops
+        setKmbDraftStopSelection({ type: "stops", stopIds: item.stopIds });
+        const nextQuery: KmbQuery = {
+          mode: "stops",
+          stopIds: item.stopIds,
+          route: item.route,
+          serviceType: "1",
+        };
+        setKmbQuery(nextQuery);
+        setRouteFilter({
+          routes: item.route ?? "",
+          entries: restoredEntries,
+        });
+        setKmbEta(null);
+        void refreshKmbEta(nextQuery);
+        return;
+      }
+
+      if ("query" in item) {
+        // Contains query
+        setKmbDraftStopSelection({ type: "contains", query: item.query });
+        const nextQuery: KmbQuery = {
+          mode: "contains",
+          query: item.query,
+          route: item.route,
+          serviceType: item.serviceType,
+        };
+        setKmbQuery(nextQuery);
+        setRouteFilter({
+          routes: item.route ?? "",
+          entries: restoredEntries,
+        });
+        setKmbEta(null);
+        void refreshKmbEta(nextQuery);
+        return;
+      }
+
       return;
     }
 
@@ -1056,7 +1152,7 @@ export default function Home() {
                 </CardContent>
               </Card>
 
-              <FavoritesAndRecents lang={lang} onSelect={onSelectFromLists} />
+              <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
             </div>
 
             <div className="space-y-4">

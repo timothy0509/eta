@@ -160,7 +160,6 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
 
             return (
               <div key={key} className="rounded-2xl border bg-background/40 p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     {line ? (
                       <Badge className="rounded-xl text-white" style={{ backgroundColor: getLineColor(line) }}>
@@ -171,10 +170,6 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
                       {stationName ?? key}
                     </div>
                   </div>
-                  <Badge variant="secondary" className="rounded-xl">
-                    Updated
-                  </Badge>
-                </div>
 
 
                 <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">

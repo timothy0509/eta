@@ -8,35 +8,129 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LRT_STATIONS } from "@/lib/data/lrt-stations";
 import { findMtrStationBySta } from "@/lib/data/mtr-stations";
-import type { UiLanguage } from "@/lib/eta/types";
+import { getLineColor } from "@/lib/eta/line-colors";
+import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
 
 type Props = {
   lang: UiLanguage;
+  kmbStops?: KmbStopSearchItem[];
   onSelect: (item: FavoritesItem) => void;
 };
 
-function pickFavoriteTitle(item: FavoritesItem, lang: UiLanguage): string {
+/**
+ * Parse a KMB stop name to extract the code from parentheses.
+ */
+function parseStopNameAndCode(fullName: string): { name: string; code: string | null } {
+  const match = fullName.match(/^(.+?)\s*\(([A-Z0-9]+)\)\s*$/);
+  if (match) {
+    return { name: match[1].trim(), code: match[2] };
+  }
+  return { name: fullName, code: null };
+}
+
+function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
+  if (lang === "en") return stop.nameEn;
+  if (lang === "sc") return stop.nameSc;
+  return stop.nameTc;
+}
+
+/**
+ * Generate display content for a favorite item based on current language.
+ */
+function FavoriteItemDisplay({
+  item,
+  lang,
+  kmbStops,
+}: {
+  item: FavoritesItem;
+  lang: UiLanguage;
+  kmbStops?: KmbStopSearchItem[];
+}) {
   if (item.mode === "mtr") {
     const station = findMtrStationBySta(item.sta);
-    if (!station) return item.title;
+    if (!station) return <span>{item.title}</span>;
 
     const name = lang === "en" ? station.nameEn : station.nameTc;
-    return `${name} · ${station.lines.join("/")}/${station.sta}`;
+    return (
+      <span className="flex items-center gap-1.5">
+        <span className="truncate">{name}</span>
+        <span className="flex shrink-0 items-center gap-0.5">
+          {station.lines.map((line) => (
+            <span
+              key={line}
+              className="inline-flex h-4 items-center rounded px-1 text-[10px] font-semibold text-white"
+              style={{ backgroundColor: getLineColor(line) }}
+            >
+              {line}
+            </span>
+          ))}
+        </span>
+      </span>
+    );
   }
 
   if (item.mode === "lrt") {
     const station = LRT_STATIONS.find((s) => s.stationId === item.stationId);
-    if (!station) return item.title;
+    if (!station) return <span>{item.title}</span>;
 
     const name = lang === "en" ? station.nameEn : station.nameZh;
-    return `${name} · ${station.stationId}`;
+    return <span className="truncate">{name}</span>;
   }
 
-  return item.title;
+  // KMB mode - regenerate title based on current language
+  if (item.mode === "kmb") {
+    // For "contains" queries, keep the static title
+    if ("query" in item) {
+      return <span className="truncate">{item.title}</span>;
+    }
+
+    // Single stop
+    if ("stopId" in item) {
+      const stop = kmbStops?.find((s) => s.stopId === item.stopId);
+      if (stop) {
+        const fullName = pickKmbStopTitle(stop, lang);
+        const { name } = parseStopNameAndCode(fullName);
+        
+        // Build suffix from saved data
+        let suffix = "";
+        if (item.routeFilterMode === "advanced" && item.entries?.length) {
+          const count = item.entries.length;
+          suffix = ` · ${count} ${count === 1 ? "route" : "routes"}`;
+        } else if (item.route) {
+          suffix = ` · ${item.route}`;
+        }
+        
+        return <span className="truncate">{name}{suffix}</span>;
+      }
+    }
+
+    // Grouped stops
+    if ("stopIds" in item) {
+      const firstStop = kmbStops?.find((s) => item.stopIds.includes(s.stopId));
+      if (firstStop) {
+        const fullName = pickKmbStopTitle(firstStop, lang);
+        const { name } = parseStopNameAndCode(fullName);
+        
+        // Build suffix from saved data
+        let suffix = "";
+        if (item.routeFilterMode === "advanced" && item.entries?.length) {
+          const count = item.entries.length;
+          suffix = ` · ${count} ${count === 1 ? "route" : "routes"}`;
+        } else if (item.route) {
+          suffix = ` · ${item.route}`;
+        }
+        
+        return <span className="truncate">{name}{suffix}</span>;
+      }
+    }
+  }
+
+  // Fallback to stored title
+  return <span className="truncate">{item.title}</span>;
 }
 
-export function FavoritesAndRecents({ lang, onSelect }: Props) {
+export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   const favorites = useAppStore((s) => s.favorites);
   const recents = useAppStore((s) => s.recents);
   const removeFavorite = useAppStore((s) => s.removeFavorite);
@@ -72,8 +166,8 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                       className="min-w-0 flex-1 text-left"
                       onClick={() => onSelect(f)}
                     >
-                      <div className="truncate text-sm font-medium">
-                        {pickFavoriteTitle(f, lang)}
+                      <div className="text-sm font-medium">
+                        <FavoriteItemDisplay item={f} lang={lang} kmbStops={kmbStops} />
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {f.mode.toUpperCase()}
@@ -119,8 +213,8 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                     className="w-full rounded-2xl border bg-background/40 px-3 py-2 text-left hover:bg-background/60"
                     onClick={() => onSelect(r)}
                   >
-                     <div className="truncate text-sm font-medium">
-                       {pickFavoriteTitle(r, lang)}
+                     <div className="text-sm font-medium">
+                       <FavoriteItemDisplay item={r} lang={lang} kmbStops={kmbStops} />
                      </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span>{r.mode.toUpperCase()}</span>

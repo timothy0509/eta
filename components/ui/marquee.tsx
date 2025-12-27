@@ -18,70 +18,81 @@ type Props = {
  */
 export function Marquee({ children, className, speed = 30 }: Props) {
   const containerRef = React.useRef<HTMLDivElement>(null);
-  const contentRef = React.useRef<HTMLSpanElement>(null);
-  const [overflow, setOverflow] = React.useState(false);
-  const [duration, setDuration] = React.useState(5);
+  const [needsMarquee, setNeedsMarquee] = React.useState(false);
+  const [animDuration, setAnimDuration] = React.useState(5);
+  const [scrollDistance, setScrollDistance] = React.useState(0);
 
-  React.useEffect(() => {
+  // Check if content overflows and calculate animation duration
+  React.useLayoutEffect(() => {
     const container = containerRef.current;
-    const content = contentRef.current;
-    if (!container || !content) return;
+    if (!container) return;
 
-    const checkOverflow = () => {
-      const isOverflowing = content.scrollWidth > container.clientWidth;
-      setOverflow(isOverflowing);
+    const check = () => {
+      // Find the measurement span
+      const measureSpan = container.querySelector("span[data-measure]") as HTMLElement | null;
+      if (!measureSpan) return;
+
+      const containerW = container.clientWidth;
+      const contentW = measureSpan.scrollWidth;
+      const isOverflowing = contentW > containerW;
+
+      setNeedsMarquee(isOverflowing);
+
       if (isOverflowing && speed > 0) {
-        // Duration based on full content width (one copy) + gap
-        const contentWidth = content.scrollWidth;
-        const gap = 32; // 2rem gap between copies
-        setDuration((contentWidth + gap) / speed);
+        // Distance to scroll = one copy width + gap
+        const gap = 32; // 2rem = 32px
+        const distance = contentW + gap;
+        setScrollDistance(distance);
+        setAnimDuration(distance / speed);
       }
     };
 
-    checkOverflow();
+    // Small delay to ensure DOM is ready
+    requestAnimationFrame(check);
 
-    const observer = new ResizeObserver(checkOverflow);
-    observer.observe(container);
-    observer.observe(content);
+    const resizeObserver = new ResizeObserver(() => {
+      requestAnimationFrame(check);
+    });
+    resizeObserver.observe(container);
 
-    return () => observer.disconnect();
+    return () => resizeObserver.disconnect();
   }, [children, speed]);
 
-  // Non-overflowing: just render content normally
-  if (!overflow) {
-    return (
-      <div
-        ref={containerRef}
-        className={cn("overflow-hidden whitespace-nowrap", className)}
-      >
-        <span ref={contentRef} className="inline-block">
-          {children}
-        </span>
-      </div>
-    );
-  }
-
-  // Overflowing: render with duplicate content for seamless scroll
   return (
     <div
       ref={containerRef}
-      className={cn("marquee-container overflow-hidden whitespace-nowrap", className)}
+      className={cn(
+        "overflow-hidden whitespace-nowrap",
+        needsMarquee && "marquee-container",
+        className
+      )}
     >
-      {/* Hidden span for measuring content width */}
-      <span ref={contentRef} className="invisible absolute whitespace-nowrap">
+      {/* Always render a measurement span */}
+      <span
+        data-measure
+        className={cn(
+          "whitespace-nowrap",
+          needsMarquee ? "pointer-events-none invisible absolute" : "inline-block"
+        )}
+      >
         {children}
       </span>
 
-      {/* Animated track with two copies */}
-      <div
-        className="marquee-track inline-flex"
-        style={{ "--marquee-duration": `${duration}s` } as React.CSSProperties}
-      >
-        <span className="shrink-0 pr-8">{children}</span>
-        <span className="shrink-0 pr-8" aria-hidden="true">
-          {children}
-        </span>
-      </div>
+      {/* Animated track (only when overflow detected) */}
+      {needsMarquee && (
+        <div
+          className="marquee-track inline-flex"
+          style={{
+            "--marquee-duration": `${animDuration}s`,
+            "--marquee-distance": `${scrollDistance}px`,
+          } as React.CSSProperties}
+        >
+          <span className="shrink-0 pr-8">{children}</span>
+          <span className="shrink-0 pr-8" aria-hidden="true">
+            {children}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

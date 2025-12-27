@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Marquee } from "@/components/ui/marquee";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { RouteBadge } from "@/components/eta/route-badge";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -157,19 +158,26 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
                  <div key={entry.id} className="flex min-w-0 items-center gap-2">
                    <Popover>
                      <PopoverTrigger asChild>
-                       <Button
-                         type="button"
-                         variant="outline"
-                         className={cn(
-                           "h-9 min-w-0 flex-1 justify-between rounded-xl",
-                           !selected && "text-muted-foreground"
-                         )}
-                       >
-                         <Marquee className="min-w-0 flex-1 text-left">
-                           {selected ? `${selected.route} · ${selected.label}` : "Select route…"}
-                         </Marquee>
-                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                       </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className={cn(
+                            "h-9 min-w-0 flex-1 justify-between rounded-xl",
+                            !selected && "text-muted-foreground"
+                          )}
+                        >
+                          {selected ? (
+                            <div className="flex min-w-0 flex-1 items-center gap-2">
+                              <RouteBadge route={selected.route} size="md" />
+                              <Marquee className="min-w-0 flex-1 text-left text-muted-foreground">
+                                {selected.label}
+                              </Marquee>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">Select route…</span>
+                          )}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
                      </PopoverTrigger>
                      <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
                        <Command shouldFilter>
@@ -180,31 +188,31 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
                              {opts.map((opt) => {
                                const picked = opt.key === entry.variantKey;
                                return (
-                                 <CommandItem
-                                   key={opt.key}
-                                   value={`${opt.route} ${opt.label}`}
-                                   onSelect={() => {
-                                     const next = entries.map((row) =>
-                                       row.id === entry.id ? { ...row, variantKey: opt.key } : row
-                                     );
-                                     onChange({
-                                       ...value,
-                                       entries: normalizeAdvancedEntries(next),
-                                       routes: "",
-                                     });
-                                   }}
-                                 >
-                                   <Check
-                                     className={cn(
-                                       "mr-2 h-4 w-4 shrink-0",
-                                       picked ? "opacity-100" : "opacity-0"
-                                     )}
-                                   />
-                                   <span className="shrink-0">{opt.route}</span>
-                                   <span className="ml-2 min-w-0 truncate text-muted-foreground">
-                                     {opt.label}
-                                   </span>
-                                 </CommandItem>
+                                  <CommandItem
+                                    key={opt.key}
+                                    value={`${opt.route} ${opt.label}`}
+                                    onSelect={() => {
+                                      const next = entries.map((row) =>
+                                        row.id === entry.id ? { ...row, variantKey: opt.key } : row
+                                      );
+                                      onChange({
+                                        ...value,
+                                        entries: normalizeAdvancedEntries(next),
+                                        routes: "",
+                                      });
+                                    }}
+                                  >
+                                    <Check
+                                      className={cn(
+                                        "mr-2 h-4 w-4 shrink-0",
+                                        picked ? "opacity-100" : "opacity-0"
+                                      )}
+                                    />
+                                    <RouteBadge route={opt.route} size="sm" />
+                                    <span className="ml-2 min-w-0 truncate text-muted-foreground">
+                                      {opt.label}
+                                    </span>
+                                  </CommandItem>
                                );
                              })}
                            </CommandGroup>

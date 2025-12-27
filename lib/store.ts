@@ -8,21 +8,42 @@ import type { TransportMode, UiLanguage } from "@/lib/eta/types";
 export type RouteFilterMode = "simple" | "advanced";
 
 export type FavoritesItem =
+  // KMB: single stop
   | {
       id: string;
       mode: "kmb";
       title: string;
       stopId: string;
+      // Route filter - simple mode (legacy field name for backward compat)
       route?: string;
       serviceType?: string;
+      // Extended route filter fields
+      routeFilterMode?: RouteFilterMode;
+      entries?: { variantKey: string }[];
     }
+  // KMB: grouped stops (multiple stops with same name)
+  | {
+      id: string;
+      mode: "kmb";
+      title: string;
+      stopIds: string[];
+      // Route filter
+      routeFilterMode?: RouteFilterMode;
+      route?: string;
+      entries?: { variantKey: string }[];
+    }
+  // KMB: contains query
   | {
       id: string;
       mode: "kmb";
       title: string;
       query: string;
+      // Route filter - simple mode (legacy field name for backward compat)
       route?: string;
       serviceType?: string;
+      // Extended route filter fields
+      routeFilterMode?: RouteFilterMode;
+      entries?: { variantKey: string }[];
     }
   | {
       id: string;

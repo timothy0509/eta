@@ -1,36 +1,123 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# TimoETA
+
+A clean, fast ETA (Estimated Time of Arrival) web application for Hong Kong public transit. Get real-time arrival information for KMB buses, MTR trains, and Light Rail.
+
+## Features
+
+- **KMB Bus ETAs** - Real-time arrival times for all KMB bus routes
+  - Search stops by name or code
+  - Group stops with the same name (e.g., stops on opposite sides of a road)
+  - Filter by specific routes (simple comma-separated or advanced multi-select)
+  - Color-coded route badges by type (Airport, Overnight, Cross-harbour, etc.)
+
+- **MTR Next Train** - Arrival times for all MTR lines
+  - Search stations by name
+  - View arrivals for all lines serving a station
+  - Color-coded line indicators
+
+- **Light Rail Schedule** - Real-time arrivals for LRT
+  - Search stations by name
+  - View platform-specific arrivals
+
+- **General Features**
+  - Auto-refresh (configurable: 10s, 15s, 30s, 60s, or off)
+  - Favorites and Recent searches
+  - Multi-language support (English, Traditional Chinese, Simplified Chinese for KMB)
+  - Dark/Light theme
+  - Responsive design for mobile and desktop
+
+## Tech Stack
+
+- **Framework**: Next.js 16 (App Router)
+- **Styling**: Tailwind CSS v4 + shadcn/ui components
+- **State Management**: Zustand (persisted to localStorage)
+- **Language**: TypeScript
 
 ## Getting Started
 
-First, run the development server:
+### Prerequisites
+
+- Node.js 18+
+- npm, yarn, pnpm, or bun
+
+### Installation
 
 ```bash
+# Clone the repository
+git clone https://github.com/your-username/eta.git
+cd eta
+
+# Install dependencies
+npm install
+
+# Start the development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Build for Production
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run build
+npm start
+```
 
-## Learn More
+## Project Structure
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  api/
+    kmb/          # KMB API proxies (eta, route, route-stop, stops)
+    lrt/          # LRT schedule API proxy
+    mtr/          # MTR schedule API proxy
+  page.tsx        # Main application page
+  layout.tsx      # Root layout with theme provider
+  globals.css     # Global styles and Tailwind config
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+components/
+  eta/            # Feature components
+    auto-refresh.tsx      # Auto-refresh menu
+    favorites.tsx         # Favorites and Recent searches panel
+    language-toggle.tsx   # Language selector
+    lrt-stop-search.tsx   # LRT station search
+    mode-tabs.tsx         # KMB/MTR/LRT tab switcher
+    results-kmb.tsx       # KMB ETA results display
+    results-lrt.tsx       # LRT schedule display
+    results-mtr.tsx       # MTR schedule display
+    route-badge.tsx       # Color-coded route badge component
+    route-filter.tsx      # Route filter (simple/advanced modes)
+    station-search.tsx    # MTR station search
+    stop-search.tsx       # KMB stop search
+  ui/             # shadcn/ui components
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+lib/
+  data/
+    lrt-stations.ts   # LRT station definitions
+    mtr-stations.ts   # MTR station definitions
+  eta/
+    client.ts         # API client functions
+    format.ts         # ETA formatting utilities
+    http.ts           # HTTP utilities
+    kmb.ts            # KMB types and utilities
+    line-colors.ts    # MTR/LRT line color mappings
+    lrt.ts            # LRT types
+    mtr.ts            # MTR types
+    route-badge.ts    # Route badge color logic
+    types.ts          # Shared types
+    use-auto-refresh.ts  # Auto-refresh hook
+  store.ts          # Zustand store (favorites, settings)
+  utils.ts          # General utilities
+```
 
-## Deploy on Vercel
+## API Sources
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This application uses official Hong Kong government open data APIs:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- **KMB**: [DATA.GOV.HK - KMB ETA](https://data.gov.hk/en-data/dataset/hk-td-tis_21-etakmb)
+- **MTR**: [DATA.GOV.HK - MTR Next Train](https://data.gov.hk/en-data/dataset/mtr-data2-nexttrain-data)
+- **Light Rail**: [DATA.GOV.HK - LRT Next Train](https://data.gov.hk/en-data/dataset/mtr-lrt_eta-lrt-eta)
+
+## License
+
+MIT

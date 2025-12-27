@@ -976,7 +976,7 @@ export default function Home() {
 
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
                 TimoETA

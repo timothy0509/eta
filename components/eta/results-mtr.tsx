@@ -2,6 +2,8 @@
 
 import { ExternalLink, Info, RefreshCw, TrainFront } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -125,25 +127,25 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
           onClick={onRefresh}
           disabled={loading}
         >
-          <RefreshCw className="mr-2 h-4 w-4" />
+          <RefreshCw className={cn("mr-2 h-4 w-4", loading && "ui-spin")} />
           Refresh
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {!schedule ? (
-          <div className="flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
+          <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
             Select a station to view trains.
           </div>
         ) : schedule.status === 0 ? (
-          <div className="rounded-2xl border bg-background/50 p-4">
+          <div className="ui-animate-in rounded-2xl border bg-background/50 p-4">
             <div className="text-sm font-medium">Service message</div>
             <div className="mt-1 text-sm text-muted-foreground">
               {schedule.message ?? "No schedule available."}
             </div>
             {schedule.url ? (
               <a
-                className="mt-3 inline-flex items-center gap-2 rounded-xl border bg-card/50 px-3 py-2 text-sm hover:bg-card"
+                className="ui-lift mt-3 inline-flex items-center gap-2 rounded-xl border bg-card/50 px-3 py-2 text-sm hover:bg-card"
                 href={schedule.url}
                 target="_blank"
                 rel="noreferrer"
@@ -153,13 +155,25 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
             ) : null}
           </div>
         ) : (
-          Object.entries(schedule.data ?? {}).map(([key, payload]) => {
+          Object.entries(schedule.data ?? {}).map(([key, payload], idx) => {
             const [line, sta] = key.split("-");
             const station = sta ? findMtrStationBySta(sta) : undefined;
             const stationName = station ? (lang === "en" ? station.nameEn : station.nameTc) : sta;
 
+            const staggerClass =
+              idx === 0
+                ? "ui-stagger-1"
+                : idx === 1
+                  ? "ui-stagger-2"
+                  : idx === 2
+                    ? "ui-stagger-3"
+                    : "";
+
             return (
-              <div key={key} className="rounded-2xl border bg-background/40 p-4">
+              <div
+                key={key}
+                className={cn("ui-animate-in ui-lift rounded-2xl border bg-background/40 p-4", staggerClass)}
+              >
                   <div className="flex min-w-0 items-center gap-2">
                     {line ? (
                       <Badge className="rounded-xl text-white" style={{ backgroundColor: getLineColor(line) }}>
@@ -198,9 +212,10 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
 
                             return (
                               <div
-                                key={`${dir}-${idx}`}
-                                className="flex items-center justify-between gap-3 rounded-xl border bg-background/30 px-3 py-2"
-                              >
+                                 key={`${dir}-${idx}`}
+                                 className="ui-lift flex items-center justify-between gap-3 rounded-xl border bg-background/30 px-3 py-2"
+                               >
+
                                 <Marquee className="min-w-0 flex-1 text-sm font-medium">
                                   {destText}
                                 </Marquee>

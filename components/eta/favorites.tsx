@@ -141,11 +141,11 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
       <Tabs defaultValue="favorites" className="gap-0">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle className="text-base">Saved</CardTitle>
-          <TabsList>
-            <TabsTrigger value="favorites" className="gap-2">
+          <TabsList withIndicator>
+            <TabsTrigger value="favorites" unstyledActive className="gap-2">
               <Heart className="h-4 w-4" /> Favorites
             </TabsTrigger>
-            <TabsTrigger value="recent" className="gap-2">
+            <TabsTrigger value="recent" unstyledActive className="gap-2">
               <History className="h-4 w-4" /> Recent
             </TabsTrigger>
           </TabsList>
@@ -160,7 +160,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                 favorites.map((f) => (
                   <div
                     key={f.id}
-                    className="flex items-center justify-between gap-2 rounded-2xl border bg-background/40 px-3 py-2"
+                    className="ui-animate-in-fast ui-lift flex items-center justify-between gap-2 rounded-2xl border bg-background/40 px-3 py-2"
                   >
                     <button
                       className="min-w-0 flex-1 text-left"
@@ -210,7 +210,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                 recents.map((r) => (
                   <button
                     key={`${r.id}-${r.at}`}
-                    className="w-full rounded-2xl border bg-background/40 px-3 py-2 text-left hover:bg-background/60"
+                    className="ui-animate-in-fast ui-lift w-full rounded-2xl border bg-background/40 px-3 py-2 text-left hover:bg-background/60"
                     onClick={() => onSelect(r)}
                   >
                      <div className="text-sm font-medium">

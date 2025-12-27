@@ -2,6 +2,8 @@
 
 import { Info, RefreshCw, TramFront } from "lucide-react";
 
+import { cn } from "@/lib/utils";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,13 +48,13 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
           onClick={onRefresh}
           disabled={loading}
         >
-          <RefreshCw className="mr-2 h-4 w-4" />
+          <RefreshCw className={cn("mr-2 h-4 w-4", loading && "ui-spin")} />
           {lang === "en" ? "Refresh" : "重新整理"}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {!schedule ? (
-          <div className="flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
+          <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
             {lang === "en" ? "Select a station to view trains." : "選擇車站以查看班次"}
           </div>
@@ -63,11 +65,24 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
               <span>{schedule.system_time ?? ""}</span>
             </div>
             <div className="space-y-3">
-              {(schedule.platform_list ?? []).map((p) => (
-                <div
-                  key={p.platform_id}
-                  className="rounded-2xl border bg-background/40 p-4"
-                >
+              {(schedule.platform_list ?? []).map((p, idx) => {
+                const staggerClass =
+                  idx === 0
+                    ? "ui-stagger-1"
+                    : idx === 1
+                      ? "ui-stagger-2"
+                      : idx === 2
+                        ? "ui-stagger-3"
+                        : "";
+
+                return (
+                  <div
+                    key={p.platform_id}
+                    className={cn(
+                      "ui-animate-in ui-lift rounded-2xl border bg-background/40 p-4",
+                      staggerClass
+                    )}
+                  >
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium">
                       {lang === "en" ? `Platform ${p.platform_id}` : `${p.platform_id}號月台`}
@@ -81,7 +96,7 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
                     {(p.route_list ?? []).map((r, idx) => (
                       <div
                         key={`${p.platform_id}-${r.route_no}-${idx}`}
-                        className="flex items-start justify-between gap-3 rounded-2xl border bg-card/30 p-3"
+                        className="ui-lift flex items-start justify-between gap-3 rounded-2xl border bg-card/30 p-3"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -113,7 +128,8 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
                     ))}
                   </div>
                 </div>
-              ))}
+              );
+            })}
             </div>
           </>
         )}

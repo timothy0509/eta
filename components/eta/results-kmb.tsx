@@ -202,32 +202,47 @@ export function KmbResults({
           onClick={onRefresh}
           disabled={loading}
         >
-          <RefreshCw className="mr-2 h-4 w-4" />
+          <RefreshCw className={cn("mr-2 h-4 w-4", loading && "ui-spin")} />
           {lang === "en" ? "Refresh" : "重新整理"}
         </Button>
       </CardHeader>
       <CardContent className="space-y-5">
         {!hasQuery ? (
-          <div className="flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
+          <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
             {lang === "en" ? "Select a stop to load ETAs." : "選擇車站以載入到站時間"}
           </div>
         ) : grouped.length === 0 ? (
-          <div className="flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
+          <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
             {formatNoScheduledText(lang)}
           </div>
         ) : (
-          grouped.map((g) => {
+          grouped.map((g, idx) => {
             const [route] = g.key.split("|");
             const first = g.items[0];
             const label = formatRouteVariantLabel(routeInfos[g.key], first, lang);
+            const staggerClass =
+              idx === 0
+                ? "ui-stagger-1"
+                : idx === 1
+                  ? "ui-stagger-2"
+                  : idx === 2
+                    ? "ui-stagger-3"
+                    : "";
 
             // Routes without valid ETAs get a simplified display
             if (!g.hasEta) {
               const remark = getGroupRemark(g.items, lang);
               return (
-                <div key={g.key} className="rounded-2xl border bg-background/40 p-4 opacity-70">
+                <div
+                  key={g.key}
+                  className={cn(
+                    "ui-animate-in ui-lift rounded-2xl border bg-background/40 p-4 opacity-70",
+                    staggerClass
+                  )}
+                >
+
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="flex min-w-0 items-center gap-2">
                       <RouteBadge route={route} size="lg" />
@@ -248,7 +263,10 @@ export function KmbResults({
             }
 
             return (
-              <div key={g.key} className="rounded-2xl border bg-background/40 p-4">
+              <div
+                key={g.key}
+                className={cn("ui-animate-in ui-lift rounded-2xl border bg-background/40 p-4", staggerClass)}
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex min-w-0 items-center gap-2">
                     <RouteBadge route={route} size="lg" />
@@ -276,7 +294,7 @@ export function KmbResults({
                       <div
                         key={`${g.key}:${entry.eta_seq}`}
                         className={cn(
-                          "min-w-[150px] shrink-0 rounded-2xl border bg-card/40 p-3 sm:min-w-0",
+                          "ui-lift min-w-[150px] shrink-0 rounded-2xl border bg-card/40 p-3 sm:min-w-0",
                           entry.eta_seq === 1 && "bg-card/60"
                         )}
                       >

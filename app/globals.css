@@ -164,3 +164,131 @@
 .marquee-container:active .marquee-track {
   animation-play-state: paused;
 }
+
+/* -----------------------------
+ * UI motion primitives
+ * ----------------------------- */
+
+:root {
+  --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ui-dur-fast: 140ms;
+  --ui-dur-md: 220ms;
+  --ui-dur-slow: 360ms;
+}
+
+@keyframes ui-fade-up {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.99);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ui-fade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes ui-soft-pop {
+  0% {
+    transform: scale(0.98);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ui-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@layer utilities {
+  .ui-animate-in {
+    animation: ui-fade-up var(--ui-dur-md) var(--ui-ease-out) both;
+  }
+
+  .ui-animate-in-fast {
+    animation: ui-fade-up var(--ui-dur-fast) var(--ui-ease-out) both;
+  }
+
+  .ui-animate-fade {
+    animation: ui-fade var(--ui-dur-md) var(--ui-ease-out) both;
+  }
+
+  .ui-stagger-1 {
+    animation-delay: 40ms;
+  }
+
+  .ui-stagger-2 {
+    animation-delay: 80ms;
+  }
+
+  .ui-stagger-3 {
+    animation-delay: 120ms;
+  }
+
+  .ui-lift {
+    transition-property: transform, box-shadow;
+    transition-duration: var(--ui-dur-fast);
+    transition-timing-function: var(--ui-ease-out);
+    will-change: transform;
+  }
+
+  .ui-lift:hover {
+    transform: translateY(-1px);
+  }
+
+  .ui-lift:active {
+    transform: translateY(0) scale(0.99);
+  }
+
+  .ui-press {
+    transition-property: transform;
+    transition-duration: var(--ui-dur-fast);
+    transition-timing-function: var(--ui-ease-out);
+    will-change: transform;
+  }
+
+  .ui-press:active {
+    transform: scale(0.98);
+  }
+
+  .ui-pop {
+    animation: ui-soft-pop var(--ui-dur-fast) var(--ui-ease-out) both;
+  }
+
+  .ui-spin {
+    animation: ui-spin 900ms linear infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-animate-in,
+  .ui-animate-in-fast,
+  .ui-animate-fade,
+  .ui-pop,
+  .ui-spin {
+    animation: none !important;
+  }
+
+  .ui-lift,
+  .ui-press {
+    transition: none !important;
+  }
+
+  .ui-lift:hover,
+  .ui-lift:active,
+  .ui-press:active {
+    transform: none !important;
+  }
+}

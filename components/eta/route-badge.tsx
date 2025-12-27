@@ -25,7 +25,7 @@ export function RouteBadge({ route, size = "md", className }: Props) {
   return (
     <span
       className={cn(
-        "inline-flex items-center justify-center rounded-lg font-sans font-bold whitespace-nowrap shrink-0 border",
+        "ui-pop inline-flex items-center justify-center rounded-lg font-sans font-bold whitespace-nowrap shrink-0 border",
         sizeClasses[size],
         className
       )}

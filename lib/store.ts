@@ -18,6 +18,14 @@ export type FavoritesItem =
     }
   | {
       id: string;
+      mode: "kmb";
+      title: string;
+      query: string;
+      route?: string;
+      serviceType?: string;
+    }
+  | {
+      id: string;
       mode: "mtr";
       // Titles are stored for display convenience only.
       // They may be regenerated in the current UI language.

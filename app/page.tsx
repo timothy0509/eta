@@ -583,7 +583,11 @@ export default function Home() {
 
   const canFavorite =
     (mode === "kmb" &&
-      ((kmbQuery?.mode === "stop" && kmbQuery.stopId) || kmbDraftStopSelection?.type === "stop")) ||
+      ((kmbQuery?.mode === "stop" && kmbQuery.stopId) ||
+        (kmbQuery?.mode === "contains" && kmbQuery.query.trim().length >= 3) ||
+        kmbDraftStopSelection?.type === "stop" ||
+        (kmbDraftStopSelection?.type === "contains" &&
+          kmbDraftStopSelection.query.trim().length >= 3))) ||
     (mode === "mtr" && mtrQuery.sta) ||
     (mode === "lrt" && lrtQuery.stationId);
 
@@ -593,6 +597,10 @@ export default function Home() {
     let item: FavoritesItem | null = null;
 
     if (mode === "kmb") {
+      const routeInput = routeFilterMode === "simple" ? (routeFilter.routes?.trim() ?? "") : "";
+      const route = routeInput || undefined;
+      const routeSuffix = route ? ` · ${route}` : "";
+
       const stopId =
         kmbQuery?.mode === "stop"
           ? kmbQuery.stopId
@@ -600,11 +608,15 @@ export default function Home() {
             ? kmbDraftStopSelection.stopId
             : null;
 
+      const containsQuery =
+        kmbQuery?.mode === "contains"
+          ? kmbQuery.query.trim()
+          : kmbDraftStopSelection?.type === "contains"
+            ? kmbDraftStopSelection.query.trim()
+            : "";
+
       if (stopId) {
         const stop = kmbStops.find((s) => s.stopId === stopId);
-        const routeInput = routeFilterMode === "simple" ? (routeFilter.routes?.trim() ?? "") : "";
-        const route = routeInput || undefined;
-        const routeSuffix = route ? ` · ${route}` : "";
         const title = stop ? `${pickKmbStopTitle(stop, lang)}${routeSuffix}` : `KMB${routeSuffix}`;
 
         item = {
@@ -612,6 +624,15 @@ export default function Home() {
           mode: "kmb",
           title,
           stopId,
+          route,
+          serviceType: "1",
+        };
+      } else if (containsQuery.length >= 3) {
+        item = {
+          id: `kmb:contains:${containsQuery}:${route ?? "__all__"}:1`,
+          mode: "kmb",
+          title: `Contains: ${containsQuery}${routeSuffix}`,
+          query: containsQuery,
           route,
           serviceType: "1",
         };
@@ -652,10 +673,25 @@ export default function Home() {
     setMode(item.mode);
 
     if (item.mode === "kmb") {
-      setKmbDraftStopSelection({ type: "stop", stopId: item.stopId });
+      if ("stopId" in item) {
+        setKmbDraftStopSelection({ type: "stop", stopId: item.stopId });
+        const nextQuery: KmbQuery = {
+          mode: "stop",
+          stopId: item.stopId,
+          route: item.route,
+          serviceType: item.serviceType,
+        };
+        setKmbQuery(nextQuery);
+        setRouteFilter({ ...routeFilter, routes: item.route ?? "" });
+        setKmbEta(null);
+        void refreshKmbEta(nextQuery);
+        return;
+      }
+
+      setKmbDraftStopSelection({ type: "contains", query: item.query });
       const nextQuery: KmbQuery = {
-        mode: "stop",
-        stopId: item.stopId,
+        mode: "contains",
+        query: item.query,
         route: item.route,
         serviceType: item.serviceType,
       };
@@ -877,23 +913,22 @@ export default function Home() {
 
             <div className="space-y-4">
               {mode === "kmb" ? (
-                <KmbResults
-                  lang={lang}
-                   title={
-                     kmbQuery
-                       ? kmbQuery.mode === "stop"
-                         ? `Stop ${kmbQuery.stopId}`
-                         : `Stops containing “${kmbQuery.query.trim()}”`
-                       : "KMB ETAs"
-                   }
-                   routesFilter={routeFilter.routes ?? ""}
-                   eta={kmbEta ?? []}
-                   routeInfos={kmbRouteInfos}
-                   hasQuery={Boolean(kmbQuery)}
-                   onRefresh={() => void refreshKmbEta(kmbQuery)}
-
-                  loading={kmbEtaLoading}
-                />
+                  <KmbResults
+                    lang={lang}
+                    title={
+                      kmbQuery
+                        ? kmbQuery.mode === "stop"
+                          ? `Stop ${kmbQuery.stopId}`
+                          : `Stops containing “${kmbQuery.query.trim()}”`
+                        : "KMB ETAs"
+                    }
+                    routesFilter={routeFilter.routes ?? ""}
+                    eta={kmbEta ?? []}
+                    routeInfos={kmbRouteInfos}
+                    hasQuery={Boolean(kmbQuery)}
+                    onRefresh={() => void refreshKmbEta(kmbQuery)}
+                    loading={kmbEtaLoading}
+                  />
               ) : null}
 
               {mode === "mtr" ? (

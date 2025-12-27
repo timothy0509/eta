@@ -301,7 +301,7 @@ export default function Home() {
 
           return {
             stopId,
-            pairs: Array.from(uniquePairs.values()).slice(0, 12),
+            pairs: Array.from(uniquePairs.values()),
           };
         });
 

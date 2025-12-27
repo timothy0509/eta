@@ -113,57 +113,111 @@ type StopGroup = {
 };
 
 /**
- * Group stops by their base name (without code) and only merge those with sequential codes.
+ * Group stops by their base name (without code) and merge those with sequential codes.
+ * Handles multiple separate sequential sets (e.g., KT313-KT316 AND KT681-KT683).
  * Non-sequential stops remain as individual items.
  */
 function groupStopsByName(stops: KmbStopSearchItem[], lang: UiLanguage): StopGroup[] {
   // First, parse all stops and group by base name
-  const byBaseName = new Map<string, { codes: string[]; stops: KmbStopSearchItem[] }>();
+  const byBaseName = new Map<
+    string,
+    { code: string | null; stop: KmbStopSearchItem }[]
+  >();
 
   for (const stop of stops) {
     const fullName = formatStopName(stop, lang);
     const { name: baseName, code } = parseStopNameAndCode(fullName);
 
     if (!byBaseName.has(baseName)) {
-      byBaseName.set(baseName, { codes: [], stops: [] });
+      byBaseName.set(baseName, []);
     }
-    const group = byBaseName.get(baseName)!;
-    if (code) group.codes.push(code);
-    group.stops.push(stop);
+    byBaseName.get(baseName)!.push({ code, stop });
   }
 
   const result: StopGroup[] = [];
 
-  for (const [baseName, { codes, stops: groupStops }] of byBaseName) {
-    // Only group if all stops have codes and codes are sequential
-    const allHaveCodes = codes.length === groupStops.length && codes.length > 0;
+  for (const [baseName, items] of byBaseName) {
+    // Separate items with valid codes from those without
+    const withCodes = items.filter((i) => i.code !== null);
+    const withoutCodes = items.filter((i) => i.code === null);
 
-    if (allHaveCodes && codes.length > 1 && areCodesSequential(codes)) {
-      // Merge into a single grouped suggestion
-      result.push({
-        id: `group:${groupStops.map((s) => s.stopId).join(",")}`,
-        baseName,
-        codes,
-        stops: groupStops,
-        displayName: baseName,
-        displayCodes: `(${formatCodeRange(codes)})`,
-        displaySecondary: formatStopSecondary(groupStops[0], lang),
-      });
-    } else {
-      // Keep as individual stops
-      for (const stop of groupStops) {
-        const fullName = formatStopName(stop, lang);
-        const { name, code } = parseStopNameAndCode(fullName);
+    // Sort by code prefix then number
+    withCodes.sort((a, b) => {
+      const pa = parseCodeParts(a.code!);
+      const pb = parseCodeParts(b.code!);
+      if (!pa || !pb) return 0;
+      if (pa.prefix !== pb.prefix) return pa.prefix.localeCompare(pb.prefix);
+      return pa.num - pb.num;
+    });
+
+    // Find contiguous runs of sequential codes
+    const runs: { code: string; stop: KmbStopSearchItem }[][] = [];
+    for (const item of withCodes) {
+      // We know code is non-null because we filtered above
+      const typedItem = item as { code: string; stop: KmbStopSearchItem };
+      const lastRun = runs[runs.length - 1];
+      if (!lastRun) {
+        runs.push([typedItem]);
+        continue;
+      }
+      const lastItem = lastRun[lastRun.length - 1];
+      const lastParts = parseCodeParts(lastItem.code);
+      const currParts = parseCodeParts(typedItem.code);
+
+      // Check if sequential (same prefix, consecutive number)
+      if (
+        lastParts &&
+        currParts &&
+        lastParts.prefix === currParts.prefix &&
+        currParts.num === lastParts.num + 1
+      ) {
+        lastRun.push(typedItem);
+      } else {
+        runs.push([typedItem]);
+      }
+    }
+
+    // Create groups from runs
+    for (const run of runs) {
+      if (run.length >= 2) {
+        // Create a grouped suggestion for 2+ sequential stops
+        const codes = run.map((r) => r.code!);
+        const runStops = run.map((r) => r.stop);
         result.push({
-          id: `stop:${stop.stopId}`,
-          baseName: name,
-          codes: code ? [code] : [],
-          stops: [stop],
-          displayName: name,
-          displayCodes: code ? `(${code})` : "",
-          displaySecondary: formatStopSecondary(stop, lang),
+          id: `group:${runStops.map((s) => s.stopId).join(",")}`,
+          baseName,
+          codes,
+          stops: runStops,
+          displayName: baseName,
+          displayCodes: `(${formatCodeRange(codes)})`,
+          displaySecondary: formatStopSecondary(runStops[0], lang),
+        });
+      } else {
+        // Single item in run - add as individual
+        const item = run[0];
+        result.push({
+          id: `stop:${item.stop.stopId}`,
+          baseName,
+          codes: [item.code!],
+          stops: [item.stop],
+          displayName: baseName,
+          displayCodes: `(${item.code})`,
+          displaySecondary: formatStopSecondary(item.stop, lang),
         });
       }
+    }
+
+    // Add items without codes as individuals
+    for (const item of withoutCodes) {
+      result.push({
+        id: `stop:${item.stop.stopId}`,
+        baseName,
+        codes: [],
+        stops: [item.stop],
+        displayName: baseName,
+        displayCodes: "",
+        displaySecondary: formatStopSecondary(item.stop, lang),
+      });
     }
   }
 

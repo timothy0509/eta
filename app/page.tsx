@@ -369,8 +369,14 @@ export default function Home() {
         setKmbEtaLoading(false);
       }
     },
-    [kmbQuery, kmbRouteInfos, kmbRouteStops, kmbStops, routeFilter.entries, routeFilterMode]
+    [kmbQuery, kmbRouteStops, kmbStops, routeFilter.entries, routeFilterMode]
   );
+
+  // Stable ref for refreshKmbEta to avoid infinite loops in effects
+  const refreshKmbEtaRef = React.useRef(refreshKmbEta);
+  React.useEffect(() => {
+    refreshKmbEtaRef.current = refreshKmbEta;
+  }, [refreshKmbEta]);
 
   const refreshMtr = React.useCallback(async () => {
     if (!mtrQuery.sta) return;
@@ -593,8 +599,8 @@ export default function Home() {
           };
 
     setKmbQuery(nextQuery);
-    void refreshKmbEta(nextQuery);
-  }, [mode, kmbDraftStopSelection, kmbRouteStops.length, refreshKmbEta, routeFilter.routes, routeFilterMode]);
+    void refreshKmbEtaRef.current(nextQuery);
+  }, [mode, kmbDraftStopSelection, kmbRouteStops.length, routeFilter.routes, routeFilterMode]);
 
   // Auto-fetch KMB ETAs when advanced filter entries change (immediate)
   const prevEntriesRef = React.useRef<typeof routeFilter.entries>([]);
@@ -619,8 +625,8 @@ export default function Home() {
         : { mode: "contains", query: kmbDraftStopSelection.query, serviceType: "1" };
 
     setKmbQuery(nextQuery);
-    void refreshKmbEta(nextQuery);
-  }, [mode, routeFilterMode, routeFilter.entries, kmbDraftStopSelection, kmbRouteStops.length, refreshKmbEta]);
+    void refreshKmbEtaRef.current(nextQuery);
+  }, [mode, routeFilterMode, routeFilter.entries, kmbDraftStopSelection, kmbRouteStops.length]);
 
   // Debounced auto-fetch for simple route filter input (1s delay)
   const [debouncedRoutes, setDebouncedRoutes] = React.useState(routeFilter.routes ?? "");
@@ -644,8 +650,8 @@ export default function Home() {
         : { mode: "contains", query: kmbDraftStopSelection.query, route: routeInput || undefined, serviceType: "1" };
 
     setKmbQuery(nextQuery);
-    void refreshKmbEta(nextQuery);
-  }, [mode, routeFilterMode, debouncedRoutes, kmbDraftStopSelection, kmbRouteStops.length, refreshKmbEta]);
+    void refreshKmbEtaRef.current(nextQuery);
+  }, [mode, routeFilterMode, debouncedRoutes, kmbDraftStopSelection, kmbRouteStops.length]);
 
   const lrtStations: LrtStationSearchItem[] = React.useMemo(
     () =>
@@ -1034,25 +1040,6 @@ export default function Home() {
                 />
               ) : null}
 
-              {mode === "mtr" ? (
-                <MtrResults
-                  title={mtrQuery.sta ? `Station ${mtrQuery.sta}` : "MTR"}
-                  lang={lang}
-                  schedule={mtrSchedule}
-                  onRefresh={refreshMtr}
-                  loading={mtrLoading}
-                />
-              ) : null}
-
-              {mode === "lrt" ? (
-                <LrtResults
-                  title={lrtQuery.stationId ? `Station ${lrtQuery.stationId}` : "Light Rail"}
-                  lang={lang}
-                  schedule={lrtSchedule}
-                  onRefresh={refreshLrt}
-                  loading={lrtLoading}
-                />
-              ) : null}
             </div>
           </div>
         </div>

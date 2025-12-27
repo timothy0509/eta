@@ -125,3 +125,34 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Marquee animation for overflow text */
+@keyframes marquee-scroll {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(calc(-100% - 2rem));
+  }
+}
+
+.marquee-container {
+  position: relative;
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    black 0.5rem,
+    black calc(100% - 0.5rem),
+    transparent 100%
+  );
+}
+
+.marquee-content {
+  padding-right: 2rem;
+  animation: marquee-scroll var(--marquee-duration, 5s) linear infinite;
+}
+
+.marquee-container:hover .marquee-content,
+.marquee-container:active .marquee-content {
+  animation-play-state: paused;
+}

@@ -5,6 +5,7 @@ import { ExternalLink, Info, RefreshCw, TrainFront } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Marquee } from "@/components/ui/marquee";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 import type { UiLanguage } from "@/lib/eta/types";
 import { getLineColor } from "@/lib/eta/line-colors";
@@ -18,12 +19,77 @@ type Props = {
   loading?: boolean;
 };
 
+// EAL station order (from south to north, excluding branch terminals)
+// Used to determine if "via Racecourse" is relevant for the current station
+const EAL_STATION_ORDER = [
+  "ADM", // Admiralty
+  "EXC", // Exhibition Centre
+  "HUH", // Hung Hom
+  "MKK", // Mong Kok East
+  "KOT", // Kowloon Tong
+  "TAW", // Tai Wai
+  "SHT", // Sha Tin
+  "FOT", // Fo Tan
+  "RAC", // Racecourse
+  "UNI", // University
+  "TAP", // Tai Po Market
+  "TWO", // Tai Wo
+  "FAN", // Fanling
+  "SHS", // Sheung Shui
+  "LOW", // Lo Wu (branch)
+  "LMC", // Lok Ma Chau (branch)
+];
+
+function getEalStationIndex(sta: string): number {
+  return EAL_STATION_ORDER.indexOf(sta);
+}
+
+/**
+ * Determine if we should show "via Racecourse" for a train.
+ * Only show when:
+ * 1. The train's route is "RAC"
+ * 2. The current station is BEFORE Racecourse in the line order
+ * 3. The train's destination is AFTER Racecourse (train hasn't passed it yet)
+ */
+function shouldShowViaRacecourse(
+  line: string,
+  currentSta: string,
+  destSta: string,
+  route: string | undefined
+): boolean {
+  if (line !== "EAL") return false;
+  if (route !== "RAC") return false;
+
+  const racecourseIdx = getEalStationIndex("RAC");
+  const currentIdx = getEalStationIndex(currentSta);
+  const destIdx = getEalStationIndex(destSta);
+
+  // If we can't find the station in our order, don't show
+  if (currentIdx === -1 || destIdx === -1 || racecourseIdx === -1) return false;
+
+  // Current station must be before Racecourse, and destination must be after Racecourse
+  // This means the train will pass through Racecourse on its way
+  return currentIdx < racecourseIdx && destIdx > racecourseIdx;
+}
+
 function formatDest(dest: unknown, lang: UiLanguage) {
   const raw = String(dest ?? "");
   if (!raw) return "";
   const station = findMtrStationBySta(raw);
   if (!station) return raw;
   return lang === "en" ? station.nameEn : station.nameTc;
+}
+
+function formatDestWithRacecourse(
+  dest: unknown,
+  lang: UiLanguage,
+  showViaRacecourse: boolean
+) {
+  const destName = formatDest(dest, lang);
+  if (!showViaRacecourse) return destName;
+
+  const suffix = lang === "en" ? " · Via Racecourse" : " · 經馬場";
+  return `${destName}${suffix}`;
 }
 
 function formatMinutes(ttnt: unknown, lang: UiLanguage) {
@@ -102,7 +168,7 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
                       </Badge>
                     ) : null}
                     <div className="min-w-0 truncate text-sm font-medium">
-                      {stationName ? `${stationName}${sta ? ` (${sta})` : ""}` : key}
+                      {stationName ?? key}
                     </div>
                   </div>
                   <Badge variant="secondary" className="rounded-xl">
@@ -123,33 +189,42 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
                         {trains.length === 0 ? (
                           <div className="text-sm text-muted-foreground">—</div>
                         ) : (
-                          trains.slice(0, 4).map((t, idx) => (
-                            <div
-                              key={`${dir}-${idx}`}
-                              className="flex items-center justify-between gap-3 rounded-xl border bg-background/30 px-3 py-2"
-                            >
-                               <div className="min-w-0">
-                                 <div className="truncate text-sm font-medium">
-                                   {formatDest(t.dest, lang)}
-                                 </div>
-                               </div>
-                                <div className="flex items-center gap-2">
-                                  {formatPlatform(t.plat) ? (
-                                    <Badge className="rounded-xl" variant="secondary">
-                                      {lang === "en" ? `Plat ${formatPlatform(t.plat)}` : `月台 ${formatPlatform(t.plat)}`}
-                                    </Badge>
-                                  ) : null}
-                                  {line === "EAL" && String((t as { route?: unknown }).route ?? "") === "RAC" ? (
-                                    <Badge className="rounded-xl" variant="secondary">
-                                      {lang === "en" ? "Via Racecourse" : "經馬場"}
+                          trains.slice(0, 4).map((t, idx) => {
+                            const destSta = String(t.dest ?? "");
+                            const route = String((t as { route?: unknown }).route ?? "");
+                            const showViaRacecourse = shouldShowViaRacecourse(
+                              line,
+                              sta,
+                              destSta,
+                              route || undefined
+                            );
+                            const destText = formatDestWithRacecourse(t.dest, lang, showViaRacecourse);
+                            const platform = formatPlatform(t.plat);
+
+                            return (
+                              <div
+                                key={`${dir}-${idx}`}
+                                className="flex items-center justify-between gap-3 rounded-xl border bg-background/30 px-3 py-2"
+                              >
+                                <Marquee className="min-w-0 flex-1 text-sm font-medium">
+                                  {destText}
+                                </Marquee>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  {platform ? (
+                                    <Badge
+                                      className="rounded-lg px-2 py-0.5 text-xs text-white"
+                                      style={{ backgroundColor: getLineColor(line) }}
+                                    >
+                                      {platform}
                                     </Badge>
                                   ) : null}
                                   <Badge className="rounded-xl" variant="outline">
                                     {formatMinutes(t.ttnt, lang)}
                                   </Badge>
                                 </div>
-                            </div>
-                          ))
+                              </div>
+                            );
+                          })
                         )}
                       </div>
                       </div>

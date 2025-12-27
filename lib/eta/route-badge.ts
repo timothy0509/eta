@@ -8,7 +8,7 @@
  * 4. Airport routes (A...) - #FFFF00 text on #263576
  * 5. External/shuttle routes (E... or S...) - white text on #FFA500
  * 6. HK routes (HK...) - #00AEEE text on white
- * 7. Cross harbour routes (3XX, 6XX) - white text on red
+ * 7. Cross harbour routes (1XX, 3XX, 6XX) - white text on red
  * 8. Western harbour crossing (9XX) - white text on #008000
  * 9. Default/normal routes - black text on white
  */
@@ -57,8 +57,12 @@ export function getRouteBadgeStyle(route: string): RouteBadgeStyle {
   const numMatch = r.match(/^[A-OQ-Z]?(\d+)/);
   if (numMatch) {
     const num = parseInt(numMatch[1], 10);
-    // 3XX or 6XX: Cross harbour (red)
-    if ((num >= 300 && num < 400) || (num >= 600 && num < 700)) {
+    // 1XX, 3XX or 6XX: Cross harbour (red)
+    if (
+      (num >= 100 && num < 200) ||
+      (num >= 300 && num < 400) ||
+      (num >= 600 && num < 700)
+    ) {
       return { textColor: "#FFFFFF", bgColor: "#DC2626" };
     }
     // 9XX: Western harbour crossing (green)

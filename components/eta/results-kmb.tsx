@@ -10,6 +10,7 @@ import type { UiLanguage } from "@/lib/eta/types";
 import type { KmbEtaEntry } from "@/lib/eta/kmb";
 import type { KmbRouteInfoLite } from "@/lib/eta/client";
 import { formatRelativeMinutes } from "@/lib/eta/format";
+import { cn } from "@/lib/utils";
 
 function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
   if (lang === "sc") return fields.sc;
@@ -139,7 +140,7 @@ export function KmbResults({
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <div className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
                   {g.items.slice(0, 3).map((entry) => {
                     const minutes = entry.eta ? formatRelativeMinutes(entry.eta, now) : null;
                     const remark = pickLang(
@@ -152,9 +153,11 @@ export function KmbResults({
                     );
                     return (
                       <div
-                         key={`${g.key}:${entry.eta_seq}`}
-
-                        className="rounded-2xl border bg-card/40 p-3"
+                        key={`${g.key}:${entry.eta_seq}`}
+                        className={cn(
+                          "min-w-[150px] shrink-0 rounded-2xl border bg-card/40 p-3 sm:min-w-0",
+                          entry.eta_seq === 1 && "bg-card/60"
+                        )}
                       >
                         <div className="text-xs text-muted-foreground">Next {entry.eta_seq}</div>
                         <div className="mt-1 text-2xl font-semibold tracking-tight">

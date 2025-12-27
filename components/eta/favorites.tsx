@@ -6,13 +6,37 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LRT_STATIONS } from "@/lib/data/lrt-stations";
+import { findMtrStationBySta } from "@/lib/data/mtr-stations";
+import type { UiLanguage } from "@/lib/eta/types";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
 
 type Props = {
+  lang: UiLanguage;
   onSelect: (item: FavoritesItem) => void;
 };
 
-export function FavoritesAndRecents({ onSelect }: Props) {
+function pickFavoriteTitle(item: FavoritesItem, lang: UiLanguage): string {
+  if (item.mode === "mtr") {
+    const station = findMtrStationBySta(item.sta);
+    if (!station) return item.title;
+
+    const name = lang === "en" ? station.nameEn : station.nameTc;
+    return `${name} · ${station.lines.join("/")}/${station.sta}`;
+  }
+
+  if (item.mode === "lrt") {
+    const station = LRT_STATIONS.find((s) => s.stationId === item.stationId);
+    if (!station) return item.title;
+
+    const name = lang === "en" ? station.nameEn : station.nameZh;
+    return `${name} · ${station.stationId}`;
+  }
+
+  return item.title;
+}
+
+export function FavoritesAndRecents({ lang, onSelect }: Props) {
   const favorites = useAppStore((s) => s.favorites);
   const recents = useAppStore((s) => s.recents);
   const removeFavorite = useAppStore((s) => s.removeFavorite);
@@ -48,7 +72,9 @@ export function FavoritesAndRecents({ onSelect }: Props) {
                       className="min-w-0 flex-1 text-left"
                       onClick={() => onSelect(f)}
                     >
-                      <div className="truncate text-sm font-medium">{f.title}</div>
+                      <div className="truncate text-sm font-medium">
+                        {pickFavoriteTitle(f, lang)}
+                      </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {f.mode.toUpperCase()}
                       </div>
@@ -93,7 +119,9 @@ export function FavoritesAndRecents({ onSelect }: Props) {
                     className="w-full rounded-2xl border bg-background/40 px-3 py-2 text-left hover:bg-background/60"
                     onClick={() => onSelect(r)}
                   >
-                    <div className="truncate text-sm font-medium">{r.title}</div>
+                     <div className="truncate text-sm font-medium">
+                       {pickFavoriteTitle(r, lang)}
+                     </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span>{r.mode.toUpperCase()}</span>
                       <span>{new Date(r.at).toLocaleString()}</span>

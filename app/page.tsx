@@ -56,7 +56,6 @@ type KmbQuery =
     };
 
 type MtrQuery = {
-  line?: string;
   sta?: string;
 };
 
@@ -119,6 +118,18 @@ export default function Home() {
   const [mtrQuery, setMtrQuery] = React.useState<MtrQuery>({});
   const [mtrSchedule, setMtrSchedule] = React.useState<MtrScheduleResponse | null>(null);
   const [mtrLoading, setMtrLoading] = React.useState(false);
+
+  const mtrStations: MtrStationSearchItem[] = React.useMemo(
+    () =>
+      MTR_STATIONS.map((s) => ({
+        labelId: s.sta,
+        sta: s.sta,
+        lines: [...s.lines],
+        nameEn: s.nameEn,
+        nameTc: s.nameTc,
+      })),
+    []
+  );
 
   const [lrtQuery, setLrtQuery] = React.useState<LrtQuery>({});
   const [lrtSchedule, setLrtSchedule] = React.useState<LrtScheduleResponse | null>(null);
@@ -347,19 +358,48 @@ export default function Home() {
   );
 
   const refreshMtr = React.useCallback(async () => {
-    if (!mtrQuery.line || !mtrQuery.sta) return;
+    if (!mtrQuery.sta) return;
+
+    const station = mtrStations.find((s) => s.sta === mtrQuery.sta);
+    if (!station) return;
+
     setMtrLoading(true);
     try {
       const mtrLang = lang === "en" ? "EN" : "TC";
-      const response = await fetch(
-        `/api/mtr/schedule?line=${encodeURIComponent(mtrQuery.line)}&sta=${encodeURIComponent(mtrQuery.sta)}&lang=${encodeURIComponent(mtrLang)}`
+
+      const schedules = await Promise.all(
+        station.lines.map(async (line) => {
+          const response = await fetch(
+            `/api/mtr/schedule?line=${encodeURIComponent(line)}&sta=${encodeURIComponent(mtrQuery.sta ?? "")}&lang=${encodeURIComponent(mtrLang)}`
+          );
+          const json = (await response.json()) as { schedule: MtrScheduleResponse };
+          return json.schedule;
+        })
       );
-      const json = (await response.json()) as { schedule: MtrScheduleResponse };
-      setMtrSchedule(json.schedule);
+
+      let baseline: MtrScheduleResponse | null = null;
+      const mergedData: Record<string, NonNullable<MtrScheduleResponse["data"]>[string]> = {};
+
+      for (const schedule of schedules) {
+        baseline ??= schedule;
+        if (schedule.status !== 1) continue;
+        Object.assign(mergedData, schedule.data ?? {});
+      }
+
+      if (!baseline) {
+        setMtrSchedule(null);
+        return;
+      }
+
+      setMtrSchedule({
+        ...baseline,
+        status: Object.keys(mergedData).length ? 1 : baseline.status,
+        data: Object.keys(mergedData).length ? mergedData : baseline.data,
+      });
     } finally {
       setMtrLoading(false);
     }
-  }, [lang, mtrQuery.line, mtrQuery.sta]);
+  }, [lang, mtrQuery.sta, mtrStations]);
 
   const refreshLrt = React.useCallback(async () => {
     if (!lrtQuery.stationId) return;
@@ -518,26 +558,15 @@ export default function Home() {
 
   React.useEffect(() => {
     if (mode !== "mtr") return;
-    if (!mtrQuery.line || !mtrQuery.sta) return;
+    if (!mtrQuery.sta) return;
     void refreshMtr();
-  }, [mode, mtrQuery.line, mtrQuery.sta, refreshMtr]);
+  }, [mode, mtrQuery.sta, refreshMtr]);
 
   React.useEffect(() => {
     if (mode !== "lrt") return;
     if (!lrtQuery.stationId) return;
     void refreshLrt();
   }, [mode, lrtQuery.stationId, refreshLrt]);
-
-  const mtrStations: MtrStationSearchItem[] = React.useMemo(
-    () =>
-      MTR_STATIONS.map((s) => ({
-        line: s.line,
-        sta: s.sta,
-        nameEn: s.nameEn,
-        nameTc: s.nameTc,
-      })),
-    []
-  );
 
   const lrtStations: LrtStationSearchItem[] = React.useMemo(
     () =>
@@ -553,8 +582,9 @@ export default function Home() {
     mode === "kmb" ? "KMB bus ETAs" : mode === "mtr" ? "MTR Next Train" : "Light Rail";
 
   const canFavorite =
-    (mode === "kmb" && kmbQuery?.mode === "stop") ||
-    (mode === "mtr" && mtrQuery.line && mtrQuery.sta) ||
+    (mode === "kmb" &&
+      ((kmbQuery?.mode === "stop" && kmbQuery.stopId) || kmbDraftStopSelection?.type === "stop")) ||
+    (mode === "mtr" && mtrQuery.sta) ||
     (mode === "lrt" && lrtQuery.stationId);
 
   const onAddFavorite = () => {
@@ -562,38 +592,49 @@ export default function Home() {
 
     let item: FavoritesItem | null = null;
 
-    if (mode === "kmb" && kmbQuery?.mode === "stop") {
-      const stop = kmbStops.find((s) => s.stopId === kmbQuery.stopId);
-      const routeSuffix = kmbQuery.route?.trim() ? ` · ${kmbQuery.route}` : "";
-      const title = stop
-        ? `${pickKmbStopTitle(stop, lang)}${routeSuffix}`
-        : `KMB${routeSuffix}`;
+    if (mode === "kmb") {
+      const stopId =
+        kmbQuery?.mode === "stop"
+          ? kmbQuery.stopId
+          : kmbDraftStopSelection?.type === "stop"
+            ? kmbDraftStopSelection.stopId
+            : null;
 
-      item = {
-        id: `kmb:${kmbQuery.stopId}:${kmbQuery.route ?? "__all__"}:${kmbQuery.serviceType ?? "1"}`,
-        mode: "kmb",
-        title,
-        stopId: kmbQuery.stopId,
-        route: kmbQuery.route,
-        serviceType: kmbQuery.serviceType ?? "1",
-      };
+      if (stopId) {
+        const stop = kmbStops.find((s) => s.stopId === stopId);
+        const routeInput = routeFilterMode === "simple" ? (routeFilter.routes?.trim() ?? "") : "";
+        const route = routeInput || undefined;
+        const routeSuffix = route ? ` · ${route}` : "";
+        const title = stop ? `${pickKmbStopTitle(stop, lang)}${routeSuffix}` : `KMB${routeSuffix}`;
+
+        item = {
+          id: `kmb:${stopId}:${route ?? "__all__"}:1`,
+          mode: "kmb",
+          title,
+          stopId,
+          route,
+          serviceType: "1",
+        };
+      }
     }
 
-    if (mode === "mtr" && mtrQuery.line && mtrQuery.sta) {
-      const station = mtrStations.find((s) => s.line === mtrQuery.line && s.sta === mtrQuery.sta);
-      const title = station ? `${station.nameEn} · ${station.line}/${station.sta}` : `MTR · ${mtrQuery.line}/${mtrQuery.sta}`;
+    if (mode === "mtr" && mtrQuery.sta) {
+      const station = mtrStations.find((s) => s.sta === mtrQuery.sta);
+      const name = station ? (lang === "en" ? station.nameEn : station.nameTc) : "";
+      const title = station ? `${name} · ${station.lines.join("/")}/${station.sta}` : `MTR · ${mtrQuery.sta}`;
       item = {
-        id: `mtr:${mtrQuery.line}:${mtrQuery.sta}`,
+        id: `mtr:${mtrQuery.sta}`,
         mode: "mtr",
         title,
-        line: mtrQuery.line,
+        line: station?.lines[0] ?? "",
         sta: mtrQuery.sta,
       };
     }
 
     if (mode === "lrt" && lrtQuery.stationId) {
       const station = lrtStations.find((s) => s.stationId === lrtQuery.stationId);
-      const title = station ? `${station.nameEn} · ${station.stationId}` : `LRT · ${lrtQuery.stationId}`;
+      const name = station ? (lang === "en" ? station.nameEn : station.nameZh) : "";
+      const title = station ? `${name} · ${station.stationId}` : `LRT · ${lrtQuery.stationId}`;
       item = {
         id: `lrt:${lrtQuery.stationId}`,
         mode: "lrt",
@@ -626,7 +667,7 @@ export default function Home() {
     }
 
     if (item.mode === "mtr") {
-      setMtrQuery({ line: item.line, sta: item.sta });
+      setMtrQuery({ sta: item.sta });
       return;
     }
 
@@ -798,14 +839,8 @@ export default function Home() {
                     <MtrStationSearch
                       lang={lang}
                       stations={mtrStations}
-                      selected={
-                        mtrQuery.line && mtrQuery.sta
-                          ? { line: mtrQuery.line, sta: mtrQuery.sta }
-                          : undefined
-                      }
-                      onSelect={(station) =>
-                        setMtrQuery({ line: station.line, sta: station.sta })
-                      }
+                      selectedSta={mtrQuery.sta}
+                      onSelect={(station) => setMtrQuery({ sta: station.sta })}
                     />
                   ) : null}
 
@@ -837,7 +872,7 @@ export default function Home() {
                 </CardContent>
               </Card>
 
-              <FavoritesAndRecents onSelect={onSelectFromLists} />
+              <FavoritesAndRecents lang={lang} onSelect={onSelectFromLists} />
             </div>
 
             <div className="space-y-4">
@@ -863,11 +898,8 @@ export default function Home() {
 
               {mode === "mtr" ? (
                 <MtrResults
-                  title={
-                    mtrQuery.line && mtrQuery.sta
-                      ? `${mtrQuery.line}/${mtrQuery.sta}`
-                      : "MTR"
-                  }
+                  title={mtrQuery.sta ? `Station ${mtrQuery.sta}` : "MTR"}
+                  lang={lang}
                   schedule={mtrSchedule}
                   onRefresh={refreshMtr}
                   loading={mtrLoading}

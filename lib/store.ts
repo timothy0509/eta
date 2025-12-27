@@ -19,7 +19,10 @@ export type FavoritesItem =
   | {
       id: string;
       mode: "mtr";
+      // Titles are stored for display convenience only.
+      // They may be regenerated in the current UI language.
       title: string;
+      // Keep one representative line for backward compatibility.
       line: string;
       sta: string;
     }

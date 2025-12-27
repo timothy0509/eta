@@ -45,13 +45,16 @@ type Props = {
 };
 
 function normalizeRoutesText(raw: string) {
+  const hasTrailingComma = raw.trimEnd().endsWith(",");
+
   const parts = raw
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean)
     .map((s) => s.toUpperCase());
 
-  return parts.join(", ");
+  const normalized = parts.join(", ");
+  return hasTrailingComma ? `${normalized}, ` : normalized;
 }
 
 function normalizeAdvancedEntries(entries: RouteFilterEntry[] | undefined) {
@@ -110,13 +113,14 @@ export function RouteFilter({ mode, onModeChange, value, onChange, options }: Pr
        <div className="grid grid-cols-1 gap-3">
          <div>
            <Label className="text-xs text-muted-foreground">Route numbers (comma-separated)</Label>
-           <Input
-             value={value.routes ?? ""}
-             onChange={(e) => onChange({ ...value, routes: normalizeRoutesText(e.target.value) })}
-             placeholder="e.g. 40, 68X"
-             className="mt-1 rounded-xl"
-             disabled={mode === "advanced"}
-           />
+            <Input
+              value={value.routes ?? ""}
+              onChange={(e) => onChange({ ...value, routes: normalizeRoutesText(e.target.value) })}
+              onBlur={(e) => onChange({ ...value, routes: normalizeRoutesText(e.target.value) })}
+              placeholder="e.g. 40, 68X"
+              className="mt-1 rounded-xl"
+              disabled={mode === "advanced"}
+            />
          </div>
 
          {mode === "advanced" ? (

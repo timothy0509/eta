@@ -80,7 +80,7 @@ export type KmbRouteInfoLite = {
 
 export async function fetchKmbRouteInfo(params: {
   route: string;
-  direction: "I" | "O" | string;
+  direction: "I" | "O" | "inbound" | "outbound" | string;
   serviceType: string;
 }): Promise<KmbRouteInfoLite> {
   const query = new URLSearchParams();

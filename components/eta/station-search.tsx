@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 type Props = {
   lang: UiLanguage;
   stations: MtrStationSearchItem[];
-  selected?: { line: string; sta: string };
+  selectedSta?: string;
   onSelect: (station: MtrStationSearchItem) => void;
 };
 
@@ -29,14 +29,14 @@ function formatStationName(station: MtrStationSearchItem, lang: UiLanguage) {
   return station.nameEn;
 }
 
-export function MtrStationSearch({ lang, stations, selected, onSelect }: Props) {
+export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
 
   const selectedStation = React.useMemo(() => {
-    if (!selected) return undefined;
-    return stations.find((s) => s.line === selected.line && s.sta === selected.sta);
-  }, [stations, selected]);
+    if (!selectedSta) return undefined;
+    return stations.find((s) => s.sta === selectedSta);
+  }, [stations, selectedSta]);
 
   const fuse = React.useMemo(() => {
     return new Fuse(stations, {
@@ -71,7 +71,7 @@ export function MtrStationSearch({ lang, stations, selected, onSelect }: Props) 
         >
           <Search className="mr-2 h-4 w-4" />
           {selectedStation
-            ? `${formatStationName(selectedStation, lang)} (${selectedStation.line}/${selectedStation.sta})`
+            ? `${formatStationName(selectedStation, lang)} (${selectedStation.lines.join("/")}/${selectedStation.sta})`
             : "Search station name…"}
         </Button>
       </PopoverTrigger>
@@ -87,8 +87,8 @@ export function MtrStationSearch({ lang, stations, selected, onSelect }: Props) 
             <CommandGroup heading="Stations">
               {(results.length ? results : stations.slice(0, 12)).map((station) => (
                 <CommandItem
-                  key={`${station.line}-${station.sta}`}
-                  value={`${station.line}-${station.sta}`}
+                  key={station.labelId}
+                  value={station.labelId}
                   onSelect={() => {
                     onSelect(station);
                     setOpen(false);
@@ -103,7 +103,7 @@ export function MtrStationSearch({ lang, stations, selected, onSelect }: Props) 
                       {formatStationName(station, lang)}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      {station.nameEn} · {station.line}/{station.sta}
+                      {station.nameEn} · {station.lines.join("/")}/{station.sta}
                     </div>
                   </div>
                 </CommandItem>

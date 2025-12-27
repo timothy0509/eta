@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { LrtScheduleResponse } from "@/lib/eta/lrt";
 import type { UiLanguage } from "@/lib/eta/types";
+import { getLineColor } from "@/lib/eta/line-colors";
 
 type Props = {
   title: string;
@@ -71,7 +72,10 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
                       >
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <Badge className="rounded-xl" variant="outline">
+                            <Badge
+                              className="rounded-xl text-white"
+                              style={{ backgroundColor: getLineColor(String(r.route_no ?? "")) }}
+                            >
                               {r.route_no}
                             </Badge>
                             <div className="truncate text-sm font-medium">

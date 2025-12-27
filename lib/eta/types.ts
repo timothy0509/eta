@@ -27,8 +27,9 @@ export type LrtStationSearchItem = {
 };
 
 export type MtrStationSearchItem = {
-  line: string;
-  sta: string;
+  labelId: string; // stable id for merged stations
+  sta: string; // used for API requests
+  lines: string[]; // all lines serving this station
   nameEn: string;
   nameTc: string;
 };

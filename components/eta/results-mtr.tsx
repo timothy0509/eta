@@ -6,15 +6,36 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
+import type { UiLanguage } from "@/lib/eta/types";
+import { getLineColor } from "@/lib/eta/line-colors";
+import { findMtrStationBySta } from "@/lib/data/mtr-stations";
 
 type Props = {
   title: string;
+  lang: UiLanguage;
   schedule: MtrScheduleResponse | null;
   onRefresh: () => void;
   loading?: boolean;
 };
 
-export function MtrResults({ title, schedule, onRefresh, loading }: Props) {
+function formatDest(dest: unknown, lang: UiLanguage) {
+  const raw = String(dest ?? "");
+  if (!raw) return "";
+  const station = findMtrStationBySta(raw);
+  if (!station) return raw;
+  return lang === "en" ? station.nameEn : station.nameTc;
+}
+
+function formatMinutes(ttnt: unknown) {
+  const raw = String(ttnt ?? "").trim();
+  if (!raw) return "—";
+  const minutes = Number(raw);
+  if (Number.isNaN(minutes)) return raw;
+  if (minutes <= 0) return "Arriving";
+  return `${minutes} min`;
+}
+
+export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props) {
   return (
     <Card className="rounded-3xl border bg-card/60 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between gap-6">
@@ -60,20 +81,35 @@ export function MtrResults({ title, schedule, onRefresh, loading }: Props) {
             ) : null}
           </div>
         ) : (
-          Object.entries(schedule.data ?? {}).map(([key, payload]) => (
-            <div key={key} className="rounded-2xl border bg-background/40 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-medium">{key}</div>
-                <Badge variant="secondary" className="rounded-xl">
-                  Updated {schedule.curr_time ?? schedule.sys_time ?? ""}
-                </Badge>
-              </div>
+          Object.entries(schedule.data ?? {}).map(([key, payload]) => {
+            const [line, sta] = key.split("-");
+            const station = sta ? findMtrStationBySta(sta) : undefined;
+            const stationName = station ? (lang === "en" ? station.nameEn : station.nameTc) : sta;
 
-              <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
-                {(["UP", "DOWN"] as const).map((dir) => {
-                  const trains = payload[dir] ?? [];
-                  return (
-                    <div key={dir} className="rounded-2xl border bg-card/30 p-3">
+            return (
+              <div key={key} className="rounded-2xl border bg-background/40 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex min-w-0 items-center gap-2">
+                    {line ? (
+                      <Badge className="rounded-xl text-white" style={{ backgroundColor: getLineColor(line) }}>
+                        {line}
+                      </Badge>
+                    ) : null}
+                    <div className="min-w-0 truncate text-sm font-medium">
+                      {stationName ? `${stationName}${sta ? ` (${sta})` : ""}` : key}
+                    </div>
+                  </div>
+                  <Badge variant="secondary" className="rounded-xl">
+                    Updated
+                  </Badge>
+                </div>
+
+
+                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  {(["UP", "DOWN"] as const).map((dir) => {
+                    const trains = payload[dir] ?? [];
+                    return (
+                      <div key={dir} className="rounded-2xl border bg-card/30 p-3">
                       <div className="text-xs font-medium text-muted-foreground">
                         {dir}
                       </div>
@@ -86,27 +122,25 @@ export function MtrResults({ title, schedule, onRefresh, loading }: Props) {
                               key={`${dir}-${idx}`}
                               className="flex items-center justify-between gap-3 rounded-xl border bg-background/30 px-3 py-2"
                             >
-                              <div className="min-w-0">
-                                <div className="truncate text-sm font-medium">
-                                  {String(t.dest ?? "")}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {String(t.time ?? "")}
-                                </div>
-                              </div>
-                              <Badge className="rounded-xl" variant="outline">
-                                {String(t.ttnt ?? "")}
-                              </Badge>
+                               <div className="min-w-0">
+                                 <div className="truncate text-sm font-medium">
+                                   {formatDest(t.dest, lang)}
+                                 </div>
+                               </div>
+                               <Badge className="rounded-xl" variant="outline">
+                                 {formatMinutes(t.ttnt)}
+                               </Badge>
                             </div>
                           ))
                         )}
                       </div>
-                    </div>
-                  );
-                })}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </CardContent>
     </Card>

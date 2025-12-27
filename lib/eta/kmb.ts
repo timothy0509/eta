@@ -96,11 +96,18 @@ export type KmbRouteInfo = {
 
 export async function getKmbRouteInfo(params: {
   route: string;
-  direction: "I" | "O" | string;
+  direction: "I" | "O" | "inbound" | "outbound" | string;
   serviceType: string;
 }): Promise<KmbRouteInfo> {
+  const direction =
+    params.direction === "I"
+      ? "inbound"
+      : params.direction === "O"
+        ? "outbound"
+        : params.direction;
+
   const json = await fetchJson<KmbApiEnvelope<KmbRouteInfo>>(
-    `${KMB_BASE_URL}/v1/transport/kmb/route/${encodeURIComponent(params.route)}/${encodeURIComponent(params.direction)}/${encodeURIComponent(params.serviceType)}`,
+    `${KMB_BASE_URL}/v1/transport/kmb/route/${encodeURIComponent(params.route)}/${encodeURIComponent(direction)}/${encodeURIComponent(params.serviceType)}`,
     {
       next: {
         revalidate: 60 * 60 * 24,

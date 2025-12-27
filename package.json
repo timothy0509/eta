@@ -4,12 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build && npx @opennextjs/cloudflare",
+    "build": "next build && npx @opennextjs/cloudflare build",
     "start": "next start",
-    "lint": "eslint",
-    "build:worker": "open-next build",
-    "dev:worker": "wrangler dev",
-    "deploy:worker": "wrangler deploy"
+    "lint": "next lint"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",

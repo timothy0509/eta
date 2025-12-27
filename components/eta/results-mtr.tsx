@@ -26,13 +26,19 @@ function formatDest(dest: unknown, lang: UiLanguage) {
   return lang === "en" ? station.nameEn : station.nameTc;
 }
 
-function formatMinutes(ttnt: unknown) {
+function formatMinutes(ttnt: unknown, lang: UiLanguage) {
   const raw = String(ttnt ?? "").trim();
   if (!raw) return "—";
   const minutes = Number(raw);
   if (Number.isNaN(minutes)) return raw;
-  if (minutes <= 0) return "Arriving";
-  return `${minutes} min`;
+  if (minutes <= 0) return lang === "en" ? "Arriving" : "即將到達";
+  return lang === "en" ? `${minutes} min` : `${minutes} 分`;
+}
+
+function formatPlatform(plat: unknown) {
+  const raw = String(plat ?? "").trim();
+  if (!raw) return "";
+  return raw;
 }
 
 export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props) {
@@ -127,9 +133,21 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
                                    {formatDest(t.dest, lang)}
                                  </div>
                                </div>
-                               <Badge className="rounded-xl" variant="outline">
-                                 {formatMinutes(t.ttnt)}
-                               </Badge>
+                                <div className="flex items-center gap-2">
+                                  {formatPlatform(t.plat) ? (
+                                    <Badge className="rounded-xl" variant="secondary">
+                                      {lang === "en" ? `Plat ${formatPlatform(t.plat)}` : `月台 ${formatPlatform(t.plat)}`}
+                                    </Badge>
+                                  ) : null}
+                                  {line === "EAL" && String((t as { route?: unknown }).route ?? "") === "RAC" ? (
+                                    <Badge className="rounded-xl" variant="secondary">
+                                      {lang === "en" ? "Via Racecourse" : "經馬場"}
+                                    </Badge>
+                                  ) : null}
+                                  <Badge className="rounded-xl" variant="outline">
+                                    {formatMinutes(t.ttnt, lang)}
+                                  </Badge>
+                                </div>
                             </div>
                           ))
                         )}

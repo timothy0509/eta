@@ -1,5 +1,5 @@
 import type { KmbStopSearchItem } from "@/lib/eta/types";
-import type { KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
+import type { KmbEtaEntry, KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
 
 export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
   const response = await fetch("/api/kmb/stops", {
@@ -90,6 +90,27 @@ export type KmbRouteInfoLite = {
     sc: string;
   };
 };
+
+export async function fetchKmbEtas(plans: Array<{ stopId: string; route: string; serviceType: string }>) {
+  const response = await fetch("/api/kmb/etas", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ plans }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load ETAs: ${response.status}`);
+  }
+
+  const json = (await response.json()) as {
+    eta: KmbEtaEntry[];
+    errors?: Array<{ stopId: string; route: string; serviceType: string }>;
+  };
+
+  return json;
+}
 
 export async function fetchKmbRouteInfo(params: {
   route: string;

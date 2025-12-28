@@ -1,15 +1,24 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
+import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
 import { getLrtSchedule } from "@/lib/eta/lrt";
+
+const QuerySchema = z.object({
+  stationId: z.string().trim().min(1),
+});
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const stationId = url.searchParams.get("stationId");
 
-  if (!stationId) {
+  const parsed = QuerySchema.safeParse({
+    stationId: url.searchParams.get("stationId"),
+  });
+
+  if (!parsed.success) {
     return NextResponse.json(
       {
-        error: "Missing required query params: stationId",
+        error: "Invalid query params",
       },
       {
         status: 400,
@@ -17,6 +26,24 @@ export async function GET(request: Request) {
     );
   }
 
-  const schedule = await getLrtSchedule({ stationId });
-  return NextResponse.json({ schedule });
+  try {
+    const schedule = await getLrtSchedule(parsed.data);
+    return NextResponse.json({ schedule });
+  } catch (error) {
+    const status =
+      error instanceof UpstreamTimeoutError
+        ? 504
+        : error instanceof ApiError
+          ? 502
+          : 500;
+
+    return NextResponse.json(
+      {
+        error: "Failed to load LRT schedule",
+      },
+      {
+        status,
+      }
+    );
+  }
 }

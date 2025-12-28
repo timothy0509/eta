@@ -42,5 +42,6 @@ export async function getMtrSchedule(params: {
 
   return await fetchJson<MtrScheduleResponse>(url.toString(), {
     cache: "no-store",
+    timeoutMs: 10_000,
   });
 }

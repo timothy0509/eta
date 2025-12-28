@@ -58,6 +58,7 @@ export async function getKmbEta(params: {
     `${KMB_BASE_URL}/v1/transport/kmb/eta/${encodeURIComponent(params.stopId)}/${encodeURIComponent(params.route)}/${encodeURIComponent(params.serviceType)}`,
     {
       cache: "no-store",
+      timeoutMs: 12_000,
     }
   );
   return json.data;

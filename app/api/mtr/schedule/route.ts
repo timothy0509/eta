@@ -1,17 +1,28 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
+import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
 import { getMtrSchedule } from "@/lib/eta/mtr";
+
+const QuerySchema = z.object({
+  line: z.string().trim().min(1),
+  sta: z.string().trim().min(1),
+  lang: z.enum(["EN", "TC"]).default("EN"),
+});
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const line = url.searchParams.get("line");
-  const sta = url.searchParams.get("sta");
-  const lang = (url.searchParams.get("lang") ?? "EN") as "EN" | "TC";
 
-  if (!line || !sta) {
+  const parsed = QuerySchema.safeParse({
+    line: url.searchParams.get("line"),
+    sta: url.searchParams.get("sta"),
+    lang: url.searchParams.get("lang") ?? "EN",
+  });
+
+  if (!parsed.success) {
     return NextResponse.json(
       {
-        error: "Missing required query params: line, sta",
+        error: "Invalid query params",
       },
       {
         status: 400,
@@ -19,17 +30,24 @@ export async function GET(request: Request) {
     );
   }
 
-  if (lang !== "EN" && lang !== "TC") {
+  try {
+    const schedule = await getMtrSchedule(parsed.data);
+    return NextResponse.json({ schedule });
+  } catch (error) {
+    const status =
+      error instanceof UpstreamTimeoutError
+        ? 504
+        : error instanceof ApiError
+          ? 502
+          : 500;
+
     return NextResponse.json(
       {
-        error: "Invalid lang. Supported: EN, TC",
+        error: "Failed to load MTR schedule",
       },
       {
-        status: 400,
+        status,
       }
     );
   }
-
-  const schedule = await getMtrSchedule({ line, sta, lang });
-  return NextResponse.json({ schedule });
 }

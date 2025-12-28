@@ -27,5 +27,6 @@ export async function getLrtSchedule(params: {
 
   return await fetchJson<LrtScheduleResponse>(url.toString(), {
     cache: "no-store",
+    timeoutMs: 10_000,
   });
 }

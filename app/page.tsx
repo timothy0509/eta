@@ -1,81 +1,28 @@
 "use client";
 
 import * as React from "react";
-import { Heart, Moon, RefreshCw, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 
 import { AutoRefreshMenu } from "@/components/eta/auto-refresh";
 import { FavoritesAndRecents } from "@/components/eta/favorites";
 import { LanguageToggle } from "@/components/eta/language-toggle";
 import { ModeTabs } from "@/components/eta/mode-tabs";
+import { KmbPane, type KmbPaneState } from "@/components/eta/panes/kmb-pane";
+import { MtrPane, type MtrPaneState } from "@/components/eta/panes/mtr-pane";
+import { LrtPane, type LrtPaneState } from "@/components/eta/panes/lrt-pane";
 import { KmbResults } from "@/components/eta/results-kmb";
-import { LrtResults } from "@/components/eta/results-lrt";
 import { MtrResults } from "@/components/eta/results-mtr";
-import {
-  RouteFilter,
-  type RouteFilterOption,
-  type RouteFilterState,
-} from "@/components/eta/route-filter";
-import { LrtStationSearch } from "@/components/eta/lrt-stop-search";
-import { MtrStationSearch } from "@/components/eta/station-search";
-import { StopSearch, type StopSearchSelection } from "@/components/eta/stop-search";
-import { Badge } from "@/components/ui/badge";
+import { LrtResults } from "@/components/eta/results-lrt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { LRT_STATIONS } from "@/lib/data/lrt-stations";
 import { MTR_STATIONS } from "@/lib/data/mtr-stations";
-import { fetchKmbRouteInfo, fetchKmbRouteStops, fetchKmbStops } from "@/lib/eta/client";
-import type { KmbEtaEntry } from "@/lib/eta/kmb";
-import type { KmbRouteInfoLite, KmbRouteStopLite } from "@/lib/eta/client";
-import type { LrtScheduleResponse } from "@/lib/eta/lrt";
-import type { MtrScheduleResponse } from "@/lib/eta/mtr";
-import type {
-  KmbStopSearchItem,
-  LrtStationSearchItem,
-  MtrStationSearchItem,
-  UiLanguage,
-} from "@/lib/eta/types";
+import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } from "@/lib/eta/types";
 import { isLanguageSupported } from "@/lib/eta/types";
-import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import { useAutoRefresh } from "@/lib/eta/use-auto-refresh";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
-import { cn } from "@/lib/utils";
-
-type KmbQuery =
-  | {
-      mode: "stop";
-      stopId: string;
-      route?: string;
-      serviceType?: string;
-    }
-  | {
-      mode: "stops";
-      stopIds: string[];
-      route?: string;
-      serviceType?: string;
-    }
-  | {
-      mode: "contains";
-      query: string;
-      route?: string;
-      serviceType?: string;
-    };
-
-type MtrQuery = {
-  sta?: string;
-};
-
-type LrtQuery = {
-  stationId?: string;
-};
-
-function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
-  if (lang === "en") return stop.nameEn;
-  if (lang === "sc") return stop.nameSc;
-  return stop.nameTc;
-}
-
 
 export default function Home() {
   const mode = useAppStore((s) => s.mode);
@@ -96,36 +43,13 @@ export default function Home() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [themeMounted, setThemeMounted] = React.useState(false);
 
-  React.useEffect(() => {
-    setThemeMounted(true);
-  }, []);
-
   const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([]);
-  const [loadingStops, setLoadingStops] = React.useState(false);
-  const [stopsError, setStopsError] = React.useState<string | null>(null);
+  const [kmbPaneState, setKmbPaneState] = React.useState<KmbPaneState | null>(null);
+  const [mtrPaneState, setMtrPaneState] = React.useState<MtrPaneState | null>(null);
+  const [lrtPaneState, setLrtPaneState] = React.useState<LrtPaneState | null>(null);
+  const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(null);
 
-  const [kmbRouteStops, setKmbRouteStops] = React.useState<KmbRouteStopLite[]>([]);
-  const [loadingRouteStops, setLoadingRouteStops] = React.useState(false);
-  const [routeStopsError, setRouteStopsError] = React.useState<string | null>(null);
-
-  const [kmbRouteInfos, setKmbRouteInfos] = React.useState<Record<string, KmbRouteInfoLite>>({});
-
-  const [kmbDraftStopSelection, setKmbDraftStopSelection] = React.useState<
-    StopSearchSelection | undefined
-  >();
-
-  const [kmbQuery, setKmbQuery] = React.useState<KmbQuery | null>(null);
-  const [routeFilter, setRouteFilter] = React.useState<RouteFilterState>({
-    routes: "",
-    entries: [],
-  });
-
-  const [kmbEta, setKmbEta] = React.useState<KmbEtaEntry[] | null>(null);
-  const [kmbEtaLoading, setKmbEtaLoading] = React.useState(false);
-
-  const [mtrQuery, setMtrQuery] = React.useState<MtrQuery>({});
-  const [mtrSchedule, setMtrSchedule] = React.useState<MtrScheduleResponse | null>(null);
-  const [mtrLoading, setMtrLoading] = React.useState(false);
+  const canFavoriteRef = React.useRef(false);
 
   const mtrStations: MtrStationSearchItem[] = React.useMemo(
     () =>
@@ -139,538 +63,6 @@ export default function Home() {
     []
   );
 
-  const [lrtQuery, setLrtQuery] = React.useState<LrtQuery>({});
-  const [lrtSchedule, setLrtSchedule] = React.useState<LrtScheduleResponse | null>(null);
-  const [lrtLoading, setLrtLoading] = React.useState(false);
-
-  React.useEffect(() => {
-    if (isLanguageSupported(mode, lang)) return;
-    setLang("tc");
-  }, [lang, mode, setLang]);
-
-  React.useEffect(() => {
-    if (mode !== "kmb") return;
-
-    let cancelled = false;
-    const load = async () => {
-      setLoadingStops(true);
-      setStopsError(null);
-      try {
-        const stops = await fetchKmbStops();
-        if (!cancelled) setKmbStops(stops);
-      } catch (e) {
-        if (!cancelled) setStopsError(e instanceof Error ? e.message : "Failed to load stops");
-      } finally {
-        if (!cancelled) setLoadingStops(false);
-      }
-    };
-
-    if (!kmbStops.length) load();
-    return () => {
-      cancelled = true;
-    };
-  }, [kmbStops.length, mode]);
-
-  React.useEffect(() => {
-    if (mode !== "kmb") return;
-
-    let cancelled = false;
-    const load = async () => {
-      setLoadingRouteStops(true);
-      setRouteStopsError(null);
-      try {
-        const data = await fetchKmbRouteStops();
-        if (!cancelled) setKmbRouteStops(data);
-      } catch (e) {
-        if (!cancelled)
-          setRouteStopsError(e instanceof Error ? e.message : "Failed to load route-stop");
-      } finally {
-        if (!cancelled) setLoadingRouteStops(false);
-      }
-    };
-
-    if (!kmbRouteStops.length) load();
-    return () => {
-      cancelled = true;
-    };
-  }, [kmbRouteStops.length, mode]);
-
-  function normalizeKmbRoutesInput(input: string) {
-    const requestedRoutes = input
-      ? input
-          .split(",")
-          .map((r) => r.trim())
-          .filter(Boolean)
-          .map((r) => r.toUpperCase())
-      : null;
-
-    return requestedRoutes?.length ? requestedRoutes : null;
-  }
-
-  function stopNameContains(stop: KmbStopSearchItem, query: string) {
-    const needle = query.trim().toLowerCase();
-    if (!needle) return false;
-
-    return (
-      stop.nameEn.toLowerCase().includes(needle) ||
-      stop.nameTc.toLowerCase().includes(needle) ||
-      stop.nameSc.toLowerCase().includes(needle)
-    );
-  }
-
-  const pickRouteVariantLabel = React.useCallback(
-    (info: KmbRouteInfoLite | undefined) => {
-      if (!info) return "";
-      const origin =
-        lang === "en" ? info.origin.en : lang === "sc" ? info.origin.sc : info.origin.tc;
-      const destination =
-        lang === "en"
-          ? info.destination.en
-          : lang === "sc"
-            ? info.destination.sc
-            : info.destination.tc;
-      if (!origin || !destination) return "";
-      return `${origin} → ${destination}`;
-    },
-    [lang]
-  );
-
-  const refreshKmbEta = React.useCallback(
-    async (queryOverride?: KmbQuery | null) => {
-      const query = queryOverride ?? kmbQuery;
-      if (!query) return;
-
-      const stopIds =
-        query.mode === "stop"
-          ? [query.stopId]
-          : query.mode === "stops"
-            ? query.stopIds
-            : query.query.trim().length >= 3
-              ? kmbStops
-                  .filter((stop) => stopNameContains(stop, query.query))
-                  .slice(0, 20)
-                  .map((stop) => stop.stopId)
-              : [];
-
-      if (!stopIds.length) return;
-
-      // Advanced filter: only apply if there are entries; empty = show all
-      const advancedEntries = routeFilterMode === "advanced" ? (routeFilter.entries ?? []) : [];
-      const advancedKeys = advancedEntries.length
-        ? new Set(advancedEntries.map((e) => e.variantKey).filter(Boolean))
-        : null;
-
-      const requestedRoutes = normalizeKmbRoutesInput(query.route?.trim() ?? "");
-      const requestedSet = requestedRoutes ? new Set(requestedRoutes) : null;
-
-      setKmbEtaLoading(true);
-      try {
-        const perStopPairs = stopIds.map((stopId) => {
-          const candidates = kmbRouteStops
-            .filter((entry) => entry.stopId === stopId)
-            .filter((entry) => {
-              const route = entry.route.toUpperCase();
-              // Advanced mode with entries: filter to selected variants only
-              if (advancedKeys) {
-                const key = `${route}|${entry.bound}|${entry.serviceType}`;
-                return advancedKeys.has(key);
-              }
-
-              // Simple mode: filter by route name if specified
-              if (!requestedSet) return true;
-              return requestedSet.has(route);
-            });
-
-          const uniquePairs = new Map<string, { route: string; serviceType: string }>();
-          for (const entry of candidates) {
-            const route = entry.route.toUpperCase();
-            const serviceType = entry.serviceType;
-            const key = `${route}|${serviceType}`;
-            if (!uniquePairs.has(key)) uniquePairs.set(key, { route, serviceType });
-          }
-
-          return {
-            stopId,
-            pairs: Array.from(uniquePairs.values()),
-          };
-        });
-
-        const requestPlans = perStopPairs
-          .flatMap((stopPlan) =>
-            stopPlan.pairs.map((pair) => ({
-              stopId: stopPlan.stopId,
-              route: pair.route,
-              serviceType: pair.serviceType,
-            }))
-          )
-          .slice(0, 60);
-
-        const results = await Promise.all(
-          requestPlans.map(async (plan) => {
-            const response = await fetch(
-              `/api/kmb/eta?stopId=${encodeURIComponent(plan.stopId)}&route=${encodeURIComponent(plan.route)}&serviceType=${encodeURIComponent(plan.serviceType)}`
-            );
-
-            if (!response.ok) {
-              throw new Error(`Failed to load ETA: ${response.status}`);
-            }
-
-            const json = (await response.json()) as { eta: KmbEtaEntry[] };
-            return json.eta;
-          })
-        );
-
-        const merged = results.flat();
-        setKmbEta(merged);
-
-        const variantKeys = Array.from(
-          new Set(
-            merged.map((eta) => `${eta.route.toUpperCase()}|${eta.dir}|${String(eta.service_type)}`)
-          )
-        );
-
-        const candidateKeysFromStops = Array.from(
-          new Set(
-            kmbRouteStops
-              .filter((entry) => stopIds.includes(entry.stopId))
-              .map((entry) => `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`)
-          )
-        );
-
-        const missingKeys = [...variantKeys, ...candidateKeysFromStops].filter(
-          (key) => !kmbRouteInfos[key]
-        );
-        if (missingKeys.length) {
-          const fetched = await Promise.allSettled(
-            missingKeys.map(async (key) => {
-              const [route, direction, serviceType] = key.split("|");
-              const info = await fetchKmbRouteInfo({
-                route,
-                direction,
-                serviceType,
-              });
-              return { key, info };
-            })
-          );
-
-          const updates: Record<string, KmbRouteInfoLite> = {};
-          for (const item of fetched) {
-            if (item.status !== "fulfilled") continue;
-            updates[item.value.key] = item.value.info;
-          }
-
-          if (Object.keys(updates).length) {
-            setKmbRouteInfos((prev) => ({ ...prev, ...updates }));
-          }
-        }
-      } finally {
-        setKmbEtaLoading(false);
-      }
-    },
-    [kmbQuery, kmbRouteStops, kmbStops, routeFilter.entries, routeFilterMode]
-  );
-
-  // Stable ref for refreshKmbEta to avoid infinite loops in effects
-  const refreshKmbEtaRef = React.useRef(refreshKmbEta);
-  React.useEffect(() => {
-    refreshKmbEtaRef.current = refreshKmbEta;
-  }, [refreshKmbEta]);
-
-  const refreshMtr = React.useCallback(async () => {
-    if (!mtrQuery.sta) return;
-
-    const station = mtrStations.find((s) => s.sta === mtrQuery.sta);
-    if (!station) return;
-
-    setMtrLoading(true);
-    try {
-      const mtrLang = lang === "en" ? "EN" : "TC";
-
-      const schedules = await Promise.all(
-        station.lines.map(async (line) => {
-          const response = await fetch(
-            `/api/mtr/schedule?line=${encodeURIComponent(line)}&sta=${encodeURIComponent(mtrQuery.sta ?? "")}&lang=${encodeURIComponent(mtrLang)}`
-          );
-          const json = (await response.json()) as { schedule: MtrScheduleResponse };
-          return json.schedule;
-        })
-      );
-
-      let baseline: MtrScheduleResponse | null = null;
-      const mergedData: Record<string, NonNullable<MtrScheduleResponse["data"]>[string]> = {};
-
-      for (const schedule of schedules) {
-        baseline ??= schedule;
-        if (schedule.status !== 1) continue;
-        Object.assign(mergedData, schedule.data ?? {});
-      }
-
-      if (!baseline) {
-        setMtrSchedule(null);
-        return;
-      }
-
-      setMtrSchedule({
-        ...baseline,
-        status: Object.keys(mergedData).length ? 1 : baseline.status,
-        data: Object.keys(mergedData).length ? mergedData : baseline.data,
-      });
-    } finally {
-      setMtrLoading(false);
-    }
-  }, [lang, mtrQuery.sta, mtrStations]);
-
-  const refreshLrt = React.useCallback(async () => {
-    if (!lrtQuery.stationId) return;
-    setLrtLoading(true);
-    try {
-      const response = await fetch(
-        `/api/lrt/schedule?stationId=${encodeURIComponent(lrtQuery.stationId)}`
-      );
-      const json = (await response.json()) as { schedule: LrtScheduleResponse };
-      setLrtSchedule(json.schedule);
-    } finally {
-      setLrtLoading(false);
-    }
-  }, [lrtQuery.stationId]);
-
-  useAutoRefresh(autoRefreshSeconds * 1000, () => {
-    if (mode === "kmb") void refreshKmbEta();
-    if (mode === "mtr") void refreshMtr();
-    if (mode === "lrt") void refreshLrt();
-  });
-
-  const availableStopIdsForFilter = React.useMemo(() => {
-    if (!kmbDraftStopSelection) return [] as string[];
-
-    if (kmbDraftStopSelection.type === "stop") {
-      return [kmbDraftStopSelection.stopId];
-    }
-
-    if (kmbDraftStopSelection.type === "stops") {
-      return kmbDraftStopSelection.stopIds;
-    }
-
-    // type === "contains"
-    const trimmed = kmbDraftStopSelection.query.trim();
-    if (trimmed.length < 3) return [];
-
-    return kmbStops
-      .filter((stop) => stopNameContains(stop, trimmed))
-      .slice(0, 20)
-      .map((stop) => stop.stopId);
-  }, [kmbDraftStopSelection, kmbStops]);
-
-  const kmbAvailableRouteVariants: RouteFilterOption[] = React.useMemo(() => {
-    if (!availableStopIdsForFilter.length) return [];
-
-    const stopSet = new Set(availableStopIdsForFilter);
-    const variantKeys = Array.from(
-      new Set(
-        kmbRouteStops
-          .filter((entry) => stopSet.has(entry.stopId))
-          .map((entry) => `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`)
-      )
-    );
-
-    return variantKeys
-      .map((key) => {
-        const [route] = key.split("|");
-        const label = pickRouteVariantLabel(kmbRouteInfos[key]);
-        return {
-          key,
-          route,
-          label: label || "—",
-        };
-      })
-      .filter((opt) => opt.route);
-  }, [availableStopIdsForFilter, kmbRouteInfos, kmbRouteStops, pickRouteVariantLabel]);
-
-  React.useEffect(() => {
-    if (mode !== "kmb") return;
-    if (!availableStopIdsForFilter.length) return;
-    if (!kmbRouteStops.length) return;
-
-    const stopSet = new Set(availableStopIdsForFilter);
-    const variantKeys = Array.from(
-      new Set(
-        kmbRouteStops
-          .filter((entry) => stopSet.has(entry.stopId))
-          .map((entry) => `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`)
-      )
-    );
-
-    const missing = variantKeys.filter((key) => !kmbRouteInfos[key]);
-    if (!missing.length) return;
-
-    let cancelled = false;
-    const load = async () => {
-      const fetched = await Promise.allSettled(
-        missing.map(async (key) => {
-          const [route, direction, serviceType] = key.split("|");
-          const info = await fetchKmbRouteInfo({
-            route,
-            direction,
-            serviceType,
-          });
-          return { key, info };
-        })
-      );
-
-      if (cancelled) return;
-
-      const updates: Record<string, KmbRouteInfoLite> = {};
-      for (const item of fetched) {
-        if (item.status !== "fulfilled") continue;
-        updates[item.value.key] = item.value.info;
-      }
-
-      if (Object.keys(updates).length) {
-        setKmbRouteInfos((prev) => ({ ...prev, ...updates }));
-      }
-    };
-
-    void load();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [availableStopIdsForFilter, kmbRouteInfos, kmbRouteStops, mode]);
-
-  React.useEffect(() => {
-    if (routeFilterMode !== "advanced") return;
-    if (!(routeFilter.entries ?? []).length) return;
-
-    const nextEntries = (routeFilter.entries ?? []).filter((entry) =>
-      kmbAvailableRouteVariants.some((opt) => opt.key === entry.variantKey)
-    );
-
-    if (nextEntries.length === (routeFilter.entries ?? []).length) return;
-
-    setRouteFilter((prev) => ({ ...prev, entries: nextEntries }));
-    setKmbQuery(null);
-    setKmbEta(null);
-  }, [kmbAvailableRouteVariants, routeFilter.entries, routeFilterMode]);
-
-  React.useEffect(() => {
-    if (mode !== "mtr") return;
-    if (!mtrQuery.sta) return;
-    void refreshMtr();
-  }, [mode, mtrQuery.sta, refreshMtr]);
-
-  React.useEffect(() => {
-    if (mode !== "lrt") return;
-    if (!lrtQuery.stationId) return;
-    void refreshLrt();
-  }, [mode, lrtQuery.stationId, refreshLrt]);
-
-  // Auto-fetch KMB ETAs when stop selection changes (immediate)
-  const prevStopSelectionRef = React.useRef<StopSearchSelection | undefined>(undefined);
-  React.useEffect(() => {
-    if (mode !== "kmb") return;
-    if (!kmbDraftStopSelection) return;
-    if (!kmbRouteStops.length) return;
-
-    // Only trigger on actual change
-    const prev = prevStopSelectionRef.current;
-    prevStopSelectionRef.current = kmbDraftStopSelection;
-
-    const isSame =
-      prev &&
-      prev.type === kmbDraftStopSelection.type &&
-      (prev.type === "stop"
-        ? prev.stopId === (kmbDraftStopSelection as { type: "stop"; stopId: string }).stopId
-        : prev.type === "stops"
-          ? JSON.stringify((prev as { type: "stops"; stopIds: string[] }).stopIds) ===
-            JSON.stringify((kmbDraftStopSelection as { type: "stops"; stopIds: string[] }).stopIds)
-          : (prev as { type: "contains"; query: string }).query ===
-            (kmbDraftStopSelection as { type: "contains"; query: string }).query);
-
-    if (isSame) return;
-
-    // Build query based on current state
-    const routeInput = routeFilterMode === "simple" ? routeFilter.routes?.trim() ?? "" : "";
-    const nextQuery: KmbQuery =
-      kmbDraftStopSelection.type === "stop"
-        ? {
-            mode: "stop",
-            stopId: kmbDraftStopSelection.stopId,
-            route: routeInput || undefined,
-            serviceType: "1",
-          }
-        : kmbDraftStopSelection.type === "stops"
-          ? {
-              mode: "stops",
-              stopIds: kmbDraftStopSelection.stopIds,
-              route: routeInput || undefined,
-              serviceType: "1",
-            }
-          : {
-              mode: "contains",
-              query: kmbDraftStopSelection.query,
-              route: routeInput || undefined,
-              serviceType: "1",
-            };
-
-    setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery);
-  }, [mode, kmbDraftStopSelection, kmbRouteStops.length, routeFilter.routes, routeFilterMode]);
-
-  // Auto-fetch KMB ETAs when advanced filter entries change (immediate)
-  const prevEntriesRef = React.useRef<typeof routeFilter.entries>([]);
-  React.useEffect(() => {
-    if (mode !== "kmb") return;
-    if (routeFilterMode !== "advanced") return;
-    if (!kmbDraftStopSelection) return;
-    if (!kmbRouteStops.length) return;
-
-    const prev = prevEntriesRef.current ?? [];
-    const curr = routeFilter.entries ?? [];
-    prevEntriesRef.current = curr;
-
-    // Check if entries actually changed
-    const prevKeys = new Set(prev.map((e) => e.variantKey));
-    const currKeys = new Set(curr.map((e) => e.variantKey));
-    if (prevKeys.size === currKeys.size && [...prevKeys].every((k) => currKeys.has(k))) return;
-
-    const nextQuery: KmbQuery =
-      kmbDraftStopSelection.type === "stop"
-        ? { mode: "stop", stopId: kmbDraftStopSelection.stopId, serviceType: "1" }
-        : kmbDraftStopSelection.type === "stops"
-          ? { mode: "stops", stopIds: kmbDraftStopSelection.stopIds, serviceType: "1" }
-          : { mode: "contains", query: kmbDraftStopSelection.query, serviceType: "1" };
-
-    setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery);
-  }, [mode, routeFilterMode, routeFilter.entries, kmbDraftStopSelection, kmbRouteStops.length]);
-
-  // Debounced auto-fetch for simple route filter input (1s delay)
-  const [debouncedRoutes, setDebouncedRoutes] = React.useState(routeFilter.routes ?? "");
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedRoutes(routeFilter.routes ?? "");
-    }, 1000);
-    return () => clearTimeout(timer);
-  }, [routeFilter.routes]);
-
-  React.useEffect(() => {
-    if (mode !== "kmb") return;
-    if (routeFilterMode !== "simple") return;
-    if (!kmbDraftStopSelection) return;
-    if (!kmbRouteStops.length) return;
-
-    const routeInput = debouncedRoutes.trim();
-    const nextQuery: KmbQuery =
-      kmbDraftStopSelection.type === "stop"
-        ? { mode: "stop", stopId: kmbDraftStopSelection.stopId, route: routeInput || undefined, serviceType: "1" }
-        : kmbDraftStopSelection.type === "stops"
-          ? { mode: "stops", stopIds: kmbDraftStopSelection.stopIds, route: routeInput || undefined, serviceType: "1" }
-          : { mode: "contains", query: kmbDraftStopSelection.query, route: routeInput || undefined, serviceType: "1" };
-
-    setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery);
-  }, [mode, routeFilterMode, debouncedRoutes, kmbDraftStopSelection, kmbRouteStops.length]);
-
   const lrtStations: LrtStationSearchItem[] = React.useMemo(
     () =>
       LRT_STATIONS.map((s) => ({
@@ -681,284 +73,42 @@ export default function Home() {
     []
   );
 
-  const heading =
-    mode === "kmb" ? "KMB bus ETAs" : mode === "mtr" ? "MTR Next Train" : "Light Rail";
+  React.useEffect(() => {
+    setThemeMounted(true);
+  }, []);
 
-  // Compute KMB results title using stop name, with code parsed out
-  const kmbResultsInfo = React.useMemo(() => {
-    if (!kmbQuery) return { title: "KMB ETAs", code: null };
-    if (kmbQuery.mode === "stop") {
-      const stop = kmbStops.find((s) => s.stopId === kmbQuery.stopId);
-      if (stop) {
-        const fullName = pickKmbStopTitle(stop, lang);
-        const parsed = parseKmbStopName(fullName);
-        return { title: parsed.name, code: parsed.stopCode };
-      }
-      return { title: `Stop ${kmbQuery.stopId}`, code: null };
-    }
-    if (kmbQuery.mode === "stops") {
-      // For grouped stops, find first stop to get base name
-      const firstStop = kmbStops.find((s) => kmbQuery.stopIds.includes(s.stopId));
-      if (firstStop) {
-        const fullName = pickKmbStopTitle(firstStop, lang);
-        const parsed = parseKmbStopName(fullName);
-        return { title: parsed.name, code: null }; // No single code for grouped stops
-      }
-      return { title: lang === "en" ? "Selected stops" : "已選車站", code: null };
-    }
-    return { title: lang === "en" ? `Stops containing "${kmbQuery.query.trim()}"` : `包含「${kmbQuery.query.trim()}」的車站`, code: null };
-  }, [kmbQuery, kmbStops, lang]);
+  React.useEffect(() => {
+    if (isLanguageSupported(mode, lang)) return;
+    setLang("tc");
+  }, [lang, mode, setLang]);
 
-  // Compute MTR results title using localized station name
-  const mtrResultsTitle = React.useMemo(() => {
-    if (!mtrQuery.sta) return "MTR";
-    const station = mtrStations.find((s) => s.sta === mtrQuery.sta);
-    if (station) {
-      return lang === "en" ? station.nameEn : station.nameTc;
-    }
-    return `Station ${mtrQuery.sta}`;
-  }, [mtrQuery.sta, mtrStations, lang]);
+  const refreshRef = React.useRef<(() => Promise<void>) | null>(null);
+  const inFlightRefreshRef = React.useRef(false);
 
-  // Compute LRT results title using localized station name
-  const lrtResultsTitle = React.useMemo(() => {
-    if (!lrtQuery.stationId) return "Light Rail";
-    const station = lrtStations.find((s) => s.stationId === lrtQuery.stationId);
-    if (station) {
-      return lang === "en" ? station.nameEn : station.nameZh;
-    }
-    return `Station ${lrtQuery.stationId}`;
-  }, [lrtQuery.stationId, lrtStations, lang]);
+  const onRegisterRefresh = React.useCallback((refresh: () => Promise<void>) => {
+    refreshRef.current = refresh;
+  }, []);
 
-  const canFavorite =
-    (mode === "kmb" &&
-      ((kmbQuery?.mode === "stop" && kmbQuery.stopId) ||
-        (kmbQuery?.mode === "stops" && kmbQuery.stopIds.length > 0) ||
-        (kmbQuery?.mode === "contains" && kmbQuery.query.trim().length >= 3) ||
-        kmbDraftStopSelection?.type === "stop" ||
-        (kmbDraftStopSelection?.type === "stops" && kmbDraftStopSelection.stopIds.length > 0) ||
-        (kmbDraftStopSelection?.type === "contains" &&
-          kmbDraftStopSelection.query.trim().length >= 3))) ||
-    (mode === "mtr" && mtrQuery.sta) ||
-    (mode === "lrt" && lrtQuery.stationId);
+  useAutoRefresh(autoRefreshSeconds * 1000, () => {
+    if (!refreshRef.current) return;
+    if (inFlightRefreshRef.current) return;
 
-  const onAddFavorite = () => {
-    if (!canFavorite) return;
-
-    let item: FavoritesItem | null = null;
-
-    if (mode === "kmb") {
-      const isAdvanced = routeFilterMode === "advanced";
-      const routeInput = isAdvanced ? "" : (routeFilter.routes?.trim() ?? "");
-      const route = routeInput || undefined;
-      
-      // Prepare entries for advanced mode (strip id, keep only variantKey)
-      const entriesForSave = isAdvanced && routeFilter.entries?.length
-        ? routeFilter.entries.map((e) => ({ variantKey: e.variantKey }))
-        : undefined;
-
-      // Build route suffix for title
-      const routeCount = isAdvanced ? (routeFilter.entries?.length ?? 0) : 0;
-      const routeSuffix = isAdvanced && routeCount > 0
-        ? ` · ${routeCount} ${routeCount === 1 ? "route" : "routes"}`
-        : route
-          ? ` · ${route}`
-          : "";
-
-      // Single stop
-      const stopId =
-        kmbQuery?.mode === "stop"
-          ? kmbQuery.stopId
-          : kmbDraftStopSelection?.type === "stop"
-            ? kmbDraftStopSelection.stopId
-            : null;
-
-      // Grouped stops
-      const stopIds =
-        kmbQuery?.mode === "stops"
-          ? kmbQuery.stopIds
-          : kmbDraftStopSelection?.type === "stops"
-            ? kmbDraftStopSelection.stopIds
-            : null;
-
-      // Contains query
-      const containsQuery =
-        kmbQuery?.mode === "contains"
-          ? kmbQuery.query.trim()
-          : kmbDraftStopSelection?.type === "contains"
-            ? kmbDraftStopSelection.query.trim()
-            : "";
-
-      if (stopId) {
-        // Single stop favorite
-        const stop = kmbStops.find((s) => s.stopId === stopId);
-        const fullName = stop ? pickKmbStopTitle(stop, lang) : "KMB";
-        const { name } = parseKmbStopName(fullName);
-        const title = `${name}${routeSuffix}`;
-
-        const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? "__all__");
-        item = {
-          id: `kmb:${stopId}:${idPart}:1`,
-          mode: "kmb",
-          title,
-          stopId,
-          routeFilterMode: routeFilterMode,
-          route,
-          serviceType: "1",
-          entries: entriesForSave,
-        };
-      } else if (stopIds && stopIds.length > 0) {
-        // Grouped stops favorite
-        const firstStop = kmbStops.find((s) => stopIds.includes(s.stopId));
-        const fullName = firstStop ? pickKmbStopTitle(firstStop, lang) : "Selected Stops";
-        const { name } = parseKmbStopName(fullName);
-        const title = `${name}${routeSuffix}`;
-
-        const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? "__all__");
-        item = {
-          id: `kmb:stops:${stopIds.join(",")}:${idPart}`,
-          mode: "kmb",
-          title,
-          stopIds,
-          routeFilterMode: routeFilterMode,
-          route,
-          entries: entriesForSave,
-        };
-      } else if (containsQuery.length >= 3) {
-        // Contains query favorite
-        const title = `Contains: ${containsQuery}${routeSuffix}`;
-
-        const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? "__all__");
-        item = {
-          id: `kmb:contains:${containsQuery}:${idPart}:1`,
-          mode: "kmb",
-          title,
-          query: containsQuery,
-          routeFilterMode: routeFilterMode,
-          route,
-          serviceType: "1",
-          entries: entriesForSave,
-        };
-      }
-    }
-
-    if (mode === "mtr" && mtrQuery.sta) {
-      const station = mtrStations.find((s) => s.sta === mtrQuery.sta);
-      const name = station ? (lang === "en" ? station.nameEn : station.nameTc) : "";
-      const title = station ? `${name} · ${station.lines.join("/")}/${station.sta}` : `MTR · ${mtrQuery.sta}`;
-      item = {
-        id: `mtr:${mtrQuery.sta}`,
-        mode: "mtr",
-        title,
-        line: station?.lines[0] ?? "",
-        sta: mtrQuery.sta,
-      };
-    }
-
-    if (mode === "lrt" && lrtQuery.stationId) {
-      const station = lrtStations.find((s) => s.stationId === lrtQuery.stationId);
-      const name = station ? (lang === "en" ? station.nameEn : station.nameZh) : "";
-      const title = station ? `${name} · ${station.stationId}` : `LRT · ${lrtQuery.stationId}`;
-      item = {
-        id: `lrt:${lrtQuery.stationId}`,
-        mode: "lrt",
-        title,
-        stationId: lrtQuery.stationId,
-      };
-    }
-
-    if (!item) return;
-    addFavorite(item);
-    addRecent(item);
-  };
+    inFlightRefreshRef.current = true;
+    refreshRef.current()
+      .catch(() => {
+        // ignore auto-refresh errors
+      })
+      .finally(() => {
+        inFlightRefreshRef.current = false;
+      });
+  });
 
   const onSelectFromLists = (item: FavoritesItem) => {
+    setSelectedItem(item);
     setMode(item.mode);
-
-    if (item.mode === "kmb") {
-      // Restore route filter mode and entries if present
-      if (item.routeFilterMode) {
-        setRouteFilterMode(item.routeFilterMode);
-      }
-
-      // Convert stored entries to RouteFilterEntry format (add id if missing)
-      const restoredEntries = (item.entries ?? []).map((e, idx) => ({
-        id: `restored-${idx}`,
-        variantKey: e.variantKey,
-      }));
-      
-      if ("stopId" in item) {
-        // Single stop
-        setKmbDraftStopSelection({ type: "stop", stopId: item.stopId });
-        const nextQuery: KmbQuery = {
-          mode: "stop",
-          stopId: item.stopId,
-          route: item.route,
-          serviceType: item.serviceType,
-        };
-        setKmbQuery(nextQuery);
-        setRouteFilter({
-          routes: item.route ?? "",
-          entries: restoredEntries,
-        });
-        setKmbEta(null);
-        void refreshKmbEta(nextQuery);
-        return;
-      }
-
-      if ("stopIds" in item) {
-        // Grouped stops
-        setKmbDraftStopSelection({ type: "stops", stopIds: item.stopIds });
-        const nextQuery: KmbQuery = {
-          mode: "stops",
-          stopIds: item.stopIds,
-          route: item.route,
-          serviceType: "1",
-        };
-        setKmbQuery(nextQuery);
-        setRouteFilter({
-          routes: item.route ?? "",
-          entries: restoredEntries,
-        });
-        setKmbEta(null);
-        void refreshKmbEta(nextQuery);
-        return;
-      }
-
-      if ("query" in item) {
-        // Contains query
-        setKmbDraftStopSelection({ type: "contains", query: item.query });
-        const nextQuery: KmbQuery = {
-          mode: "contains",
-          query: item.query,
-          route: item.route,
-          serviceType: item.serviceType,
-        };
-        setKmbQuery(nextQuery);
-        setRouteFilter({
-          routes: item.route ?? "",
-          entries: restoredEntries,
-        });
-        setKmbEta(null);
-        void refreshKmbEta(nextQuery);
-        return;
-      }
-
-      return;
-    }
-
-    if (item.mode === "mtr") {
-      setMtrQuery({ sta: item.sta });
-      return;
-    }
-
-    setLrtQuery({ stationId: item.stationId });
   };
 
-  const onRefresh = () => {
-    if (mode === "kmb") void refreshKmbEta(kmbQuery);
-    if (mode === "mtr") void refreshMtr();
-    if (mode === "lrt") void refreshLrt();
-  };
+  const heading = mode === "kmb" ? "KMB bus ETAs" : mode === "mtr" ? "MTR Next Train" : "Light Rail";
 
   return (
     <div className="relative min-h-dvh bg-gradient-to-b from-background via-background to-muted/30">
@@ -968,19 +118,12 @@ export default function Home() {
         <div className="flex flex-col gap-2">
           <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-                TimoETA
-              </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Clean, fast ETAs for Hong Kong transit.
-              </p>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">TimoETA</h1>
+              <p className="mt-1 text-sm text-muted-foreground">Clean, fast ETAs for Hong Kong transit.</p>
             </div>
 
             <div className="flex items-center gap-2">
-              <AutoRefreshMenu
-                valueSeconds={autoRefreshSeconds}
-                onChange={setAutoRefreshSeconds}
-              />
+              <AutoRefreshMenu valueSeconds={autoRefreshSeconds} onChange={setAutoRefreshSeconds} />
               <Button
                 variant="outline"
                 size="sm"
@@ -1013,132 +156,53 @@ export default function Home() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">{heading}</div>
-                      <div className="text-xs text-muted-foreground">
-                        Search and pin your go-to stops.
-                      </div>
+                      <div className="text-xs text-muted-foreground">Search and pin your go-to stops.</div>
                     </div>
-                    <LanguageToggle
-                      mode={mode}
-                      value={lang}
-                      onChange={setLang}
-                    />
+                    <LanguageToggle mode={mode} value={lang} onChange={setLang} />
                   </div>
 
                   <Separator />
 
                   {mode === "kmb" ? (
-                    <>
-                      <StopSearch
+                      <KmbPane
                         lang={lang}
-                        stops={kmbStops}
-                        value={kmbDraftStopSelection}
-                        onSelectStop={(stop) => {
-                          setKmbDraftStopSelection({ type: "stop", stopId: stop.stopId });
-                          addRecent({
-                            id: `kmb:${stop.stopId}:__stop__`,
-                            mode: "kmb",
-                            title: pickKmbStopTitle(stop, lang),
-                            stopId: stop.stopId,
-                          });
-                        }}
-                        onSelectStops={(stops) => {
-                          const stopIds = stops.map((s) => s.stopId);
-                          setKmbDraftStopSelection({ type: "stops", stopIds });
-                          // Use first stop's name for the recent entry
-                          if (stops.length > 0) {
-                            const firstStop = stops[0];
-                            const fullName = pickKmbStopTitle(firstStop, lang);
-                            const { name } = parseKmbStopName(fullName);
-                            addRecent({
-                              id: `kmb:${stopIds.join(",")}:__stops__`,
-                              mode: "kmb",
-                              title: name,
-                              stopId: stopIds[0], // Primary stop ID for compatibility
-                            });
-                          }
-                        }}
-                        onSelectContains={(query) => {
-                          setKmbDraftStopSelection({ type: "contains", query });
-                        }}
+                        routeFilterMode={routeFilterMode}
+                        onRouteFilterModeChange={setRouteFilterMode}
+                        onAddRecent={addRecent}
+                        onAddFavorite={addFavorite}
+                        canFavoriteRef={canFavoriteRef}
+                        selectedItem={selectedItem}
+                        onRegisterRefresh={onRegisterRefresh}
+                        onStopsChange={setKmbStops}
+                        onStateChange={setKmbPaneState}
                       />
-
-                        <RouteFilter
-                          mode={routeFilterMode}
-                          onModeChange={(nextMode) => {
-                            setRouteFilterMode(nextMode);
-                          }}
-                          value={routeFilter}
-                          options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
-                          onChange={(next) => {
-                            setRouteFilter(next);
-                          }}
-                        />
-
-
-
-                       {stopsError ? (
-                         <div className="rounded-2xl border bg-background/40 p-3 text-sm text-destructive">
-                           {stopsError}
-                         </div>
-                       ) : null}
-
-                       {routeStopsError ? (
-                         <div className="rounded-2xl border bg-background/40 p-3 text-sm text-destructive">
-                           {routeStopsError}
-                         </div>
-                       ) : null}
-
-
-                      <div className="flex items-center justify-between gap-2">
-                        <Badge variant="secondary" className="rounded-xl">
-                          {loadingStops || loadingRouteStops
-                            ? "Indexing data…"
-                            : `${kmbStops.length.toLocaleString()} stops · ${kmbRouteStops.length.toLocaleString()} route-stops`}
-                        </Badge>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="rounded-xl"
-                          onClick={onRefresh}
-                        >
-                          <RefreshCw className="mr-2 h-4 w-4" />
-                          Refresh
-                        </Button>
-                      </div>
-
-                    </>
                   ) : null}
 
-                  {mode === "mtr" ? (
-                    <MtrStationSearch
-                      lang={lang}
-                      stations={mtrStations}
-                      selectedSta={mtrQuery.sta}
-                      onSelect={(station) => setMtrQuery({ sta: station.sta })}
-                    />
-                  ) : null}
+                    {mode === "mtr" ? (
+                      <MtrPane
+                        lang={lang}
+                        stations={mtrStations}
+                        onAddRecent={addRecent}
+                        onAddFavorite={addFavorite}
+                        canFavoriteRef={canFavoriteRef}
+                        onRegisterRefresh={onRegisterRefresh}
+                        selectedItem={selectedItem}
+                        onStateChange={setMtrPaneState}
+                      />
+                    ) : null}
 
-                  {mode === "lrt" ? (
-                    <LrtStationSearch
-                      lang={lang}
-                      stations={lrtStations}
-                      selectedStationId={lrtQuery.stationId}
-                      onSelect={(station) => setLrtQuery({ stationId: station.stationId })}
-                    />
-                  ) : null}
-
-                  <Separator />
-
-                  <div className="flex items-center justify-between gap-2">
-                    <Button
-                      className={cn("rounded-xl", !canFavorite && "opacity-60")}
-                      disabled={!canFavorite}
-                      onClick={onAddFavorite}
-                    >
-                      <Heart className="mr-2 h-4 w-4" />
-                      Save
-                    </Button>
-                  </div>
+                    {mode === "lrt" ? (
+                      <LrtPane
+                        lang={lang}
+                        stations={lrtStations}
+                        onAddRecent={addRecent}
+                        onAddFavorite={addFavorite}
+                        canFavoriteRef={canFavoriteRef}
+                        onRegisterRefresh={onRegisterRefresh}
+                        selectedItem={selectedItem}
+                        onStateChange={setLrtPaneState}
+                      />
+                    ) : null}
                 </CardContent>
               </Card>
 
@@ -1147,41 +211,40 @@ export default function Home() {
 
             <div className="space-y-4">
               {mode === "kmb" ? (
-                  <KmbResults
-                    lang={lang}
-                    title={kmbResultsInfo.title}
-                    stopCode={kmbResultsInfo.code}
-                    routesFilter={routeFilter.routes ?? ""}
-                    eta={kmbEta ?? []}
-                    routeInfos={kmbRouteInfos}
-                    hasQuery={Boolean(kmbQuery)}
-                    onRefresh={() => void refreshKmbEta(kmbQuery)}
-                    loading={kmbEtaLoading}
-                    stops={kmbStops}
-                    multipleStops={kmbQuery?.mode === "stops" || kmbQuery?.mode === "contains"}
-                  />
+                <KmbResults
+                  lang={kmbPaneState?.lang ?? lang}
+                  title={kmbPaneState?.title ?? "KMB ETAs"}
+                  stopCode={kmbPaneState?.stopCode ?? null}
+                  routesFilter={kmbPaneState?.routeFilter.routes ?? ""}
+                  eta={kmbPaneState?.eta ?? []}
+                  routeInfos={kmbPaneState?.routeInfos ?? {}}
+                  hasQuery={kmbPaneState?.hasQuery ?? false}
+                  onRefresh={() => void kmbPaneState?.refresh()}
+                  loading={kmbPaneState?.loading}
+                  stops={kmbPaneState?.stops ?? undefined}
+                  multipleStops={kmbPaneState?.multipleStops}
+                />
               ) : null}
 
               {mode === "mtr" ? (
                 <MtrResults
-                  title={mtrResultsTitle}
-                  lang={lang}
-                  schedule={mtrSchedule}
-                  onRefresh={refreshMtr}
-                  loading={mtrLoading}
+                  title={mtrPaneState?.title ?? "MTR"}
+                  lang={mtrPaneState?.lang ?? lang}
+                  schedule={mtrPaneState?.schedule ?? null}
+                  onRefresh={mtrPaneState?.onRefresh ?? (() => {})}
+                  loading={mtrPaneState?.loading}
                 />
               ) : null}
 
               {mode === "lrt" ? (
                 <LrtResults
-                  title={lrtResultsTitle}
-                  lang={lang}
-                  schedule={lrtSchedule}
-                  onRefresh={refreshLrt}
-                  loading={lrtLoading}
+                  title={lrtPaneState?.title ?? "Light Rail"}
+                  lang={lrtPaneState?.lang ?? lang}
+                  schedule={lrtPaneState?.schedule ?? null}
+                  onRefresh={lrtPaneState?.onRefresh ?? (() => {})}
+                  loading={lrtPaneState?.loading}
                 />
               ) : null}
-
             </div>
           </div>
         </div>

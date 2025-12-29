@@ -269,10 +269,11 @@ export function StopSearch({
       return baseName;
     }
     if (value.type === "contains") {
-      return `Contains: ${value.query}`;
+      return (lang === "en" ? "Contains: " : lang === "sc" ? "包含: " : "包含: ") + value.query;
     }
     return null;
   }, [value, stops, lang]);
+
 
   // Use Fuse.js to search individual stops, then group results
   const fuse = React.useMemo(() => {
@@ -326,20 +327,20 @@ export function StopSearch({
         >
           <Search className="mr-2 h-4 w-4 shrink-0" />
           <span className="truncate">
-            {selectedLabel || "Search stop name..."}
+            {selectedLabel || (lang === "en" ? "Search stop name..." : lang === "sc" ? "搜索车站..." : "搜尋車站...")}
           </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Type a stop name..."
+            placeholder={lang === "en" ? "Type a stop name..." : lang === "sc" ? "输入车站名称..." : "輸入車站名稱..."}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList className={cn(isSearching && "opacity-60 transition-opacity")}>
-            <CommandEmpty>No results.</CommandEmpty>
-            <CommandGroup heading="Stops">
+            <CommandEmpty>{lang === "en" ? "No results." : "無結果。"}</CommandEmpty>
+            <CommandGroup heading={lang === "en" ? "Stops" : lang === "sc" ? "车站" : "車站"}>
               {canSearchContains ? (
                 <CommandItem
                   key={`contains:${trimmedQuery}`}
@@ -354,17 +355,28 @@ export function StopSearch({
                     <Search className="h-4 w-4 text-muted-foreground" />
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate font-medium">Contains: {trimmedQuery}</div>
+                    <div className="truncate font-medium">
+                      {(lang === "en" ? "Contains: " : lang === "sc" ? "包含: " : "包含: ") + trimmedQuery}
+                    </div>
                     <div className="truncate text-xs text-muted-foreground">
-                      Search all stops whose name contains this text
+                      {lang === "en"
+                        ? "Search all stops whose name contains this text"
+                        : lang === "sc"
+                          ? "搜索所有名称包含此文本的车站"
+                          : "搜尋所有名稱包含此文本的車站"}
                     </div>
                   </div>
                 </CommandItem>
               ) : trimmedQuery.length ? (
                 <div className="px-2 py-1 text-xs text-muted-foreground">
-                  Type 3+ characters for &quot;contains&quot; search.
+                  {lang === "en"
+                    ? "Type 3+ characters for \"contains\" search."
+                    : lang === "sc"
+                      ? "输入 3 个以上字符以进行“包含”搜索。"
+                      : "輸入 3 個以上字符以進行「包含」搜尋。"}
                 </div>
               ) : null}
+
 
               {groupedResults.map((group) => (
                 <CommandItem

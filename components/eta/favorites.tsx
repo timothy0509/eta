@@ -87,7 +87,9 @@ function FavoriteItemDisplay({
         let suffix = "";
         if (item.routeFilterMode === "advanced" && item.entries?.length) {
           const count = item.entries.length;
-          suffix = ` · ${count} ${count === 1 ? "route" : "routes"}`;
+          suffix = ` · ${count} ${
+            lang === "en" ? (count === 1 ? "route" : "routes") : "條路線"
+          }`;
         } else if (item.route) {
           suffix = ` · ${item.route}`;
         }
@@ -107,7 +109,9 @@ function FavoriteItemDisplay({
         let suffix = "";
         if (item.routeFilterMode === "advanced" && item.entries?.length) {
           const count = item.entries.length;
-          suffix = ` · ${count} ${count === 1 ? "route" : "routes"}`;
+          suffix = ` · ${count} ${
+            lang === "en" ? (count === 1 ? "route" : "routes") : "條路線"
+          }`;
         } else if (item.route) {
           suffix = ` · ${item.route}`;
         }
@@ -115,6 +119,7 @@ function FavoriteItemDisplay({
         return <span className="truncate">{name}{suffix}</span>;
       }
     }
+
   }
 
   // Fallback to stored title
@@ -127,17 +132,27 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   const removeFavorite = useAppStore((s) => s.removeFavorite);
   const clearRecents = useAppStore((s) => s.clearRecents);
 
+  const t = {
+    saved: lang === "en" ? "Saved" : lang === "sc" ? "已储存" : "已儲存",
+    favorites: lang === "en" ? "Favorites" : lang === "sc" ? "收藏" : "收藏",
+    recent: lang === "en" ? "Recent" : lang === "sc" ? "最近" : "最近",
+    noFavorites: lang === "en" ? "No favorites yet." : lang === "sc" ? "暂无收藏。" : "暫無收藏。",
+    tip: lang === "en" ? "Tip: results can auto-refresh while you wait." : lang === "sc" ? "提示：结果可在等待时自动整理。" : "提示：結果可在等待時自動整理。",
+    clear: lang === "en" ? "Clear" : lang === "sc" ? "清除" : "清除",
+    noRecent: lang === "en" ? "No recent searches." : lang === "sc" ? "暂无搜索记录。" : "暫無搜尋記錄。",
+  };
+
   return (
     <Card className="rounded-3xl">
       <Tabs defaultValue="favorites" className="gap-0">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-base">Saved</CardTitle>
+          <CardTitle className="text-base">{t.saved}</CardTitle>
           <TabsList withIndicator>
             <TabsTrigger value="favorites" unstyledActive className="gap-2">
-              <Heart className="h-4 w-4" /> Favorites
+              <Heart className="h-4 w-4" /> {t.favorites}
             </TabsTrigger>
             <TabsTrigger value="recent" unstyledActive className="gap-2">
-              <History className="h-4 w-4" /> Recent
+              <History className="h-4 w-4" /> {t.recent}
             </TabsTrigger>
           </TabsList>
         </CardHeader>
@@ -146,7 +161,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
           <TabsContent value="favorites" className="mt-0 p-6 pt-0">
             <div className="space-y-2">
               {favorites.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No favorites yet.</div>
+                <div className="text-sm text-muted-foreground">{t.noFavorites}</div>
               ) : (
                 favorites.map((f) => (
                   <div
@@ -182,7 +197,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-xs text-muted-foreground">
-                  Tip: results can auto-refresh while you wait.
+                  {t.tip}
                 </div>
                 <Button
                   variant="ghost"
@@ -191,12 +206,12 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                   className="rounded-xl"
                   disabled={!recents.length}
                 >
-                  Clear
+                  {t.clear}
                 </Button>
               </div>
 
               {recents.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No recent searches.</div>
+                <div className="text-sm text-muted-foreground">{t.noRecent}</div>
               ) : (
                 recents.map((r) => (
                   <button
@@ -222,4 +237,5 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
       </Tabs>
     </Card>
   );
+
 }

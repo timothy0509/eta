@@ -100,8 +100,13 @@ function formatMinutes(ttnt: unknown, lang: UiLanguage) {
   const minutes = Number(raw);
   if (Number.isNaN(minutes)) return raw;
   if (minutes <= 0) return lang === "en" ? "Arriving" : "即將到達";
-  return lang === "en" ? `${minutes} min` : `${minutes} 分`;
+  return lang === "en"
+    ? `${minutes} min`
+    : lang === "sc"
+      ? `${minutes} 分`
+      : `${minutes} 分`;
 }
+
 
 function formatPlatform(plat: unknown) {
   const raw = String(plat ?? "").trim();
@@ -110,6 +115,17 @@ function formatPlatform(plat: unknown) {
 }
 
 export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props) {
+  const t = {
+    nextTrain: lang === "en" ? "Next Train" : lang === "sc" ? "下班车" : "下班車",
+    refresh: lang === "en" ? "Refresh" : "重新整理",
+    selectStation: lang === "en" ? "Select a station to view trains." : "選擇車站以查看班次",
+    serviceMessage: lang === "en" ? "Service message" : lang === "sc" ? "服务信息" : "服務信息",
+    noSchedule: lang === "en" ? "No schedule available." : lang === "sc" ? "暂无班次信息。" : "暫無班次信息。",
+    viewDetails: lang === "en" ? "View details" : lang === "sc" ? "查看详情" : "查看詳情",
+    up: lang === "en" ? "UP" : lang === "sc" ? "上行" : "上行",
+    down: lang === "en" ? "DOWN" : lang === "sc" ? "下行" : "下行",
+  };
+
   return (
     <Card className="rounded-3xl border bg-card/60 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between gap-6">
@@ -117,7 +133,7 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
           <CardTitle className="text-base">{title}</CardTitle>
           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
             <TrainFront className="h-3.5 w-3.5" />
-            Next Train
+            {t.nextTrain}
           </div>
         </div>
         <Button
@@ -128,20 +144,20 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
           disabled={loading}
         >
           <RefreshCw className={cn("mr-2 h-4 w-4", loading && "ui-spin")} />
-          Refresh
+          {t.refresh}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
         {!schedule ? (
           <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
-            Select a station to view trains.
+            {t.selectStation}
           </div>
         ) : schedule.status === 0 ? (
           <div className="ui-animate-in rounded-2xl border bg-background/50 p-4">
-            <div className="text-sm font-medium">Service message</div>
+            <div className="text-sm font-medium">{t.serviceMessage}</div>
             <div className="mt-1 text-sm text-muted-foreground">
-              {schedule.message ?? "No schedule available."}
+              {schedule.message ?? t.noSchedule}
             </div>
             {schedule.url ? (
               <a
@@ -150,7 +166,7 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
                 target="_blank"
                 rel="noreferrer"
               >
-                View details <ExternalLink className="h-4 w-4" />
+                {t.viewDetails} <ExternalLink className="h-4 w-4" />
               </a>
             ) : null}
           </div>
@@ -192,8 +208,9 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
                     return (
                       <div key={dir} className="rounded-2xl border bg-card/30 p-3">
                       <div className="text-xs font-medium text-muted-foreground">
-                        {dir}
+                        {dir === "UP" ? t.up : t.down}
                       </div>
+
                       <div className="mt-2 space-y-2">
                         {trains.length === 0 ? (
                           <div className="text-sm text-muted-foreground">—</div>

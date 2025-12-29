@@ -19,8 +19,10 @@ function formatTrainLength(length: number, lang: UiLanguage) {
 
 function formatArrivalDeparture(code: string, lang: UiLanguage) {
   if (lang === "en") return code === "A" ? "Arriving" : "Departing";
+  if (lang === "sc") return code === "A" ? "到达" : "离开";
   return code === "A" ? "到達" : "離開";
 }
+
 
 type Props = {
   title: string;
@@ -31,6 +33,9 @@ type Props = {
 };
 
 export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props) {
+  const t = {
+    systemTime: lang === "en" ? "System time" : lang === "sc" ? "系统时间" : "系統時間",
+  };
   return (
     <Card className="rounded-3xl border bg-card/60 shadow-sm">
       <CardHeader className="flex flex-row items-center justify-between gap-6">
@@ -38,7 +43,7 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
           <CardTitle className="text-base">{title}</CardTitle>
           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
             <TramFront className="h-3.5 w-3.5" />
-            {lang === "en" ? "Light Rail" : "輕鐵"}
+            {lang === "en" ? "Light Rail" : lang === "sc" ? "轻铁" : "輕鐵"}
           </div>
         </div>
         <Button
@@ -61,9 +66,10 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
         ) : (
           <>
             <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-              <span>System time</span>
+              <span>{t.systemTime}</span>
               <span>{schedule.system_time ?? ""}</span>
             </div>
+
             <div className="space-y-3">
               {(schedule.platform_list ?? []).map((p, idx) => {
                 const staggerClass =
@@ -85,12 +91,18 @@ export function LrtResults({ title, lang, schedule, onRefresh, loading }: Props)
                   >
                   <div className="flex items-center justify-between gap-2">
                     <div className="text-sm font-medium">
-                      {lang === "en" ? `Platform ${p.platform_id}` : `${p.platform_id}號月台`}
+                      {lang === "en"
+                        ? `Platform ${p.platform_id}`
+                        : lang === "sc"
+                          ? `${p.platform_id}号月台`
+                          : `${p.platform_id}號月台`}
                     </div>
                     <Badge variant="secondary" className="rounded-xl">
-                      {(p.route_list ?? []).length} {lang === "en" ? "routes" : "條路線"}
+                      {(p.route_list ?? []).length}{" "}
+                      {lang === "en" ? "routes" : lang === "sc" ? "条路线" : "條路線"}
                     </Badge>
                   </div>
+
 
                   <div className="mt-3 grid grid-cols-1 gap-2 lg:grid-cols-2">
                     {(p.route_list ?? []).map((r, idx) => (

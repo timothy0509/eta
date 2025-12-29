@@ -14,7 +14,8 @@ type Props = {
   onChange: (value: UiLanguage) => void;
 };
 
-export function LanguageToggle({ mode, value, onChange }: Props) {
+export function LanguageToggle({ mode, value: lang, onChange }: Props) {
+
   const supported = React.useMemo(
     () => ({
       en: isLanguageSupported(mode, "en"),
@@ -28,8 +29,9 @@ export function LanguageToggle({ mode, value, onChange }: Props) {
     <div className="flex items-center gap-2">
       <ToggleGroup
         type="single"
-        value={value}
+        value={lang}
         onValueChange={(nextValue) => {
+
           if (!nextValue) return;
           onChange(nextValue as UiLanguage);
         }}
@@ -55,9 +57,14 @@ export function LanguageToggle({ mode, value, onChange }: Props) {
           </TooltipTrigger>
           {!supported.sc ? (
             <TooltipContent>
-              API doesn’t support Simplified for this mode
+              {lang === "en"
+                ? "API doesn’t support Simplified for this mode"
+                : lang === "sc"
+                  ? "此模式不支持简体中文"
+                  : "此模式不支援簡體中文"}
             </TooltipContent>
           ) : null}
+
         </Tooltip>
       </ToggleGroup>
     </div>

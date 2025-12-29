@@ -108,7 +108,41 @@ export default function Home() {
     setMode(item.mode);
   };
 
-  const heading = mode === "kmb" ? "KMB bus ETAs" : mode === "mtr" ? "MTR Next Train" : "Light Rail";
+  const heading =
+    mode === "kmb"
+      ? lang === "en"
+        ? "KMB bus ETAs"
+        : lang === "sc"
+          ? "九巴到站预报"
+          : "九巴到站預報"
+      : mode === "mtr"
+        ? lang === "en"
+          ? "MTR Next Train"
+          : lang === "sc"
+            ? "港铁下班车"
+            : "港鐵下班車"
+        : lang === "en"
+          ? "Light Rail"
+          : "輕鐵";
+
+  const t = {
+    desc:
+      lang === "en"
+        ? "Clean, fast ETAs for Hong Kong transit."
+        : lang === "sc"
+          ? "简洁、快速的香港交通到站预报。"
+          : "簡潔、快速的香港交通到站預報。",
+    theme: lang === "en" ? "Theme" : lang === "sc" ? "主题" : "主題",
+    searchPin:
+      lang === "en"
+        ? "Search and pin your go-to stops."
+        : lang === "sc"
+          ? "搜索并固定您的常用车站。"
+          : "搜索並固定您的常用車站。",
+    kmbTitle: lang === "en" ? "KMB ETAs" : lang === "sc" ? "九巴到站预报" : "九巴到站預報",
+    mtrTitle: lang === "en" ? "MTR" : lang === "sc" ? "港铁" : "港鐵",
+    lrtTitle: lang === "en" ? "Light Rail" : "輕鐵",
+  };
 
   return (
     <div className="relative min-h-dvh bg-gradient-to-b from-background via-background to-muted/30">
@@ -119,11 +153,11 @@ export default function Home() {
           <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">TimoETA</h1>
-              <p className="mt-1 text-sm text-muted-foreground">Clean, fast ETAs for Hong Kong transit.</p>
+              <p className="mt-1 text-sm text-muted-foreground">{t.desc}</p>
             </div>
 
             <div className="flex items-center gap-2">
-              <AutoRefreshMenu valueSeconds={autoRefreshSeconds} onChange={setAutoRefreshSeconds} />
+              <AutoRefreshMenu lang={lang} valueSeconds={autoRefreshSeconds} onChange={setAutoRefreshSeconds} />
               <Button
                 variant="outline"
                 size="sm"
@@ -142,7 +176,7 @@ export default function Home() {
                 ) : (
                   <span className="mr-2 inline-block h-4 w-4" aria-hidden />
                 )}
-                Theme
+                {t.theme}
               </Button>
             </div>
           </div>
@@ -151,12 +185,12 @@ export default function Home() {
             <div className="space-y-4">
               <Card className="rounded-3xl border bg-card/60 p-0 shadow-sm">
                 <CardContent className="space-y-4 p-5">
-                  <ModeTabs value={mode} onChange={setMode} />
+                  <ModeTabs lang={lang} value={mode} onChange={setMode} />
 
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">{heading}</div>
-                      <div className="text-xs text-muted-foreground">Search and pin your go-to stops.</div>
+                      <div className="text-xs text-muted-foreground">{t.searchPin}</div>
                     </div>
                     <LanguageToggle mode={mode} value={lang} onChange={setLang} />
                   </div>
@@ -164,45 +198,45 @@ export default function Home() {
                   <Separator />
 
                   {mode === "kmb" ? (
-                      <KmbPane
-                        lang={lang}
-                        routeFilterMode={routeFilterMode}
-                        onRouteFilterModeChange={setRouteFilterMode}
-                        onAddRecent={addRecent}
-                        onAddFavorite={addFavorite}
-                        canFavoriteRef={canFavoriteRef}
-                        selectedItem={selectedItem}
-                        onRegisterRefresh={onRegisterRefresh}
-                        onStopsChange={setKmbStops}
-                        onStateChange={setKmbPaneState}
-                      />
+                    <KmbPane
+                      lang={lang}
+                      routeFilterMode={routeFilterMode}
+                      onRouteFilterModeChange={setRouteFilterMode}
+                      onAddRecent={addRecent}
+                      onAddFavorite={addFavorite}
+                      canFavoriteRef={canFavoriteRef}
+                      selectedItem={selectedItem}
+                      onRegisterRefresh={onRegisterRefresh}
+                      onStopsChange={setKmbStops}
+                      onStateChange={setKmbPaneState}
+                    />
                   ) : null}
 
-                    {mode === "mtr" ? (
-                      <MtrPane
-                        lang={lang}
-                        stations={mtrStations}
-                        onAddRecent={addRecent}
-                        onAddFavorite={addFavorite}
-                        canFavoriteRef={canFavoriteRef}
-                        onRegisterRefresh={onRegisterRefresh}
-                        selectedItem={selectedItem}
-                        onStateChange={setMtrPaneState}
-                      />
-                    ) : null}
+                  {mode === "mtr" ? (
+                    <MtrPane
+                      lang={lang}
+                      stations={mtrStations}
+                      onAddRecent={addRecent}
+                      onAddFavorite={addFavorite}
+                      canFavoriteRef={canFavoriteRef}
+                      onRegisterRefresh={onRegisterRefresh}
+                      selectedItem={selectedItem}
+                      onStateChange={setMtrPaneState}
+                    />
+                  ) : null}
 
-                    {mode === "lrt" ? (
-                      <LrtPane
-                        lang={lang}
-                        stations={lrtStations}
-                        onAddRecent={addRecent}
-                        onAddFavorite={addFavorite}
-                        canFavoriteRef={canFavoriteRef}
-                        onRegisterRefresh={onRegisterRefresh}
-                        selectedItem={selectedItem}
-                        onStateChange={setLrtPaneState}
-                      />
-                    ) : null}
+                  {mode === "lrt" ? (
+                    <LrtPane
+                      lang={lang}
+                      stations={lrtStations}
+                      onAddRecent={addRecent}
+                      onAddFavorite={addFavorite}
+                      canFavoriteRef={canFavoriteRef}
+                      onRegisterRefresh={onRegisterRefresh}
+                      selectedItem={selectedItem}
+                      onStateChange={setLrtPaneState}
+                    />
+                  ) : null}
                 </CardContent>
               </Card>
 
@@ -213,7 +247,7 @@ export default function Home() {
               {mode === "kmb" ? (
                 <KmbResults
                   lang={kmbPaneState?.lang ?? lang}
-                  title={kmbPaneState?.title ?? "KMB ETAs"}
+                  title={kmbPaneState?.title ?? t.kmbTitle}
                   stopCode={kmbPaneState?.stopCode ?? null}
                   routesFilter={kmbPaneState?.routeFilter.routes ?? ""}
                   eta={kmbPaneState?.eta ?? []}
@@ -228,7 +262,7 @@ export default function Home() {
 
               {mode === "mtr" ? (
                 <MtrResults
-                  title={mtrPaneState?.title ?? "MTR"}
+                  title={mtrPaneState?.title ?? t.mtrTitle}
                   lang={mtrPaneState?.lang ?? lang}
                   schedule={mtrPaneState?.schedule ?? null}
                   onRefresh={mtrPaneState?.onRefresh ?? (() => {})}
@@ -238,7 +272,7 @@ export default function Home() {
 
               {mode === "lrt" ? (
                 <LrtResults
-                  title={lrtPaneState?.title ?? "Light Rail"}
+                  title={lrtPaneState?.title ?? t.lrtTitle}
                   lang={lrtPaneState?.lang ?? lang}
                   schedule={lrtPaneState?.schedule ?? null}
                   onRefresh={lrtPaneState?.onRefresh ?? (() => {})}

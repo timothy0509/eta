@@ -45,13 +45,16 @@ function formatRouteVariantLabel(
 
 function formatArrivingText(lang: UiLanguage) {
   if (lang === "en") return "Now";
+  if (lang === "sc") return "即将到达";
   return "即將到達";
 }
 
 function formatNoScheduledText(lang: UiLanguage) {
   if (lang === "en") return "No scheduled buses";
+  if (lang === "sc") return "暂时没有预定班次";
   return "暫時沒有預定班次";
 }
+
 
 function formatEtaLabel(seq: number, lang: UiLanguage) {
   if (lang === "en") {
@@ -60,8 +63,9 @@ function formatEtaLabel(seq: number, lang: UiLanguage) {
     if (seq === 3) return "3rd";
     return `${seq}th`;
   }
-  return `第${seq}班`;
+  return `第${seq}${lang === "sc" ? "班" : "班"}`;
 }
+
 
 function hasValidEta(items: KmbEtaEntry[]): boolean {
   return items.some((entry) => entry.eta && !isNaN(Date.parse(entry.eta)));
@@ -189,8 +193,16 @@ export function KmbResults({
           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
             <Clock className="h-3.5 w-3.5" />
             {routesFilter?.trim()
-              ? (lang === "en" ? `Filtered: ${routesFilter}` : `篩選: ${routesFilter}`)
-              : (lang === "en" ? "All routes at this stop" : "此站所有路線")}
+              ? lang === "en"
+                ? `Filtered: ${routesFilter}`
+                : lang === "sc"
+                  ? `筛选: ${routesFilter}`
+                  : `篩選: ${routesFilter}`
+              : lang === "en"
+                ? "All routes at this stop"
+                : lang === "sc"
+                  ? "此站所有路线"
+                  : "此站所有路線"}
           </div>
         </div>
         <Button
@@ -201,15 +213,20 @@ export function KmbResults({
           disabled={loading}
         >
           <RefreshCw className={cn("mr-2 h-4 w-4", loading && "ui-spin")} />
-          {lang === "en" ? "Refresh" : "重新整理"}
+          {lang === "en" ? "Refresh" : lang === "sc" ? "重新整理" : "重新整理"}
         </Button>
       </CardHeader>
       <CardContent className="space-y-5">
         {!hasQuery ? (
           <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
-            {lang === "en" ? "Select a stop to load ETAs." : "選擇車站以載入到站時間"}
+            {lang === "en"
+              ? "Select a stop to load ETAs."
+              : lang === "sc"
+                ? "选择车站以载入到站时间"
+                : "選擇車站以載入到站時間"}
           </div>
+
         ) : grouped.length === 0 ? (
           <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
@@ -302,8 +319,11 @@ export function KmbResults({
                             ? "—"
                             : minutes <= 0
                               ? formatArrivingText(lang)
-                              : `${minutes} min`}
+                              : lang === "en"
+                                ? `${minutes} min`
+                                : `${minutes} 分`}
                         </div>
+
                         {remark ? (
                           <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                             {remark}

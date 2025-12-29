@@ -90,19 +90,21 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
           )}
         >
           <Search className="mr-2 h-4 w-4" />
-          {selectedStation ? formatStationName(selectedStation, lang) : "Search station name…"}
+          {selectedStation ? formatStationName(selectedStation, lang) : (
+            lang === "en" ? "Search station name…" : lang === "sc" ? "搜索车站…" : "搜尋車站…"
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Type a station name…"
+            placeholder={lang === "en" ? "Type a station name…" : lang === "sc" ? "输入车站名称…" : "輸入車站名稱…"}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
-            <CommandEmpty>No results.</CommandEmpty>
-            <CommandGroup heading="Stations">
+            <CommandEmpty>{lang === "en" ? "No results." : "無結果。"}</CommandEmpty>
+            <CommandGroup heading={lang === "en" ? "Stations" : lang === "sc" ? "车站" : "車站"}>
               {(results.length ? results : stations.slice(0, 12)).map((station) => (
                 <CommandItem
                   key={station.labelId}
@@ -122,8 +124,8 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
                       {formatStationSecondary(station, lang)}
-                      {` · Lines: ${station.lines.join("/")}`}
-                      {showStationCode ? ` · Code: ${station.sta}` : null}
+                      {` · ${lang === "en" ? "Lines" : lang === "sc" ? "线路" : "路線"}: ${station.lines.join("/")}`}
+                      {showStationCode ? ` · ${lang === "en" ? "Code" : lang === "sc" ? "代号" : "代號"}: ${station.sta}` : null}
                     </div>
                   </div>
                 </CommandItem>
@@ -132,6 +134,7 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
           </CommandList>
         </Command>
       </PopoverContent>
+
     </Popover>
   );
 }

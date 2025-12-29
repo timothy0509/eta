@@ -3,24 +3,37 @@
 import { Bus, TrainFront, TramFront } from "lucide-react";
 
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { TransportMode } from "@/lib/eta/types";
+import type { TransportMode, UiLanguage } from "@/lib/eta/types";
 
 const MODES: Array<{
   mode: TransportMode;
-  label: string;
+  labels: Record<UiLanguage, string>;
   icon: React.ComponentType<{ className?: string }>;
 }> = [
-  { mode: "kmb", label: "KMB Bus", icon: Bus },
-  { mode: "mtr", label: "MTR", icon: TrainFront },
-  { mode: "lrt", label: "Light Rail", icon: TramFront },
+  {
+    mode: "kmb",
+    labels: { en: "KMB Bus", tc: "九巴", sc: "九巴" },
+    icon: Bus,
+  },
+  {
+    mode: "mtr",
+    labels: { en: "MTR", tc: "港鐵", sc: "港铁" },
+    icon: TrainFront,
+  },
+  {
+    mode: "lrt",
+    labels: { en: "Light Rail", tc: "輕鐵", sc: "轻铁" },
+    icon: TramFront,
+  },
 ];
 
 type Props = {
+  lang: UiLanguage;
   value: TransportMode;
   onChange: (mode: TransportMode) => void;
 };
 
-export function ModeTabs({ value, onChange }: Props) {
+export function ModeTabs({ lang, value, onChange }: Props) {
   return (
     <Tabs value={value} onValueChange={(nextValue) => onChange(nextValue as TransportMode)}>
       <TabsList
@@ -30,6 +43,7 @@ export function ModeTabs({ value, onChange }: Props) {
       >
         {MODES.map((m) => {
           const Icon = m.icon;
+          const label = m.labels[lang];
           return (
             <TabsTrigger
               key={m.mode}
@@ -38,7 +52,7 @@ export function ModeTabs({ value, onChange }: Props) {
               className="gap-2 rounded-xl"
             >
               <Icon className="h-4 w-4" />
-              <span className="hidden sm:inline">{m.label}</span>
+              <span className="hidden sm:inline">{label}</span>
               <span className="sm:hidden">{m.mode.toUpperCase()}</span>
             </TabsTrigger>
           );
@@ -47,3 +61,4 @@ export function ModeTabs({ value, onChange }: Props) {
     </Tabs>
   );
 }
+

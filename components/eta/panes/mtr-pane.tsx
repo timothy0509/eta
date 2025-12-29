@@ -110,9 +110,10 @@ export function MtrPane({
           onClick={() => void onSave()}
           disabled={!sta}
         >
-          Save
+          {lang === "en" ? "Save" : "儲存"}
         </button>
       </div>
+
     </div>
   );
 }

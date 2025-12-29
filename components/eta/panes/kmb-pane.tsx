@@ -660,10 +660,13 @@ export function KmbPane({
     const routeCount = isAdvanced ? (routeFilter.entries?.length ?? 0) : 0;
     const routeSuffix =
       isAdvanced && routeCount > 0
-        ? ` · ${routeCount} ${routeCount === 1 ? "route" : "routes"}`
+        ? ` · ${routeCount} ${
+            lang === "en" ? (routeCount === 1 ? "route" : "routes") : "條路線"
+          }`
         : route
           ? ` · ${route}`
           : "";
+
 
     const stopId =
       kmbQuery?.mode === "stop"
@@ -811,12 +814,14 @@ export function KmbPane({
       />
 
       <RouteFilter
+        lang={lang}
         mode={routeFilterMode}
         onModeChange={onRouteFilterModeChange}
         value={routeFilter}
         options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
         onChange={(next) => setRouteFilter(next)}
       />
+
 
       {stopsError ? (
         <div className="rounded-2xl border bg-background/40 p-3 text-sm text-destructive">
@@ -833,8 +838,16 @@ export function KmbPane({
       <div className="flex items-center justify-between gap-2">
         <Badge variant="secondary" className="rounded-xl">
           {loadingStops || loadingRouteStops
-            ? "Indexing data…"
-            : `${kmbStops.length.toLocaleString()} stops · ${kmbRouteStops.length.toLocaleString()} route-stops`}
+            ? lang === "en"
+              ? "Indexing data…"
+              : lang === "sc"
+                ? "正在索引数据…"
+                : "正在索引數據…"
+            : `${kmbStops.length.toLocaleString()} ${
+                lang === "en" ? "stops" : "個車站"
+              } · ${kmbRouteStops.length.toLocaleString()} ${
+                lang === "en" ? "route-stops" : "個路線車站"
+              }`}
         </Badge>
         <Button
           size="sm"
@@ -843,7 +856,7 @@ export function KmbPane({
           onClick={() => void refreshKmbEta(kmbQuery)}
         >
           <RefreshCw className={cn("mr-2 h-4 w-4", kmbEtaLoading && "ui-spin")} />
-          Refresh
+          {lang === "en" ? "Refresh" : "重新整理"}
         </Button>
       </div>
 
@@ -855,9 +868,10 @@ export function KmbPane({
           disabled={!canFavorite}
           onClick={onSave}
         >
-          Save
+          {lang === "en" ? "Save" : "儲存"}
         </Button>
       </div>
+
 
     </div>
   );

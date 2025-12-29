@@ -110,9 +110,10 @@ export function LrtPane({
           onClick={() => void onSave()}
           disabled={!stationId}
         >
-          Save
+          {lang === "en" ? "Save" : "儲存"}
         </button>
       </div>
+
     </div>
   );
 }

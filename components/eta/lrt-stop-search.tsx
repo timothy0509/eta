@@ -96,19 +96,21 @@ export function LrtStationSearch({
           )}
         >
           <Search className="mr-2 h-4 w-4" />
-          {selected ? formatStationName(selected, lang) : "Search LRT stop…"}
+          {selected ? formatStationName(selected, lang) : (
+            lang === "en" ? "Search LRT stop…" : lang === "sc" ? "搜索轻铁站…" : "搜尋輕鐵站…"
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder="Type a stop name…"
+            placeholder={lang === "en" ? "Type a stop name…" : lang === "sc" ? "输入车站名称…" : "輸入車站名稱…"}
             value={query}
             onValueChange={setQuery}
           />
           <CommandList>
-            <CommandEmpty>No results.</CommandEmpty>
-            <CommandGroup heading="Stops">
+            <CommandEmpty>{lang === "en" ? "No results." : "無結果。"}</CommandEmpty>
+            <CommandGroup heading={lang === "en" ? "Stops" : "車站"}>
               {(results.length ? results : stations.slice(0, 12)).map((station) => (
                 <CommandItem
                   key={station.stationId}
@@ -137,6 +139,7 @@ export function LrtStationSearch({
           </CommandList>
         </Command>
       </PopoverContent>
+
     </Popover>
   );
 }

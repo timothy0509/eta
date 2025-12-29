@@ -17,6 +17,7 @@ import { LrtResults } from "@/components/eta/results-lrt";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { LRT_STATIONS } from "@/lib/data/lrt-stations";
 import { MTR_STATIONS } from "@/lib/data/mtr-stations";
 import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } from "@/lib/eta/types";
@@ -36,6 +37,9 @@ export default function Home() {
 
   const autoRefreshSeconds = useAppStore((s) => s.autoRefreshSeconds);
   const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds);
+
+  const savedOpen = useAppStore((s) => s.savedOpen ?? true);
+  const setSavedOpen = useAppStore((s) => s.setSavedOpen);
 
   const addFavorite = useAppStore((s) => s.addFavorite);
   const addRecent = useAppStore((s) => s.addRecent);
@@ -106,6 +110,7 @@ export default function Home() {
   const onSelectFromLists = (item: FavoritesItem) => {
     setSelectedItem(item);
     setMode(item.mode);
+    setSavedOpen(false);
   };
 
   const heading =
@@ -150,36 +155,72 @@ export default function Home() {
 
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="flex flex-col gap-2">
-          <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">TimoETA</h1>
-              <p className="mt-1 text-sm text-muted-foreground">{t.desc}</p>
+            <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">TimoETA</h1>
+                <p className="mt-1 text-sm text-muted-foreground">{t.desc}</p>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl"
+                  onClick={() => setSavedOpen(!savedOpen)}
+                >
+                  {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
+                </Button>
+                <AutoRefreshMenu lang={lang} valueSeconds={autoRefreshSeconds} onChange={setAutoRefreshSeconds} />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="rounded-xl"
+                  onClick={() => {
+                    const actual = resolvedTheme ?? theme;
+                    setTheme(actual === "dark" ? "light" : "dark");
+                  }}
+                >
+                  {themeMounted ? (
+                    (resolvedTheme ?? theme) === "dark" ? (
+                      <Sun className="mr-2 h-4 w-4" />
+                    ) : (
+                      <Moon className="mr-2 h-4 w-4" />
+                    )
+                  ) : (
+                    <span className="mr-2 inline-block h-4 w-4" aria-hidden />
+                  )}
+                  {t.theme}
+                </Button>
+              </div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <AutoRefreshMenu lang={lang} valueSeconds={autoRefreshSeconds} onChange={setAutoRefreshSeconds} />
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl"
-                onClick={() => {
-                  const actual = resolvedTheme ?? theme;
-                  setTheme(actual === "dark" ? "light" : "dark");
-                }}
-              >
-                {themeMounted ? (
-                  (resolvedTheme ?? theme) === "dark" ? (
-                    <Sun className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Moon className="mr-2 h-4 w-4" />
-                  )
-                ) : (
-                  <span className="mr-2 inline-block h-4 w-4" aria-hidden />
-                )}
-                {t.theme}
-              </Button>
-            </div>
-          </div>
+
+          <Sheet
+            open={savedOpen}
+            onOpenChange={setSavedOpen}
+          >
+            <SheetContent side="bottom" className="lg:hidden">
+              <SheetHeader>
+                <SheetTitle>
+                  {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
+                </SheetTitle>
+              </SheetHeader>
+              <SheetBody className="px-4">
+                <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
+              </SheetBody>
+            </SheetContent>
+
+            <SheetContent side="right" className="hidden lg:flex">
+              <SheetHeader>
+                <SheetTitle>
+                  {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
+                </SheetTitle>
+              </SheetHeader>
+              <SheetBody>
+                <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
+              </SheetBody>
+            </SheetContent>
+          </Sheet>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
             <div className="space-y-4">
@@ -239,11 +280,10 @@ export default function Home() {
                   ) : null}
                 </CardContent>
               </Card>
-
-              <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
             </div>
 
             <div className="space-y-4">
+
               {mode === "kmb" ? (
                 <KmbResults
                   lang={kmbPaneState?.lang ?? lang}
@@ -253,11 +293,15 @@ export default function Home() {
                   eta={kmbPaneState?.eta ?? []}
                   routeInfos={kmbPaneState?.routeInfos ?? {}}
                   hasQuery={kmbPaneState?.hasQuery ?? false}
-                  onRefresh={() => void kmbPaneState?.refresh()}
+                  error={kmbPaneState?.error ?? null}
+                  stale={kmbPaneState?.stale ?? false}
+                  lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
+                  onRefresh={() => void kmbPaneState?.refresh({ toastOnError: true })}
                   loading={kmbPaneState?.loading}
                   stops={kmbPaneState?.stops ?? undefined}
                   multipleStops={kmbPaneState?.multipleStops}
                 />
+
               ) : null}
 
               {mode === "mtr" ? (
@@ -265,9 +309,13 @@ export default function Home() {
                   title={mtrPaneState?.title ?? t.mtrTitle}
                   lang={mtrPaneState?.lang ?? lang}
                   schedule={mtrPaneState?.schedule ?? null}
+                  error={mtrPaneState?.error ?? null}
+                  stale={mtrPaneState?.stale ?? false}
+                  lastUpdatedAt={mtrPaneState?.lastUpdatedAt ?? null}
                   onRefresh={mtrPaneState?.onRefresh ?? (() => {})}
                   loading={mtrPaneState?.loading}
                 />
+
               ) : null}
 
               {mode === "lrt" ? (
@@ -275,9 +323,13 @@ export default function Home() {
                   title={lrtPaneState?.title ?? t.lrtTitle}
                   lang={lrtPaneState?.lang ?? lang}
                   schedule={lrtPaneState?.schedule ?? null}
+                  error={lrtPaneState?.error ?? null}
+                  stale={lrtPaneState?.stale ?? false}
+                  lastUpdatedAt={lrtPaneState?.lastUpdatedAt ?? null}
                   onRefresh={lrtPaneState?.onRefresh ?? (() => {})}
                   loading={lrtPaneState?.loading}
                 />
+
               ) : null}
             </div>
           </div>

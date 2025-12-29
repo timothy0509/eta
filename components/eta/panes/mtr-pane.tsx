@@ -5,12 +5,17 @@ import * as React from "react";
 import { MtrStationSearch } from "@/components/eta/station-search";
 import { useMtrSchedule } from "@/lib/eta/use-mtr-schedule";
 import type { MtrStationSearchItem, UiLanguage } from "@/lib/eta/types";
+import { Button } from "@/components/ui/button";
+
 import type { FavoritesItem } from "@/lib/store";
 
 export type MtrPaneState = {
   title: string;
   lang: UiLanguage;
   schedule: ReturnType<typeof useMtrSchedule>["schedule"];
+  error?: string | null;
+  stale?: boolean;
+  lastUpdatedAt?: number | null;
   onRefresh: () => void;
   loading: boolean;
 };
@@ -36,7 +41,10 @@ export function MtrPane({
   selectedItem,
   onStateChange,
 }: Props) {
-  const { sta, setSta, schedule, loading, refresh, title } = useMtrSchedule({ lang, stations });
+  const { sta, setSta, schedule, loading, refresh, title, error, stale, lastUpdatedAt } = useMtrSchedule({
+    lang,
+    stations,
+  });
 
   React.useEffect(() => {
     if (!selectedItem || selectedItem.mode !== "mtr") return;
@@ -71,9 +79,12 @@ export function MtrPane({
       lang,
       schedule,
       loading,
-      onRefresh: () => void refresh(),
+      error,
+      stale,
+      lastUpdatedAt,
+      onRefresh: () => void refresh({ toastOnError: true }),
     }),
-    [lang, loading, refresh, schedule, title]
+    [error, lang, lastUpdatedAt, loading, refresh, schedule, stale, title]
   );
 
   React.useEffect(() => {
@@ -100,18 +111,14 @@ export function MtrPane({
             sta: station.sta,
           };
           onAddRecent(item);
-          void refresh();
+          void refresh({ toastOnError: false });
         }}
       />
 
       <div className="flex items-center gap-2">
-        <button
-          className="rounded-xl border bg-card px-3 py-2 text-sm"
-          onClick={() => void onSave()}
-          disabled={!sta}
-        >
+        <Button className="rounded-xl" onClick={() => void onSave()} disabled={!sta}>
           {lang === "en" ? "Save" : "儲存"}
-        </button>
+        </Button>
       </div>
 
     </div>

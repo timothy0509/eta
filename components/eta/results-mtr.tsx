@@ -17,6 +17,9 @@ type Props = {
   title: string;
   lang: UiLanguage;
   schedule: MtrScheduleResponse | null;
+  error?: string | null;
+  stale?: boolean;
+  lastUpdatedAt?: number | null;
   onRefresh: () => void;
   loading?: boolean;
 };
@@ -114,7 +117,9 @@ function formatPlatform(plat: unknown) {
   return raw;
 }
 
-export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props) {
+export function MtrResults({ title, lang, schedule, error, stale, lastUpdatedAt, onRefresh, loading }: Props) {
+  const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
+
   const t = {
     nextTrain: lang === "en" ? "Next Train" : lang === "sc" ? "下班车" : "下班車",
     refresh: lang === "en" ? "Refresh" : "重新整理",
@@ -131,9 +136,26 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
       <CardHeader className="flex flex-row items-center justify-between gap-6">
         <div>
           <CardTitle className="text-base">{title}</CardTitle>
-          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             <TrainFront className="h-3.5 w-3.5" />
             {t.nextTrain}
+            {updatedAt ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>
+                  {lang === "en"
+                    ? `Updated ${updatedAt.toLocaleTimeString()}`
+                    : lang === "sc"
+                      ? `更新 ${updatedAt.toLocaleTimeString()}`
+                      : `更新 ${updatedAt.toLocaleTimeString()}`}
+                </span>
+              </>
+            ) : null}
+            {stale ? (
+              <Badge variant="destructive" className="rounded-lg">
+                {lang === "en" ? "Stale" : lang === "sc" ? "未更新" : "未更新"}
+              </Badge>
+            ) : null}
           </div>
         </div>
         <Button
@@ -148,6 +170,15 @@ export function MtrResults({ title, lang, schedule, onRefresh, loading }: Props)
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
+        {error ? (
+          <div className="ui-animate-fade rounded-2xl border bg-destructive/10 p-4 text-sm text-destructive">
+            {lang === "en"
+              ? `Update failed. Showing last results. (${error})`
+              : lang === "sc"
+                ? `更新失败。显示上次结果。(${error})`
+                : `更新失敗。顯示上次結果。(${error})`}
+          </div>
+        ) : null}
         {!schedule ? (
           <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />

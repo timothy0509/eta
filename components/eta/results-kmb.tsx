@@ -108,6 +108,9 @@ type Props = {
   eta: KmbEtaEntry[];
   routeInfos: Record<string, KmbRouteInfoLite>;
   hasQuery: boolean;
+  lastUpdatedAt?: number;
+  stale?: boolean;
+  error?: string | null;
   onRefresh: () => void;
   loading?: boolean;
   /** For showing stop codes next to routes when multiple stops are selected */
@@ -124,12 +127,16 @@ export function KmbResults({
   eta,
   routeInfos,
   hasQuery,
+  lastUpdatedAt,
+  stale,
+  error,
   onRefresh,
   loading,
   stops,
   multipleStops,
 }: Props) {
   const now = new Date();
+  const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
 
   // Create a lookup map for stops by ID
   const stopLookup = React.useMemo(() => {
@@ -190,20 +197,42 @@ export function KmbResults({
               </Badge>
             ) : null}
           </div>
-          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
-            {routesFilter?.trim()
+          <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+             <Clock className="h-3.5 w-3.5" />
+             {routesFilter?.trim()
+
               ? lang === "en"
                 ? `Filtered: ${routesFilter}`
-                : lang === "sc"
-                  ? `筛选: ${routesFilter}`
-                  : `篩選: ${routesFilter}`
-              : lang === "en"
-                ? "All routes at this stop"
-                : lang === "sc"
-                  ? "此站所有路线"
-                  : "此站所有路線"}
+                 : lang === "sc"
+                   ? `筛选: ${routesFilter}`
+                   : `篩選: ${routesFilter}`
+               : lang === "en"
+                 ? "All routes at this stop"
+                 : lang === "sc"
+                   ? "此站所有路线"
+                   : "此站所有路線"}
+
+            {updatedAt ? (
+              <>
+                <span aria-hidden>·</span>
+                <span>
+                  {lang === "en"
+                    ? `Updated ${updatedAt.toLocaleTimeString()}`
+                    : lang === "sc"
+                      ? `更新 ${updatedAt.toLocaleTimeString()}`
+                      : `更新 ${updatedAt.toLocaleTimeString()}`}
+                </span>
+              </>
+            ) : null}
+
+            {stale ? (
+              <Badge variant="destructive" className="rounded-lg">
+                {lang === "en" ? "Stale" : lang === "sc" ? "未更新" : "未更新"}
+              </Badge>
+            ) : null}
           </div>
+
+
         </div>
         <Button
           size="sm"
@@ -217,6 +246,16 @@ export function KmbResults({
         </Button>
       </CardHeader>
       <CardContent className="space-y-5">
+        {error ? (
+          <div className="ui-animate-fade rounded-2xl border bg-destructive/10 p-4 text-sm text-destructive">
+            {lang === "en"
+              ? `Update failed. Showing last results. (${error})`
+              : lang === "sc"
+                ? `更新失败。显示上次结果。(${error})`
+                : `更新失敗。顯示上次結果。(${error})`}
+
+          </div>
+        ) : null}
         {!hasQuery ? (
           <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />

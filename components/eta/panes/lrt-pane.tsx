@@ -5,12 +5,17 @@ import * as React from "react";
 import { LrtStationSearch } from "@/components/eta/lrt-stop-search";
 import { useLrtSchedule } from "@/lib/eta/use-lrt-schedule";
 import type { LrtStationSearchItem, UiLanguage } from "@/lib/eta/types";
+import { Button } from "@/components/ui/button";
+
 import type { FavoritesItem } from "@/lib/store";
 
 export type LrtPaneState = {
   title: string;
   lang: UiLanguage;
   schedule: ReturnType<typeof useLrtSchedule>["schedule"];
+  error?: string | null;
+  stale?: boolean;
+  lastUpdatedAt?: number | null;
   onRefresh: () => void;
   loading: boolean;
 };
@@ -36,10 +41,11 @@ export function LrtPane({
   selectedItem,
   onStateChange,
 }: Props) {
-  const { stationId, setStationId, schedule, loading, refresh, title } = useLrtSchedule({
-    stations,
-    lang,
-  });
+  const { stationId, setStationId, schedule, loading, refresh, title, error, stale, lastUpdatedAt } =
+    useLrtSchedule({
+      stations,
+      lang,
+    });
 
   React.useEffect(() => {
     onRegisterRefresh(refresh);
@@ -51,9 +57,12 @@ export function LrtPane({
       lang,
       schedule,
       loading,
-      onRefresh: () => void refresh(),
+      error,
+      stale,
+      lastUpdatedAt,
+      onRefresh: () => void refresh({ toastOnError: true }),
     }),
-    [lang, loading, refresh, schedule, title]
+    [error, lang, lastUpdatedAt, loading, refresh, schedule, stale, title]
   );
 
   React.useEffect(() => {
@@ -100,18 +109,14 @@ export function LrtPane({
             title: `${lang === "en" ? station.nameEn : station.nameZh} · ${station.stationId}`,
             stationId: station.stationId,
           });
-          void refresh();
+          void refresh({ toastOnError: false });
         }}
       />
 
       <div className="flex items-center gap-2">
-        <button
-          className="rounded-xl border bg-card px-3 py-2 text-sm"
-          onClick={() => void onSave()}
-          disabled={!stationId}
-        >
+        <Button className="rounded-xl" onClick={() => void onSave()} disabled={!stationId}>
           {lang === "en" ? "Save" : "儲存"}
-        </button>
+        </Button>
       </div>
 
     </div>

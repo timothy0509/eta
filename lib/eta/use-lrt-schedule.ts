@@ -11,11 +11,17 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
   const [stationId, setStationId] = React.useState<string | undefined>(undefined);
   const [schedule, setSchedule] = React.useState<LrtScheduleResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = React.useState<number | null>(null);
+  const [stale, setStale] = React.useState(false);
 
-  const refresh = React.useCallback(async () => {
-    if (!stationId) return;
-    setLoading(true);
-    try {
+  const refresh = React.useCallback(
+    async (options?: { toastOnError?: boolean }) => {
+      if (!stationId) return;
+     setLoading(true);
+     try {
+       setError(null);
+
       const response = await fetch(
         `/api/lrt/schedule?stationId=${encodeURIComponent(stationId)}`
       );
@@ -24,17 +30,31 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
         throw new Error(`Failed to load schedule: ${response.status}`);
       }
 
-      const json = (await response.json()) as { schedule: LrtScheduleResponse };
-      setSchedule(json.schedule);
-    } finally {
-      setLoading(false);
-    }
-  }, [stationId]);
+       const json = (await response.json()) as { schedule: LrtScheduleResponse };
+       setSchedule(json.schedule);
+       setLastUpdatedAt(Date.now());
+       setStale(false);
+     } catch (error) {
+       const message = error instanceof Error ? error.message : "Failed to load schedule";
+       setError(message);
+       setStale(true);
+       if (options?.toastOnError) {
+         const { toast } = await import("sonner");
+         toast.error(message);
+       }
+     } finally {
+       setLoading(false);
+     }
+   },
+   [stationId]
+ );
+
 
   React.useEffect(() => {
     if (!stationId) return;
-    void refresh();
-  }, [refresh, stationId]);
+     void refresh({ toastOnError: false });
+   }, [refresh, stationId]);
+
 
   const title = React.useMemo(() => {
     if (!stationId) return "Light Rail";
@@ -48,6 +68,9 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
     setStationId,
     schedule,
     loading,
+    error,
+    stale,
+    lastUpdatedAt,
     refresh,
     title,
   };

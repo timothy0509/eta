@@ -95,12 +95,15 @@ export type KmbPaneState = {
   routeInfos: Record<string, KmbRouteInfoLite>;
   eta: KmbEtaEntry[];
   loading: boolean;
+  error?: string | null;
+  stale?: boolean;
+  lastUpdatedAt?: number;
   hasQuery: boolean;
   multipleStops: boolean;
   title: string;
   stopCode: string | null;
   stops: KmbStopSearchItem[];
-  refresh: () => Promise<void>;
+  refresh: (options?: { toastOnError?: boolean }) => Promise<void>;
 };
 
 export function KmbPane({
@@ -137,6 +140,9 @@ export function KmbPane({
 
   const [kmbEta, setKmbEta] = React.useState<KmbEtaEntry[] | null>(null);
   const [kmbEtaLoading, setKmbEtaLoading] = React.useState(false);
+  const [kmbEtaError, setKmbEtaError] = React.useState<string | null>(null);
+  const [kmbEtaLastUpdatedAt, setKmbEtaLastUpdatedAt] = React.useState<number | null>(null);
+  const [kmbEtaStale, setKmbEtaStale] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -306,10 +312,13 @@ export function KmbPane({
     setRouteFilter((prev) => ({ ...prev, entries: nextEntries }));
     setKmbQuery(null);
     setKmbEta(null);
+    setKmbEtaError(null);
+    setKmbEtaStale(false);
+    setKmbEtaLastUpdatedAt(null);
   }, [kmbAvailableRouteVariants, routeFilter.entries, routeFilterMode]);
 
   const refreshKmbEta = React.useCallback(
-    async (queryOverride?: KmbQuery | null) => {
+    async (queryOverride?: KmbQuery | null, options?: { toastOnError?: boolean }) => {
       const query = queryOverride ?? kmbQuery;
       if (!query) return;
 
@@ -337,6 +346,7 @@ export function KmbPane({
 
       setKmbEtaLoading(true);
       try {
+        setKmbEtaError(null);
         const perStopPairs = stopIds.map((stopId) => {
           const candidates = kmbRouteStops
             .filter((entry) => entry.stopId === stopId)
@@ -378,6 +388,8 @@ export function KmbPane({
         const json = await fetchKmbEtas(requestPlans);
 
         setKmbEta(json.eta);
+        setKmbEtaLastUpdatedAt(Date.now());
+        setKmbEtaStale(false);
 
         const variantKeys = Array.from(
           new Set(
@@ -418,6 +430,15 @@ export function KmbPane({
             setKmbRouteInfos((prev) => ({ ...prev, ...updates }));
           }
         }
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load ETAs";
+        setKmbEtaError(message);
+        setKmbEtaStale(true);
+
+        if (options?.toastOnError) {
+          const { toast } = await import("sonner");
+          toast.error(message);
+        }
       } finally {
         setKmbEtaLoading(false);
       }
@@ -432,7 +453,7 @@ export function KmbPane({
 
   React.useEffect(() => {
     if (!onRegisterRefresh) return;
-    onRegisterRefresh(() => refreshKmbEtaRef.current(kmbQuery));
+    onRegisterRefresh(() => refreshKmbEtaRef.current(kmbQuery, { toastOnError: false }));
   }, [kmbQuery, onRegisterRefresh]);
 
   const lastSelectedIdRef = React.useRef<string | null>(null);
@@ -466,6 +487,9 @@ export function KmbPane({
 
     setKmbQuery(null);
     setKmbEta(null);
+    setKmbEtaError(null);
+    setKmbEtaStale(false);
+    setKmbEtaLastUpdatedAt(null);
   }, [onRouteFilterModeChange, routeFilterMode, selectedItem]);
 
   const prevStopSelectionRef = React.useRef<StopSearchSelection | undefined>(undefined);
@@ -515,7 +539,7 @@ export function KmbPane({
             };
 
     setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery);
+    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false });
   }, [kmbDraftStopSelection, kmbRouteStops.length, routeFilter.routes, routeFilterMode]);
 
   React.useEffect(() => {
@@ -551,7 +575,7 @@ export function KmbPane({
     if (!nextQuery) return;
 
     setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery);
+    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false });
   }, [selectedItem]);
 
   const prevEntriesRef = React.useRef<typeof routeFilter.entries>([]);
@@ -576,7 +600,7 @@ export function KmbPane({
           : { mode: "contains", query: kmbDraftStopSelection.query, serviceType: "1" };
 
     setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery);
+    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false });
   }, [routeFilterMode, routeFilter.entries, kmbDraftStopSelection, kmbRouteStops.length]);
 
   const [debouncedRoutes, setDebouncedRoutes] = React.useState(routeFilter.routes ?? "");
@@ -601,7 +625,7 @@ export function KmbPane({
           : { mode: "contains", query: kmbDraftStopSelection.query, route: routeInput || undefined, serviceType: "1" };
 
     setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery);
+    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false });
   }, [routeFilterMode, debouncedRoutes, kmbDraftStopSelection, kmbRouteStops.length]);
 
   const kmbResultsInfo = React.useMemo(() => {
@@ -753,16 +777,23 @@ export function KmbPane({
       routeInfos: kmbRouteInfos,
       eta: kmbEta ?? [],
       loading: kmbEtaLoading,
+      error: kmbEtaError,
+      stale: kmbEtaStale,
+      lastUpdatedAt: kmbEtaLastUpdatedAt ?? undefined,
       hasQuery: Boolean(kmbQuery),
       multipleStops: kmbQuery?.mode === "stops" || kmbQuery?.mode === "contains",
       title: kmbResultsInfo.title,
       stopCode: kmbResultsInfo.code,
       stops: kmbStops,
-      refresh: () => refreshKmbEta(kmbQuery),
+      refresh: (options) => refreshKmbEta(kmbQuery, options),
     }),
     [
-      kmbEta,
-      kmbEtaLoading,
+        kmbEta,
+        kmbEtaLoading,
+        kmbEtaError,
+        kmbEtaLastUpdatedAt,
+        kmbEtaStale,
+
       kmbQuery,
       kmbResultsInfo.code,
       kmbResultsInfo.title,
@@ -853,7 +884,8 @@ export function KmbPane({
           size="sm"
           variant="outline"
           className="rounded-xl"
-          onClick={() => void refreshKmbEta(kmbQuery)}
+          onClick={() => void refreshKmbEta(kmbQuery, { toastOnError: true })}
+
         >
           <RefreshCw className={cn("mr-2 h-4 w-4", kmbEtaLoading && "ui-spin")} />
           {lang === "en" ? "Refresh" : "重新整理"}

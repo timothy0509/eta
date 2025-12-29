@@ -14,15 +14,20 @@ export function useMtrSchedule(params: {
   const [sta, setSta] = React.useState<string | undefined>(undefined);
   const [schedule, setSchedule] = React.useState<MtrScheduleResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = React.useState<number | null>(null);
+  const [stale, setStale] = React.useState(false);
 
-  const refresh = React.useCallback(async () => {
-    if (!sta) return;
+  const refresh = React.useCallback(
+    async (options?: { toastOnError?: boolean }) => {
+      if (!sta) return;
 
     const station = stations.find((s) => s.sta === sta);
     if (!station) return;
 
     setLoading(true);
     try {
+      setError(null);
       const mtrLang = lang === "en" ? "EN" : "TC";
 
       const schedules = await Promise.all(
@@ -54,20 +59,34 @@ export function useMtrSchedule(params: {
         return;
       }
 
-      setSchedule({
-        ...baseline,
-        status: Object.keys(mergedData).length ? 1 : baseline.status,
-        data: Object.keys(mergedData).length ? mergedData : baseline.data,
-      });
-    } finally {
-      setLoading(false);
-    }
-  }, [lang, sta, stations]);
+       setSchedule({
+         ...baseline,
+         status: Object.keys(mergedData).length ? 1 : baseline.status,
+         data: Object.keys(mergedData).length ? mergedData : baseline.data,
+       });
+       setLastUpdatedAt(Date.now());
+       setStale(false);
+     } catch (error) {
+       const message = error instanceof Error ? error.message : "Failed to load schedule";
+       setError(message);
+       setStale(true);
+       if (options?.toastOnError) {
+         const { toast } = await import("sonner");
+         toast.error(message);
+       }
+     } finally {
+       setLoading(false);
+     }
+   },
+   [lang, sta, stations]
+ );
+
 
   React.useEffect(() => {
     if (!sta) return;
-    void refresh();
-  }, [refresh, sta]);
+     void refresh({ toastOnError: false });
+   }, [refresh, sta]);
+
 
   const title = React.useMemo(() => {
     if (!sta) return "MTR";
@@ -80,6 +99,9 @@ export function useMtrSchedule(params: {
     setSta,
     schedule,
     loading,
+    error,
+    stale,
+    lastUpdatedAt,
     refresh,
     title,
   };

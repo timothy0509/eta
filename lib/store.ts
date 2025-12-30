@@ -72,9 +72,6 @@ type AppState = {
   routeFilterMode: RouteFilterMode;
   autoRefreshSeconds: number;
 
-  /** Whether the Saved sheet is open (persisted). */
-  savedOpen?: boolean;
-
   favorites: FavoritesItem[];
   recents: RecentItem[];
 
@@ -82,9 +79,6 @@ type AppState = {
   setLang: (lang: UiLanguage) => void;
   setRouteFilterMode: (mode: RouteFilterMode) => void;
   setAutoRefreshSeconds: (seconds: number) => void;
-
-  setSavedOpen: (open: boolean) => void;
-
   addFavorite: (item: FavoritesItem) => void;
   removeFavorite: (id: string) => void;
 
@@ -101,7 +95,6 @@ export const useAppStore = create<AppState>()(
       lang: "tc",
       routeFilterMode: "simple",
       autoRefreshSeconds: 15,
-      savedOpen: true,
 
       favorites: [],
       recents: [],
@@ -110,7 +103,6 @@ export const useAppStore = create<AppState>()(
       setLang: (lang) => set({ lang }),
       setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
       setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
-      setSavedOpen: (savedOpen) => set({ savedOpen }),
 
       addFavorite: (item) =>
         set((state) => {
@@ -145,7 +137,6 @@ export const useAppStore = create<AppState>()(
         lang: state.lang,
         routeFilterMode: state.routeFilterMode,
         autoRefreshSeconds: state.autoRefreshSeconds,
-        savedOpen: state.savedOpen,
         favorites: state.favorites,
         recents: state.recents,
       }),

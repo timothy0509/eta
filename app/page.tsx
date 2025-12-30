@@ -38,8 +38,7 @@ export default function Home() {
   const autoRefreshSeconds = useAppStore((s) => s.autoRefreshSeconds);
   const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds);
 
-  const savedOpen = useAppStore((s) => s.savedOpen ?? true);
-  const setSavedOpen = useAppStore((s) => s.setSavedOpen);
+  const [savedOpen, setSavedOpen] = React.useState(false);
 
   const addFavorite = useAppStore((s) => s.addFavorite);
   const addRecent = useAppStore((s) => s.addRecent);

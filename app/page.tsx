@@ -39,6 +39,7 @@ export default function Home() {
   const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds);
 
   const [savedOpen, setSavedOpen] = React.useState(false);
+  const [isDesktop, setIsDesktop] = React.useState(false);
 
   const addFavorite = useAppStore((s) => s.addFavorite);
   const addRecent = useAppStore((s) => s.addRecent);
@@ -78,6 +79,20 @@ export default function Home() {
 
   React.useEffect(() => {
     setThemeMounted(true);
+  }, []);
+
+  React.useEffect(() => {
+    const media = window.matchMedia("(min-width: 1024px)");
+
+    const onChange = () => {
+      setIsDesktop(media.matches);
+    };
+
+    onChange();
+    media.addEventListener("change", onChange);
+    return () => {
+      media.removeEventListener("change", onChange);
+    };
   }, []);
 
   React.useEffect(() => {
@@ -194,31 +209,30 @@ export default function Home() {
             </div>
 
 
-          <Sheet
-            open={savedOpen}
-            onOpenChange={setSavedOpen}
-          >
-            <SheetContent side="bottom" className="lg:hidden">
-              <SheetHeader>
-                <SheetTitle>
-                  {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
-                </SheetTitle>
-              </SheetHeader>
-              <SheetBody className="px-4">
-                <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
-              </SheetBody>
-            </SheetContent>
-
-            <SheetContent side="right" className="hidden lg:flex">
-              <SheetHeader>
-                <SheetTitle>
-                  {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
-                </SheetTitle>
-              </SheetHeader>
-              <SheetBody>
-                <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
-              </SheetBody>
-            </SheetContent>
+          <Sheet open={savedOpen} onOpenChange={setSavedOpen}>
+            {isDesktop ? (
+              <SheetContent side="right">
+                <SheetHeader>
+                  <SheetTitle>
+                    {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
+                  </SheetTitle>
+                </SheetHeader>
+                <SheetBody>
+                  <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
+                </SheetBody>
+              </SheetContent>
+            ) : (
+              <SheetContent side="bottom">
+                <SheetHeader>
+                  <SheetTitle>
+                    {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
+                  </SheetTitle>
+                </SheetHeader>
+                <SheetBody className="px-4">
+                  <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
+                </SheetBody>
+              </SheetContent>
+            )}
           </Sheet>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">

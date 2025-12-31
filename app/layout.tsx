@@ -30,6 +30,8 @@ const notoSansSC = Noto_Sans_SC({
   weight: ["400", "500", "600", "700"],
 });
 
+// Geist Mono is loaded via @fontsource in globals.css
+
 export const metadata: Metadata = {
   title: "TimoETA",
   description: "Fast ETAs for KMB, MTR and Light Rail",

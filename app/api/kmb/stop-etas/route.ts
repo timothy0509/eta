@@ -124,16 +124,21 @@ export async function POST(request: Request) {
         }
       }
 
-      // Flatten back to array, sorted by route
-      const trimmed = Array.from(byVariant.values())
-        .flat()
-        .sort((a, b) => {
-          const routeCmp = (a.route ?? "").localeCompare(b.route ?? "", undefined, { numeric: true });
-          if (routeCmp !== 0) return routeCmp;
-          return (a.eta_seq ?? 0) - (b.eta_seq ?? 0);
-        });
+       // Flatten back to array, sorted by route
+       const trimmed = Array.from(byVariant.values())
+         .flat()
+         .map((entry) => ({
+           ...entry,
+           stop: stopId,
+         }))
+         .sort((a, b) => {
+           const routeCmp = (a.route ?? "").localeCompare(b.route ?? "", undefined, { numeric: true });
+           if (routeCmp !== 0) return routeCmp;
+           return (a.eta_seq ?? 0) - (b.eta_seq ?? 0);
+         });
 
-      byStopId[stopId] = trimmed;
+       byStopId[stopId] = trimmed;
+
     }
 
     return NextResponse.json(

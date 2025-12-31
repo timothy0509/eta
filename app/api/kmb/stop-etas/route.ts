@@ -3,7 +3,9 @@ import { z } from "zod";
 
 import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
 import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
-import { getKmbStopEta, type KmbEtaEntry } from "@/lib/eta/kmb";
+import type { KmbRouteStopLite } from "@/lib/eta/client";
+import { kmbFareCacheControlHeader, getCachedKmbVariantStops, getStopToTerminusFare, computeEtaLeg } from "@/lib/eta/kmb-fares";
+import { getKmbRouteStops, getKmbStopEta, type KmbEtaEntry } from "@/lib/eta/kmb";
 import { promisePool } from "@/lib/eta/promise-pool";
 import { kmbStopEtaCache } from "@/lib/eta/cache";
 
@@ -15,8 +17,14 @@ const BodySchema = z.object({
 // Concurrency limit for upstream calls
 const KMB_CONCURRENCY = 6;
 
-// Max ETAs per route+direction to return (keep payload small)
+// Max ETAs per route+direction+leg to return (keep payload small)
 const MAX_ETAS_PER_VARIANT = 3;
+
+/** ETA entry augmented with leg info for circular route disambiguation */
+export type KmbEtaEntryWithLeg = KmbEtaEntry & {
+  /** "A" = departing leg (closer to first stop occurrence), "B" = arriving leg (closer to last stop occurrence), null = not a circular stop */
+  leg: "A" | "B" | null;
+};
 
 /**
  * POST /api/kmb/stop-etas
@@ -71,7 +79,22 @@ export async function POST(request: Request) {
     : null;
 
   try {
-    const byStopId: Record<string, KmbEtaEntry[]> = {};
+    // Load variant stops first - needed for leg computation
+    const byVariantStops = await getCachedKmbVariantStops(async () => {
+      const routeStops = await getKmbRouteStops();
+      const lite: KmbRouteStopLite[] = routeStops
+        .map((entry) => ({
+          route: entry.route,
+          bound: entry.bound,
+          serviceType: String(entry.service_type),
+          seq: typeof entry.seq === "string" ? Number(entry.seq) : entry.seq,
+          stopId: entry.stop,
+        }))
+        .filter((entry) => entry.route && entry.stopId);
+      return lite;
+    });
+
+    const byStopId: Record<string, KmbEtaEntryWithLeg[]> = {};
     const errors: string[] = [];
     let cached = 0;
     let fetched = 0;
@@ -113,13 +136,31 @@ export async function POST(request: Request) {
         );
       }
 
-      // Group by route+dir+service_type and limit to MAX_ETAS_PER_VARIANT
-      const byVariant = new Map<string, KmbEtaEntry[]>();
+      // Add leg info to each entry and group by route+dir+service_type+leg
+      // This prevents circular routes from mixing departing/arriving ETAs
+      const byVariant = new Map<string, KmbEtaEntryWithLeg[]>();
       for (const entry of filtered) {
-        const key = `${entry.route}|${entry.dir}|${entry.service_type}`;
+        const route = String(entry.route ?? "").toUpperCase();
+        const dir = String(entry.dir ?? "");
+        const serviceType = String(entry.service_type ?? "");
+        
+        // Compute leg for circular route disambiguation
+        const leg = computeEtaLeg({
+          route,
+          dir,
+          serviceType,
+          stopId,
+          etaSeq: entry.seq,
+          byVariantStops,
+        });
+
+        // Include leg in grouping key to separate departing/arriving ETAs
+        const legSuffix = leg ?? "_";
+        const key = `${route}|${dir}|${serviceType}|${legSuffix}`;
+        
         const existing = byVariant.get(key) ?? [];
         if (existing.length < MAX_ETAS_PER_VARIANT) {
-          existing.push(entry);
+          existing.push({ ...entry, leg });
           byVariant.set(key, existing);
         }
       }
@@ -141,18 +182,54 @@ export async function POST(request: Request) {
 
     }
 
+    // Compute fares per route variant (route|dir|service_type) - base key without leg
+    const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }> = {};
+
+    for (const [stopId, entries] of Object.entries(byStopId)) {
+      for (const entry of entries) {
+        const route = String(entry.route ?? "").toUpperCase();
+        const dir = String(entry.dir ?? "");
+        const serviceType = String(entry.service_type ?? "");
+        const vKey = `${route}|${dir}|${serviceType}`;
+
+        if (faresByVariantKey[vKey]) continue;
+
+        const destCandidates = [entry.dest_en, entry.dest_tc, entry.dest_sc].filter(Boolean).map(String);
+        const fare = getStopToTerminusFare({
+          route,
+          dir,
+          serviceType,
+          stopId,
+          etaDestCandidates: destCandidates,
+          byVariantStops,
+        });
+
+        if (fare) {
+          faresByVariantKey[vKey] = fare;
+        }
+      }
+    }
+
     return NextResponse.json(
       {
         byStopId,
+        faresByVariantKey,
         errors,
         cached,
         fetched,
       },
       {
-        headers: KMB_NO_STORE_HEADERS,
+        headers: {
+          ...KMB_NO_STORE_HEADERS,
+          // This response includes ETA (no-store), but fare mapping is derived from daily-cached data.
+          // Keep no-store to avoid stale ETAs; consumers can still use faresByVariantKey if present.
+          "X-KMB-Fare-Cache": kmbFareCacheControlHeader(),
+        },
       }
     );
   } catch (error) {
+    console.error("/api/kmb/stop-etas failed", error);
+
     const status =
       error instanceof UpstreamTimeoutError
         ? 504

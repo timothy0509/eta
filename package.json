@@ -4,9 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "NODE_OPTIONS='--max-old-space-size=5120' next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "fare:extract": "node scripts/extract-kmb-fares-from-mdb.mjs",
+    "fare:build-index": "node scripts/build-kmb-fares.mjs",
+    "fare:build": "node scripts/build-kmb-fares.mjs"
   },
   "dependencies": {
     "@fontsource/geist-mono": "^5.2.7",
@@ -33,7 +36,7 @@
     "react-dom": "19.2.3",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.4.0",
-    "zod": "^4.2.1",
+    "zod": "^3.23.0",
     "zustand": "^5.0.9"
   },
   "devDependencies": {

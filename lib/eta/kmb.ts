@@ -64,6 +64,22 @@ export async function getKmbEta(params: {
   return json.data;
 }
 
+/**
+ * Fetch all ETAs at a stop using the Stop ETA API.
+ * This returns all routes' ETAs in one call, much more efficient than per-route calls.
+ * See: https://data.etabus.gov.hk - Stop ETA API (/v1/transport/kmb/stop-eta/{stop_id})
+ */
+export async function getKmbStopEta(stopId: string): Promise<KmbEtaEntry[]> {
+  const json = await fetchJson<KmbApiEnvelope<KmbEtaEntry[]>>(
+    `${KMB_BASE_URL}/v1/transport/kmb/stop-eta/${encodeURIComponent(stopId)}`,
+    {
+      cache: "no-store",
+      timeoutMs: 12_000,
+    }
+  );
+  return json.data ?? [];
+}
+
 export type KmbRouteStopEntry = {
   route: string;
   bound: "I" | "O" | string;

@@ -1,5 +1,6 @@
 import type { KmbStopSearchItem } from "@/lib/eta/types";
 import type { KmbEtaEntry, KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
+import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 
 export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
   const response = await fetch("/api/kmb/stops", {
@@ -157,4 +158,69 @@ export async function fetchKmbRouteInfo(params: {
       sc: (json.data.dest_sc ?? "").trim(),
     },
   };
+}
+
+/**
+ * Fetch ETAs for multiple stops using the new stop-eta API.
+ * Much more efficient than per-route ETA calls.
+ */
+export type KmbStopEtasResponse = {
+  byStopId: Record<string, KmbEtaEntry[]>;
+  errors: string[];
+  cached: number;
+  fetched: number;
+};
+
+export async function fetchKmbStopEtas(
+  stopIds: string[],
+  options?: { routeFilter?: string; signal?: AbortSignal }
+): Promise<KmbStopEtasResponse> {
+  const response = await fetch("/api/kmb/stop-etas", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({
+      stopIds,
+      routeFilter: options?.routeFilter,
+    }),
+    signal: options?.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load stop ETAs: ${response.status}`);
+  }
+
+  return (await response.json()) as KmbStopEtasResponse;
+}
+
+/**
+ * Fetch schedules for multiple MTR stations in one request.
+ */
+export type MtrSchedulesResponse = {
+  byKey: Record<string, MtrScheduleResponse>;
+  errors: string[];
+  cached: number;
+  fetched: number;
+  backoff: boolean;
+};
+
+export async function fetchMtrSchedules(
+  queries: Array<{ line: string; sta: string; lang: "EN" | "TC" }>,
+  options?: { signal?: AbortSignal }
+): Promise<MtrSchedulesResponse> {
+  const response = await fetch("/api/mtr/schedules", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ queries }),
+    signal: options?.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load MTR schedules: ${response.status}`);
+  }
+
+  return (await response.json()) as MtrSchedulesResponse;
 }

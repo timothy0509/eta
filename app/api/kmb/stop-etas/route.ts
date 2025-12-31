@@ -12,6 +12,8 @@ import { kmbStopEtaCache } from "@/lib/eta/cache";
 const BodySchema = z.object({
   stopIds: z.array(z.string().trim().min(1)).min(1).max(100),
   routeFilter: z.string().optional(),
+  /** When false (default), skip fare computation to speed up response */
+  includeFares: z.boolean().optional().default(false),
 });
 
 // Concurrency limit for upstream calls
@@ -183,29 +185,33 @@ export async function POST(request: Request) {
     }
 
     // Compute fares per route variant (route|dir|service_type) - base key without leg
-    const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }> = {};
+    // Only compute if includeFares is true (deferred by default for faster initial load)
+    let faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }> | undefined;
 
-    for (const [stopId, entries] of Object.entries(byStopId)) {
-      for (const entry of entries) {
-        const route = String(entry.route ?? "").toUpperCase();
-        const dir = String(entry.dir ?? "");
-        const serviceType = String(entry.service_type ?? "");
-        const vKey = `${route}|${dir}|${serviceType}`;
+    if (parsed.data.includeFares) {
+      faresByVariantKey = {};
+      for (const [stopId, entries] of Object.entries(byStopId)) {
+        for (const entry of entries) {
+          const route = String(entry.route ?? "").toUpperCase();
+          const dir = String(entry.dir ?? "");
+          const serviceType = String(entry.service_type ?? "");
+          const vKey = `${route}|${dir}|${serviceType}`;
 
-        if (faresByVariantKey[vKey]) continue;
+          if (faresByVariantKey[vKey]) continue;
 
-        const destCandidates = [entry.dest_en, entry.dest_tc, entry.dest_sc].filter(Boolean).map(String);
-        const fare = getStopToTerminusFare({
-          route,
-          dir,
-          serviceType,
-          stopId,
-          etaDestCandidates: destCandidates,
-          byVariantStops,
-        });
+          const destCandidates = [entry.dest_en, entry.dest_tc, entry.dest_sc].filter(Boolean).map(String);
+          const fare = getStopToTerminusFare({
+            route,
+            dir,
+            serviceType,
+            stopId,
+            etaDestCandidates: destCandidates,
+            byVariantStops,
+          });
 
-        if (fare) {
-          faresByVariantKey[vKey] = fare;
+          if (fare) {
+            faresByVariantKey[vKey] = fare;
+          }
         }
       }
     }

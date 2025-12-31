@@ -19,9 +19,11 @@ import {
   fetchKmbRouteStops,
   fetchKmbStops,
   fetchKmbStopEtas,
+  fetchKmbFares,
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
   type KmbEtaEntryWithLeg,
+  type KmbFareVariant,
 } from "@/lib/eta/client";
 import { useInfiniteScroll } from "@/lib/eta/use-infinite-scroll";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
@@ -49,7 +51,7 @@ type EtaAction =
       payload: {
         byStopId: Record<string, KmbEtaEntryWithLeg[]>;
         loadedStopIds: string[];
-        faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
       };
     }
   | { type: "REFRESH_ERROR"; error: string }
@@ -58,6 +60,12 @@ type EtaAction =
       payload: {
         byStopId: Record<string, KmbEtaEntryWithLeg[]>;
         newStopIds: string[];
+        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+      };
+    }
+  | {
+      type: "FARES_SUCCESS";
+      payload: {
         faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
       };
     }
@@ -82,7 +90,8 @@ function etaReducer(state: EtaState, action: EtaAction): EtaState {
         ...state,
         byStopId: action.payload.byStopId,
         loadedStopIds: action.payload.loadedStopIds,
-        faresByVariantKey: action.payload.faresByVariantKey,
+        // Keep existing fares if payload doesn't include new ones (deferred loading)
+        faresByVariantKey: action.payload.faresByVariantKey ?? state.faresByVariantKey,
         loading: false,
         error: null,
         stale: false,
@@ -95,8 +104,13 @@ function etaReducer(state: EtaState, action: EtaAction): EtaState {
         ...state,
         byStopId: { ...state.byStopId, ...action.payload.byStopId },
         loadedStopIds: [...state.loadedStopIds, ...action.payload.newStopIds],
-        faresByVariantKey: { ...state.faresByVariantKey, ...action.payload.faresByVariantKey },
+        faresByVariantKey: { ...state.faresByVariantKey, ...(action.payload.faresByVariantKey ?? {}) },
         loading: false,
+      };
+    case "FARES_SUCCESS":
+      return {
+        ...state,
+        faresByVariantKey: { ...state.faresByVariantKey, ...action.payload.faresByVariantKey },
       };
     case "RESET":
       return initialEtaState;
@@ -191,7 +205,7 @@ export type EtaGroup = {
   baseKey: string;
   items: KmbEtaEntryWithLeg[];
   hasEta: boolean;
-  /** Whether this group has a displayable fare (false for leg B / arriving groups) */
+  /** Whether this group should display a fare badge (true for non-arriving legs) */
   hasFare: boolean;
   /** Whether this is the "arriving/returning" leg (leg B) - should show origin instead of destination */
   isArrivingLeg: boolean;
@@ -210,7 +224,7 @@ function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
 
 function groupEtasByVariant(
   eta: KmbEtaEntryWithLeg[],
-  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>
 ): EtaGroup[] {
   const byVariant = new Map<string, KmbEtaEntryWithLeg[]>();
   for (const entry of eta) {
@@ -236,25 +250,39 @@ function groupEtasByVariant(
     const legPart = parts[3];
     const isArrivingLeg = legPart === "B";
     
-    // Suppress fare for arriving leg (leg B) - it's the last stop, passengers can't board
-    const hasFare = !isArrivingLeg && Boolean(faresByVariantKey?.[baseKey]);
+    // hasFare = should show fare badge (true for non-arriving legs)
+    // The actual fare may or may not be loaded yet (deferred loading)
+    const hasFare = !isArrivingLeg;
     
     return { key, baseKey, items: sorted, hasEta, hasFare, isArrivingLeg };
   });
 
-  // Sort alphabetically by route number
+  // Sort with 3-tier ordering:
+  // 1) ETA + fare loaded (hasEta && hasFare && fare exists in faresByVariantKey)
+  // 2) ETA only (hasEta && (!hasFare || fare not loaded))
+  // 3) No ETA
+  // Within each tier, sort alphabetically by route number
   const sortByRoute = (a: { key: string }, b: { key: string }) => {
     const [routeA] = a.key.split("|");
     const [routeB] = b.key.split("|");
     return routeA.localeCompare(routeB, undefined, { numeric: true });
   };
 
-  // Order: ETAs w/ fare, ETAs w/o fare, then routes w/o ETA.
-  const withEtasAndFare = groups.filter((g) => g.hasEta && g.hasFare).sort(sortByRoute);
-  const withEtasNoFare = groups.filter((g) => g.hasEta && !g.hasFare).sort(sortByRoute);
+  const hasFareLoaded = (g: EtaGroup) =>
+    g.hasFare && Boolean(faresByVariantKey[g.baseKey]);
+
+  // Tier 1: ETA + fare loaded
+  const withEtaAndFare = groups
+    .filter((g) => g.hasEta && hasFareLoaded(g))
+    .sort(sortByRoute);
+  // Tier 2: ETA only (no fare or fare not loaded yet)
+  const withEtaOnly = groups
+    .filter((g) => g.hasEta && !hasFareLoaded(g))
+    .sort(sortByRoute);
+  // Tier 3: No ETA
   const withoutEtas = groups.filter((g) => !g.hasEta).sort(sortByRoute);
 
-  return [...withEtasAndFare, ...withEtasNoFare, ...withoutEtas];
+  return [...withEtaAndFare, ...withEtaOnly, ...withoutEtas];
 }
 
 function precomputeRenderGroups(
@@ -679,6 +707,7 @@ export function KmbPane({
   );
 
   // Fetch ETAs for a specific set of stop IDs and merge into state
+  // Fares are fetched in a separate background request for faster initial load
   const fetchStopEtas = React.useCallback(
     async (
       stopIds: string[],
@@ -690,9 +719,11 @@ export function KmbPane({
     ) => {
       if (!stopIds.length) return;
 
+      // Fetch ETAs without fares (fast path)
       const result = await fetchKmbStopEtas(stopIds, {
         routeFilter: options.routeFilterString,
         signal: options.signal,
+        includeFares: false, // Skip fare computation for speed
       });
 
       if (options.signal?.aborted) return;
@@ -716,6 +747,7 @@ export function KmbPane({
         filteredByStopId[stopId] = etas;
       }
 
+      // Dispatch ETAs immediately (without fares)
       if (options.append) {
         // Append mode: merge with existing state
         const existingSet = new Set(etaState.loadedStopIds);
@@ -725,7 +757,7 @@ export function KmbPane({
           payload: {
             byStopId: filteredByStopId,
             newStopIds,
-            faresByVariantKey: result.faresByVariantKey ?? {},
+            // Don't include fares - they'll be fetched in background
           },
         });
       } else {
@@ -735,14 +767,60 @@ export function KmbPane({
           payload: {
             byStopId: filteredByStopId,
             loadedStopIds: stopIds,
-            faresByVariantKey: result.faresByVariantKey ?? {},
+            // Keep existing fares - they'll be updated in background
           },
         });
       }
 
+      // Fire background request for fares
+      // Build list of unique variants that need fares
+      const allEtas = Object.entries(filteredByStopId).flatMap(([stopId, etas]) =>
+        etas.map((eta) => ({ stopId, eta }))
+      );
+      const seenVariants = new Set<string>();
+      const fareVariants: KmbFareVariant[] = [];
+
+      for (const { stopId, eta } of allEtas) {
+        const route = (eta.route ?? "").toUpperCase();
+        const dir = String(eta.dir ?? "");
+        const serviceType = String(eta.service_type ?? "");
+        const vKey = `${route}|${dir}|${serviceType}`;
+
+        // Skip if we already have this fare or already queued it
+        if (etaState.faresByVariantKey[vKey] || seenVariants.has(vKey)) continue;
+        seenVariants.add(vKey);
+
+        fareVariants.push({
+          route,
+          dir,
+          serviceType,
+          stopId,
+          destCandidates: [eta.dest_en, eta.dest_tc, eta.dest_sc].filter(Boolean) as string[],
+        });
+      }
+
+      // Fetch fares in background if there are any missing
+      if (fareVariants.length > 0 && !options.signal?.aborted) {
+        fetchKmbFares(fareVariants, { signal: options.signal })
+          .then((faresResult) => {
+            if (!options.signal?.aborted) {
+              dispatchEta({
+                type: "FARES_SUCCESS",
+                payload: { faresByVariantKey: faresResult.faresByVariantKey },
+              });
+            }
+          })
+          .catch((err) => {
+            // Silently ignore fare errors - fares are optional enhancement
+            if (!options.signal?.aborted) {
+              console.warn("Failed to load fares:", err);
+            }
+          });
+      }
+
       return { filteredByStopId, result };
     },
-    [routeFilter.entries, routeFilterMode, etaState.loadedStopIds]
+    [routeFilter.entries, routeFilterMode, etaState.loadedStopIds, etaState.faresByVariantKey]
   );
 
   // Main refresh function - handles both initial load and refresh of loaded stops

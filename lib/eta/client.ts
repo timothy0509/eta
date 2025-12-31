@@ -180,7 +180,7 @@ export type KmbStopEtasResponse = {
 
 export async function fetchKmbStopEtas(
   stopIds: string[],
-  options?: { routeFilter?: string; signal?: AbortSignal }
+  options?: { routeFilter?: string; signal?: AbortSignal; includeFares?: boolean }
 ): Promise<KmbStopEtasResponse> {
   const response = await fetch("/api/kmb/stop-etas", {
     method: "POST",
@@ -190,6 +190,7 @@ export async function fetchKmbStopEtas(
     body: JSON.stringify({
       stopIds,
       routeFilter: options?.routeFilter,
+      includeFares: options?.includeFares ?? false,
     }),
     signal: options?.signal,
   });
@@ -199,6 +200,41 @@ export async function fetchKmbStopEtas(
   }
 
   return (await response.json()) as KmbStopEtasResponse;
+}
+
+/**
+ * Fetch fares for a list of route variants (deferred from stop-etas).
+ */
+export type KmbFareVariant = {
+  route: string;
+  dir: string;
+  serviceType: string;
+  stopId: string;
+  destCandidates?: string[];
+};
+
+export type KmbFaresResponse = {
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+};
+
+export async function fetchKmbFares(
+  variants: KmbFareVariant[],
+  options?: { signal?: AbortSignal }
+): Promise<KmbFaresResponse> {
+  const response = await fetch("/api/kmb/fares", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+    },
+    body: JSON.stringify({ variants }),
+    signal: options?.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to load fares: ${response.status}`);
+  }
+
+  return (await response.json()) as KmbFaresResponse;
 }
 
 /**

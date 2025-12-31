@@ -156,7 +156,11 @@ const rstopRaw = parseCsv(rstopCsv);
 const fareRaw = parseCsv(fareCsv);
 
 const routes = routesRaw
-  .filter((r) => String(r.COMPANY_CODE ?? "").toUpperCase().includes("KMB"))
+  .filter((r) => {
+    const code = String(r.COMPANY_CODE ?? "").toUpperCase();
+    // Include KMB, LWB, and joint operations involving them
+    return code.includes("KMB") || code.includes("LWB");
+  })
   .map((r) => ({
     routeId: Number(r.ROUTE_ID),
     // The ROUTE table doesn't carry ROUTE_SEQ; we include both sequences as potential candidates.

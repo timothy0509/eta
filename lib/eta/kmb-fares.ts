@@ -1,4 +1,5 @@
-import fareIndex from "@/data/fare/kmb-fare-index.v1.json";
+import fs from "node:fs";
+import path from "node:path";
 
 import type { KmbRouteStopLite } from "@/lib/eta/client";
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
@@ -18,7 +19,19 @@ type FareIndexV1 = {
   fareByKey: Record<string, { price: number; dayCode: number }>;
 };
 
-const index = fareIndex as unknown as FareIndexV1;
+let cachedFareIndex: FareIndexV1 | null = null;
+
+function loadFareIndexV1(): FareIndexV1 {
+  if (cachedFareIndex) return cachedFareIndex;
+
+  // Important: avoid bundling large JSON into the Next.js build.
+  // Turbopack will attempt to parse JSON imports at build time, which fails on
+  // Git LFS pointer files in CI if LFS isn't downloaded.
+  const filePath = path.join(process.cwd(), "data", "fare", "kmb-fare-index.v1.json");
+  const raw = fs.readFileSync(filePath, "utf8");
+  cachedFareIndex = JSON.parse(raw) as FareIndexV1;
+  return cachedFareIndex;
+}
 
 type VariantKey = `${string}|${string}|${string}`;
 
@@ -56,6 +69,7 @@ function scoreStopNameMatch(a: string, b: string): number {
 }
 
 function chooseBestRouteIdCandidate(routeName: string, terminusNameCandidates: string[], routeSeq: 1 | 2) {
+  const index = loadFareIndexV1();
   const candidates = index.routeCandidatesByName[routeName] ?? [];
   if (candidates.length === 0) return null;
 
@@ -178,6 +192,7 @@ export function getStopToTerminusFare(params: {
   const routeId = chooseBestRouteIdCandidate(routeName, params.etaDestCandidates ?? [], routeSeq);
   if (!routeId) return null;
 
+  const index = loadFareIndexV1();
   const fareKey = `${routeId}|${routeSeq}|${onSeq}|${offSeq}`;
   const fare = index.fareByKey[fareKey];
   if (!fare) return null;

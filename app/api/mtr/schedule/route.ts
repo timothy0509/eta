@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
-import { getMtrSchedule } from "@/lib/eta/mtr";
+import { getMtrSchedule, type MtrScheduleResponse } from "@/lib/eta/mtr";
+import { mtrScheduleCache } from "@/lib/eta/cache";
 
 const QuerySchema = z.object({
   line: z.string().trim().min(1),
@@ -31,8 +32,18 @@ export async function GET(request: Request) {
   }
 
   try {
+    const cacheKey = `mtr:${parsed.data.line}:${parsed.data.sta}:${parsed.data.lang}`;
+
+    // Try cache first
+    const cachedData = mtrScheduleCache.get(cacheKey) as MtrScheduleResponse | undefined;
+    if (cachedData !== undefined) {
+      return NextResponse.json({ schedule: cachedData, cached: true });
+    }
+
     const schedule = await getMtrSchedule(parsed.data);
-    return NextResponse.json({ schedule });
+    mtrScheduleCache.set(cacheKey, schedule);
+
+    return NextResponse.json({ schedule, cached: false });
   } catch (error) {
     const status =
       error instanceof UpstreamTimeoutError

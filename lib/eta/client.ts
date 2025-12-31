@@ -2,6 +2,12 @@ import type { KmbStopSearchItem } from "@/lib/eta/types";
 import type { KmbEtaEntry, KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 
+/** ETA entry augmented with leg info for circular route disambiguation */
+export type KmbEtaEntryWithLeg = KmbEtaEntry & {
+  /** "A" = departing leg (closer to first stop occurrence), "B" = arriving leg (closer to last stop occurrence), null = not a circular stop */
+  leg: "A" | "B" | null;
+};
+
 export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
   const response = await fetch("/api/kmb/stops", {
     cache: "force-cache",
@@ -165,7 +171,8 @@ export async function fetchKmbRouteInfo(params: {
  * Much more efficient than per-route ETA calls.
  */
 export type KmbStopEtasResponse = {
-  byStopId: Record<string, KmbEtaEntry[]>;
+  byStopId: Record<string, KmbEtaEntryWithLeg[]>;
+  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
   errors: string[];
   cached: number;
   fetched: number;

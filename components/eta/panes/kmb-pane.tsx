@@ -21,12 +21,264 @@ import {
   fetchKmbStopEtas,
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
+  type KmbEtaEntryWithLeg,
 } from "@/lib/eta/client";
 import { useInfiniteScroll } from "@/lib/eta/use-infinite-scroll";
-import type { KmbEtaEntry } from "@/lib/eta/kmb";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { FavoritesItem, RouteFilterMode } from "@/lib/store";
+
+// ============================================================================
+// ETA State Reducer - Batch updates to minimize renders
+// ============================================================================
+
+type EtaState = {
+  byStopId: Record<string, KmbEtaEntryWithLeg[]>;
+  loadedStopIds: string[];
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+  loading: boolean;
+  error: string | null;
+  stale: boolean;
+  lastUpdatedAt: number | null;
+};
+
+type EtaAction =
+  | { type: "REFRESH_START" }
+  | {
+      type: "REFRESH_SUCCESS";
+      payload: {
+        byStopId: Record<string, KmbEtaEntryWithLeg[]>;
+        loadedStopIds: string[];
+        faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+      };
+    }
+  | { type: "REFRESH_ERROR"; error: string }
+  | {
+      type: "APPEND_STOPS";
+      payload: {
+        byStopId: Record<string, KmbEtaEntryWithLeg[]>;
+        newStopIds: string[];
+        faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+      };
+    }
+  | { type: "RESET" };
+
+const initialEtaState: EtaState = {
+  byStopId: {},
+  loadedStopIds: [],
+  faresByVariantKey: {},
+  loading: false,
+  error: null,
+  stale: false,
+  lastUpdatedAt: null,
+};
+
+function etaReducer(state: EtaState, action: EtaAction): EtaState {
+  switch (action.type) {
+    case "REFRESH_START":
+      return { ...state, loading: true, error: null };
+    case "REFRESH_SUCCESS":
+      return {
+        ...state,
+        byStopId: action.payload.byStopId,
+        loadedStopIds: action.payload.loadedStopIds,
+        faresByVariantKey: action.payload.faresByVariantKey,
+        loading: false,
+        error: null,
+        stale: false,
+        lastUpdatedAt: Date.now(),
+      };
+    case "REFRESH_ERROR":
+      return { ...state, loading: false, error: action.error, stale: true };
+    case "APPEND_STOPS":
+      return {
+        ...state,
+        byStopId: { ...state.byStopId, ...action.payload.byStopId },
+        loadedStopIds: [...state.loadedStopIds, ...action.payload.newStopIds],
+        faresByVariantKey: { ...state.faresByVariantKey, ...action.payload.faresByVariantKey },
+        loading: false,
+      };
+    case "RESET":
+      return initialEtaState;
+    default:
+      return state;
+  }
+}
+
+// ============================================================================
+// Stop Search Index - Precompute for O(1) contains lookups
+// ============================================================================
+
+type StopSearchIndex = {
+  /** Lowercased concatenation of all name fields for each stop */
+  normalizedNames: Map<string, string>;
+  /** Version counter to detect when stops change */
+  version: number;
+};
+
+function buildStopSearchIndex(stops: KmbStopSearchItem[]): StopSearchIndex {
+  const normalizedNames = new Map<string, string>();
+  for (const stop of stops) {
+    const normalized = `${stop.nameEn.toLowerCase()}|${stop.nameTc.toLowerCase()}|${stop.nameSc.toLowerCase()}`;
+    normalizedNames.set(stop.stopId, normalized);
+  }
+  return { normalizedNames, version: stops.length };
+}
+
+function searchStopsByContains(
+  stops: KmbStopSearchItem[],
+  index: StopSearchIndex,
+  query: string
+): string[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+
+  const result: string[] = [];
+  for (const stop of stops) {
+    const normalized = index.normalizedNames.get(stop.stopId);
+    if (normalized && normalized.includes(needle)) {
+      result.push(stop.stopId);
+    }
+  }
+  return result;
+}
+
+// ============================================================================
+// Route-Stop Index - O(1) lookup of variant keys by stop ID
+// ============================================================================
+
+type RouteStopIndex = {
+  /** stopId -> Set of variant keys (route|bound|serviceType) */
+  byStopId: Map<string, Set<string>>;
+  /** Version counter */
+  version: number;
+};
+
+function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
+  const byStopId = new Map<string, Set<string>>();
+  for (const entry of routeStops) {
+    const key = `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`;
+    let set = byStopId.get(entry.stopId);
+    if (!set) {
+      set = new Set();
+      byStopId.set(entry.stopId, set);
+    }
+    set.add(key);
+  }
+  return { byStopId, version: routeStops.length };
+}
+
+function getVariantKeysForStops(index: RouteStopIndex, stopIds: string[]): string[] {
+  const result = new Set<string>();
+  for (const stopId of stopIds) {
+    const keys = index.byStopId.get(stopId);
+    if (keys) {
+      for (const key of keys) {
+        result.add(key);
+      }
+    }
+  }
+  return Array.from(result);
+}
+
+// ============================================================================
+// Precomputed Render Groups - Avoid recomputing during render
+// ============================================================================
+
+export type EtaGroup = {
+  key: string;
+  /** Base variant key without leg suffix (route|dir|service_type) for fare lookup */
+  baseKey: string;
+  items: KmbEtaEntryWithLeg[];
+  hasEta: boolean;
+  /** Whether this group has a displayable fare (false for leg B / arriving groups) */
+  hasFare: boolean;
+  /** Whether this is the "arriving/returning" leg (leg B) - should show origin instead of destination */
+  isArrivingLeg: boolean;
+};
+
+export type PrecomputedGroups = {
+  /** Groups by stop ID for sectioned rendering */
+  byStopId: Record<string, EtaGroup[]>;
+  /** Flat groups for legacy rendering (non-keyphrase mode) */
+  flat: EtaGroup[];
+};
+
+function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
+  return items.some((entry) => entry.eta && !isNaN(Date.parse(entry.eta)));
+}
+
+function groupEtasByVariant(
+  eta: KmbEtaEntryWithLeg[],
+  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>
+): EtaGroup[] {
+  const byVariant = new Map<string, KmbEtaEntryWithLeg[]>();
+  for (const entry of eta) {
+    const route = (entry.route ?? "").toUpperCase();
+    const dir = String(entry.dir ?? "");
+    const serviceType = String(entry.service_type ?? "");
+    // Include leg in key to separate departing/arriving ETAs for circular routes
+    const legSuffix = entry.leg ?? "_";
+    const key = `${route}|${dir}|${serviceType}|${legSuffix}`;
+
+    const items = byVariant.get(key) ?? [];
+    items.push(entry);
+    byVariant.set(key, items);
+  }
+
+  const groups = Array.from(byVariant.entries()).map(([key, items]) => {
+    const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq);
+    const hasEta = hasValidEta(sorted);
+    
+    // Extract base key (route|dir|service_type) for fare lookup
+    const parts = key.split("|");
+    const baseKey = parts.slice(0, 3).join("|");
+    const legPart = parts[3];
+    const isArrivingLeg = legPart === "B";
+    
+    // Suppress fare for arriving leg (leg B) - it's the last stop, passengers can't board
+    const hasFare = !isArrivingLeg && Boolean(faresByVariantKey?.[baseKey]);
+    
+    return { key, baseKey, items: sorted, hasEta, hasFare, isArrivingLeg };
+  });
+
+  // Sort alphabetically by route number
+  const sortByRoute = (a: { key: string }, b: { key: string }) => {
+    const [routeA] = a.key.split("|");
+    const [routeB] = b.key.split("|");
+    return routeA.localeCompare(routeB, undefined, { numeric: true });
+  };
+
+  // Order: ETAs w/ fare, ETAs w/o fare, then routes w/o ETA.
+  const withEtasAndFare = groups.filter((g) => g.hasEta && g.hasFare).sort(sortByRoute);
+  const withEtasNoFare = groups.filter((g) => g.hasEta && !g.hasFare).sort(sortByRoute);
+  const withoutEtas = groups.filter((g) => !g.hasEta).sort(sortByRoute);
+
+  return [...withEtasAndFare, ...withEtasNoFare, ...withoutEtas];
+}
+
+function precomputeRenderGroups(
+  etaByStopId: Record<string, KmbEtaEntryWithLeg[]>,
+  loadedStopIds: string[],
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>
+): PrecomputedGroups {
+  // Precompute groups by stop ID
+  const byStopId: Record<string, EtaGroup[]> = {};
+  for (const stopId of loadedStopIds) {
+    const eta = etaByStopId[stopId] ?? [];
+    byStopId[stopId] = groupEtasByVariant(eta, faresByVariantKey);
+  }
+
+  // Precompute flat groups (for non-keyphrase mode)
+  const allEtas = loadedStopIds.flatMap((stopId) => etaByStopId[stopId] ?? []);
+  const flat = groupEtasByVariant(allEtas, faresByVariantKey);
+
+  return { byStopId, flat };
+}
+
+// ============================================================================
+// Types and Helpers
+// ============================================================================
 
 type Props = {
   lang: UiLanguage;
@@ -61,6 +313,13 @@ type KmbQuery =
       serviceType?: string;
     };
 
+/** Cached result for contains query resolution */
+type ContainsCache = {
+  query: string;
+  stopIds: string[];
+  stopsVersion: number;
+};
+
 function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
   if (lang === "en") return stop.nameEn;
   if (lang === "sc") return stop.nameSc;
@@ -79,6 +338,7 @@ function normalizeKmbRoutesInput(input: string) {
   return requestedRoutes?.length ? requestedRoutes : null;
 }
 
+/** Legacy function - still used for small filter operations where index isn't needed */
 function stopNameContains(stop: KmbStopSearchItem, query: string) {
   const needle = query.trim().toLowerCase();
   if (!needle) return false;
@@ -97,9 +357,10 @@ export type KmbPaneState = {
   lang: UiLanguage;
   routeFilter: RouteFilterState;
   routeInfos: Record<string, KmbRouteInfoLite>;
-  eta: KmbEtaEntry[];
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+  eta: KmbEtaEntryWithLeg[];
   /** ETAs grouped by stop ID for sectioned rendering */
-  etaByStopId: Record<string, KmbEtaEntry[]>;
+  etaByStopId: Record<string, KmbEtaEntryWithLeg[]>;
   /** Ordered list of stop IDs that have been loaded */
   loadedStopIds: string[];
   loading: boolean;
@@ -118,6 +379,8 @@ export type KmbPaneState = {
   sentinelRef: React.RefObject<HTMLDivElement | null>;
   /** Whether there are more stops to load */
   hasMoreStops: boolean;
+  /** Precomputed render groups to avoid recomputation during render */
+  precomputedGroups: PrecomputedGroups;
 };
 
 export function KmbPane({
@@ -152,26 +415,72 @@ export function KmbPane({
     entries: [],
   });
 
-  // ETA state - now with byStopId for sectioned rendering
-  const [kmbEtaByStopId, setKmbEtaByStopId] = React.useState<Record<string, KmbEtaEntry[]>>({});
-  const [loadedStopIds, setLoadedStopIds] = React.useState<string[]>([]);
-  const [kmbEtaLoading, setKmbEtaLoading] = React.useState(false);
-  const [kmbEtaError, setKmbEtaError] = React.useState<string | null>(null);
-  const [kmbEtaLastUpdatedAt, setKmbEtaLastUpdatedAt] = React.useState<number | null>(null);
-  const [kmbEtaStale, setKmbEtaStale] = React.useState(false);
+  // ========== OPTIMIZATION: Use reducer for batched ETA state updates ==========
+  const [etaState, dispatchEta] = React.useReducer(etaReducer, initialEtaState);
 
-  // Compute all stop IDs for the current query (no limit)
+  // Aliases for backwards compatibility with existing code
+  const kmbEtaByStopId = etaState.byStopId;
+  const loadedStopIds = etaState.loadedStopIds;
+  const kmbEtaLoading = etaState.loading;
+  const kmbEtaError = etaState.error;
+  const kmbEtaLastUpdatedAt = etaState.lastUpdatedAt;
+  const kmbEtaStale = etaState.stale;
+  const kmbFaresByVariantKey = etaState.faresByVariantKey;
+
+  // ========== OPTIMIZATION: Build search index once when stops load ==========
+  const stopSearchIndex = React.useMemo<StopSearchIndex>(() => {
+    return buildStopSearchIndex(kmbStops);
+  }, [kmbStops]);
+
+  // ========== OPTIMIZATION: Build route-stop index once when routeStops load ==========
+  const routeStopIndex = React.useMemo<RouteStopIndex>(() => {
+    return buildRouteStopIndex(kmbRouteStops);
+  }, [kmbRouteStops]);
+
+  // ========== OPTIMIZATION: Cache contains query resolution ==========
+  // This avoids re-scanning all stops on every refresh/auto-refresh
+  const containsCacheRef = React.useRef<ContainsCache | null>(null);
+
+  const resolveContainsStopIds = React.useCallback(
+    (query: string): string[] => {
+      const trimmed = query.trim();
+      if (trimmed.length < 3) return [];
+
+      const cache = containsCacheRef.current;
+      // Return cached result if query and stops haven't changed
+      if (
+        cache &&
+        cache.query === trimmed &&
+        cache.stopsVersion === stopSearchIndex.version
+      ) {
+        return cache.stopIds;
+      }
+
+      // Compute using indexed search
+      const stopIds = searchStopsByContains(kmbStops, stopSearchIndex, trimmed);
+
+      // Cache the result
+      containsCacheRef.current = {
+        query: trimmed,
+        stopIds,
+        stopsVersion: stopSearchIndex.version,
+      };
+
+      return stopIds;
+    },
+    [kmbStops, stopSearchIndex]
+  );
+
+  // Compute all stop IDs for the current query (uses cached resolution for contains)
   const allStopIds = React.useMemo(() => {
     if (!kmbQuery) return [];
     if (kmbQuery.mode === "stop") return [kmbQuery.stopId];
     if (kmbQuery.mode === "stops") return kmbQuery.stopIds;
-    if (kmbQuery.mode === "contains" && kmbQuery.query.trim().length >= 3) {
-      return kmbStops
-        .filter((stop) => stopNameContains(stop, kmbQuery.query))
-        .map((stop) => stop.stopId);
+    if (kmbQuery.mode === "contains") {
+      return resolveContainsStopIds(kmbQuery.query);
     }
     return [];
-  }, [kmbQuery, kmbStops]);
+  }, [kmbQuery, resolveContainsStopIds]);
 
   // Infinite scroll hook for keyphrase mode
   const infiniteScroll = useInfiniteScroll({
@@ -271,17 +580,12 @@ export function KmbPane({
     [lang]
   );
 
+  // ========== OPTIMIZATION: Use index for available route variants ==========
   const kmbAvailableRouteVariants: RouteFilterOption[] = React.useMemo(() => {
     if (!availableStopIdsForFilter.length) return [];
 
-    const stopSet = new Set(availableStopIdsForFilter);
-    const variantKeys = Array.from(
-      new Set(
-        kmbRouteStops
-          .filter((entry) => stopSet.has(entry.stopId))
-          .map((entry) => `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`)
-      )
-    );
+    // Use the route-stop index instead of filtering the entire array
+    const variantKeys = getVariantKeysForStops(routeStopIndex, availableStopIdsForFilter);
 
     return variantKeys
       .map((key) => {
@@ -294,20 +598,14 @@ export function KmbPane({
         };
       })
       .filter((opt) => opt.route);
-  }, [availableStopIdsForFilter, kmbRouteInfos, kmbRouteStops, pickRouteVariantLabel]);
+  }, [availableStopIdsForFilter, kmbRouteInfos, routeStopIndex, pickRouteVariantLabel]);
 
   React.useEffect(() => {
     if (!availableStopIdsForFilter.length) return;
-    if (!kmbRouteStops.length) return;
+    if (!routeStopIndex.version) return;
 
-    const stopSet = new Set(availableStopIdsForFilter);
-    const variantKeys = Array.from(
-      new Set(
-        kmbRouteStops
-          .filter((entry) => stopSet.has(entry.stopId))
-          .map((entry) => `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`)
-      )
-    );
+    // Use the route-stop index instead of filtering the entire array
+    const variantKeys = getVariantKeysForStops(routeStopIndex, availableStopIdsForFilter);
 
     const missing = variantKeys.filter((key) => !kmbRouteInfos[key]);
     if (!missing.length) return;
@@ -339,7 +637,7 @@ export function KmbPane({
     return () => {
       cancelled = true;
     };
-  }, [availableStopIdsForFilter, kmbRouteInfos, kmbRouteStops]);
+  }, [availableStopIdsForFilter, kmbRouteInfos, routeStopIndex]);
 
   React.useEffect(() => {
     if (routeFilterMode !== "advanced") return;
@@ -353,11 +651,7 @@ export function KmbPane({
 
     setRouteFilter((prev) => ({ ...prev, entries: nextEntries }));
     setKmbQuery(null);
-    setKmbEtaByStopId({});
-    setLoadedStopIds([]);
-    setKmbEtaError(null);
-    setKmbEtaStale(false);
-    setKmbEtaLastUpdatedAt(null);
+    dispatchEta({ type: "RESET" });
   }, [kmbAvailableRouteVariants, routeFilter.entries, routeFilterMode]);
 
   // AbortController for cancelling in-flight requests
@@ -409,11 +703,12 @@ export function KmbPane({
         ? new Set(advancedEntries.map((e) => e.variantKey).filter(Boolean))
         : null;
 
-      const filteredByStopId: Record<string, KmbEtaEntry[]> = {};
+      const filteredByStopId: Record<string, KmbEtaEntryWithLeg[]> = {};
       for (const stopId of stopIds) {
         let etas = result.byStopId[stopId] ?? [];
         if (advancedKeys) {
           etas = etas.filter((eta) => {
+            // Use base key (without leg) for advanced filter matching
             const key = `${(eta.route ?? "").toUpperCase()}|${eta.dir}|${String(eta.service_type)}`;
             return advancedKeys.has(key);
           });
@@ -422,20 +717,32 @@ export function KmbPane({
       }
 
       if (options.append) {
-        setKmbEtaByStopId((prev) => ({ ...prev, ...filteredByStopId }));
-        setLoadedStopIds((prev) => {
-          const existing = new Set(prev);
-          const newIds = stopIds.filter((id) => !existing.has(id));
-          return [...prev, ...newIds];
+        // Append mode: merge with existing state
+        const existingSet = new Set(etaState.loadedStopIds);
+        const newStopIds = stopIds.filter((id) => !existingSet.has(id));
+        dispatchEta({
+          type: "APPEND_STOPS",
+          payload: {
+            byStopId: filteredByStopId,
+            newStopIds,
+            faresByVariantKey: result.faresByVariantKey ?? {},
+          },
         });
       } else {
-        setKmbEtaByStopId(filteredByStopId);
-        setLoadedStopIds(stopIds);
+        // Replace mode: full refresh
+        dispatchEta({
+          type: "REFRESH_SUCCESS",
+          payload: {
+            byStopId: filteredByStopId,
+            loadedStopIds: stopIds,
+            faresByVariantKey: result.faresByVariantKey ?? {},
+          },
+        });
       }
 
       return { filteredByStopId, result };
     },
-    [routeFilter.entries, routeFilterMode]
+    [routeFilter.entries, routeFilterMode, etaState.loadedStopIds]
   );
 
   // Main refresh function - handles both initial load and refresh of loaded stops
@@ -453,17 +760,13 @@ export function KmbPane({
 
       const routeFilterString = getRouteFilterString(query);
 
-      // Determine which stops to fetch
+      // ========== OPTIMIZATION: Use cached stopId resolution for contains mode ==========
       const queryStopIds =
         query.mode === "stop"
           ? [query.stopId]
           : query.mode === "stops"
             ? query.stopIds
-            : query.query.trim().length >= 3
-              ? kmbStops
-                  .filter((stop) => stopNameContains(stop, query.query))
-                  .map((stop) => stop.stopId)
-              : [];
+            : resolveContainsStopIds(query.query);
 
       if (!queryStopIds.length) return;
 
@@ -474,10 +777,8 @@ export function KmbPane({
         ? queryStopIds.slice(0, STOPS_PER_PAGE)
         : loadedStopIds;
 
-      setKmbEtaLoading(true);
+      dispatchEta({ type: "REFRESH_START" });
       try {
-        setKmbEtaError(null);
-
         const fetchResult = await fetchStopEtas(stopIdsToFetch, {
           routeFilterString,
           signal: controller.signal,
@@ -486,13 +787,12 @@ export function KmbPane({
 
         if (controller.signal.aborted) return;
 
-        setKmbEtaLastUpdatedAt(Date.now());
-        setKmbEtaStale(false);
+        // Note: fetchStopEtas already dispatches REFRESH_SUCCESS
 
-        // Fetch missing route info for the ETAs we got
+        // ========== OPTIMIZATION: Use route-stop index for variant key lookup ==========
         if (fetchResult) {
           const allEtas = Object.values(fetchResult.filteredByStopId).flat();
-          const variantKeys = Array.from(
+          const variantKeysFromEtas = Array.from(
             new Set(
               allEtas.map(
                 (eta) => `${(eta.route ?? "").toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
@@ -500,17 +800,13 @@ export function KmbPane({
             )
           );
 
-          const candidateKeysFromStops = Array.from(
-            new Set(
-              kmbRouteStops
-                .filter((entry) => stopIdsToFetch.includes(entry.stopId))
-                .map((entry) => `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`)
-            )
-          );
+          // Use index instead of filtering entire kmbRouteStops array
+          const candidateKeysFromStops = getVariantKeysForStops(routeStopIndex, stopIdsToFetch);
 
-          const missingKeys = [...variantKeys, ...candidateKeysFromStops].filter(
-            (key) => !kmbRouteInfos[key as string]
-          ) as string[];
+          const allVariantKeys = new Set([...variantKeysFromEtas, ...candidateKeysFromStops]);
+          const missingKeys = Array.from(allVariantKeys).filter(
+            (key) => !kmbRouteInfos[key]
+          );
 
           if (missingKeys.length && !controller.signal.aborted) {
             const fetched = await Promise.allSettled(
@@ -538,20 +834,16 @@ export function KmbPane({
         if (controller.signal.aborted) return;
 
         const message = error instanceof Error ? error.message : "Failed to load ETAs";
-        setKmbEtaError(message);
-        setKmbEtaStale(true);
+        dispatchEta({ type: "REFRESH_ERROR", error: message });
 
         if (options?.toastOnError) {
           const { toast } = await import("sonner");
           toast.error(message);
         }
-      } finally {
-        if (!controller.signal.aborted) {
-          setKmbEtaLoading(false);
-        }
       }
+      // Note: loading state is managed by REFRESH_START/REFRESH_SUCCESS/REFRESH_ERROR
     },
-    [kmbQuery, kmbRouteInfos, kmbRouteStops, kmbStops, loadedStopIds, getRouteFilterString, fetchStopEtas]
+    [kmbQuery, kmbRouteInfos, loadedStopIds, getRouteFilterString, fetchStopEtas, resolveContainsStopIds, routeStopIndex]
   );
 
   // Load more stops when infinite scroll triggers
@@ -570,21 +862,18 @@ export function KmbPane({
 
     const routeFilterString = getRouteFilterString(kmbQuery);
 
-    setKmbEtaLoading(true);
+    dispatchEta({ type: "REFRESH_START" });
     try {
       await fetchStopEtas(nextStopIds, {
         routeFilterString,
         signal: controller.signal,
         append: true,
       });
+      // Note: fetchStopEtas dispatches APPEND_STOPS on success
     } catch (error) {
       if (!controller.signal.aborted) {
         const message = error instanceof Error ? error.message : "Failed to load more stops";
-        setKmbEtaError(message);
-      }
-    } finally {
-      if (!controller.signal.aborted) {
-        setKmbEtaLoading(false);
+        dispatchEta({ type: "REFRESH_ERROR", error: message });
       }
     }
   }, [kmbQuery, kmbEtaLoading, loadedStopIds, allStopIds, getRouteFilterString, fetchStopEtas]);
@@ -652,11 +941,7 @@ export function KmbPane({
 
     // Clear state for new query
     setKmbQuery(null);
-    setKmbEtaByStopId({});
-    setLoadedStopIds([]);
-    setKmbEtaError(null);
-    setKmbEtaStale(false);
-    setKmbEtaLastUpdatedAt(null);
+    dispatchEta({ type: "RESET" });
     infiniteScroll.reset();
   }, [onRouteFilterModeChange, routeFilterMode, selectedItem, infiniteScroll]);
 
@@ -707,8 +992,7 @@ export function KmbPane({
             };
 
     // Reset infinite scroll and state for new query
-    setKmbEtaByStopId({});
-    setLoadedStopIds([]);
+    dispatchEta({ type: "RESET" });
     infiniteScroll.reset();
 
     setKmbQuery(nextQuery);
@@ -945,11 +1229,17 @@ export function KmbPane({
 
   const isKeyphraseMode = kmbQuery?.mode === "contains";
 
+  // ========== OPTIMIZATION: Precompute render groups to avoid work during render ==========
+  const precomputedGroups = React.useMemo<PrecomputedGroups>(() => {
+    return precomputeRenderGroups(kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey);
+  }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey]);
+
   const paneState = React.useMemo<KmbPaneState>(
     () => ({
       lang,
       routeFilter,
       routeInfos: kmbRouteInfos,
+      faresByVariantKey: kmbFaresByVariantKey,
       eta: kmbEta,
       etaByStopId: kmbEtaByStopId,
       loadedStopIds,
@@ -966,10 +1256,12 @@ export function KmbPane({
       refresh: (options) => refreshKmbEta(kmbQuery, options),
       sentinelRef: infiniteScroll.sentinelRef,
       hasMoreStops: infiniteScroll.hasMore,
+      precomputedGroups,
     }),
     [
       kmbEta,
       kmbEtaByStopId,
+      kmbFaresByVariantKey,
       loadedStopIds,
       kmbEtaLoading,
       kmbEtaError,
@@ -986,6 +1278,7 @@ export function KmbPane({
       isKeyphraseMode,
       infiniteScroll.sentinelRef,
       infiniteScroll.hasMore,
+      precomputedGroups,
     ]
   );
 

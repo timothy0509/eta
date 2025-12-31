@@ -24,25 +24,42 @@ import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } fr
 import { isLanguageSupported } from "@/lib/eta/types";
 import { useAutoRefresh } from "@/lib/eta/use-auto-refresh";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
+import { useShallow } from "zustand/shallow";
+
+// ============================================================================
+// Consolidated store selectors with shallow equality for stable snapshots
+// ============================================================================
+const useAppStoreState = () =>
+  useAppStore(
+    useShallow((s) => ({
+      mode: s.mode,
+      lang: s.lang,
+      routeFilterMode: s.routeFilterMode,
+      autoRefreshSeconds: s.autoRefreshSeconds,
+    }))
+  );
+
+const useAppStoreActions = () =>
+  useAppStore(
+    useShallow((s) => ({
+      setMode: s.setMode,
+      setLang: s.setLang,
+      setRouteFilterMode: s.setRouteFilterMode,
+      setAutoRefreshSeconds: s.setAutoRefreshSeconds,
+      addFavorite: s.addFavorite,
+      addRecent: s.addRecent,
+    }))
+  );
 
 export default function Home() {
-  const mode = useAppStore((s) => s.mode);
-  const setMode = useAppStore((s) => s.setMode);
-
-  const lang = useAppStore((s) => s.lang);
-  const setLang = useAppStore((s) => s.setLang);
-
-  const routeFilterMode = useAppStore((s) => s.routeFilterMode);
-  const setRouteFilterMode = useAppStore((s) => s.setRouteFilterMode);
-
-  const autoRefreshSeconds = useAppStore((s) => s.autoRefreshSeconds);
-  const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds);
+  // Consolidated state subscription (single re-render when any state changes)
+  const { mode, lang, routeFilterMode, autoRefreshSeconds } = useAppStoreState();
+  
+  // Actions are stable and don't cause re-renders
+  const { setMode, setLang, setRouteFilterMode, setAutoRefreshSeconds, addFavorite, addRecent } = useAppStoreActions();
 
   const [savedOpen, setSavedOpen] = React.useState(false);
   const [isDesktop, setIsDesktop] = React.useState(false);
-
-  const addFavorite = useAppStore((s) => s.addFavorite);
-  const addRecent = useAppStore((s) => s.addRecent);
 
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [themeMounted, setThemeMounted] = React.useState(false);
@@ -305,6 +322,7 @@ export default function Home() {
                   routesFilter={kmbPaneState?.routeFilter.routes ?? ""}
                   eta={kmbPaneState?.eta ?? []}
                   routeInfos={kmbPaneState?.routeInfos ?? {}}
+                  faresByVariantKey={kmbPaneState?.faresByVariantKey ?? {}}
                   hasQuery={kmbPaneState?.hasQuery ?? false}
                   error={kmbPaneState?.error ?? null}
                   stale={kmbPaneState?.stale ?? false}
@@ -313,6 +331,12 @@ export default function Home() {
                   loading={kmbPaneState?.loading}
                   stops={kmbPaneState?.stops ?? undefined}
                   multipleStops={kmbPaneState?.multipleStops}
+                  isKeyphraseMode={kmbPaneState?.isKeyphraseMode}
+                  etaByStopId={kmbPaneState?.etaByStopId}
+                  loadedStopIds={kmbPaneState?.loadedStopIds}
+                  sentinelRef={kmbPaneState?.sentinelRef}
+                  hasMoreStops={kmbPaneState?.hasMoreStops}
+                  precomputedGroups={kmbPaneState?.precomputedGroups}
                 />
 
               ) : null}

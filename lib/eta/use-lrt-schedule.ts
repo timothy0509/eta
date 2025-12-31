@@ -15,46 +15,71 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
   const [lastUpdatedAt, setLastUpdatedAt] = React.useState<number | null>(null);
   const [stale, setStale] = React.useState(false);
 
+  // AbortController for cancelling in-flight requests
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
   const refresh = React.useCallback(
     async (options?: { toastOnError?: boolean }) => {
       if (!stationId) return;
-     setLoading(true);
-     try {
-       setError(null);
 
-      const response = await fetch(
-        `/api/lrt/schedule?stationId=${encodeURIComponent(stationId)}`
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to load schedule: ${response.status}`);
+      // Cancel any in-flight request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
       }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
-       const json = (await response.json()) as { schedule: LrtScheduleResponse };
-       setSchedule(json.schedule);
-       setLastUpdatedAt(Date.now());
-       setStale(false);
-     } catch (error) {
-       const message = error instanceof Error ? error.message : "Failed to load schedule";
-       setError(message);
-       setStale(true);
-       if (options?.toastOnError) {
-         const { toast } = await import("sonner");
-         toast.error(message);
-       }
-     } finally {
-       setLoading(false);
-     }
-   },
-   [stationId]
- );
+      setLoading(true);
+      try {
+        setError(null);
 
+        const response = await fetch(
+          `/api/lrt/schedule?stationId=${encodeURIComponent(stationId)}`,
+          { signal: controller.signal }
+        );
+
+        if (controller.signal.aborted) return;
+
+        if (!response.ok) {
+          throw new Error(`Failed to load schedule: ${response.status}`);
+        }
+
+        const json = (await response.json()) as { schedule: LrtScheduleResponse };
+        setSchedule(json.schedule);
+        setLastUpdatedAt(Date.now());
+        setStale(false);
+      } catch (error) {
+        if (controller.signal.aborted) return;
+
+        const message = error instanceof Error ? error.message : "Failed to load schedule";
+        setError(message);
+        setStale(true);
+        if (options?.toastOnError) {
+          const { toast } = await import("sonner");
+          toast.error(message);
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoading(false);
+        }
+      }
+    },
+    [stationId]
+  );
+
+  // Cleanup abort controller on unmount
+  React.useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   React.useEffect(() => {
     if (!stationId) return;
-     void refresh({ toastOnError: false });
-   }, [refresh, stationId]);
-
+    void refresh({ toastOnError: false });
+  }, [refresh, stationId]);
 
   const title = React.useMemo(() => {
     if (!stationId) return "Light Rail";

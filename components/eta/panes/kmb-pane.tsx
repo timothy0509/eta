@@ -15,13 +15,14 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import {
-  fetchKmbEtas,
   fetchKmbRouteInfo,
   fetchKmbRouteStops,
   fetchKmbStops,
+  fetchKmbStopEtas,
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
 } from "@/lib/eta/client";
+import { useInfiniteScroll } from "@/lib/eta/use-infinite-scroll";
 import type { KmbEtaEntry } from "@/lib/eta/kmb";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
@@ -89,21 +90,34 @@ function stopNameContains(stop: KmbStopSearchItem, query: string) {
   );
 }
 
+/** Stops per page for infinite scroll */
+const STOPS_PER_PAGE = 10;
+
 export type KmbPaneState = {
   lang: UiLanguage;
   routeFilter: RouteFilterState;
   routeInfos: Record<string, KmbRouteInfoLite>;
   eta: KmbEtaEntry[];
+  /** ETAs grouped by stop ID for sectioned rendering */
+  etaByStopId: Record<string, KmbEtaEntry[]>;
+  /** Ordered list of stop IDs that have been loaded */
+  loadedStopIds: string[];
   loading: boolean;
   error?: string | null;
   stale?: boolean;
   lastUpdatedAt?: number;
   hasQuery: boolean;
   multipleStops: boolean;
+  /** Whether this is a keyphrase search (contains mode) */
+  isKeyphraseMode: boolean;
   title: string;
   stopCode: string | null;
   stops: KmbStopSearchItem[];
   refresh: (options?: { toastOnError?: boolean }) => Promise<void>;
+  /** Sentinel ref for infinite scroll */
+  sentinelRef: React.RefObject<HTMLDivElement | null>;
+  /** Whether there are more stops to load */
+  hasMoreStops: boolean;
 };
 
 export function KmbPane({
@@ -138,11 +152,39 @@ export function KmbPane({
     entries: [],
   });
 
-  const [kmbEta, setKmbEta] = React.useState<KmbEtaEntry[] | null>(null);
+  // ETA state - now with byStopId for sectioned rendering
+  const [kmbEtaByStopId, setKmbEtaByStopId] = React.useState<Record<string, KmbEtaEntry[]>>({});
+  const [loadedStopIds, setLoadedStopIds] = React.useState<string[]>([]);
   const [kmbEtaLoading, setKmbEtaLoading] = React.useState(false);
   const [kmbEtaError, setKmbEtaError] = React.useState<string | null>(null);
   const [kmbEtaLastUpdatedAt, setKmbEtaLastUpdatedAt] = React.useState<number | null>(null);
   const [kmbEtaStale, setKmbEtaStale] = React.useState(false);
+
+  // Compute all stop IDs for the current query (no limit)
+  const allStopIds = React.useMemo(() => {
+    if (!kmbQuery) return [];
+    if (kmbQuery.mode === "stop") return [kmbQuery.stopId];
+    if (kmbQuery.mode === "stops") return kmbQuery.stopIds;
+    if (kmbQuery.mode === "contains" && kmbQuery.query.trim().length >= 3) {
+      return kmbStops
+        .filter((stop) => stopNameContains(stop, kmbQuery.query))
+        .map((stop) => stop.stopId);
+    }
+    return [];
+  }, [kmbQuery, kmbStops]);
+
+  // Infinite scroll hook for keyphrase mode
+  const infiniteScroll = useInfiniteScroll({
+    totalItems: allStopIds.length,
+    initialPageSize: STOPS_PER_PAGE,
+    pageSize: STOPS_PER_PAGE,
+    rootMargin: "300px",
+  });
+
+  // Derived flat eta array for backwards compatibility
+  const kmbEta = React.useMemo(() => {
+    return loadedStopIds.flatMap((stopId) => kmbEtaByStopId[stopId] ?? []);
+  }, [kmbEtaByStopId, loadedStopIds]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -311,18 +353,108 @@ export function KmbPane({
 
     setRouteFilter((prev) => ({ ...prev, entries: nextEntries }));
     setKmbQuery(null);
-    setKmbEta(null);
+    setKmbEtaByStopId({});
+    setLoadedStopIds([]);
     setKmbEtaError(null);
     setKmbEtaStale(false);
     setKmbEtaLastUpdatedAt(null);
   }, [kmbAvailableRouteVariants, routeFilter.entries, routeFilterMode]);
 
+  // AbortController for cancelling in-flight requests
+  const abortControllerRef = React.useRef<AbortController | null>(null);
+
+  // Build route filter string based on current filter state
+  const getRouteFilterString = React.useCallback(
+    (query: KmbQuery) => {
+      const advancedEntries = routeFilterMode === "advanced" ? (routeFilter.entries ?? []) : [];
+      const requestedRoutes = normalizeKmbRoutesInput(query.route?.trim() ?? "");
+
+      if (advancedEntries.length) {
+        const routesFromAdvanced = new Set(
+          advancedEntries
+            .map((e) => e.variantKey.split("|")[0])
+            .filter(Boolean)
+        );
+        return Array.from(routesFromAdvanced).join(",");
+      } else if (requestedRoutes) {
+        return requestedRoutes.join(",");
+      }
+      return undefined;
+    },
+    [routeFilter.entries, routeFilterMode]
+  );
+
+  // Fetch ETAs for a specific set of stop IDs and merge into state
+  const fetchStopEtas = React.useCallback(
+    async (
+      stopIds: string[],
+      options: {
+        routeFilterString?: string;
+        signal?: AbortSignal;
+        append?: boolean;
+      }
+    ) => {
+      if (!stopIds.length) return;
+
+      const result = await fetchKmbStopEtas(stopIds, {
+        routeFilter: options.routeFilterString,
+        signal: options.signal,
+      });
+
+      if (options.signal?.aborted) return;
+
+      // Apply advanced filter client-side if needed
+      const advancedEntries = routeFilterMode === "advanced" ? (routeFilter.entries ?? []) : [];
+      const advancedKeys = advancedEntries.length
+        ? new Set(advancedEntries.map((e) => e.variantKey).filter(Boolean))
+        : null;
+
+      const filteredByStopId: Record<string, KmbEtaEntry[]> = {};
+      for (const stopId of stopIds) {
+        let etas = result.byStopId[stopId] ?? [];
+        if (advancedKeys) {
+          etas = etas.filter((eta) => {
+            const key = `${(eta.route ?? "").toUpperCase()}|${eta.dir}|${String(eta.service_type)}`;
+            return advancedKeys.has(key);
+          });
+        }
+        filteredByStopId[stopId] = etas;
+      }
+
+      if (options.append) {
+        setKmbEtaByStopId((prev) => ({ ...prev, ...filteredByStopId }));
+        setLoadedStopIds((prev) => {
+          const existing = new Set(prev);
+          const newIds = stopIds.filter((id) => !existing.has(id));
+          return [...prev, ...newIds];
+        });
+      } else {
+        setKmbEtaByStopId(filteredByStopId);
+        setLoadedStopIds(stopIds);
+      }
+
+      return { filteredByStopId, result };
+    },
+    [routeFilter.entries, routeFilterMode]
+  );
+
+  // Main refresh function - handles both initial load and refresh of loaded stops
   const refreshKmbEta = React.useCallback(
-    async (queryOverride?: KmbQuery | null, options?: { toastOnError?: boolean }) => {
+    async (queryOverride?: KmbQuery | null, options?: { toastOnError?: boolean; isInitialLoad?: boolean }) => {
       const query = queryOverride ?? kmbQuery;
       if (!query) return;
 
-      const stopIds =
+      // Cancel any in-flight request
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+
+      const routeFilterString = getRouteFilterString(query);
+
+      // Determine which stops to fetch
+      const queryStopIds =
         query.mode === "stop"
           ? [query.stopId]
           : query.mode === "stops"
@@ -330,107 +462,81 @@ export function KmbPane({
             : query.query.trim().length >= 3
               ? kmbStops
                   .filter((stop) => stopNameContains(stop, query.query))
-                  .slice(0, 20)
                   .map((stop) => stop.stopId)
               : [];
 
-      if (!stopIds.length) return;
+      if (!queryStopIds.length) return;
 
-      const advancedEntries = routeFilterMode === "advanced" ? (routeFilter.entries ?? []) : [];
-      const advancedKeys = advancedEntries.length
-        ? new Set(advancedEntries.map((e) => e.variantKey).filter(Boolean))
-        : null;
-
-      const requestedRoutes = normalizeKmbRoutesInput(query.route?.trim() ?? "");
-      const requestedSet = requestedRoutes ? new Set(requestedRoutes) : null;
+      // For initial load or query change, fetch first page
+      // For refresh, fetch all currently loaded stops
+      const isNewQuery = options?.isInitialLoad || loadedStopIds.length === 0;
+      const stopIdsToFetch = isNewQuery
+        ? queryStopIds.slice(0, STOPS_PER_PAGE)
+        : loadedStopIds;
 
       setKmbEtaLoading(true);
       try {
         setKmbEtaError(null);
-        const perStopPairs = stopIds.map((stopId) => {
-          const candidates = kmbRouteStops
-            .filter((entry) => entry.stopId === stopId)
-            .filter((entry) => {
-              const route = entry.route.toUpperCase();
-              if (advancedKeys) {
-                const key = `${route}|${entry.bound}|${entry.serviceType}`;
-                return advancedKeys.has(key);
-              }
 
-              if (!requestedSet) return true;
-              return requestedSet.has(route);
-            });
-
-          const uniquePairs = new Map<string, { route: string; serviceType: string }>();
-          for (const entry of candidates) {
-            const route = entry.route.toUpperCase();
-            const serviceType = entry.serviceType;
-            const key = `${route}|${serviceType}`;
-            if (!uniquePairs.has(key)) uniquePairs.set(key, { route, serviceType });
-          }
-
-          return {
-            stopId,
-            pairs: Array.from(uniquePairs.values()),
-          };
+        const fetchResult = await fetchStopEtas(stopIdsToFetch, {
+          routeFilterString,
+          signal: controller.signal,
+          append: false, // Always replace on refresh
         });
 
-        const requestPlans = perStopPairs
-          .flatMap((stopPlan) =>
-            stopPlan.pairs.map((pair) => ({
-              stopId: stopPlan.stopId,
-              route: pair.route,
-              serviceType: pair.serviceType,
-            }))
-          )
-          .slice(0, 60);
+        if (controller.signal.aborted) return;
 
-        const json = await fetchKmbEtas(requestPlans);
-
-        setKmbEta(json.eta);
         setKmbEtaLastUpdatedAt(Date.now());
         setKmbEtaStale(false);
 
-        const variantKeys = Array.from(
-          new Set(
-            json.eta.map(
-              (eta) => `${eta.route.toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
+        // Fetch missing route info for the ETAs we got
+        if (fetchResult) {
+          const allEtas = Object.values(fetchResult.filteredByStopId).flat();
+          const variantKeys = Array.from(
+            new Set(
+              allEtas.map(
+                (eta) => `${(eta.route ?? "").toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
+              )
             )
-          )
-        );
-
-        const candidateKeysFromStops = Array.from(
-          new Set(
-            kmbRouteStops
-              .filter((entry) => stopIds.includes(entry.stopId))
-              .map((entry) => `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`)
-          )
-        );
-
-        const missingKeys = [...variantKeys, ...candidateKeysFromStops].filter(
-          (key) => !kmbRouteInfos[key as string]
-        ) as string[];
-
-        if (missingKeys.length) {
-          const fetched = await Promise.allSettled(
-            missingKeys.map(async (key) => {
-              const [route, direction, serviceType] = key.split("|");
-              const info = await fetchKmbRouteInfo({ route, direction, serviceType });
-              return { key, info };
-            })
           );
 
-          const updates: Record<string, KmbRouteInfoLite> = {};
-          for (const item of fetched) {
-            if (item.status !== "fulfilled") continue;
-            updates[item.value.key] = item.value.info;
-          }
+          const candidateKeysFromStops = Array.from(
+            new Set(
+              kmbRouteStops
+                .filter((entry) => stopIdsToFetch.includes(entry.stopId))
+                .map((entry) => `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`)
+            )
+          );
 
-          if (Object.keys(updates).length) {
-            setKmbRouteInfos((prev) => ({ ...prev, ...updates }));
+          const missingKeys = [...variantKeys, ...candidateKeysFromStops].filter(
+            (key) => !kmbRouteInfos[key as string]
+          ) as string[];
+
+          if (missingKeys.length && !controller.signal.aborted) {
+            const fetched = await Promise.allSettled(
+              missingKeys.slice(0, 30).map(async (key) => {
+                const [route, direction, serviceType] = key.split("|");
+                const info = await fetchKmbRouteInfo({ route, direction, serviceType });
+                return { key, info };
+              })
+            );
+
+            if (!controller.signal.aborted) {
+              const updates: Record<string, KmbRouteInfoLite> = {};
+              for (const item of fetched) {
+                if (item.status !== "fulfilled") continue;
+                updates[item.value.key] = item.value.info;
+              }
+
+              if (Object.keys(updates).length) {
+                setKmbRouteInfos((prev) => ({ ...prev, ...updates }));
+              }
+            }
           }
         }
       } catch (error) {
+        if (controller.signal.aborted) return;
+
         const message = error instanceof Error ? error.message : "Failed to load ETAs";
         setKmbEtaError(message);
         setKmbEtaStale(true);
@@ -440,11 +546,70 @@ export function KmbPane({
           toast.error(message);
         }
       } finally {
-        setKmbEtaLoading(false);
+        if (!controller.signal.aborted) {
+          setKmbEtaLoading(false);
+        }
       }
     },
-    [kmbQuery, kmbRouteInfos, kmbRouteStops, kmbStops, routeFilter.entries, routeFilterMode]
+    [kmbQuery, kmbRouteInfos, kmbRouteStops, kmbStops, loadedStopIds, getRouteFilterString, fetchStopEtas]
   );
+
+  // Load more stops when infinite scroll triggers
+  const loadMoreStops = React.useCallback(async () => {
+    if (!kmbQuery || kmbEtaLoading) return;
+
+    const currentLoaded = new Set(loadedStopIds);
+    const nextStopIds = allStopIds
+      .filter((id) => !currentLoaded.has(id))
+      .slice(0, STOPS_PER_PAGE);
+
+    if (!nextStopIds.length) return;
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    const routeFilterString = getRouteFilterString(kmbQuery);
+
+    setKmbEtaLoading(true);
+    try {
+      await fetchStopEtas(nextStopIds, {
+        routeFilterString,
+        signal: controller.signal,
+        append: true,
+      });
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        const message = error instanceof Error ? error.message : "Failed to load more stops";
+        setKmbEtaError(message);
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setKmbEtaLoading(false);
+      }
+    }
+  }, [kmbQuery, kmbEtaLoading, loadedStopIds, allStopIds, getRouteFilterString, fetchStopEtas]);
+
+  // Watch infinite scroll visibleCount and load more when needed
+  const prevVisibleCountRef = React.useRef(infiniteScroll.visibleCount);
+  React.useEffect(() => {
+    const prev = prevVisibleCountRef.current;
+    const curr = infiniteScroll.visibleCount;
+    prevVisibleCountRef.current = curr;
+
+    // Only load more if visibleCount increased and we have more stops to load
+    if (curr > prev && curr > loadedStopIds.length && infiniteScroll.hasMore) {
+      void loadMoreStops();
+    }
+  }, [infiniteScroll.visibleCount, infiniteScroll.hasMore, loadedStopIds.length, loadMoreStops]);
+
+  // Cleanup abort controller on unmount
+  React.useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
 
   const refreshKmbEtaRef = React.useRef(refreshKmbEta);
   React.useEffect(() => {
@@ -485,12 +650,15 @@ export function KmbPane({
       setKmbDraftStopSelection({ type: "contains", query: selectedItem.query });
     }
 
+    // Clear state for new query
     setKmbQuery(null);
-    setKmbEta(null);
+    setKmbEtaByStopId({});
+    setLoadedStopIds([]);
     setKmbEtaError(null);
     setKmbEtaStale(false);
     setKmbEtaLastUpdatedAt(null);
-  }, [onRouteFilterModeChange, routeFilterMode, selectedItem]);
+    infiniteScroll.reset();
+  }, [onRouteFilterModeChange, routeFilterMode, selectedItem, infiniteScroll]);
 
   const prevStopSelectionRef = React.useRef<StopSearchSelection | undefined>(undefined);
   React.useEffect(() => {
@@ -538,9 +706,14 @@ export function KmbPane({
               serviceType: "1",
             };
 
+    // Reset infinite scroll and state for new query
+    setKmbEtaByStopId({});
+    setLoadedStopIds([]);
+    infiniteScroll.reset();
+
     setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false });
-  }, [kmbDraftStopSelection, kmbRouteStops.length, routeFilter.routes, routeFilterMode]);
+    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true });
+  }, [kmbDraftStopSelection, kmbRouteStops.length, routeFilter.routes, routeFilterMode, infiniteScroll]);
 
   React.useEffect(() => {
     if (!selectedItem) return;
@@ -575,7 +748,7 @@ export function KmbPane({
     if (!nextQuery) return;
 
     setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false });
+    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true });
   }, [selectedItem]);
 
   const prevEntriesRef = React.useRef<typeof routeFilter.entries>([]);
@@ -600,7 +773,7 @@ export function KmbPane({
           : { mode: "contains", query: kmbDraftStopSelection.query, serviceType: "1" };
 
     setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false });
+    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true });
   }, [routeFilterMode, routeFilter.entries, kmbDraftStopSelection, kmbRouteStops.length]);
 
   const [debouncedRoutes, setDebouncedRoutes] = React.useState(routeFilter.routes ?? "");
@@ -625,7 +798,7 @@ export function KmbPane({
           : { mode: "contains", query: kmbDraftStopSelection.query, route: routeInput || undefined, serviceType: "1" };
 
     setKmbQuery(nextQuery);
-    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false });
+    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true });
   }, [routeFilterMode, debouncedRoutes, kmbDraftStopSelection, kmbRouteStops.length]);
 
   const kmbResultsInfo = React.useMemo(() => {
@@ -770,30 +943,38 @@ export function KmbPane({
     onAddRecent(item);
   };
 
+  const isKeyphraseMode = kmbQuery?.mode === "contains";
+
   const paneState = React.useMemo<KmbPaneState>(
     () => ({
       lang,
       routeFilter,
       routeInfos: kmbRouteInfos,
-      eta: kmbEta ?? [],
+      eta: kmbEta,
+      etaByStopId: kmbEtaByStopId,
+      loadedStopIds,
       loading: kmbEtaLoading,
       error: kmbEtaError,
       stale: kmbEtaStale,
       lastUpdatedAt: kmbEtaLastUpdatedAt ?? undefined,
       hasQuery: Boolean(kmbQuery),
       multipleStops: kmbQuery?.mode === "stops" || kmbQuery?.mode === "contains",
+      isKeyphraseMode: isKeyphraseMode ?? false,
       title: kmbResultsInfo.title,
       stopCode: kmbResultsInfo.code,
       stops: kmbStops,
       refresh: (options) => refreshKmbEta(kmbQuery, options),
+      sentinelRef: infiniteScroll.sentinelRef,
+      hasMoreStops: infiniteScroll.hasMore,
     }),
     [
-        kmbEta,
-        kmbEtaLoading,
-        kmbEtaError,
-        kmbEtaLastUpdatedAt,
-        kmbEtaStale,
-
+      kmbEta,
+      kmbEtaByStopId,
+      loadedStopIds,
+      kmbEtaLoading,
+      kmbEtaError,
+      kmbEtaLastUpdatedAt,
+      kmbEtaStale,
       kmbQuery,
       kmbResultsInfo.code,
       kmbResultsInfo.title,
@@ -802,6 +983,9 @@ export function KmbPane({
       lang,
       refreshKmbEta,
       routeFilter,
+      isKeyphraseMode,
+      infiniteScroll.sentinelRef,
+      infiniteScroll.hasMore,
     ]
   );
 

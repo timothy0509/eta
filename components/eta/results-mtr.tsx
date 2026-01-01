@@ -24,58 +24,55 @@ type Props = {
   loading?: boolean;
 };
 
-// EAL station order (from south to north, excluding branch terminals)
-// Used to determine if "via Racecourse" is relevant for the current station
-const EAL_STATION_ORDER = [
-  "ADM", // Admiralty
-  "EXC", // Exhibition Centre
-  "HUH", // Hung Hom
-  "MKK", // Mong Kok East
-  "KOT", // Kowloon Tong
-  "TAW", // Tai Wai
-  "SHT", // Sha Tin
-  "FOT", // Fo Tan
-  "RAC", // Racecourse
-  "UNI", // University
-  "TAP", // Tai Po Market
-  "TWO", // Tai Wo
-  "FAN", // Fanling
-  "SHS", // Sheung Shui
-  "LOW", // Lo Wu (branch)
-  "LMC", // Lok Ma Chau (branch)
-];
+type MtrDirection = "UP" | "DOWN";
 
-function getEalStationIndex(sta: string): number {
-  return EAL_STATION_ORDER.indexOf(sta);
-}
+// Stations where “via Racecourse” is relevant, by direction.
+// These rules are intentionally explicit (do not infer via station ordering).
+const EAL_VIA_RACECOURSE_BY_DIR: Record<MtrDirection, ReadonlySet<string>> = {
+  UP: new Set([
+    "ADM",
+    "EXC",
+    "HUH",
+    "MKK",
+    "KOT",
+    "TAW",
+    "SHT",
+  ]),
+  DOWN: new Set([
+    "LMC",
+    "LOW",
+    "SHS",
+    "FAN",
+    "TWO",
+    "TAP",
+    "UNI",
+  ]),
+};
 
 /**
- * Determine if we should show "via Racecourse" for a train.
+ * Determine if we should show “via Racecourse” for a train.
  * Only show when:
- * 1. The train's route is "RAC"
- * 2. The current station is BEFORE Racecourse in the line order
- * 3. The train's destination is AFTER Racecourse (train hasn't passed it yet)
+ * 1. Line is EAL
+ * 2. Train's route is "RAC"
+ * 3. The current station/direction pair makes it relevant
+ *
+ * Never show at Fo Tan (FOT) or Racecourse (RAC).
  */
-function shouldShowViaRacecourse(
-  line: string,
-  currentSta: string,
-  destSta: string,
-  route: string | undefined
-): boolean {
-  if (line !== "EAL") return false;
-  if (route !== "RAC") return false;
+function shouldShowViaRacecourse(params: {
+  line: string;
+  currentSta: string;
+  dir: MtrDirection;
+  route: string | undefined;
+}): boolean {
+  if (params.line !== "EAL") return false;
+  if (params.route !== "RAC") return false;
 
-  const racecourseIdx = getEalStationIndex("RAC");
-  const currentIdx = getEalStationIndex(currentSta);
-  const destIdx = getEalStationIndex(destSta);
+  // Explicit exceptions
+  if (params.currentSta === "FOT" || params.currentSta === "RAC") return false;
 
-  // If we can't find the station in our order, don't show
-  if (currentIdx === -1 || destIdx === -1 || racecourseIdx === -1) return false;
-
-  // Current station must be before Racecourse, and destination must be after Racecourse
-  // This means the train will pass through Racecourse on its way
-  return currentIdx < racecourseIdx && destIdx > racecourseIdx;
+  return EAL_VIA_RACECOURSE_BY_DIR[params.dir].has(params.currentSta);
 }
+
 
 function formatDest(dest: unknown, lang: UiLanguage) {
   const raw = String(dest ?? "");
@@ -247,14 +244,13 @@ export function MtrResults({ title, lang, schedule, error, stale, lastUpdatedAt,
                           <div className="text-sm text-muted-foreground">—</div>
                         ) : (
                           trains.slice(0, 4).map((t, idx) => {
-                            const destSta = String(t.dest ?? "");
                             const route = String((t as { route?: unknown }).route ?? "");
-                            const showViaRacecourse = shouldShowViaRacecourse(
+                            const showViaRacecourse = shouldShowViaRacecourse({
                               line,
-                              sta,
-                              destSta,
-                              route || undefined
-                            );
+                              currentSta: sta,
+                              dir,
+                              route: route || undefined,
+                            });
                             const destText = formatDestWithRacecourse(t.dest, lang, showViaRacecourse);
                             const platform = formatPlatform(t.plat);
 

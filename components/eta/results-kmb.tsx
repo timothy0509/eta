@@ -48,7 +48,7 @@ function formatRouteVariantLabel(
     // For arriving leg, show origin (where the bus came from) instead of destination
     if (isArrivingLeg) {
       const origin = pickLang(info.origin, lang);
-      if (origin) return `← ${origin}`;
+      if (origin) return `→ ${origin}`;
     }
     const destination = pickLang(info.destination, lang);
     if (destination) return `→ ${destination}`;
@@ -339,7 +339,9 @@ function RouteVariantCard({
           {fare ? (
             <div className="space-y-1">
               <div className="text-xs text-muted-foreground">{i18n.fare}</div>
-              <div className="text-sm font-medium">HK$ {fare.hkd.toFixed(1)}</div>
+              <div className="text-sm font-medium">
+                HK$ {fare.hkd.toFixed(1)}
+              </div>
             </div>
           ) : null}
         </div>
@@ -688,7 +690,12 @@ export function KmbResults({
       return routeA.localeCompare(routeB, undefined, { numeric: true });
     };
 
-    type GroupWithFare = { key: string; baseKey: string; hasEta: boolean; hasFare: boolean };
+    type GroupWithFare = {
+      key: string;
+      baseKey: string;
+      hasEta: boolean;
+      hasFare: boolean;
+    };
     const hasFareLoaded = (g: GroupWithFare) =>
       g.hasFare && faresByVariantKey && Boolean(faresByVariantKey[g.baseKey]);
 
@@ -704,7 +711,15 @@ export function KmbResults({
     const withoutEtas = groups.filter((g) => !g.hasEta).sort(sortByRoute);
 
     return [...withEtaAndFare, ...withEtaOnly, ...withoutEtas];
-  }, [eta, stopLookup, lang, multipleStops, useStopSections, precomputedFlat, faresByVariantKey]);
+  }, [
+    eta,
+    stopLookup,
+    lang,
+    multipleStops,
+    useStopSections,
+    precomputedFlat,
+    faresByVariantKey,
+  ]);
 
   return (
     <Card className="rounded-3xl border bg-card/60 shadow-sm">

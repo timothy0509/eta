@@ -4,6 +4,21 @@ export type ParsedKmbStopName = {
   platform: string | null;
 };
 
+export type ParseKmbStopNameFn = (fullName: string) => ParsedKmbStopName;
+
+export function createParseKmbStopNameCached(): ParseKmbStopNameFn {
+  const cache = new Map<string, ParsedKmbStopName>();
+
+  return (fullName: string) => {
+    const cached = cache.get(fullName);
+    if (cached) return cached;
+
+    const parsed = parseKmbStopName(fullName);
+    cache.set(fullName, parsed);
+    return parsed;
+  };
+}
+
 // Platform: 1 letter + 1–2 digits (e.g. A12)
 const PLATFORM_RE = "[A-Z][0-9]{1,2}";
 

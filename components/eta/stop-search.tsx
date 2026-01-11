@@ -15,7 +15,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
-import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
+import { createParseKmbStopNameCached } from "@/lib/eta/kmb-stop-name";
 import { cn } from "@/lib/utils";
 
 export type StopSearchSelection =
@@ -26,6 +26,7 @@ export type StopSearchSelection =
 type Props = {
   lang: UiLanguage;
   stops: KmbStopSearchItem[];
+  stopById?: Map<string, KmbStopSearchItem>;
   value?: StopSearchSelection;
   onSelectStop: (stop: KmbStopSearchItem) => void;
   onSelectStops: (stops: KmbStopSearchItem[]) => void;
@@ -98,10 +99,16 @@ type StopGroup = {
   id: string; // Unique key for React
   baseName: string;
   codes: string[];
-  stops: KmbStopSearchItem[];
+  stopIds: string[];
   displayName: string;
   displayCodes: string;
   displaySecondary: string;
+};
+
+type StopMeta = {
+  baseName: string;
+  stopCode: string | null;
+  secondaryLabel: string;
 };
 
 /**
@@ -109,118 +116,131 @@ type StopGroup = {
  * Handles multiple separate sequential sets (e.g., KT313-KT316 AND KT681-KT683).
  * Non-sequential stops remain as individual items.
  */
-function groupStopsByName(stops: KmbStopSearchItem[], lang: UiLanguage): StopGroup[] {
-  // First, parse all stops and group by base name
-  const byBaseName = new Map<
-    string,
-    { code: string | null; stop: KmbStopSearchItem }[]
-  >();
+function createStopMetaIndex(stops: KmbStopSearchItem[], lang: UiLanguage) {
+  const parseCached = createParseKmbStopNameCached();
+
+  const stopMetaById = new Map<string, StopMeta>();
+  const stopIdsByBaseName = new Map<string, string[]>();
 
   for (const stop of stops) {
     const fullName = formatStopName(stop, lang);
-    const parsed = parseKmbStopName(fullName);
-    const baseName = parsed.name;
-    const code = parsed.stopCode;
+    const parsed = parseCached(fullName);
 
-    if (!byBaseName.has(baseName)) {
-      byBaseName.set(baseName, []);
+    const meta: StopMeta = {
+      baseName: parsed.name,
+      stopCode: parsed.stopCode,
+      secondaryLabel: formatStopSecondary(stop, lang),
+    };
+
+    stopMetaById.set(stop.stopId, meta);
+
+    const list = stopIdsByBaseName.get(meta.baseName);
+    if (list) {
+      list.push(stop.stopId);
+    } else {
+      stopIdsByBaseName.set(meta.baseName, [stop.stopId]);
     }
-    byBaseName.get(baseName)!.push({ code, stop });
   }
 
-  const result: StopGroup[] = [];
+  return { parseCached, stopMetaById, stopIdsByBaseName };
+}
 
-  for (const [baseName, items] of byBaseName) {
-    // Separate items with valid codes from those without
-    const withCodes = items.filter((i) => i.code !== null);
-    const withoutCodes = items.filter((i) => i.code === null);
+function buildGroupsByBaseName(
+  stopIdsByBaseName: Map<string, string[]>,
+  stopMetaById: Map<string, StopMeta>
+) {
+  const groupsByBaseName = new Map<string, StopGroup[]>();
 
-    // Sort by code prefix then number
+  for (const [baseName, stopIds] of stopIdsByBaseName) {
+    const items = stopIds.map((stopId) => ({ stopId, meta: stopMetaById.get(stopId)! }));
+
+    const withCodes = items.filter((i) => i.meta.stopCode !== null);
+    const withoutCodes = items.filter((i) => i.meta.stopCode === null);
+
     withCodes.sort((a, b) => {
-      const pa = parseCodeParts(a.code!);
-      const pb = parseCodeParts(b.code!);
+      const pa = parseCodeParts(a.meta.stopCode!);
+      const pb = parseCodeParts(b.meta.stopCode!);
       if (!pa || !pb) return 0;
       if (pa.prefix !== pb.prefix) return pa.prefix.localeCompare(pb.prefix);
       return pa.num - pb.num;
     });
 
-    // Find contiguous runs of sequential codes
-    const runs: { code: string; stop: KmbStopSearchItem }[][] = [];
+    const runs: { stopId: string; meta: StopMeta }[][] = [];
     for (const item of withCodes) {
-      // We know code is non-null because we filtered above
-      const typedItem = item as { code: string; stop: KmbStopSearchItem };
       const lastRun = runs[runs.length - 1];
       if (!lastRun) {
-        runs.push([typedItem]);
+        runs.push([item]);
         continue;
       }
-      const lastItem = lastRun[lastRun.length - 1];
-      const lastParts = parseCodeParts(lastItem.code);
-      const currParts = parseCodeParts(typedItem.code);
 
-      // Check if sequential (same prefix, consecutive number)
+      const lastItem = lastRun[lastRun.length - 1];
+      const lastParts = parseCodeParts(lastItem.meta.stopCode!);
+      const currParts = parseCodeParts(item.meta.stopCode!);
+
       if (
         lastParts &&
         currParts &&
         lastParts.prefix === currParts.prefix &&
         currParts.num === lastParts.num + 1
       ) {
-        lastRun.push(typedItem);
+        lastRun.push(item);
       } else {
-        runs.push([typedItem]);
+        runs.push([item]);
       }
     }
 
-    // Create groups from runs
+    const groups: StopGroup[] = [];
+
     for (const run of runs) {
       if (run.length >= 2) {
-        // Create a grouped suggestion for 2+ sequential stops
-        const codes = run.map((r) => r.code!);
-        const runStops = run.map((r) => r.stop);
-        result.push({
-          id: `group:${runStops.map((s) => s.stopId).join(",")}`,
+        const codes = run.map((r) => r.meta.stopCode!).filter(Boolean);
+        const stopIdsForRun = run.map((r) => r.stopId);
+
+        groups.push({
+          id: `group:${stopIdsForRun.join(",")}`,
           baseName,
           codes,
-          stops: runStops,
+          stopIds: stopIdsForRun,
           displayName: baseName,
           displayCodes: `(${formatCodeRange(codes)})`,
-          displaySecondary: formatStopSecondary(runStops[0], lang),
+          displaySecondary: run[0].meta.secondaryLabel,
         });
       } else {
-        // Single item in run - add as individual
         const item = run[0];
-        result.push({
-          id: `stop:${item.stop.stopId}`,
+        groups.push({
+          id: `stop:${item.stopId}`,
           baseName,
-          codes: [item.code!],
-          stops: [item.stop],
+          codes: [item.meta.stopCode!],
+          stopIds: [item.stopId],
           displayName: baseName,
-          displayCodes: `(${item.code})`,
-          displaySecondary: formatStopSecondary(item.stop, lang),
+          displayCodes: `(${item.meta.stopCode})`,
+          displaySecondary: item.meta.secondaryLabel,
         });
       }
     }
 
-    // Add items without codes as individuals
     for (const item of withoutCodes) {
-      result.push({
-        id: `stop:${item.stop.stopId}`,
+      groups.push({
+        id: `stop:${item.stopId}`,
         baseName,
         codes: [],
-        stops: [item.stop],
+        stopIds: [item.stopId],
         displayName: baseName,
         displayCodes: "",
-        displaySecondary: formatStopSecondary(item.stop, lang),
+        displaySecondary: item.meta.secondaryLabel,
       });
     }
+
+    groupsByBaseName.set(baseName, groups);
   }
 
-  return result;
+  return groupsByBaseName;
 }
 
 export function StopSearch({
   lang,
   stops,
+  stopById: stopByIdProp,
   value,
   onSelectStop,
   onSelectStops,
@@ -233,46 +253,57 @@ export function StopSearch({
   const deferredQuery = React.useDeferredValue(query);
   const isSearching = query !== deferredQuery;
 
+  const stopById = React.useMemo(() => {
+    if (stopByIdProp) return stopByIdProp;
+    return new Map(stops.map((s) => [s.stopId, s] as const));
+  }, [stopByIdProp, stops]);
+
+  const { parseCached, stopMetaById, stopIdsByBaseName } = React.useMemo(
+    () => createStopMetaIndex(stops, lang),
+    [stops, lang]
+  );
+
+  const groupsByBaseName = React.useMemo(
+    () => buildGroupsByBaseName(stopIdsByBaseName, stopMetaById),
+    [stopIdsByBaseName, stopMetaById]
+  );
+
   // Find selected stop(s) for display in the button
   const selectedLabel = React.useMemo(() => {
     if (!value) return null;
+
     if (value.type === "stop") {
-      const stop = stops.find((s) => s.stopId === value.stopId);
-      if (stop) {
-        const fullName = formatStopName(stop, lang);
-        const parsed = parseKmbStopName(fullName);
-        return parsed.stopCode ? `${parsed.name} (${parsed.stopCode})` : parsed.name;
-      }
-      return null;
+      const stop = stopById.get(value.stopId);
+      if (!stop) return null;
+
+      const fullName = formatStopName(stop, lang);
+      const parsed = parseCached(fullName);
+      return parsed.stopCode ? `${parsed.name} (${parsed.stopCode})` : parsed.name;
     }
+
     if (value.type === "stops") {
-      // Find first stop to get base name
-      const firstStop = stops.find((s) => value.stopIds.includes(s.stopId));
-      if (!firstStop) return null;
+      const baseName = stopMetaById.get(value.stopIds[0])?.baseName;
+      if (!baseName) return null;
 
-      const fullName = formatStopName(firstStop, lang);
-      const { name: baseName } = parseKmbStopName(fullName);
-
-      // Collect all codes for selected stops
       const codes: string[] = [];
       for (const stopId of value.stopIds) {
-        const stop = stops.find((s) => s.stopId === stopId);
-        if (stop) {
-          const parsed = parseKmbStopName(formatStopName(stop, lang));
-          if (parsed.stopCode) codes.push(parsed.stopCode);
-        }
+        const code = stopMetaById.get(stopId)?.stopCode;
+        if (code) codes.push(code);
       }
 
       if (codes.length > 1 && areCodesSequential(codes)) {
         return `${baseName} (${formatCodeRange(codes)})`;
       }
+
       return baseName;
     }
+
     if (value.type === "contains") {
       return (lang === "en" ? "Contains: " : lang === "sc" ? "包含: " : "包含: ") + value.query;
     }
+
     return null;
-  }, [value, stops, lang]);
+  }, [value, stopById, stopMetaById, lang, parseCached]);
 
 
   // Use Fuse.js to search individual stops, then group results
@@ -293,22 +324,59 @@ export function StopSearch({
   const groupedResults = React.useMemo(() => {
     if (!deferredQuery.trim()) {
       // Default: show first 12 stops, grouped
-      return groupStopsByName(stops.slice(0, 30), lang).slice(0, 12);
+      const baseNames = new Set<string>();
+      const groups: StopGroup[] = [];
+
+      for (const stop of stops.slice(0, 30)) {
+        const baseName = stopMetaById.get(stop.stopId)?.baseName;
+        if (!baseName || baseNames.has(baseName)) continue;
+
+        const groupsForName = groupsByBaseName.get(baseName);
+        if (!groupsForName) continue;
+
+        baseNames.add(baseName);
+        groups.push(...groupsForName);
+        if (groups.length >= 12) break;
+      }
+
+      return groups.slice(0, 12);
     }
+
     const hits = fuse.search(deferredQuery.trim()).slice(0, 60);
-    const matchedStops = hits.map((h) => h.item);
-    return groupStopsByName(matchedStops, lang).slice(0, 20);
-  }, [fuse, deferredQuery, stops, lang]);
+
+    const baseNames = new Set<string>();
+    const groups: StopGroup[] = [];
+
+    for (const hit of hits) {
+      const stopId = hit.item.stopId;
+      const baseName = stopMetaById.get(stopId)?.baseName;
+      if (!baseName || baseNames.has(baseName)) continue;
+
+      const groupsForName = groupsByBaseName.get(baseName);
+      if (!groupsForName) continue;
+
+      baseNames.add(baseName);
+      groups.push(...groupsForName);
+      if (groups.length >= 20) break;
+    }
+
+    return groups.slice(0, 20);
+  }, [fuse, deferredQuery, stops, stopMetaById, groupsByBaseName]);
 
   const trimmedQuery = query.trim();
   const canSearchContains = trimmedQuery.length >= 3;
 
   const handleSelectGroup = (group: StopGroup) => {
-    if (group.stops.length === 1) {
-      onSelectStop(group.stops[0]);
+    const selectedStops = group.stopIds
+      .map((stopId) => stopById.get(stopId))
+      .filter(Boolean) as KmbStopSearchItem[];
+
+    if (selectedStops.length === 1) {
+      onSelectStop(selectedStops[0]);
     } else {
-      onSelectStops(group.stops);
+      onSelectStops(selectedStops);
     }
+
     setOpen(false);
   };
 

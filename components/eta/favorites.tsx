@@ -1,6 +1,10 @@
 "use client";
 
+import * as React from "react";
+
 import { Heart, History, Trash2 } from "lucide-react";
+
+import { useVirtualizer } from "@tanstack/react-virtual";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,13 +13,14 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LRT_STATIONS } from "@/lib/data/lrt-stations";
 import { findMtrStationBySta } from "@/lib/data/mtr-stations";
 import { getLineColor } from "@/lib/eta/line-colors";
-import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
+import { createParseKmbStopNameCached } from "@/lib/eta/kmb-stop-name";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
 
 type Props = {
   lang: UiLanguage;
   kmbStops?: KmbStopSearchItem[];
+  kmbStopById?: Map<string, KmbStopSearchItem>;
   onSelect: (item: FavoritesItem) => void;
 };
 
@@ -33,10 +38,14 @@ function FavoriteItemDisplay({
   item,
   lang,
   kmbStops,
+  kmbStopById,
+  parseKmbStopNameCached,
 }: {
   item: FavoritesItem;
   lang: UiLanguage;
   kmbStops?: KmbStopSearchItem[];
+  kmbStopById?: Map<string, KmbStopSearchItem>;
+  parseKmbStopNameCached: (fullName: string) => { name: string };
 }) {
   if (item.mode === "mtr") {
     const station = findMtrStationBySta(item.sta);
@@ -78,11 +87,11 @@ function FavoriteItemDisplay({
 
     // Single stop
     if ("stopId" in item) {
-      const stop = kmbStops?.find((s) => s.stopId === item.stopId);
+      const stop = kmbStopById?.get(item.stopId) ?? kmbStops?.find((s) => s.stopId === item.stopId);
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang);
-        const { name } = parseKmbStopName(fullName);
-        
+        const { name } = parseKmbStopNameCached(fullName);
+
         // Build suffix from saved data
         let suffix = "";
         if (item.routeFilterMode === "advanced" && item.entries?.length) {
@@ -93,18 +102,27 @@ function FavoriteItemDisplay({
         } else if (item.route) {
           suffix = ` · ${item.route}`;
         }
-        
-        return <span className="truncate">{name}{suffix}</span>;
+
+        return (
+          <span className="truncate">
+            {name}
+            {suffix}
+          </span>
+        );
       }
     }
 
     // Grouped stops
     if ("stopIds" in item) {
-      const firstStop = kmbStops?.find((s) => item.stopIds.includes(s.stopId));
+      const firstStopId = item.stopIds[0];
+      const firstStop = firstStopId
+        ? kmbStopById?.get(firstStopId) ?? kmbStops?.find((s) => item.stopIds.includes(s.stopId))
+        : undefined;
+
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang);
-        const { name } = parseKmbStopName(fullName);
-        
+        const { name } = parseKmbStopNameCached(fullName);
+
         // Build suffix from saved data
         let suffix = "";
         if (item.routeFilterMode === "advanced" && item.entries?.length) {
@@ -115,8 +133,13 @@ function FavoriteItemDisplay({
         } else if (item.route) {
           suffix = ` · ${item.route}`;
         }
-        
-        return <span className="truncate">{name}{suffix}</span>;
+
+        return (
+          <span className="truncate">
+            {name}
+            {suffix}
+          </span>
+        );
       }
     }
 
@@ -126,9 +149,28 @@ function FavoriteItemDisplay({
   return <span className="truncate">{item.title}</span>;
 }
 
-export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
+export function FavoritesAndRecents({ lang, kmbStops, kmbStopById, onSelect }: Props) {
+  const parseKmbStopNameCached = React.useMemo(() => createParseKmbStopNameCached(), []);
+
   const favorites = useAppStore((s) => s.favorites);
   const recents = useAppStore((s) => s.recents);
+
+  const favoritesParentRef = React.useRef<HTMLDivElement | null>(null);
+  const recentsParentRef = React.useRef<HTMLDivElement | null>(null);
+
+  const favoritesVirtualizer = useVirtualizer({
+    count: favorites.length,
+    getScrollElement: () => favoritesParentRef.current,
+    estimateSize: () => 56,
+    overscan: 6,
+  });
+
+  const recentsVirtualizer = useVirtualizer({
+    count: recents.length,
+    getScrollElement: () => recentsParentRef.current,
+    estimateSize: () => 56,
+    overscan: 6,
+  });
   const removeFavorite = useAppStore((s) => s.removeFavorite);
   const clearRecents = useAppStore((s) => s.clearRecents);
 
@@ -159,36 +201,53 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
 
         <CardContent className="p-0">
           <TabsContent value="favorites" className="mt-0 p-6 pt-0">
-            <div className="space-y-2">
+            <div ref={favoritesParentRef} className="max-h-[60dvh] overflow-auto">
               {favorites.length === 0 ? (
                 <div className="text-sm text-muted-foreground">{t.noFavorites}</div>
               ) : (
-                favorites.map((f) => (
-                  <div
-                    key={f.id}
-                    className="ui-animate-in-fast ui-lift flex items-center justify-between gap-2 rounded-2xl border bg-background/40 px-3 py-2"
-                  >
-                    <button
-                      className="min-w-0 flex-1 text-left"
-                      onClick={() => onSelect(f)}
-                    >
-                      <div className="text-sm font-medium">
-                        <FavoriteItemDisplay item={f} lang={lang} kmbStops={kmbStops} />
+                <div
+                  className="relative"
+                  style={{ height: `${favoritesVirtualizer.getTotalSize()}px` }}
+                >
+                  {favoritesVirtualizer.getVirtualItems().map((row) => {
+                    const f = favorites[row.index];
+                    return (
+                      <div
+                        key={f.id}
+                        className="absolute left-0 top-0 w-full px-0"
+                        style={{ transform: `translateY(${row.start}px)` }}
+                      >
+                        <div className="ui-animate-in-fast ui-lift flex items-center justify-between gap-2 rounded-2xl border bg-background/40 px-3 py-2">
+                          <button
+                            className="min-w-0 flex-1 text-left"
+                            onClick={() => onSelect(f)}
+                          >
+                            <div className="text-sm font-medium">
+                              <FavoriteItemDisplay
+                                item={f}
+                                lang={lang}
+                                kmbStops={kmbStops}
+                                kmbStopById={kmbStopById}
+                                parseKmbStopNameCached={parseKmbStopNameCached}
+                              />
+                            </div>
+                            <div className="truncate text-xs text-muted-foreground">
+                              {f.mode.toUpperCase()}
+                            </div>
+                          </button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="rounded-xl"
+                            onClick={() => removeFavorite(f.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {f.mode.toUpperCase()}
-                      </div>
-                    </button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="rounded-xl"
-                      onClick={() => removeFavorite(f.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))
+                    );
+                  })}
+                </div>
               )}
             </div>
           </TabsContent>
@@ -196,9 +255,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
           <TabsContent value="recent" className="mt-0 p-6 pt-0">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-xs text-muted-foreground">
-                  {t.tip}
-                </div>
+                <div className="text-xs text-muted-foreground">{t.tip}</div>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -210,25 +267,46 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                 </Button>
               </div>
 
-              {recents.length === 0 ? (
-                <div className="text-sm text-muted-foreground">{t.noRecent}</div>
-              ) : (
-                recents.map((r) => (
-                  <button
-                    key={`${r.id}-${r.at}`}
-                    className="ui-animate-in-fast ui-lift w-full rounded-2xl border bg-background/40 px-3 py-2 text-left hover:bg-background/60"
-                    onClick={() => onSelect(r)}
+              <div ref={recentsParentRef} className="max-h-[60dvh] overflow-auto">
+                {recents.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">{t.noRecent}</div>
+                ) : (
+                  <div
+                    className="relative"
+                    style={{ height: `${recentsVirtualizer.getTotalSize()}px` }}
                   >
-                     <div className="text-sm font-medium">
-                       <FavoriteItemDisplay item={r} lang={lang} kmbStops={kmbStops} />
-                     </div>
-                    <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                      <span>{r.mode.toUpperCase()}</span>
-                      <span>{new Date(r.at).toLocaleString()}</span>
-                    </div>
-                  </button>
-                ))
-              )}
+                    {recentsVirtualizer.getVirtualItems().map((row) => {
+                      const r = recents[row.index];
+                      return (
+                        <div
+                          key={`${r.id}-${r.at}`}
+                          className="absolute left-0 top-0 w-full"
+                          style={{ transform: `translateY(${row.start}px)` }}
+                        >
+                          <button
+                            className="ui-animate-in-fast ui-lift w-full rounded-2xl border bg-background/40 px-3 py-2 text-left hover:bg-background/60"
+                            onClick={() => onSelect(r)}
+                          >
+                            <div className="text-sm font-medium">
+                              <FavoriteItemDisplay
+                                item={r}
+                                lang={lang}
+                                kmbStops={kmbStops}
+                                kmbStopById={kmbStopById}
+                                parseKmbStopNameCached={parseKmbStopNameCached}
+                              />
+                            </div>
+                            <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                              <span>{r.mode.toUpperCase()}</span>
+                              <span>{new Date(r.at).toLocaleString()}</span>
+                            </div>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             <Separator className="my-2" />

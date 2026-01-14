@@ -17,7 +17,9 @@ const BodySchema = z.object({
 });
 
 // Concurrency limit for upstream calls
-const KMB_CONCURRENCY = 6;
+// Vercel latency is often dominated by "fan-out" for multi-stop queries;
+// a higher concurrency reduces tail latency while staying conservative.
+const KMB_CONCURRENCY = 10;
 
 // Max ETAs per route+direction+leg to return (keep payload small)
 const MAX_ETAS_PER_VARIANT = 3;
@@ -111,9 +113,11 @@ export async function POST(request: Request) {
         return { stopId, eta: cachedData, fromCache: true };
       }
 
-      // Fetch from upstream
-      const eta = await getKmbStopEta(stopId);
-      kmbStopEtaCache.set(cacheKey, eta);
+      // Fetch from upstream (deduped per stopId)
+      const eta = (await kmbStopEtaCache.getOrFetch(
+        cacheKey,
+        () => getKmbStopEta(stopId)
+      )) as KmbEtaEntry[];
       fetched++;
       return { stopId, eta, fromCache: false };
     });
@@ -131,9 +135,9 @@ export async function POST(request: Request) {
       const { stopId, eta } = result.value;
 
       // Apply route filter if provided
-      let filtered = eta;
+      let filtered: KmbEtaEntry[] = eta;
       if (routeFilterSet && routeFilterSet.size > 0) {
-        filtered = eta.filter((entry) =>
+        filtered = eta.filter((entry: KmbEtaEntry) =>
           routeFilterSet.has((entry.route ?? "").toUpperCase())
         );
       }

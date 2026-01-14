@@ -89,12 +89,12 @@ export type KmbRouteStopEntry = {
 };
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
+  // NOTE: this endpoint payload is >2MB, which exceeds Vercel/Next.js data cache limits.
+  // Do not use `next.revalidate` here; cache instead at our own API layer via Cache-Control.
   const json = await fetchJson<KmbApiEnvelope<KmbRouteStopEntry[]>>(
     `${KMB_BASE_URL}/v1/transport/kmb/route-stop`,
     {
-      next: {
-        revalidate: secondsUntilNextKmbDailyUpdate(),
-      },
+      cache: "no-store",
     }
   );
   return json.data;

@@ -909,7 +909,11 @@ export function KmbPane({
           }
         }
       } catch (error) {
-        if (controller.signal.aborted) return;
+        const isAbort =
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === "AbortError") ||
+          (error instanceof Error && error.message.toLowerCase().includes("aborted"));
+        if (isAbort) return;
 
         const message = error instanceof Error ? error.message : "Failed to load ETAs";
         dispatchEta({ type: "REFRESH_ERROR", error: message });
@@ -949,10 +953,14 @@ export function KmbPane({
       });
       // Note: fetchStopEtas dispatches APPEND_STOPS on success
     } catch (error) {
-      if (!controller.signal.aborted) {
-        const message = error instanceof Error ? error.message : "Failed to load more stops";
-        dispatchEta({ type: "REFRESH_ERROR", error: message });
-      }
+      const isAbort =
+        controller.signal.aborted ||
+        (error instanceof DOMException && error.name === "AbortError") ||
+        (error instanceof Error && error.message.toLowerCase().includes("aborted"));
+      if (isAbort) return;
+
+      const message = error instanceof Error ? error.message : "Failed to load more stops";
+      dispatchEta({ type: "REFRESH_ERROR", error: message });
     }
   }, [kmbQuery, kmbEtaLoading, loadedStopIds, allStopIds, getRouteFilterString, fetchStopEtas]);
 

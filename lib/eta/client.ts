@@ -11,6 +11,17 @@ async function fetchJsonDedupe<T>(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<T> {
+  // If the caller passes an AbortSignal, do not dedupe.
+  // Otherwise, one caller aborting can inadvertently cancel a shared request,
+  // causing spurious "operation was aborted" errors.
+  if (init?.signal) {
+    const response = await fetch(input, init);
+    if (!response.ok) {
+      throw new Error(`Request failed: ${response.status}`);
+    }
+    return (await response.json()) as T;
+  }
+
   const existing = inFlightJson.get(key);
   if (existing) return existing as Promise<T>;
 

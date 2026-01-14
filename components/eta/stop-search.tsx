@@ -37,7 +37,18 @@ type StopComputed = {
   baseName: string;
   stopCode: string | null;
   displaySecondary: string;
+
+  /** Primary display name in selected UI language */
+  displayName: string;
+
+  /** Search fields with better weighting */
+  searchName: string;
+  searchSecondary: string;
+  searchCode: string;
+
+  /** Catch-all fallback for fuzzy matches */
   normalized: string;
+
   stop: KmbStopSearchItem;
 };
 
@@ -272,7 +283,13 @@ export function StopSearch({
       const parsed = parseKmbStopName(fullName);
       const baseName = parsed.name;
       const stopCode = parsed.stopCode;
+      const displayName = baseName;
       const displaySecondary = formatStopSecondary(stop, lang);
+
+      const searchName = displayName.toLowerCase().trim();
+      const searchSecondary = displaySecondary.toLowerCase().trim();
+      const searchCode = (stopCode ?? "").toLowerCase().trim();
+
       const normalized = `${stop.nameEn}|${stop.nameTc}|${stop.nameSc}|${baseName}|${stopCode ?? ""}`
         .toLowerCase()
         .trim();
@@ -282,6 +299,10 @@ export function StopSearch({
         baseName,
         stopCode,
         displaySecondary,
+        displayName,
+        searchName,
+        searchSecondary,
+        searchCode,
         normalized,
         stop,
       };
@@ -290,10 +311,19 @@ export function StopSearch({
 
   const fuse = React.useMemo(() => {
     return new Fuse(stopComputed, {
-      threshold: 0.35,
+      // Lower threshold = stricter matching = higher precision.
+      // We also explicitly boost exact/prefix matches in post-processing.
+      threshold: 0.28,
       ignoreLocation: true,
       minMatchCharLength: 2,
-      keys: [{ name: "normalized", weight: 1 }],
+      includeScore: true,
+      shouldSort: true,
+      keys: [
+        { name: "searchCode", weight: 0.55 },
+        { name: "searchName", weight: 0.30 },
+        { name: "searchSecondary", weight: 0.10 },
+        { name: "normalized", weight: 0.05 },
+      ],
     });
   }, [stopComputed]);
 
@@ -304,16 +334,46 @@ export function StopSearch({
       return groupStopsByName(stopComputed.slice(0, 30)).slice(0, 12);
     }
 
-    const hits = fuse.search(deferredQuery.trim()).slice(0, 60);
-    const matchedStops = hits.map((h: { item: StopComputed }) => h.item);
-    const matchedStopIds = new Set(matchedStops.map((s: StopComputed) => s.stopId));
-    const matchedComputed: StopComputed[] = [];
+    const needle = deferredQuery.trim().toLowerCase();
 
-    for (const item of stopComputed) {
-      if (matchedStopIds.has(item.stopId)) matchedComputed.push(item);
-    }
+    const hits = fuse.search(needle).slice(0, 80);
 
-    return groupStopsByName(matchedComputed).slice(0, 20);
+    // Prefer exact/prefix matches (stop code or name) over generic fuzzy score.
+    // This improves accuracy for common user behavior:
+    // - typing stop code prefixes (KT31…)
+    // - typing station name prefixes
+    const scored = hits
+      .map((h: { item: StopComputed; score?: number }) => {
+        const item = h.item;
+
+        const exact =
+          (item.searchCode && item.searchCode === needle) ||
+          item.searchName === needle ||
+          item.searchSecondary === needle;
+
+        const prefix =
+          (item.searchCode && item.searchCode.startsWith(needle)) ||
+          item.searchName.startsWith(needle) ||
+          item.searchSecondary.startsWith(needle);
+
+        const includes =
+          (item.searchCode && item.searchCode.includes(needle)) ||
+          item.searchName.includes(needle) ||
+          item.searchSecondary.includes(needle);
+
+        // Fuse score is lower-is-better; normalize missing to a mediocre score.
+        const fuseScore = h.score ?? 0.5;
+
+        const boost = exact ? 0 : prefix ? 1 : includes ? 2 : 3;
+        return { item, fuseScore, boost };
+      })
+      .sort((a, b) => {
+        if (a.boost !== b.boost) return a.boost - b.boost;
+        return a.fuseScore - b.fuseScore;
+      })
+      .slice(0, 60);
+
+    return groupStopsByName(scored.map((s) => s.item)).slice(0, 20);
   }, [fuse, deferredQuery, stopComputed]);
 
   const trimmedQuery = query.trim();

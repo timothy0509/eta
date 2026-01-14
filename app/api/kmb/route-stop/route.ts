@@ -4,6 +4,8 @@ import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
 import { getKmbRouteStops } from "@/lib/eta/kmb";
 
+export const runtime = "nodejs";
+
 export async function GET() {
   const revalidateSeconds = secondsUntilNextKmbDailyUpdate();
 

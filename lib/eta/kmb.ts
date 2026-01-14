@@ -1,3 +1,4 @@
+import { kmbRouteStopCache } from "@/lib/eta/cache";
 import { secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
 import { fetchJson } from "@/lib/eta/http";
 
@@ -89,14 +90,22 @@ export type KmbRouteStopEntry = {
 };
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
+  // The route-stop payload is >2MB, so Next.js Data Cache can't store it on Vercel.
+  // Cache it in-memory per instance until the next daily update.
+  const ttlMs = secondsUntilNextKmbDailyUpdate() * 1000;
+
+  const cached = kmbRouteStopCache.get("kmb:route-stop") as KmbRouteStopEntry[] | undefined;
+  if (cached !== undefined) return cached;
+
   const json = await fetchJson<KmbApiEnvelope<KmbRouteStopEntry[]>>(
     `${KMB_BASE_URL}/v1/transport/kmb/route-stop`,
     {
-      next: {
-        revalidate: secondsUntilNextKmbDailyUpdate(),
-      },
+      cache: "no-store",
+      timeoutMs: 20_000,
     }
   );
+
+  kmbRouteStopCache.set("kmb:route-stop", json.data, ttlMs);
   return json.data;
 }
 

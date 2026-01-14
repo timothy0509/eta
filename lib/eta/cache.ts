@@ -138,3 +138,7 @@ export class MicroCache<T> {
 export const kmbStopEtaCache = new MicroCache<unknown>({ ttlMs: 15_000, maxSize: 500 });
 export const mtrScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 200 });
 export const lrtScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 100 });
+
+// KMB static datasets can be large (e.g. route-stop > 2MB), which cannot be stored
+// in Next.js' Data Cache on Vercel. Cache it in-memory per instance instead.
+export const kmbRouteStopCache = new MicroCache<unknown>({ ttlMs: 60 * 60 * 1000, maxSize: 5 });

@@ -6,6 +6,8 @@ import type { KmbRouteStopLite } from "@/lib/eta/client";
 import { kmbFareCacheControlHeader, getCachedKmbVariantStops, getStopToTerminusFare } from "@/lib/eta/kmb-fares";
 import { getKmbRouteStops } from "@/lib/eta/kmb";
 
+export const runtime = "nodejs";
+
 const VariantSchema = z.object({
   route: z.string(),
   dir: z.string(),

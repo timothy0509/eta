@@ -9,6 +9,8 @@ import { getKmbRouteStops, getKmbStopEta, type KmbEtaEntry } from "@/lib/eta/kmb
 import { promisePool } from "@/lib/eta/promise-pool";
 import { kmbStopEtaCache } from "@/lib/eta/cache";
 
+export const runtime = "nodejs";
+
 const BodySchema = z.object({
   stopIds: z.array(z.string().trim().min(1)).min(1).max(100),
   routeFilter: z.string().optional(),

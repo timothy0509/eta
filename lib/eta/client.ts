@@ -2,6 +2,33 @@ import type { KmbStopSearchItem } from "@/lib/eta/types";
 import type { KmbEtaEntry, KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 
+type DedupeKey = string;
+
+const inFlightJson = new Map<DedupeKey, Promise<unknown>>();
+
+async function fetchJsonDedupe<T>(
+  key: DedupeKey,
+  input: RequestInfo | URL,
+  init?: RequestInit
+): Promise<T> {
+  const existing = inFlightJson.get(key);
+  if (existing) return existing as Promise<T>;
+
+  const promise = fetch(input, init)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+      }
+      return (await response.json()) as T;
+    })
+    .finally(() => {
+      inFlightJson.delete(key);
+    });
+
+  inFlightJson.set(key, promise);
+  return promise;
+}
+
 /** ETA entry augmented with leg info for circular route disambiguation */
 export type KmbEtaEntryWithLeg = KmbEtaEntry & {
   /** "A" = departing leg (closer to first stop occurrence), "B" = arriving leg (closer to last stop occurrence), null = not a circular stop */
@@ -182,24 +209,23 @@ export async function fetchKmbStopEtas(
   stopIds: string[],
   options?: { routeFilter?: string; signal?: AbortSignal; includeFares?: boolean }
 ): Promise<KmbStopEtasResponse> {
-  const response = await fetch("/api/kmb/stop-etas", {
+  const body = {
+    stopIds,
+    routeFilter: options?.routeFilter,
+    includeFares: options?.includeFares ?? false,
+  };
+
+  const key = `POST:/api/kmb/stop-etas:${JSON.stringify(body)}`;
+  const json = await fetchJsonDedupe<KmbStopEtasResponse>(key, "/api/kmb/stop-etas", {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({
-      stopIds,
-      routeFilter: options?.routeFilter,
-      includeFares: options?.includeFares ?? false,
-    }),
+    body: JSON.stringify(body),
     signal: options?.signal,
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to load stop ETAs: ${response.status}`);
-  }
-
-  return (await response.json()) as KmbStopEtasResponse;
+  return json;
 }
 
 /**
@@ -221,20 +247,17 @@ export async function fetchKmbFares(
   variants: KmbFareVariant[],
   options?: { signal?: AbortSignal }
 ): Promise<KmbFaresResponse> {
-  const response = await fetch("/api/kmb/fares", {
+  const body = { variants };
+  const key = `POST:/api/kmb/fares:${JSON.stringify(body)}`;
+
+  return await fetchJsonDedupe<KmbFaresResponse>(key, "/api/kmb/fares", {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({ variants }),
+    body: JSON.stringify(body),
     signal: options?.signal,
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to load fares: ${response.status}`);
-  }
-
-  return (await response.json()) as KmbFaresResponse;
 }
 
 /**
@@ -252,18 +275,15 @@ export async function fetchMtrSchedules(
   queries: Array<{ line: string; sta: string; lang: "EN" | "TC" }>,
   options?: { signal?: AbortSignal }
 ): Promise<MtrSchedulesResponse> {
-  const response = await fetch("/api/mtr/schedules", {
+  const body = { queries };
+  const key = `POST:/api/mtr/schedules:${JSON.stringify(body)}`;
+
+  return await fetchJsonDedupe<MtrSchedulesResponse>(key, "/api/mtr/schedules", {
     method: "POST",
     headers: {
       "content-type": "application/json",
     },
-    body: JSON.stringify({ queries }),
+    body: JSON.stringify(body),
     signal: options?.signal,
   });
-
-  if (!response.ok) {
-    throw new Error(`Failed to load MTR schedules: ${response.status}`);
-  }
-
-  return (await response.json()) as MtrSchedulesResponse;
 }

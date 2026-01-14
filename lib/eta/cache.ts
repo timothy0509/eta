@@ -11,6 +11,11 @@ type CacheEntry<T> = {
   createdAt: number;
 };
 
+type CacheEntryMeta = {
+  expiresAt: number;
+  createdAt: number;
+};
+
 type InFlightEntry<T> = {
   promise: Promise<T>;
   createdAt: number;
@@ -43,6 +48,26 @@ export class MicroCache<T> {
     }
 
     return entry.value;
+  }
+
+  /**
+   * Get a cached value even if expired, for stale fallback.
+   * NOTE: Only use this when you can clearly signal staleness to the client.
+   */
+  getStale(key: string, maxStaleAgeMs: number): { value: T; meta: CacheEntryMeta } | undefined {
+    const entry = this.cache.get(key);
+    if (!entry) return undefined;
+
+    const ageMs = Date.now() - entry.createdAt;
+    if (ageMs > maxStaleAgeMs) return undefined;
+
+    return {
+      value: entry.value,
+      meta: {
+        createdAt: entry.createdAt,
+        expiresAt: entry.expiresAt,
+      },
+    };
   }
 
   /**

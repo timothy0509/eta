@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
 import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
-import { getKmbEta } from "@/lib/eta/kmb";
+import { getKmbStopEta } from "@/lib/eta/kmb";
 
 const QuerySchema = z.object({
   stopId: z.string().trim().min(1),
@@ -33,7 +33,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const eta = await getKmbEta(parsed.data);
+    // Prefer stop-level ETA API (much fewer upstream calls).
+    // Filter by route+serviceType to preserve old response shape.
+    const stopEta = await getKmbStopEta(parsed.data.stopId);
+    const route = parsed.data.route.toUpperCase();
+    const eta = stopEta.filter(
+      (entry) =>
+        String(entry.route ?? "").toUpperCase() === route &&
+        String(entry.service_type ?? "") === parsed.data.serviceType
+    );
 
     return NextResponse.json(
       {

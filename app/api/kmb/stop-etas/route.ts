@@ -9,6 +9,8 @@ import { getKmbRouteStops, getKmbStopEta, type KmbEtaEntry } from "@/lib/eta/kmb
 import { promisePool } from "@/lib/eta/promise-pool";
 import { kmbStopEtaCache } from "@/lib/eta/cache";
 
+const KMB_MAX_STALE_AGE_MS = 30_000;
+
 const BodySchema = z.object({
   stopIds: z.array(z.string().trim().min(1)).min(1).max(100),
   routeFilter: z.string().optional(),
@@ -17,7 +19,9 @@ const BodySchema = z.object({
 });
 
 // Concurrency limit for upstream calls
-const KMB_CONCURRENCY = 6;
+// Vercel latency is often dominated by "fan-out" for multi-stop queries;
+// a higher concurrency reduces tail latency while staying conservative.
+const KMB_CONCURRENCY = 10;
 
 // Max ETAs per route+direction+leg to return (keep payload small)
 const MAX_ETAS_PER_VARIANT = 3;
@@ -96,26 +100,52 @@ export async function POST(request: Request) {
       return lite;
     });
 
-    const byStopId: Record<string, KmbEtaEntryWithLeg[]> = {};
-    const errors: string[] = [];
-    let cached = 0;
-    let fetched = 0;
+     const byStopId: Record<string, KmbEtaEntryWithLeg[]> = {};
+     const errors: string[] = [];
+     const staleByStopId: Record<string, { stale: boolean; ageMs: number | null }> = {};
+     let cached = 0;
+     let fetched = 0;
+     let staleServed = 0;
+
 
     const results = await promisePool(uniqueStopIds, KMB_CONCURRENCY, async (stopId) => {
       const cacheKey = `stop-eta:${stopId}`;
 
-      // Try cache first
-      const cachedData = kmbStopEtaCache.get(cacheKey) as KmbEtaEntry[] | undefined;
-      if (cachedData !== undefined) {
-        cached++;
-        return { stopId, eta: cachedData, fromCache: true };
-      }
+       // Try fresh cache first
+       const cachedData = kmbStopEtaCache.get(cacheKey) as KmbEtaEntry[] | undefined;
+       if (cachedData !== undefined) {
+         cached++;
+         staleByStopId[stopId] = { stale: false, ageMs: 0 };
+         return { stopId, eta: cachedData, fromCache: true };
+       }
 
-      // Fetch from upstream
-      const eta = await getKmbStopEta(stopId);
-      kmbStopEtaCache.set(cacheKey, eta);
-      fetched++;
-      return { stopId, eta, fromCache: false };
+       // Fetch from upstream (deduped per stopId). If it fails, fall back to stale.
+       try {
+         const eta = (await kmbStopEtaCache.getOrFetch(
+           cacheKey,
+           () => getKmbStopEta(stopId)
+         )) as KmbEtaEntry[];
+         fetched++;
+         staleByStopId[stopId] = { stale: false, ageMs: 0 };
+         return { stopId, eta, fromCache: false };
+       } catch (error) {
+         const stale = kmbStopEtaCache.getStale(
+           cacheKey,
+           KMB_MAX_STALE_AGE_MS
+         ) as { value: KmbEtaEntry[]; meta: { createdAt: number } } | undefined;
+
+         if (stale) {
+           staleServed++;
+           staleByStopId[stopId] = {
+             stale: true,
+             ageMs: Date.now() - stale.meta.createdAt,
+           };
+           return { stopId, eta: stale.value, fromCache: true };
+         }
+
+         throw error;
+       }
+
     });
 
     for (const result of results) {
@@ -131,9 +161,9 @@ export async function POST(request: Request) {
       const { stopId, eta } = result.value;
 
       // Apply route filter if provided
-      let filtered = eta;
+      let filtered: KmbEtaEntry[] = eta;
       if (routeFilterSet && routeFilterSet.size > 0) {
-        filtered = eta.filter((entry) =>
+        filtered = eta.filter((entry: KmbEtaEntry) =>
           routeFilterSet.has((entry.route ?? "").toUpperCase())
         );
       }
@@ -218,18 +248,22 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        byStopId,
-        faresByVariantKey,
-        errors,
-        cached,
-        fetched,
+         byStopId,
+         faresByVariantKey,
+         errors,
+         cached,
+         fetched,
+         staleByStopId,
+
       },
       {
         headers: {
           ...KMB_NO_STORE_HEADERS,
           // This response includes ETA (no-store), but fare mapping is derived from daily-cached data.
           // Keep no-store to avoid stale ETAs; consumers can still use faresByVariantKey if present.
-          "X-KMB-Fare-Cache": kmbFareCacheControlHeader(),
+           "X-KMB-Fare-Cache": kmbFareCacheControlHeader(),
+           "X-ETA-Stale": staleServed > 0 ? "1" : "0",
+
         },
       }
     );

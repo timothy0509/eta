@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
 import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
-import { getKmbEta } from "@/lib/eta/kmb";
+import { getKmbStopEta, type KmbEtaEntry } from "@/lib/eta/kmb";
 import { promisePool } from "@/lib/eta/promise-pool";
 
 const BodySchema = z.object({
@@ -47,32 +47,42 @@ export async function POST(request: Request) {
   const plans = Array.from(unique.values()).slice(0, 80);
 
   try {
-    const results = await promisePool(plans, 10, async (p) => {
-      const eta = await getKmbEta(p);
-      return { plan: p, eta };
+    // Prefer stop-level ETA API (much fewer upstream calls).
+    // Fetch per stopId then filter by requested route+serviceType.
+    const uniqueStopIds = Array.from(new Set(plans.map((p) => p.stopId)));
+
+    const stopResults = await promisePool(uniqueStopIds, 10, async (stopId) => {
+      const eta = await getKmbStopEta(stopId);
+      return { stopId, eta };
     });
 
-    const eta = results
-      .filter((r) => r.status === "fulfilled")
-      .flatMap((r) => (r.status === "fulfilled" ? r.value.eta : []));
+    const byStopId = new Map<string, KmbEtaEntry[]>();
+    for (const r of stopResults) {
+      if (r.status !== "fulfilled") continue;
+      byStopId.set(r.value.stopId, r.value.eta);
+    }
 
-    const errors = results
+    const eta = plans.flatMap((p) => {
+      const stopEta = byStopId.get(p.stopId) ?? [];
+      const route = p.route.toUpperCase();
+      return stopEta.filter(
+        (entry) =>
+          String(entry.route ?? "").toUpperCase() === route &&
+          String(entry.service_type ?? "") === p.serviceType
+      );
+    });
+
+    const errors = stopResults
       .map((r, idx) => ({ r, idx }))
       .filter((x) => x.r.status === "rejected")
       .slice(0, 10)
-      .map((x) => {
-        const plan = plans[x.idx];
-        return {
-          stopId: plan.stopId,
-          route: plan.route,
-          serviceType: plan.serviceType,
-        };
-      });
+      .map((x) => uniqueStopIds[x.idx])
+      .filter((stopId): stopId is string => Boolean(stopId));
 
     return NextResponse.json(
       {
         eta,
-        errors,
+        errors: errors.map((stopId) => ({ stopId })),
       },
       {
         headers: KMB_NO_STORE_HEADERS,

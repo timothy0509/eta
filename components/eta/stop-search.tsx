@@ -32,6 +32,26 @@ type Props = {
   onSelectContains: (query: string) => void;
 };
 
+type StopComputed = {
+  stopId: string;
+  baseName: string;
+  stopCode: string | null;
+  displaySecondary: string;
+
+  /** Primary display name in selected UI language */
+  displayName: string;
+
+  /** Search fields with better weighting */
+  searchName: string;
+  searchSecondary: string;
+  searchCode: string;
+
+  /** Catch-all fallback for fuzzy matches */
+  normalized: string;
+
+  stop: KmbStopSearchItem;
+};
+
 // --- Utility functions for stop name/code parsing ---
 
 function formatStopName(stop: KmbStopSearchItem, lang: UiLanguage) {
@@ -109,73 +129,57 @@ type StopGroup = {
  * Handles multiple separate sequential sets (e.g., KT313-KT316 AND KT681-KT683).
  * Non-sequential stops remain as individual items.
  */
-function groupStopsByName(stops: KmbStopSearchItem[], lang: UiLanguage): StopGroup[] {
-  // First, parse all stops and group by base name
-  const byBaseName = new Map<
-    string,
-    { code: string | null; stop: KmbStopSearchItem }[]
-  >();
-
+function groupStopsByName(stops: StopComputed[]): StopGroup[] {
+  const byBaseName = new Map<string, StopComputed[]>();
   for (const stop of stops) {
-    const fullName = formatStopName(stop, lang);
-    const parsed = parseKmbStopName(fullName);
-    const baseName = parsed.name;
-    const code = parsed.stopCode;
-
+    const baseName = stop.baseName;
     if (!byBaseName.has(baseName)) {
       byBaseName.set(baseName, []);
     }
-    byBaseName.get(baseName)!.push({ code, stop });
+    byBaseName.get(baseName)!.push(stop);
   }
 
   const result: StopGroup[] = [];
 
   for (const [baseName, items] of byBaseName) {
-    // Separate items with valid codes from those without
-    const withCodes = items.filter((i) => i.code !== null);
-    const withoutCodes = items.filter((i) => i.code === null);
+    const withCodes = items.filter((i) => i.stopCode !== null);
+    const withoutCodes = items.filter((i) => i.stopCode === null);
 
-    // Sort by code prefix then number
     withCodes.sort((a, b) => {
-      const pa = parseCodeParts(a.code!);
-      const pb = parseCodeParts(b.code!);
+      const pa = parseCodeParts(a.stopCode!);
+      const pb = parseCodeParts(b.stopCode!);
       if (!pa || !pb) return 0;
       if (pa.prefix !== pb.prefix) return pa.prefix.localeCompare(pb.prefix);
       return pa.num - pb.num;
     });
 
-    // Find contiguous runs of sequential codes
-    const runs: { code: string; stop: KmbStopSearchItem }[][] = [];
+    const runs: StopComputed[][] = [];
     for (const item of withCodes) {
-      // We know code is non-null because we filtered above
-      const typedItem = item as { code: string; stop: KmbStopSearchItem };
       const lastRun = runs[runs.length - 1];
       if (!lastRun) {
-        runs.push([typedItem]);
+        runs.push([item]);
         continue;
       }
-      const lastItem = lastRun[lastRun.length - 1];
-      const lastParts = parseCodeParts(lastItem.code);
-      const currParts = parseCodeParts(typedItem.code);
 
-      // Check if sequential (same prefix, consecutive number)
+      const lastItem = lastRun[lastRun.length - 1];
+      const lastParts = parseCodeParts(lastItem.stopCode!);
+      const currParts = parseCodeParts(item.stopCode!);
+
       if (
         lastParts &&
         currParts &&
         lastParts.prefix === currParts.prefix &&
         currParts.num === lastParts.num + 1
       ) {
-        lastRun.push(typedItem);
+        lastRun.push(item);
       } else {
-        runs.push([typedItem]);
+        runs.push([item]);
       }
     }
 
-    // Create groups from runs
     for (const run of runs) {
       if (run.length >= 2) {
-        // Create a grouped suggestion for 2+ sequential stops
-        const codes = run.map((r) => r.code!);
+        const codes = run.map((r) => r.stopCode!).filter(Boolean);
         const runStops = run.map((r) => r.stop);
         result.push({
           id: `group:${runStops.map((s) => s.stopId).join(",")}`,
@@ -184,24 +188,22 @@ function groupStopsByName(stops: KmbStopSearchItem[], lang: UiLanguage): StopGro
           stops: runStops,
           displayName: baseName,
           displayCodes: `(${formatCodeRange(codes)})`,
-          displaySecondary: formatStopSecondary(runStops[0], lang),
+          displaySecondary: run[0]?.displaySecondary ?? "",
         });
       } else {
-        // Single item in run - add as individual
         const item = run[0];
         result.push({
           id: `stop:${item.stop.stopId}`,
           baseName,
-          codes: [item.code!],
+          codes: item.stopCode ? [item.stopCode] : [],
           stops: [item.stop],
           displayName: baseName,
-          displayCodes: `(${item.code})`,
-          displaySecondary: formatStopSecondary(item.stop, lang),
+          displayCodes: item.stopCode ? `(${item.stopCode})` : "",
+          displaySecondary: item.displaySecondary,
         });
       }
     }
 
-    // Add items without codes as individuals
     for (const item of withoutCodes) {
       result.push({
         id: `stop:${item.stop.stopId}`,
@@ -210,7 +212,7 @@ function groupStopsByName(stops: KmbStopSearchItem[], lang: UiLanguage): StopGro
         stops: [item.stop],
         displayName: baseName,
         displayCodes: "",
-        displaySecondary: formatStopSecondary(item.stop, lang),
+        displaySecondary: item.displaySecondary,
       });
     }
   }
@@ -275,30 +277,104 @@ export function StopSearch({
   }, [value, stops, lang]);
 
 
-  // Use Fuse.js to search individual stops, then group results
+  const stopComputed = React.useMemo<StopComputed[]>(() => {
+    return stops.map((stop) => {
+      const fullName = formatStopName(stop, lang);
+      const parsed = parseKmbStopName(fullName);
+      const baseName = parsed.name;
+      const stopCode = parsed.stopCode;
+      const displayName = baseName;
+      const displaySecondary = formatStopSecondary(stop, lang);
+
+      const searchName = displayName.toLowerCase().trim();
+      const searchSecondary = displaySecondary.toLowerCase().trim();
+      const searchCode = (stopCode ?? "").toLowerCase().trim();
+
+      const normalized = `${stop.nameEn}|${stop.nameTc}|${stop.nameSc}|${baseName}|${stopCode ?? ""}`
+        .toLowerCase()
+        .trim();
+
+      return {
+        stopId: stop.stopId,
+        baseName,
+        stopCode,
+        displaySecondary,
+        displayName,
+        searchName,
+        searchSecondary,
+        searchCode,
+        normalized,
+        stop,
+      };
+    });
+  }, [stops, lang]);
+
   const fuse = React.useMemo(() => {
-    return new Fuse(stops, {
-      threshold: 0.35,
+    return new Fuse(stopComputed, {
+      // Lower threshold = stricter matching = higher precision.
+      // We also explicitly boost exact/prefix matches in post-processing.
+      threshold: 0.28,
       ignoreLocation: true,
       minMatchCharLength: 2,
+      includeScore: true,
+      shouldSort: true,
       keys: [
-        { name: "nameEn", weight: 0.35 },
-        { name: "nameTc", weight: 0.45 },
-        { name: "nameSc", weight: 0.2 },
+        { name: "searchCode", weight: 0.55 },
+        { name: "searchName", weight: 0.30 },
+        { name: "searchSecondary", weight: 0.10 },
+        { name: "normalized", weight: 0.05 },
       ],
     });
-  }, [stops]);
+  }, [stopComputed]);
 
   // Search and group results
   const groupedResults = React.useMemo(() => {
     if (!deferredQuery.trim()) {
       // Default: show first 12 stops, grouped
-      return groupStopsByName(stops.slice(0, 30), lang).slice(0, 12);
+      return groupStopsByName(stopComputed.slice(0, 30)).slice(0, 12);
     }
-    const hits = fuse.search(deferredQuery.trim()).slice(0, 60);
-    const matchedStops = hits.map((h) => h.item);
-    return groupStopsByName(matchedStops, lang).slice(0, 20);
-  }, [fuse, deferredQuery, stops, lang]);
+
+    const needle = deferredQuery.trim().toLowerCase();
+
+    const hits = fuse.search(needle).slice(0, 80);
+
+    // Prefer exact/prefix matches (stop code or name) over generic fuzzy score.
+    // This improves accuracy for common user behavior:
+    // - typing stop code prefixes (KT31…)
+    // - typing station name prefixes
+    const scored = hits
+      .map((h: { item: StopComputed; score?: number }) => {
+        const item = h.item;
+
+        const exact =
+          (item.searchCode && item.searchCode === needle) ||
+          item.searchName === needle ||
+          item.searchSecondary === needle;
+
+        const prefix =
+          (item.searchCode && item.searchCode.startsWith(needle)) ||
+          item.searchName.startsWith(needle) ||
+          item.searchSecondary.startsWith(needle);
+
+        const includes =
+          (item.searchCode && item.searchCode.includes(needle)) ||
+          item.searchName.includes(needle) ||
+          item.searchSecondary.includes(needle);
+
+        // Fuse score is lower-is-better; normalize missing to a mediocre score.
+        const fuseScore = h.score ?? 0.5;
+
+        const boost = exact ? 0 : prefix ? 1 : includes ? 2 : 3;
+        return { item, fuseScore, boost };
+      })
+      .sort((a, b) => {
+        if (a.boost !== b.boost) return a.boost - b.boost;
+        return a.fuseScore - b.fuseScore;
+      })
+      .slice(0, 60);
+
+    return groupStopsByName(scored.map((s) => s.item)).slice(0, 20);
+  }, [fuse, deferredQuery, stopComputed]);
 
   const trimmedQuery = query.trim();
   const canSearchContains = trimmedQuery.length >= 3;

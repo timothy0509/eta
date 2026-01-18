@@ -3,12 +3,19 @@ export type TransportMode = "kmb" | "mtr" | "lrt";
 export type UiLanguage = "en" | "tc" | "sc";
 
 export function isLanguageSupported(mode: TransportMode, lang: UiLanguage) {
-  if (lang === "sc") return mode === "kmb";
+  if (lang === "sc") {
+    return mode === "kmb";
+  }
   return true;
 }
 
-export function defaultLanguageForMode(mode: TransportMode): UiLanguage {
-  return mode === "kmb" ? "tc" : "tc";
+/**
+ * Returns the default UI language for a transport mode.
+ * Currently all modes default to Traditional Chinese (tc) as it provides
+ * the best coverage for Hong Kong transit information.
+ */
+export function defaultLanguageForMode(): UiLanguage {
+  return "tc";
 }
 
 export type KmbStopSearchItem = {

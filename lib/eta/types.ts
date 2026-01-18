@@ -14,7 +14,7 @@ export function isLanguageSupported(mode: TransportMode, lang: UiLanguage) {
  * Currently all modes default to Traditional Chinese (tc) as it provides
  * the best coverage for Hong Kong transit information.
  */
-export function defaultLanguageForMode(mode: TransportMode): UiLanguage {
+export function defaultLanguageForMode(): UiLanguage {
   return "tc";
 }
 

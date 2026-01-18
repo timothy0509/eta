@@ -15,15 +15,15 @@ import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 
 import {
-  fetchKmbRouteInfo,
-  fetchKmbRouteStops,
-  fetchKmbStops,
-  fetchKmbStopEtas,
-  fetchKmbFares,
-  type KmbRouteInfoLite,
-  type KmbRouteStopLite,
   type KmbEtaEntryWithLeg,
   type KmbFareVariant,
+  type KmbRouteInfoLite,
+  type KmbRouteStopLite,
+  fetchKmbFares,
+  fetchKmbRouteInfo,
+  fetchKmbRouteStops,
+  fetchKmbStopEtas,
+  fetchKmbStops,
 } from "@/lib/eta/client";
 import { useInfiniteScroll } from "@/lib/eta/use-infinite-scroll";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
@@ -263,8 +263,8 @@ function groupEtasByVariant(
   // 3) No ETA
   // Within each tier, sort alphabetically by route number
   const sortByRoute = (a: { key: string }, b: { key: string }) => {
-    const [routeA] = a.key.split("|");
-    const [routeB] = b.key.split("|");
+    const [routeA = ""] = a.key.split("|");
+    const [routeB = ""] = b.key.split("|");
     return routeA.localeCompare(routeB, undefined, { numeric: true });
   };
 
@@ -617,7 +617,7 @@ export function KmbPane({
 
     return variantKeys
       .map((key) => {
-        const [route] = key.split("|");
+        const [route = ""] = key.split("|");
         const label = pickRouteVariantLabel(kmbRouteInfos[key]);
         return {
           key,
@@ -642,7 +642,7 @@ export function KmbPane({
     const load = async () => {
       const fetched = await Promise.allSettled(
         missing.map(async (key) => {
-          const [route, direction, serviceType] = key.split("|");
+          const [route = "", direction = "", serviceType = ""] = key.split("|");
           const info = await fetchKmbRouteInfo({ route, direction, serviceType });
           return { key, info };
         })
@@ -889,7 +889,7 @@ export function KmbPane({
           if (missingKeys.length && !controller.signal.aborted) {
             const fetched = await Promise.allSettled(
               missingKeys.slice(0, 30).map(async (key) => {
-                const [route, direction, serviceType] = key.split("|");
+                const [route = "", direction = "", serviceType = ""] = key.split("|");
                 const info = await fetchKmbRouteInfo({ route, direction, serviceType });
                 return { key, info };
               })
@@ -928,16 +928,22 @@ export function KmbPane({
     [kmbQuery, kmbRouteInfos, loadedStopIds, getRouteFilterString, fetchStopEtas, resolveContainsStopIds, routeStopIndex]
   );
 
+  const loadMoreLoadingRef = React.useRef(false);
+
   // Load more stops when infinite scroll triggers
   const loadMoreStops = React.useCallback(async () => {
-    if (!kmbQuery || kmbEtaLoading) return;
+    if (!kmbQuery || kmbEtaLoading || loadMoreLoadingRef.current) return;
+    loadMoreLoadingRef.current = true;
 
     const currentLoaded = new Set(loadedStopIds);
     const nextStopIds = allStopIds
       .filter((id) => !currentLoaded.has(id))
       .slice(0, STOPS_PER_PAGE);
 
-    if (!nextStopIds.length) return;
+    if (!nextStopIds.length) {
+      loadMoreLoadingRef.current = false;
+      return;
+    }
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -961,6 +967,8 @@ export function KmbPane({
 
       const message = error instanceof Error ? error.message : "Failed to load more stops";
       dispatchEta({ type: "REFRESH_ERROR", error: message });
+    } finally {
+      loadMoreLoadingRef.current = false;
     }
   }, [kmbQuery, kmbEtaLoading, loadedStopIds, allStopIds, getRouteFilterString, fetchStopEtas]);
 
@@ -1391,14 +1399,15 @@ export function KmbPane({
           const stopIds = stops.map((s) => s.stopId);
           setKmbDraftStopSelection({ type: "stops", stopIds });
           if (stops.length > 0) {
-            const firstStop = stops[0];
+            const firstStop = stops[0]!;
             const fullName = pickKmbStopTitle(firstStop, lang);
             const { name } = parseKmbStopName(fullName);
+            const firstStopId = stopIds[0]!;
             onAddRecent({
               id: `kmb:${stopIds.join(",")}:__stops__`,
               mode: "kmb",
               title: name,
-              stopId: stopIds[0],
+              stopId: firstStopId,
             });
           }
         }}

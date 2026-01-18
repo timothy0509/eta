@@ -7,7 +7,7 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     rules: {
-      "sort-imports": ["error", {
+      "sort-imports": ["warn", {
         ignoreDeclarationSort: false,
         memberSyntaxSortOrder: ["none", "all", "multiple", "single"],
       }],

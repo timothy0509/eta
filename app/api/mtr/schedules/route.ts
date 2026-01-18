@@ -127,13 +127,20 @@ export async function POST(request: Request) {
       byKey[result.value.key] = result.value.schedule;
     }
 
-    return NextResponse.json({
-      byKey,
-      errors,
-      cached,
-      fetched,
-      backoff: inBackoff,
-    });
+    return NextResponse.json(
+      {
+        byKey,
+        errors,
+        cached,
+        fetched,
+        backoff: inBackoff,
+      },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=45, s-maxage=60, stale-while-revalidate=120",
+        },
+      }
+    );
   } catch (error) {
     const status =
       error instanceof UpstreamTimeoutError

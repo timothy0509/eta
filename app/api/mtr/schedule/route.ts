@@ -37,13 +37,27 @@ export async function GET(request: Request) {
     // Try cache first
     const cachedData = mtrScheduleCache.get(cacheKey) as MtrScheduleResponse | undefined;
     if (cachedData !== undefined) {
-      return NextResponse.json({ schedule: cachedData, cached: true });
+      return NextResponse.json(
+      { schedule: cachedData, cached: true },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=45, s-maxage=60, stale-while-revalidate=120",
+        },
+      }
+    );
     }
 
     const schedule = await getMtrSchedule(parsed.data);
     mtrScheduleCache.set(cacheKey, schedule);
 
-    return NextResponse.json({ schedule, cached: false });
+    return NextResponse.json(
+      { schedule, cached: false },
+      {
+        headers: {
+          "Cache-Control": "public, max-age=45, s-maxage=60, stale-while-revalidate=120",
+        },
+      }
+    );
   } catch (error) {
     const status =
       error instanceof UpstreamTimeoutError

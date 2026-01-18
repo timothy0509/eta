@@ -21,7 +21,7 @@ type InFlightEntry<T> = {
   createdAt: number;
 };
 
-const DEFAULT_TTL_MS = 15_000; // 15 seconds
+const DEFAULT_TTL_MS = 30_000; // 30 seconds for better cache hit rate
 const MAX_INFLIGHT_AGE_MS = 30_000; // 30 seconds max for in-flight dedup
 
 export class MicroCache<T> {
@@ -160,6 +160,6 @@ export class MicroCache<T> {
 }
 
 // Singleton caches for each provider
-export const kmbStopEtaCache = new MicroCache<unknown>({ ttlMs: 15_000, maxSize: 500 });
-export const mtrScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 200 });
-export const lrtScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 100 });
+export const kmbStopEtaCache = new MicroCache<unknown>({ ttlMs: 30_000, maxSize: 500 });
+export const mtrScheduleCache = new MicroCache<unknown>({ ttlMs: 45_000, maxSize: 200 });
+export const lrtScheduleCache = new MicroCache<unknown>({ ttlMs: 45_000, maxSize: 100 });

@@ -146,6 +146,25 @@ export class MicroCache<T> {
     };
   }
 
+  /**
+   * Warm the cache with frequently accessed keys.
+   * Prefetches keys in the background without blocking.
+   */
+  warm(
+    keys: Array<{ key: string; ttlMs?: number }>,
+    fetcher: (key: string) => Promise<T>
+  ): void {
+    for (const { key } of keys) {
+      // Skip if already cached
+      if (this.cache.has(key)) continue;
+
+      // Fire and forget - don't wait for result
+      this.getOrFetch(key, () => fetcher(key)).catch(() => {
+        // Silently ignore warmup failures
+      });
+    }
+  }
+
   private evictOldest(): void {
     // Remove ~20% of oldest entries
     const entriesToRemove = Math.max(1, Math.floor(this.maxSize * 0.2));

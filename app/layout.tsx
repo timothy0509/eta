@@ -32,11 +32,60 @@ const notoSansSC = Noto_Sans_SC({
 
 // Geist Mono is loaded via @fontsource in globals.css
 
+const siteUrl = new URL("https://eta.hkjc.uk");
+
 export const metadata: Metadata = {
-  title: "TimoETA",
-  description: "Fast ETAs for KMB, MTR and Light Rail",
+  metadataBase: siteUrl,
+  title: {
+    default: "TimoETA",
+    template: "%s | TimoETA",
+  },
+  description:
+    "Fast, clean Hong Kong transit ETAs for KMB buses, MTR trains, and Light Rail. Pin stops, save favorites, and auto-refresh arrivals.",
+  alternates: {
+    canonical: "/",
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
   icons: {
-    icon: "/timoeta_new.png",
+    icon: [
+      { url: "/timoeta_new.png" },
+      { url: "/timoeta_new.png", type: "image/png" },
+    ],
+    apple: [{ url: "/timoeta_new.png" }],
+    shortcut: ["/timoeta_new.png"],
+  },
+  openGraph: {
+    type: "website",
+    url: "/",
+    title: "TimoETA",
+    description:
+      "Fast, clean Hong Kong transit ETAs for KMB buses, MTR trains, and Light Rail.",
+    siteName: "TimoETA",
+    images: [
+      {
+        url: "/timoeta_new.png",
+        width: 512,
+        height: 512,
+        alt: "TimoETA",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary",
+    title: "TimoETA",
+    description:
+      "Fast, clean Hong Kong transit ETAs for KMB buses, MTR trains, and Light Rail.",
+    images: ["/timoeta_new.png"],
   },
 };
 
@@ -56,6 +105,19 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <script
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{
+              __html: JSON.stringify({
+                "@context": "https://schema.org",
+                "@type": "WebSite",
+                name: "TimoETA",
+                url: siteUrl.toString(),
+                description:
+                  "Fast, clean Hong Kong transit ETAs for KMB buses, MTR trains, and Light Rail.",
+              }),
+            }}
+          />
           {children}
           <Toaster />
         </ThemeProvider>

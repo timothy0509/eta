@@ -100,8 +100,8 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
       lang === "en"
         ? "No filter added. All routes at the stop will be shown."
         : lang === "sc"
-          ? "未添加筛选。将显示车站的所有路线。"
-          : "未添加篩選。將顯示車站的所有路線。",
+          ? "未添加篩選，將顯示車站的所有路線。"
+          : "未添加篩選，將顯示車站的所有路線。",
     selectRoute: lang === "en" ? "Select route…" : lang === "sc" ? "选择路线…" : "選擇路線…",
     searchRoute: lang === "en" ? "Search route…" : lang === "sc" ? "搜索路线…" : "搜尋路線…",
     noResults: lang === "en" ? "No results." : "無結果。",

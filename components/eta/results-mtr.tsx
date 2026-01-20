@@ -90,7 +90,7 @@ function formatDestWithRacecourse(
   const destName = formatDest(dest, lang);
   if (!showViaRacecourse) return destName;
 
-  const suffix = lang === "en" ? " · Via Racecourse" : " · 經馬場";
+  const suffix = lang === "en" ? " · Via Racecourse" : " · 經馬場站";
   return `${destName}${suffix}`;
 }
 

@@ -1444,7 +1444,7 @@ export function KmbPane({
             ? lang === "en"
               ? "Indexing data…"
               : lang === "sc"
-                ? "正在索引数据…"
+                ? "正在索引數據…"
                 : "正在索引數據…"
             : `${kmbStops.length.toLocaleString()} ${
                 lang === "en" ? "stops" : "個車站"
@@ -1472,7 +1472,7 @@ export function KmbPane({
           disabled={!canFavorite}
           onClick={onSave}
         >
-          {lang === "en" ? "Save" : "儲存"}
+          {lang === "en" ? "Save" : "收藏"}
         </Button>
       </div>
 

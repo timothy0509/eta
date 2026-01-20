@@ -267,14 +267,14 @@ function RouteVariantCard({
   );
 
   const i18n = {
-    details: lang === "en" ? "Details" : lang === "sc" ? "  " : "  ",
-    routeDetails: lang === "en" ? "Route details" : lang === "sc" ? "  " : "  ",
+    details: lang === "en" ? "Details" : lang === "sc" ? "詳情" : "詳情",
+    routeDetails: lang === "en" ? "Route details" : lang === "sc" ? "路線詳情" : "路線詳情",
     routeAndStopDetails:
-      lang === "en" ? "Route and stop details" : lang === "sc" ? "  " : "  ",
-    stop: lang === "en" ? "Stop" : lang === "sc" ? " " : " ",
-    route: lang === "en" ? "Route" : lang === "sc" ? " " : " ",
-    fare: lang === "en" ? "Fare" : lang === "sc" ? "车费" : "車費",
-    unknown: lang === "en" ? "Unknown" : lang === "sc" ? " " : " ",
+      lang === "en" ? "Route and stop details" : lang === "sc" ? "路線及車站詳情" : "路線及車站詳情",
+    stop: lang === "en" ? "Stop" : lang === "sc" ? "車站" : "車站",
+    route: lang === "en" ? "Route" : lang === "sc" ? "路線" : "路線",
+    fare: lang === "en" ? "Fare" : lang === "sc" ? "車費" : "車費",
+    unknown: lang === "en" ? "Unknown" : lang === "sc" ? "未知" : "未知",
   };
 
   const InfoButton = (

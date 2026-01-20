@@ -117,7 +117,7 @@ export function MtrPane({
 
       <div className="flex items-center gap-2">
         <Button className="rounded-xl" onClick={() => void onSave()} disabled={!sta}>
-          {lang === "en" ? "Save" : "儲存"}
+          {lang === "en" ? "Save" : "收藏"}
         </Button>
       </div>
 

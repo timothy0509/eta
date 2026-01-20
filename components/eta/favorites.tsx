@@ -133,13 +133,13 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   const clearRecents = useAppStore((s) => s.clearRecents);
 
   const t = {
-    saved: lang === "en" ? "Saved" : lang === "sc" ? "已储存" : "已儲存",
-    favorites: lang === "en" ? "Favorites" : lang === "sc" ? "收藏" : "收藏",
-    recent: lang === "en" ? "Recent" : lang === "sc" ? "最近" : "最近",
-    noFavorites: lang === "en" ? "No favorites yet." : lang === "sc" ? "暂无收藏。" : "暫無收藏。",
-    tip: lang === "en" ? "Tip: results can auto-refresh while you wait." : lang === "sc" ? "提示：结果可在等待时自动整理。" : "提示：結果可在等待時自動整理。",
-    clear: lang === "en" ? "Clear" : lang === "sc" ? "清除" : "清除",
-    noRecent: lang === "en" ? "No recent searches." : lang === "sc" ? "暂无搜索记录。" : "暫無搜尋記錄。",
+    saved: lang === "en" ? "Saved" : lang === "sc" ? "已儲存" : "已儲存",
+    favorites: lang === "en" ? "Favorites" : "收藏",
+    recent: lang === "en" ? "Recent" : "最近",
+    noFavorites: lang === "en" ? "No favorites yet." : lang === "sc" ? "暫無收藏。" : "暫無收藏。",
+    tip: lang === "en" ? "Tip: results can auto-refresh while you wait." : lang === "sc" ? "提示：結果可在等待時自動刷新。" : "提示：結果可在等待時自動刷新。",
+    clear: lang === "en" ? "Clear" : "清除",
+    noRecent: lang === "en" ? "No recent searches." : lang === "sc" ? "暫無搜尋記錄。" : "暫無搜尋記錄。",
   };
 
   return (

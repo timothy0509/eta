@@ -403,14 +403,14 @@ export function StopSearch({
         >
           <Search className="mr-2 h-4 w-4 shrink-0" />
           <span className="truncate">
-            {selectedLabel || (lang === "en" ? "Search stop name..." : lang === "sc" ? "搜索车站..." : "搜尋車站...")}
+            {selectedLabel || (lang === "en" ? "Search stop name..." : lang === "sc" ? "搜尋車站…" : "搜尋車站…")}
           </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
         <Command shouldFilter={false}>
           <CommandInput
-            placeholder={lang === "en" ? "Type a stop name..." : lang === "sc" ? "输入车站名称..." : "輸入車站名稱..."}
+            placeholder={lang === "en" ? "Type a stop name…" : lang === "sc" ? "輸入車站名稱…" : "輸入車站名稱…"}
             value={query}
             onValueChange={setQuery}
           />
@@ -432,7 +432,7 @@ export function StopSearch({
                   </div>
                   <div className="min-w-0">
                     <div className="truncate font-medium">
-                      {(lang === "en" ? "Contains: " : lang === "sc" ? "包含: " : "包含: ") + trimmedQuery}
+                      {(lang === "en" ? "Contains: " : lang === "sc" ? "包含：" : "包含：") + trimmedQuery}
                     </div>
                     <div className="truncate text-xs text-muted-foreground">
                       {lang === "en"

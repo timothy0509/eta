@@ -166,15 +166,15 @@ export default function Home() {
       lang === "en"
         ? "Clean, fast ETAs for Hong Kong transit."
         : lang === "sc"
-          ? "简洁、快速的香港交通到站预报。"
-          : "簡潔、快速的香港交通到站預報。",
+          ? "簡潔又快速的香港交通到站預報。"
+          : "簡潔又快速的香港交通到站預報。",
     theme: lang === "en" ? "Theme" : lang === "sc" ? "主题" : "主題",
     searchPin:
       lang === "en"
         ? "Search and pin your go-to stops."
         : lang === "sc"
-          ? "搜索并固定您的常用车站。"
-          : "搜索並固定您的常用車站。",
+          ? "搜尋並釘選常用車站。"
+          : "搜尋並釘選常用車站。",
     kmbTitle: lang === "en" ? "KMB ETAs" : lang === "sc" ? "九巴到站预报" : "九巴到站預報",
     mtrTitle: lang === "en" ? "MTR" : lang === "sc" ? "港铁" : "港鐵",
     lrtTitle: lang === "en" ? "Light Rail" : "輕鐵",

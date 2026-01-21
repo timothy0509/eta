@@ -164,7 +164,7 @@ export function LrtResults({ title, lang, schedule, error, stale, lastUpdatedAt,
                           </div>
                           {r.stop ? (
                             <div className="text-xs text-destructive">
-                              {lang === "en" ? "Stopped" : "暫停服務"}
+                              {lang === "en" ? "Stopped" : lang === "sc" ? "暫停服務" : "暫停服務"}
                             </div>
                           ) : null}
                         </div>

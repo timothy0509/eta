@@ -110,7 +110,7 @@ export function LrtStationSearch({
           />
           <CommandList>
             <CommandEmpty>{lang === "en" ? "No results." : "無結果。"}</CommandEmpty>
-            <CommandGroup heading={lang === "en" ? "Stops" : "車站"}>
+            <CommandGroup heading={lang === "en" ? "Stops" : lang === "sc" ? "车站" : "車站"}>
               {(results.length ? results : stations.slice(0, 12)).map((station) => (
                 <CommandItem
                   key={station.stationId}

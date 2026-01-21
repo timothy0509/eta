@@ -33,9 +33,9 @@ export function AutoRefreshMenu({ lang, valueSeconds, onChange }: Props) {
           : "關閉";
 
   const t = {
-    title: lang === "en" ? "Auto refresh" : lang === "sc" ? "自动整理" : "自動整理",
-    auto: lang === "en" ? "Auto" : lang === "sc" ? "自动" : "自動",
-    off: lang === "en" ? "Off" : lang === "sc" ? "关闭" : "關閉",
+    title: lang === "en" ? "Auto refresh" : lang === "sc" ? "自動刷新" : "自動刷新",
+    auto: lang === "en" ? "Auto" : lang === "sc" ? "自動" : "自動",
+    off: lang === "en" ? "Off" : lang === "sc" ? "關閉" : "關閉",
   };
 
   return (

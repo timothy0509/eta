@@ -1,16 +1,13 @@
 import { defineConfig, globalIgnores } from "eslint/config";
-import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import nextVitals from "eslint-config-next/core-web-vitals";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
   ...nextTs,
   {
     rules: {
-      "sort-imports": ["warn", {
-        ignoreDeclarationSort: false,
-        memberSyntaxSortOrder: ["none", "all", "multiple", "single"],
-      }],
+      "sort-imports": "off",
     },
   },
   // Override default ignores of eslint-config-next.
@@ -20,6 +17,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "tmp/package/**",
   ]),
 ]);
 

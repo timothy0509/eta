@@ -2,9 +2,9 @@
 
 import * as React from "react";
 
+import { fetchMtrSchedules } from "@/lib/eta/client";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 import type { MtrStationSearchItem, UiLanguage } from "@/lib/eta/types";
-import { fetchMtrSchedules } from "@/lib/eta/client";
 
 export function useMtrSchedule(params: {
   lang: UiLanguage;
@@ -56,7 +56,7 @@ export function useMtrSchedule(params: {
         let baseline: MtrScheduleResponse | null = null;
         const mergedData: Record<string, NonNullable<MtrScheduleResponse["data"]>[string]> = {};
 
-        for (const [key, item] of Object.entries(result.byKey)) {
+        for (const item of Object.values(result.byKey)) {
           baseline ??= item;
           if (item.status !== 1) continue;
           Object.assign(mergedData, item.data ?? {});

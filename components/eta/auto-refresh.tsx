@@ -1,7 +1,5 @@
 "use client";
 
-import { Timer } from "lucide-react";
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +10,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import type { UiLanguage } from "@/lib/eta/types";
+import { Timer } from "lucide-react";
 
 type Props = {
   lang: UiLanguage;
@@ -59,4 +58,3 @@ export function AutoRefreshMenu({ lang, valueSeconds, onChange }: Props) {
     </DropdownMenu>
   );
 }
-

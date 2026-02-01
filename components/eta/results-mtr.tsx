@@ -2,16 +2,15 @@
 
 import { ExternalLink, Info, RefreshCw, TrainFront } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Marquee } from "@/components/ui/marquee";
+import { findMtrStationBySta } from "@/lib/data/mtr-stations";
+import { getLineColor } from "@/lib/eta/line-colors";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 import type { UiLanguage } from "@/lib/eta/types";
-import { getLineColor } from "@/lib/eta/line-colors";
-import { findMtrStationBySta } from "@/lib/data/mtr-stations";
+import { cn } from "@/lib/utils";
 
 type Props = {
   title: string;

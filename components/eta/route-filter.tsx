@@ -1,8 +1,10 @@
 "use client";
 
-import * as React from "react";
 import { Check, ChevronsUpDown, Plus, Trash2 } from "lucide-react";
+import * as React from "react";
 
+import { RouteBadge } from "@/components/eta/route-badge";
+import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -15,13 +17,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Marquee } from "@/components/ui/marquee";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { RouteBadge } from "@/components/eta/route-badge";
-import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
-import { Button } from "@/components/ui/button";
-import type { RouteFilterMode } from "@/lib/store";
+import { Switch } from "@/components/ui/switch";
 import type { UiLanguage } from "@/lib/eta/types";
 import { cn } from "@/lib/utils";
+import type { RouteFilterMode } from "@/lib/store";
 
 export type RouteFilterEntry = {
   id: string;
@@ -271,4 +271,3 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
     </div>
   );
 }
-

@@ -1,10 +1,9 @@
+import { fetchKmbEtasForStop } from "@/lib/eta/hk-bus-eta";
+import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
+import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
+import { promisePool } from "@/lib/eta/promise-pool";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-
-import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
-import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
-import { getKmbStopEta, type KmbEtaEntry } from "@/lib/eta/kmb";
-import { promisePool } from "@/lib/eta/promise-pool";
 
 const BodySchema = z.object({
   plans: z
@@ -52,11 +51,14 @@ export async function POST(request: Request) {
     const uniqueStopIds = Array.from(new Set(plans.map((p) => p.stopId)));
 
     const stopResults = await promisePool(uniqueStopIds, 10, async (stopId) => {
-      const eta = await getKmbStopEta(stopId);
+      const eta = await fetchKmbEtasForStop({
+        stopId,
+        language: "tc",
+      });
       return { stopId, eta };
     });
 
-    const byStopId = new Map<string, KmbEtaEntry[]>();
+    const byStopId = new Map<string, Awaited<ReturnType<typeof fetchKmbEtasForStop>>>();
     for (const r of stopResults) {
       if (r.status !== "fulfilled") continue;
       byStopId.set(r.value.stopId, r.value.eta);
@@ -65,11 +67,30 @@ export async function POST(request: Request) {
     const eta = plans.flatMap((p) => {
       const stopEta = byStopId.get(p.stopId) ?? [];
       const route = p.route.toUpperCase();
-      return stopEta.filter(
-        (entry) =>
-          String(entry.route ?? "").toUpperCase() === route &&
-          String(entry.service_type ?? "") === p.serviceType
-      );
+      const now = new Date().toISOString();
+      return stopEta
+        .filter(
+          (entry) =>
+            String(entry.route ?? "").toUpperCase() === route &&
+            String(entry.serviceType ?? "") === p.serviceType
+        )
+        .map((entry, idx) => ({
+          co: "kmb",
+          route: entry.route,
+          dir: entry.dir,
+          service_type: entry.serviceType,
+          seq: entry.seq,
+          stop: p.stopId,
+          dest_en: entry.dest?.en ?? "",
+          dest_tc: entry.dest?.zh ?? "",
+          dest_sc: entry.dest?.zh ?? "",
+          eta_seq: entry.etaSeq ?? idx + 1,
+          eta: entry.eta ?? "",
+          rmk_en: entry.remark?.en ?? "",
+          rmk_tc: entry.remark?.zh ?? "",
+          rmk_sc: entry.remark?.zh ?? "",
+          data_timestamp: now,
+        }));
     });
 
     const errors = stopResults

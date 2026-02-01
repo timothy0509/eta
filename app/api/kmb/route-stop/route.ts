@@ -1,17 +1,24 @@
-import { NextResponse } from "next/server";
-
 import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
+import { listKmbRouteStops } from "@/lib/eta/hk-bus-eta";
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
-import { getKmbRouteStops } from "@/lib/eta/kmb";
+import { NextResponse } from "next/server";
 
 export async function GET() {
   const revalidateSeconds = secondsUntilNextKmbDailyUpdate();
 
   try {
-    const data = await getKmbRouteStops();
+    const data = await listKmbRouteStops();
 
     return NextResponse.json(
-      { data },
+      {
+        data: data.map((entry) => ({
+          route: entry.route,
+          bound: entry.bound,
+          service_type: entry.serviceType,
+          seq: entry.seq,
+          stop: entry.stopId,
+        })),
+      },
       {
         headers: {
           "Cache-Control": kmbDailyCacheControlHeader(revalidateSeconds),

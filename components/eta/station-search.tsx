@@ -1,9 +1,9 @@
 "use client";
 
-import * as React from "react";
-import Fuse from "fuse.js";
 import { Search, TrainFront } from "lucide-react";
+import * as React from "react";
 
+import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -13,9 +13,9 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
 import type { MtrStationSearchItem, UiLanguage } from "@/lib/eta/types";
 import { cn } from "@/lib/utils";
+import Fuse from "fuse.js";
 
 type Props = {
   lang: UiLanguage;

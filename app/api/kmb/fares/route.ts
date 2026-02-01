@@ -1,10 +1,9 @@
+import type { KmbRouteStopLite } from "@/lib/eta/client";
+import { listKmbRouteStops } from "@/lib/eta/hk-bus-eta";
+import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
+import { getCachedKmbVariantStops, getStopToTerminusFare, kmbFareCacheControlHeader } from "@/lib/eta/kmb-fares";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-
-import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
-import type { KmbRouteStopLite } from "@/lib/eta/client";
-import { kmbFareCacheControlHeader, getCachedKmbVariantStops, getStopToTerminusFare } from "@/lib/eta/kmb-fares";
-import { getKmbRouteStops } from "@/lib/eta/kmb";
 
 const VariantSchema = z.object({
   route: z.string(),
@@ -36,7 +35,7 @@ const BodySchema = z.object({
  *
  * Response:
  * {
- *   faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>
+ *   faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>
  * }
  */
 export async function POST(request: Request) {
@@ -61,20 +60,20 @@ export async function POST(request: Request) {
   try {
     // Load variant stops (cached daily)
     const byVariantStops = await getCachedKmbVariantStops(async () => {
-      const routeStops = await getKmbRouteStops();
+      const routeStops = await listKmbRouteStops();
       const lite: KmbRouteStopLite[] = routeStops
         .map((entry) => ({
           route: entry.route,
           bound: entry.bound,
-          serviceType: String(entry.service_type),
-          seq: typeof entry.seq === "string" ? Number(entry.seq) : entry.seq,
-          stopId: entry.stop,
+          serviceType: String(entry.serviceType),
+          seq: entry.seq,
+          stopId: entry.stopId,
         }))
         .filter((entry) => entry.route && entry.stopId);
       return lite;
     });
 
-    const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }> = {};
+    const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }> = {};
 
     for (const v of parsed.data.variants) {
       const route = v.route.toUpperCase();
@@ -82,7 +81,7 @@ export async function POST(request: Request) {
 
       if (faresByVariantKey[vKey]) continue;
 
-      const fare = getStopToTerminusFare({
+      const fare = await getStopToTerminusFare({
         route,
         dir: v.dir,
         serviceType: v.serviceType,

@@ -2,15 +2,14 @@
 
 import { Info, RefreshCw, TramFront } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Marquee } from "@/components/ui/marquee";
+import { getLineColor } from "@/lib/eta/line-colors";
 import type { LrtScheduleResponse } from "@/lib/eta/lrt";
 import type { UiLanguage } from "@/lib/eta/types";
-import { getLineColor } from "@/lib/eta/line-colors";
+import { cn } from "@/lib/utils";
 
 function formatTrainLength(length: number, lang: UiLanguage) {
   if (lang === "en") return `${length}-car`;

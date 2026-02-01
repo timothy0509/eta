@@ -6,10 +6,7 @@
     "dev": "next dev",
     "build": "NODE_OPTIONS='--max-old-space-size=5120' next build",
     "start": "next start",
-    "lint": "eslint",
-    "fare:extract": "node scripts/extract-kmb-fares-from-mdb.mjs",
-    "fare:build-index": "node scripts/build-kmb-fares.mjs",
-    "fare:build": "node scripts/build-kmb-fares.mjs"
+    "lint": "eslint"
   },
   "dependencies": {
     "@fontsource/geist-mono": "^5.2.7",

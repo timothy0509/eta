@@ -1,33 +1,32 @@
 "use client";
 
-import * as React from "react";
 import { RefreshCw } from "lucide-react";
+import * as React from "react";
 
-import { StopSearch, type StopSearchSelection } from "@/components/eta/stop-search";
 import {
   RouteFilter,
   type RouteFilterOption,
   type RouteFilterState,
 } from "@/components/eta/route-filter";
+import { StopSearch, type StopSearchSelection } from "@/components/eta/stop-search";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
-
 import {
-  type KmbEtaEntryWithLeg,
-  type KmbFareVariant,
-  type KmbRouteInfoLite,
-  type KmbRouteStopLite,
   fetchKmbFares,
   fetchKmbRouteInfo,
   fetchKmbRouteStops,
   fetchKmbStopEtas,
   fetchKmbStops,
+  type KmbEtaEntryWithLeg,
+  type KmbFareVariant,
+  type KmbRouteInfoLite,
+  type KmbRouteStopLite,
 } from "@/lib/eta/client";
-import { useInfiniteScroll } from "@/lib/eta/use-infinite-scroll";
-import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
+import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
+import { useInfiniteScroll } from "@/lib/eta/use-infinite-scroll";
+import { cn } from "@/lib/utils";
 import type { FavoritesItem, RouteFilterMode } from "@/lib/store";
 
 // ============================================================================
@@ -37,7 +36,7 @@ import type { FavoritesItem, RouteFilterMode } from "@/lib/store";
 type EtaState = {
   byStopId: Record<string, KmbEtaEntryWithLeg[]>;
   loadedStopIds: string[];
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
   loading: boolean;
   error: string | null;
   stale: boolean;
@@ -51,7 +50,7 @@ type EtaAction =
       payload: {
         byStopId: Record<string, KmbEtaEntryWithLeg[]>;
         loadedStopIds: string[];
-        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
       };
     }
   | { type: "REFRESH_ERROR"; error: string }
@@ -60,13 +59,13 @@ type EtaAction =
       payload: {
         byStopId: Record<string, KmbEtaEntryWithLeg[]>;
         newStopIds: string[];
-        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
       };
     }
   | {
       type: "FARES_SUCCESS";
       payload: {
-        faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+        faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
       };
     }
   | { type: "RESET" };
@@ -224,7 +223,7 @@ function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
 
 function groupEtasByVariant(
   eta: KmbEtaEntryWithLeg[],
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>
 ): EtaGroup[] {
   const byVariant = new Map<string, KmbEtaEntryWithLeg[]>();
   for (const entry of eta) {
@@ -288,7 +287,7 @@ function groupEtasByVariant(
 function precomputeRenderGroups(
   etaByStopId: Record<string, KmbEtaEntryWithLeg[]>,
   loadedStopIds: string[],
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>
 ): PrecomputedGroups {
   // Precompute groups by stop ID
   const byStopId: Record<string, EtaGroup[]> = {};
@@ -385,7 +384,7 @@ export type KmbPaneState = {
   lang: UiLanguage;
   routeFilter: RouteFilterState;
   routeInfos: Record<string, KmbRouteInfoLite>;
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
   eta: KmbEtaEntryWithLeg[];
   /** ETAs grouped by stop ID for sectioned rendering */
   etaByStopId: Record<string, KmbEtaEntryWithLeg[]>;

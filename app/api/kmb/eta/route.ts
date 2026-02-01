@@ -1,9 +1,8 @@
+import { fetchKmbEtasForStop } from "@/lib/eta/hk-bus-eta";
+import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
+import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-
-import { KMB_NO_STORE_HEADERS } from "@/lib/eta/kmb-cache";
-import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
-import { getKmbStopEta } from "@/lib/eta/kmb";
 
 const QuerySchema = z.object({
   stopId: z.string().trim().min(1),
@@ -35,17 +34,33 @@ export async function GET(request: Request) {
   try {
     // Prefer stop-level ETA API (much fewer upstream calls).
     // Filter by route+serviceType to preserve old response shape.
-    const stopEta = await getKmbStopEta(parsed.data.stopId);
-    const route = parsed.data.route.toUpperCase();
-    const eta = stopEta.filter(
-      (entry) =>
-        String(entry.route ?? "").toUpperCase() === route &&
-        String(entry.service_type ?? "") === parsed.data.serviceType
-    );
+    const now = new Date().toISOString();
+    const eta = await fetchKmbEtasForStop({
+      stopId: parsed.data.stopId,
+      route: parsed.data.route,
+      serviceType: parsed.data.serviceType,
+      language: "tc",
+    });
 
     return NextResponse.json(
       {
-        eta,
+        eta: eta.map((entry) => ({
+          co: "kmb",
+          route: entry.route,
+          dir: entry.dir,
+          service_type: entry.serviceType,
+          seq: entry.seq,
+          stop: parsed.data.stopId,
+          dest_en: entry.dest?.en ?? "",
+          dest_tc: entry.dest?.zh ?? "",
+          dest_sc: entry.dest?.zh ?? "",
+          eta_seq: entry.etaSeq,
+          eta: entry.eta ?? "",
+          rmk_en: entry.remark?.en ?? "",
+          rmk_tc: entry.remark?.zh ?? "",
+          rmk_sc: entry.remark?.zh ?? "",
+          data_timestamp: now,
+        })),
       },
       {
         headers: KMB_NO_STORE_HEADERS,

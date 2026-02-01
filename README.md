@@ -42,7 +42,7 @@ A clean, fast ETA (Estimated Time of Arrival) web application for Hong Kong publ
 - **Language**: TypeScript
 - **Search**: Fuse.js (fuzzy matching)
 - **Package Manager**: bun (preferred, via `bun.lock`) with npm/yarn/pnpm support
-- **Data Management**: Git LFS (tracked fare data files)
+- **Transit Data**: [hk-bus-eta](https://github.com/hkbus/hk-bus-eta) npm package (KMB, MTR, LRT routes, stops, ETAs, and fares)
 
 ## Getting Started
 
@@ -90,13 +90,11 @@ bun run build
 bun start
 ```
 
-### Fare Data (Git LFS)
+### Fare Data
 
-Fare data in `data/fare/` is tracked with Git LFS.
+Fare data is now provided directly by the [hk-bus-eta](https://github.com/hkbus/hk-bus-eta) npm package.
 
-- If you are cloning fresh, install Git LFS and run `git lfs pull`.
-- To rebuild the local fare index from the source data:
-  - `npm run fare:build` (or `bun run fare:build`)
+No local fare data extraction or Git LFS is required. The package includes up-to-date fare information for KMB routes as part of its EtaDb database.
 
 ## Project Structure
 
@@ -147,14 +145,14 @@ lib/
     cache.ts            # In-memory micro-cache with TTL
     client.ts           # API client functions
     format.ts           # ETA formatting utilities
-    http.ts             # HTTP utilities and 429 backoff
+    hk-bus-eta.ts      # Adapter layer for hk-bus-eta package
     kmb-cache.ts        # KMB-specific caching logic
-    kmb-fares.ts        # KMB fare computation
+    kmb-fares.ts        # KMB fare computation (uses hk-bus-eta)
     kmb-stop-name.ts    # Stop name processing
-    kmb.ts              # KMB types and utilities
+    kmb.ts              # KMB provider (mapped from hk-bus-eta)
     line-colors.ts      # MTR/LRT line color mappings
-    lrt.ts              # LRT types
-    mtr.ts              # MTR types
+    lrt.ts              # LRT provider (mapped from hk-bus-eta)
+    mtr.ts              # MTR provider (mapped from hk-bus-eta)
     promise-pool.ts     # Concurrent request management
     route-badge.ts      # Route badge color logic
     types.ts            # Shared types
@@ -164,24 +162,17 @@ lib/
     use-mtr-schedule.ts # MTR schedule data hook
   store.ts              # Zustand store (favorites, settings)
   utils.ts              # General utilities
-
-data/
-  fare/                 # Git LFS-tracked fare data
-    kmb-fare-index.v1.json
-    kmb-fare-source.v1.json
-
-scripts/
-  build-kmb-fares.mjs       # Build fare data script
-  extract-kmb-fares-from-mdb.mjs # MDB extraction script
 ```
 
-## API Sources
+## Data Sources
 
-This application uses official Hong Kong government open data APIs:
+This application uses the [hk-bus-eta](https://github.com/hkbus/hk-bus-eta) npm package, which provides:
 
-- **KMB**: [DATA.GOV.HK - KMB ETA](https://data.gov.hk/en-data/dataset/hk-td-tis_21-etakmb)
-- **MTR**: [DATA.GOV.HK - MTR Next Train](https://data.gov.hk/en-data/dataset/mtr-data2-nexttrain-data)
-- **Light Rail**: [DATA.GOV.HK - LRT Next Train](https://data.gov.hk/en-data/dataset/mtr-lrt_eta-lrt-eta)
+- **KMB**: Bus routes, stops, ETAs, and fare data (sourced from official KMB APIs)
+- **MTR**: Train routes, stations, and next train ETAs (sourced from official MTR APIs)
+- **Light Rail**: Routes, stations, and arrival schedules (sourced from official LRT APIs)
+
+The hk-bus-eta package maintains a single, cached EtaDb that aggregates all transit data with proper caching, holiday schedules, and service day logic.
 
 ## License
 

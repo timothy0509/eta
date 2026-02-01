@@ -1,37 +1,12 @@
-import fs from "node:fs";
-import path from "node:path";
-
 import type { KmbRouteStopLite } from "@/lib/eta/client";
+import { getEtaDbIndexes } from "@/lib/eta/hk-bus-eta";
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
 
 export type KmbFareInfo = {
   hkd: number;
   dayCode?: number;
-  source: "td-fare";
+  source: "hk-bus-eta";
 };
-
-type FareIndexV1 = {
-  version: 1;
-  generatedAt: string;
-  dayCodePriority: number[];
-  routeCandidatesByName: Record<string, Array<{ routeId: number; companyCode?: string | null }>>;
-  stopNameByKey: Record<string, { en: string; tc: string; sc: string }>;
-  fareByKey: Record<string, { price: number; dayCode: number }>;
-};
-
-let cachedFareIndex: FareIndexV1 | null = null;
-
-function loadFareIndexV1(): FareIndexV1 {
-  if (cachedFareIndex) return cachedFareIndex;
-
-  // Important: avoid bundling large JSON into the Next.js build.
-  // Turbopack will attempt to parse JSON imports at build time, which fails on
-  // Git LFS pointer files in CI if LFS isn't downloaded.
-  const filePath = path.join(process.cwd(), "data", "fare", "kmb-fare-index.v1.json");
-  const raw = fs.readFileSync(filePath, "utf8");
-  cachedFareIndex = JSON.parse(raw) as FareIndexV1;
-  return cachedFareIndex;
-}
 
 type VariantKey = `${string}|${string}|${string}`;
 
@@ -51,58 +26,6 @@ function normalizeRouteName(route: string): string {
 
 function variantKey(route: string, bound: string, serviceType: string): VariantKey {
   return `${normalizeRouteName(route)}|${String(bound ?? "")}|${String(serviceType ?? "")}`;
-}
-
-function getKmbDirRouteSeq(dir: string): 1 | 2 {
-  // KMB convention: O = outbound, I = inbound.
-  // Fare dataset uses ROUTE_SEQ: 1=outbound/circular, 2=inbound.
-  return String(dir) === "I" ? 2 : 1;
-}
-
-function scoreStopNameMatch(a: string, b: string): number {
-  const x = a.trim();
-  const y = b.trim();
-  if (!x || !y) return 0;
-  if (x === y) return 3;
-  if (x.includes(y) || y.includes(x)) return 2;
-  return 0;
-}
-
-function chooseBestRouteIdCandidate(routeName: string, terminusNameCandidates: string[], routeSeq: 1 | 2) {
-  const index = loadFareIndexV1();
-  const candidates = index.routeCandidatesByName[routeName] ?? [];
-  if (candidates.length === 0) return null;
-
-  // Prefer candidates whose terminus stop name best matches our terminus name set.
-  // We use stopSeq=1 (first stop) and max seq is unknown here, so we approximate with far end by scanning
-  // a small range; since stopNameByKey is sparse index, this often still works.
-
-  type Scored = { routeId: number; score: number };
-  const scored: Scored[] = [];
-
-  for (const c of candidates) {
-    const routeId = Number(c.routeId);
-    if (!Number.isFinite(routeId)) continue;
-
-    // Attempt to find a terminus name by probing common terminus sequences.
-    // Without having RSTOP counts, we rely on matching any stopNameByKey entries.
-    // We'll take the best match across all known stopSeq keys for this routeId+routeSeq.
-    let best = 0;
-    for (const [key, names] of Object.entries(index.stopNameByKey)) {
-      if (!key.startsWith(`${routeId}|${routeSeq}|`)) continue;
-      for (const t of terminusNameCandidates) {
-        best = Math.max(best, scoreStopNameMatch(names.en, t));
-        best = Math.max(best, scoreStopNameMatch(names.tc, t));
-        best = Math.max(best, scoreStopNameMatch(names.sc, t));
-      }
-      if (best >= 3) break;
-    }
-
-    scored.push({ routeId, score: best });
-  }
-
-  scored.sort((a, b) => b.score - a.score);
-  return scored[0]?.routeId ?? null;
 }
 
 export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]) {
@@ -164,7 +87,12 @@ export function kmbFareCacheControlHeader() {
   return kmbDailyCacheControlHeader(secondsUntilNextKmbDailyUpdate());
 }
 
-export function getStopToTerminusFare(params: {
+/**
+ * Get fare from current stop to terminus using hk-bus-eta data.
+ * The fare arrays in hk-bus-eta are indexed by stop sequence (0-indexed),
+ * where each entry represents the fare from that stop to the terminus.
+ */
+export async function getStopToTerminusFare(params: {
   route: string;
   dir: string;
   serviceType: string;
@@ -172,10 +100,8 @@ export function getStopToTerminusFare(params: {
   // For disambiguation: KMB ETA provides destination strings; use them if possible.
   etaDestCandidates?: string[];
   byVariantStops: Map<VariantKey, VariantStops>;
-}): KmbFareInfo | null {
+}): Promise<KmbFareInfo | null> {
   const routeName = normalizeRouteName(params.route);
-  const routeSeq = getKmbDirRouteSeq(params.dir);
-
   const key = variantKey(routeName, params.dir, params.serviceType);
   const variant = params.byVariantStops.get(key);
   if (!variant) return null;
@@ -185,22 +111,35 @@ export function getStopToTerminusFare(params: {
   const onSeq = seqs?.[0];
   if (!onSeq) return null;
 
-  const offSeq = variant.terminusSeq;
-  if (!Number.isFinite(offSeq) || offSeq <= 0) return null;
+  // Get fare from hk-bus-eta
+  const { kmbRouteListEntries } = await getEtaDbIndexes();
+  const bound = String(params.dir ?? "");
+  const serviceType = String(params.serviceType ?? "");
 
-  // Map routeName -> routeId using candidates.
-  const routeId = chooseBestRouteIdCandidate(routeName, params.etaDestCandidates ?? [], routeSeq);
-  if (!routeId) return null;
+  const entry = kmbRouteListEntries.find((item: { route: string; serviceType: string; bound: { kmb: string } }) => {
+    if (item.route.toUpperCase() !== routeName) return false;
+    if (String(item.serviceType) !== serviceType) return false;
+    const itemBound = item.bound.kmb;
+    return itemBound === bound || (bound === "I" && itemBound === "I") || (bound !== "I" && itemBound === "O");
+  });
 
-  const index = loadFareIndexV1();
-  const fareKey = `${routeId}|${routeSeq}|${onSeq}|${offSeq}`;
-  const fare = index.fareByKey[fareKey];
-  if (!fare) return null;
+  if (!entry) return null;
+
+  // fares array is 0-indexed, so subtract 1 from the 1-indexed sequence
+  const fareIndex = onSeq - 1;
+  const fares = entry.fares;
+
+  if (!fares || fareIndex < 0 || fareIndex >= fares.length) return null;
+
+  const fareStr = fares[fareIndex];
+  if (!fareStr) return null;
+
+  const fare = Number(fareStr);
+  if (!Number.isFinite(fare) || fare < 0) return null;
 
   return {
-    hkd: Number(fare.price),
-    dayCode: Number(fare.dayCode),
-    source: "td-fare",
+    hkd: fare,
+    source: "hk-bus-eta",
   };
 }
 

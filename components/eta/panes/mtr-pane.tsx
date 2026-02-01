@@ -3,10 +3,9 @@
 import * as React from "react";
 
 import { MtrStationSearch } from "@/components/eta/station-search";
-import { useMtrSchedule } from "@/lib/eta/use-mtr-schedule";
-import type { MtrStationSearchItem, UiLanguage } from "@/lib/eta/types";
 import { Button } from "@/components/ui/button";
-
+import type { MtrStationSearchItem, UiLanguage } from "@/lib/eta/types";
+import { useMtrSchedule } from "@/lib/eta/use-mtr-schedule";
 import type { FavoritesItem } from "@/lib/store";
 
 export type MtrPaneState = {

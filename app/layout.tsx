@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
-import { DM_Sans, Rubik, Noto_Sans_HK, Noto_Sans_SC } from "next/font/google";
-
-import "./globals.css";
+import { DM_Sans, Noto_Sans_HK, Noto_Sans_SC, Rubik } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/toaster";
+import "./globals.css";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",

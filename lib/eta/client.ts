@@ -1,6 +1,6 @@
-import type { KmbStopSearchItem } from "@/lib/eta/types";
 import type { KmbEtaEntry, KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
+import type { KmbStopSearchItem } from "@/lib/eta/types";
 
 type DedupeKey = string;
 
@@ -210,7 +210,7 @@ export async function fetchKmbRouteInfo(params: {
  */
 export type KmbStopEtasResponse = {
   byStopId: Record<string, KmbEtaEntryWithLeg[]>;
-  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
   errors: string[];
   cached: number;
   fetched: number;
@@ -251,7 +251,7 @@ export type KmbFareVariant = {
 };
 
 export type KmbFaresResponse = {
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "td-fare" }>;
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
 };
 
 export async function fetchKmbFares(

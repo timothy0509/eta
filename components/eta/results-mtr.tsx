@@ -2,16 +2,15 @@
 
 import { ExternalLink, Info, RefreshCw, TrainFront } from "lucide-react";
 
-import { cn } from "@/lib/utils";
-
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Marquee } from "@/components/ui/marquee";
+import { findMtrStationBySta } from "@/lib/data/mtr-stations";
+import { getLineColor } from "@/lib/eta/line-colors";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 import type { UiLanguage } from "@/lib/eta/types";
-import { getLineColor } from "@/lib/eta/line-colors";
-import { findMtrStationBySta } from "@/lib/data/mtr-stations";
+import { cn } from "@/lib/utils";
 
 type Props = {
   title: string;
@@ -29,24 +28,8 @@ type MtrDirection = "UP" | "DOWN";
 // Stations where “via Racecourse” is relevant, by direction.
 // These rules are intentionally explicit (do not infer via station ordering).
 const EAL_VIA_RACECOURSE_BY_DIR: Record<MtrDirection, ReadonlySet<string>> = {
-  UP: new Set([
-    "ADM",
-    "EXC",
-    "HUH",
-    "MKK",
-    "KOT",
-    "TAW",
-    "SHT",
-  ]),
-  DOWN: new Set([
-    "LMC",
-    "LOW",
-    "SHS",
-    "FAN",
-    "TWO",
-    "TAP",
-    "UNI",
-  ]),
+  UP: new Set(["ADM", "EXC", "HUH", "MKK", "KOT", "TAW", "SHT"]),
+  DOWN: new Set(["LMC", "LOW", "SHS", "FAN", "TWO", "TAP", "UNI"]),
 };
 
 /**
@@ -73,7 +56,6 @@ function shouldShowViaRacecourse(params: {
   return EAL_VIA_RACECOURSE_BY_DIR[params.dir].has(params.currentSta);
 }
 
-
 function formatDest(dest: unknown, lang: UiLanguage) {
   const raw = String(dest ?? "");
   if (!raw) return "";
@@ -85,12 +67,12 @@ function formatDest(dest: unknown, lang: UiLanguage) {
 function formatDestWithRacecourse(
   dest: unknown,
   lang: UiLanguage,
-  showViaRacecourse: boolean
+  showViaRacecourse: boolean,
 ) {
   const destName = formatDest(dest, lang);
   if (!showViaRacecourse) return destName;
 
-  const suffix = lang === "en" ? " · Via Racecourse" : " · 經馬場站";
+  const suffix = lang === "en" ? " · Via Racecourse" : " · 經馬場";
   return `${destName}${suffix}`;
 }
 
@@ -107,23 +89,44 @@ function formatMinutes(ttnt: unknown, lang: UiLanguage) {
       : `${minutes} 分`;
 }
 
-
 function formatPlatform(plat: unknown) {
   const raw = String(plat ?? "").trim();
   if (!raw) return "";
   return raw;
 }
 
-export function MtrResults({ title, lang, schedule, error, stale, lastUpdatedAt, onRefresh, loading }: Props) {
+export function MtrResults({
+  title,
+  lang,
+  schedule,
+  error,
+  stale,
+  lastUpdatedAt,
+  onRefresh,
+  loading,
+}: Props) {
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
 
   const t = {
-    nextTrain: lang === "en" ? "Next Train" : lang === "sc" ? "下班车" : "下班車",
+    nextTrain:
+      lang === "en" ? "Next Train" : lang === "sc" ? "下班车" : "下班車",
     refresh: lang === "en" ? "Refresh" : "重新整理",
-    selectStation: lang === "en" ? "Select a station to view trains." : "選擇車站以查看班次",
-    serviceMessage: lang === "en" ? "Service message" : lang === "sc" ? "服务信息" : "服務信息",
-    noSchedule: lang === "en" ? "No schedule available." : lang === "sc" ? "暂无班次信息。" : "暫無班次信息。",
-    viewDetails: lang === "en" ? "View details" : lang === "sc" ? "查看详情" : "查看詳情",
+    selectStation:
+      lang === "en" ? "Select a station to view trains." : "選擇車站以查看班次",
+    serviceMessage:
+      lang === "en"
+        ? "Service message"
+        : lang === "sc"
+          ? "服务信息"
+          : "服務信息",
+    noSchedule:
+      lang === "en"
+        ? "No schedule available."
+        : lang === "sc"
+          ? "暂无班次信息。"
+          : "暫無班次信息。",
+    viewDetails:
+      lang === "en" ? "View details" : lang === "sc" ? "查看详情" : "查看詳情",
     up: lang === "en" ? "UP" : lang === "sc" ? "上行" : "上行",
     down: lang === "en" ? "DOWN" : lang === "sc" ? "下行" : "下行",
   };
@@ -202,7 +205,11 @@ export function MtrResults({ title, lang, schedule, error, stale, lastUpdatedAt,
           Object.entries(schedule.data ?? {}).map(([key, payload], idx) => {
             const [line, sta] = key.split("-");
             const station = sta ? findMtrStationBySta(sta) : undefined;
-            const stationName = station ? (lang === "en" ? station.nameEn : station.nameTc) : sta;
+            const stationName = station
+              ? lang === "en"
+                ? station.nameEn
+                : station.nameTc
+              : sta;
 
             const staggerClass =
               idx === 0
@@ -216,71 +223,93 @@ export function MtrResults({ title, lang, schedule, error, stale, lastUpdatedAt,
             return (
               <div
                 key={key}
-                className={cn("ui-animate-in ui-lift rounded-2xl border bg-background/40 p-4", staggerClass)}
+                className={cn(
+                  "ui-animate-in ui-lift rounded-2xl border bg-background/40 p-4",
+                  staggerClass,
+                )}
               >
-                  <div className="flex min-w-0 items-center gap-2">
-                    {line ? (
-                      <Badge className="rounded-xl text-white" style={{ backgroundColor: getLineColor(line) }}>
-                        {line}
-                      </Badge>
-                    ) : null}
-                    <div className="min-w-0 truncate text-sm font-medium">
-                      {stationName ?? key}
-                    </div>
+                <div className="flex min-w-0 items-center gap-2">
+                  {line ? (
+                    <Badge
+                      className="rounded-xl text-white"
+                      style={{ backgroundColor: getLineColor(line) }}
+                    >
+                      {line}
+                    </Badge>
+                  ) : null}
+                  <div className="min-w-0 truncate text-sm font-medium">
+                    {stationName ?? key}
                   </div>
-
+                </div>
 
                 <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {(["UP", "DOWN"] as const).map((dir) => {
                     const trains = payload[dir] ?? [];
                     return (
-                      <div key={dir} className="rounded-2xl border bg-card/30 p-3">
-                      <div className="text-xs font-medium text-muted-foreground">
-                        {dir === "UP" ? t.up : t.down}
-                      </div>
+                      <div
+                        key={dir}
+                        className="rounded-2xl border bg-card/30 p-3"
+                      >
+                        <div className="text-xs font-medium text-muted-foreground">
+                          {dir === "UP" ? t.up : t.down}
+                        </div>
 
-                      <div className="mt-2 space-y-2">
-                        {trains.length === 0 ? (
-                          <div className="text-sm text-muted-foreground">—</div>
-                        ) : (
-                          trains.slice(0, 4).map((t, idx) => {
-                            const route = String((t as { route?: unknown }).route ?? "");
-                            const showViaRacecourse = shouldShowViaRacecourse({
-                              line,
-                              currentSta: sta,
-                              dir,
-                              route: route || undefined,
-                            });
-                            const destText = formatDestWithRacecourse(t.dest, lang, showViaRacecourse);
-                            const platform = formatPlatform(t.plat);
+                        <div className="mt-2 space-y-2">
+                          {trains.length === 0 ? (
+                            <div className="text-sm text-muted-foreground">
+                              —
+                            </div>
+                          ) : (
+                            trains.slice(0, 4).map((t, idx) => {
+                              const route = String(
+                                (t as { route?: unknown }).route ?? "",
+                              );
+                              const showViaRacecourse = shouldShowViaRacecourse(
+                                {
+                                  line,
+                                  currentSta: sta,
+                                  dir,
+                                  route: route || undefined,
+                                },
+                              );
+                              const destText = formatDestWithRacecourse(
+                                t.dest,
+                                lang,
+                                showViaRacecourse,
+                              );
+                              const platform = formatPlatform(t.plat);
 
-                            return (
-                              <div
-                                 key={`${dir}-${idx}`}
-                                 className="ui-lift flex items-center justify-between gap-3 rounded-xl border bg-background/30 px-3 py-2"
-                               >
-
-                                <Marquee className="min-w-0 flex-1 text-sm font-medium">
-                                  {destText}
-                                </Marquee>
-                                <div className="flex shrink-0 items-center gap-2">
-                                  {platform ? (
+                              return (
+                                <div
+                                  key={`${dir}-${idx}`}
+                                  className="ui-lift flex items-center justify-between gap-3 rounded-xl border bg-background/30 px-3 py-2"
+                                >
+                                  <Marquee className="min-w-0 flex-1 text-sm font-medium">
+                                    {destText}
+                                  </Marquee>
+                                  <div className="flex shrink-0 items-center gap-2">
+                                    {platform ? (
+                                      <Badge
+                                        className="rounded-lg px-2 py-0.5 text-xs text-white"
+                                        style={{
+                                          backgroundColor: getLineColor(line),
+                                        }}
+                                      >
+                                        {platform}
+                                      </Badge>
+                                    ) : null}
                                     <Badge
-                                      className="rounded-lg px-2 py-0.5 text-xs text-white"
-                                      style={{ backgroundColor: getLineColor(line) }}
+                                      className="font-tabular rounded-xl"
+                                      variant="outline"
                                     >
-                                      {platform}
+                                      {formatMinutes(t.ttnt, lang)}
                                     </Badge>
-                                  ) : null}
-                                  <Badge className="font-tabular rounded-xl" variant="outline">
-                                    {formatMinutes(t.ttnt, lang)}
-                                  </Badge>
+                                  </div>
                                 </div>
-                              </div>
-                            );
-                          })
-                        )}
-                      </div>
+                              );
+                            })
+                          )}
+                        </div>
                       </div>
                     );
                   })}

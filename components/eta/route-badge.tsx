@@ -1,7 +1,7 @@
 "use client";
 
-import { getRouteBadgeStyle } from "@/lib/eta/route-badge";
 import { cn } from "@/lib/utils";
+import { getRouteBadgeStyle } from "@/lib/eta/route-badge";
 
 type Props = {
   route: string;

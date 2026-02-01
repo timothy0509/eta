@@ -1,14 +1,11 @@
-import { secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
-import { fetchJson } from "@/lib/eta/http";
-
-const KMB_BASE_URL = "https://data.etabus.gov.hk";
-
-export type KmbApiEnvelope<T> = {
-  type: string;
-  version: string;
-  generated_timestamp?: string;
-  data: T;
-};
+import {
+  fetchKmbEtasForStop,
+  findKmbRouteInfo,
+  listKmbRouteStops,
+  listKmbRoutes,
+  listKmbStops,
+  type KmbEta,
+} from "@/lib/eta/hk-bus-eta";
 
 export type KmbStop = {
   stop: string;
@@ -37,16 +34,43 @@ export type KmbEtaEntry = {
   data_timestamp: string;
 };
 
+function normalizeDirection(direction: string): "I" | "O" | string {
+  if (direction === "inbound") return "I";
+  if (direction === "outbound") return "O";
+  return direction;
+}
+
+function mapKmbEtaEntry(eta: KmbEta, stopId: string): KmbEtaEntry {
+  const now = new Date().toISOString();
+  return {
+    co: "kmb",
+    route: eta.route,
+    dir: eta.dir,
+    service_type: eta.serviceType,
+    seq: eta.seq,
+    stop: stopId,
+    dest_en: eta.dest?.en ?? "",
+    dest_tc: eta.dest?.zh ?? "",
+    dest_sc: eta.dest?.zh ?? "",
+    eta_seq: eta.etaSeq,
+    eta: eta.eta ?? "",
+    rmk_en: eta.remark?.en ?? "",
+    rmk_tc: eta.remark?.zh ?? "",
+    rmk_sc: eta.remark?.zh ?? "",
+    data_timestamp: now,
+  };
+}
+
 export async function getKmbStops(): Promise<KmbStop[]> {
-  const json = await fetchJson<KmbApiEnvelope<KmbStop[]>>(
-    `${KMB_BASE_URL}/v1/transport/kmb/stop`,
-    {
-      next: {
-        revalidate: secondsUntilNextKmbDailyUpdate(),
-      },
-    }
-  );
-  return json.data;
+  const stops = await listKmbStops();
+  return stops.map((stop) => ({
+    stop: stop.stopId,
+    name_en: stop.nameEn,
+    name_tc: stop.nameTc,
+    name_sc: stop.nameSc,
+    lat: stop.lat,
+    long: stop.lng,
+  }));
 }
 
 export async function getKmbEta(params: {
@@ -54,14 +78,13 @@ export async function getKmbEta(params: {
   route: string;
   serviceType: string;
 }): Promise<KmbEtaEntry[]> {
-  const json = await fetchJson<KmbApiEnvelope<KmbEtaEntry[]>>(
-    `${KMB_BASE_URL}/v1/transport/kmb/eta/${encodeURIComponent(params.stopId)}/${encodeURIComponent(params.route)}/${encodeURIComponent(params.serviceType)}`,
-    {
-      cache: "no-store",
-      timeoutMs: 12_000,
-    }
-  );
-  return json.data;
+  const etas = await fetchKmbEtasForStop({
+    stopId: params.stopId,
+    route: params.route,
+    serviceType: params.serviceType,
+    language: "tc",
+  });
+  return etas.map((eta) => mapKmbEtaEntry(eta, params.stopId));
 }
 
 /**
@@ -70,14 +93,11 @@ export async function getKmbEta(params: {
  * See: https://data.etabus.gov.hk - Stop ETA API (/v1/transport/kmb/stop-eta/{stop_id})
  */
 export async function getKmbStopEta(stopId: string): Promise<KmbEtaEntry[]> {
-  const json = await fetchJson<KmbApiEnvelope<KmbEtaEntry[]>>(
-    `${KMB_BASE_URL}/v1/transport/kmb/stop-eta/${encodeURIComponent(stopId)}`,
-    {
-      cache: "no-store",
-      timeoutMs: 12_000,
-    }
-  );
-  return json.data ?? [];
+  const etas = await fetchKmbEtasForStop({
+    stopId,
+    language: "tc",
+  });
+  return etas.map((eta) => mapKmbEtaEntry(eta, stopId));
 }
 
 export type KmbRouteStopEntry = {
@@ -89,15 +109,14 @@ export type KmbRouteStopEntry = {
 };
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
-  // NOTE: this endpoint payload is >2MB, which exceeds Vercel/Next.js data cache limits.
-  // Do not use `next.revalidate` here; cache instead at our own API layer via Cache-Control.
-  const json = await fetchJson<KmbApiEnvelope<KmbRouteStopEntry[]>>(
-    `${KMB_BASE_URL}/v1/transport/kmb/route-stop`,
-    {
-      cache: "no-store",
-    }
-  );
-  return json.data;
+  const routeStops = await listKmbRouteStops();
+  return routeStops.map((entry) => ({
+    route: entry.route,
+    bound: entry.bound,
+    service_type: entry.serviceType,
+    seq: entry.seq,
+    stop: entry.stopId,
+  }));
 }
 
 export type KmbRouteInfo = {
@@ -127,16 +146,19 @@ export type KmbRouteListEntry = {
 };
 
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
-  const json = await fetchJson<KmbApiEnvelope<KmbRouteListEntry[]>>(
-    `${KMB_BASE_URL}/v1/transport/kmb/route/`,
-    {
-      next: {
-        revalidate: secondsUntilNextKmbDailyUpdate(),
-      },
-    }
-  );
-
-  return json.data;
+  const routes = await listKmbRoutes();
+  return routes.map((entry) => ({
+    co: "kmb",
+    route: entry.route,
+    bound: entry.bound,
+    service_type: entry.serviceType,
+    orig_en: entry.origin.en,
+    orig_tc: entry.origin.tc,
+    orig_sc: entry.origin.sc,
+    dest_en: entry.destination.en,
+    dest_tc: entry.destination.tc,
+    dest_sc: entry.destination.sc,
+  }));
 }
 
 export async function getKmbRouteInfo(params: {
@@ -144,20 +166,26 @@ export async function getKmbRouteInfo(params: {
   direction: "I" | "O" | "inbound" | "outbound" | string;
   serviceType: string;
 }): Promise<KmbRouteInfo> {
-  const direction =
-    params.direction === "I"
-      ? "inbound"
-      : params.direction === "O"
-        ? "outbound"
-        : params.direction;
+  const bound = normalizeDirection(params.direction);
+  const info = await findKmbRouteInfo({
+    route: params.route,
+    bound,
+    serviceType: params.serviceType,
+  });
 
-  const json = await fetchJson<KmbApiEnvelope<KmbRouteInfo>>(
-    `${KMB_BASE_URL}/v1/transport/kmb/route/${encodeURIComponent(params.route)}/${encodeURIComponent(direction)}/${encodeURIComponent(params.serviceType)}`,
-    {
-      next: {
-        revalidate: secondsUntilNextKmbDailyUpdate(),
-      },
-    }
-  );
-  return json.data;
+  if (!info) {
+    throw new Error("KMB route info not found");
+  }
+
+  return {
+    route: info.route,
+    bound: info.bound,
+    service_type: info.serviceType,
+    orig_en: info.origin.en,
+    orig_tc: info.origin.tc,
+    orig_sc: info.origin.sc,
+    dest_en: info.destination.en,
+    dest_tc: info.destination.tc,
+    dest_sc: info.destination.sc,
+  };
 }

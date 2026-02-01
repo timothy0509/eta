@@ -1,8 +1,10 @@
 "use client";
 
-import * as React from "react";
 import { Clock, Info, Loader2, RefreshCw } from "lucide-react";
+import * as React from "react";
 
+import type { EtaGroup, PrecomputedGroups } from "@/components/eta/panes/kmb-pane";
+import { RouteBadge } from "@/components/eta/route-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,15 +17,10 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Marquee } from "@/components/ui/marquee";
-import { RouteBadge } from "@/components/eta/route-badge";
-import type { UiLanguage } from "@/lib/eta/types";
-import type { KmbRouteInfoLite, KmbEtaEntryWithLeg } from "@/lib/eta/client";
-import type {
-  PrecomputedGroups,
-  EtaGroup,
-} from "@/components/eta/panes/kmb-pane";
+import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from "@/lib/eta/client";
 import { formatRelativeMinutes } from "@/lib/eta/format";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
+import type { UiLanguage } from "@/lib/eta/types";
 import { cn } from "@/lib/utils";
 
 function pickLang(
@@ -178,7 +175,7 @@ type Props = {
   routeInfos: Record<string, KmbRouteInfoLite>;
   faresByVariantKey?: Record<
     string,
-    { hkd: number; dayCode?: number; source: "td-fare" }
+    { hkd: number; dayCode?: number; source: "hk-bus-eta" }
   >;
   hasQuery: boolean;
   lastUpdatedAt?: number;
@@ -231,7 +228,7 @@ function RouteVariantCard({
   routeInfos: Record<string, KmbRouteInfoLite>;
   faresByVariantKey?: Record<
     string,
-    { hkd: number; dayCode?: number; source: "td-fare" }
+    { hkd: number; dayCode?: number; source: "hk-bus-eta" }
   >;
   lang: UiLanguage;
   now: Date;
@@ -252,8 +249,6 @@ function RouteVariantCard({
   // Fare is only shown if hasFare is true (suppressed for arriving leg)
   const fare =
     hasFare && faresByVariantKey ? faresByVariantKey[baseKey] : undefined;
-  // Show loading placeholder when fare should be shown but hasn't loaded yet
-  const fareLoading = hasFare && !fare;
 
   const origin = routeInfo?.origin ? pickLang(routeInfo.origin, lang) : null;
   const destination = routeInfo?.destination
@@ -486,7 +481,7 @@ function StopSection({
   routeInfos: Record<string, KmbRouteInfoLite>;
   faresByVariantKey?: Record<
     string,
-    { hkd: number; dayCode?: number; source: "td-fare" }
+    { hkd: number; dayCode?: number; source: "hk-bus-eta" }
   >;
   lang: UiLanguage;
   now: Date;

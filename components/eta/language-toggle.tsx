@@ -5,8 +5,8 @@ import * as React from "react";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatUiLanguageLabel } from "@/lib/eta/format";
-import type { TransportMode, UiLanguage } from "@/lib/eta/types";
 import { isLanguageSupported } from "@/lib/eta/types";
+import type { TransportMode, UiLanguage } from "@/lib/eta/types";
 
 type Props = {
   mode: TransportMode;

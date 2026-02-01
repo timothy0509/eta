@@ -1,9 +1,8 @@
 "use client";
 
+import type { TransportMode, UiLanguage } from "@/lib/eta/types";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-
-import type { TransportMode, UiLanguage } from "@/lib/eta/types";
 
 export type RouteFilterMode = "simple" | "advanced";
 

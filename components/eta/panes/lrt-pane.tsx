@@ -3,10 +3,9 @@
 import * as React from "react";
 
 import { LrtStationSearch } from "@/components/eta/lrt-stop-search";
-import { useLrtSchedule } from "@/lib/eta/use-lrt-schedule";
-import type { LrtStationSearchItem, UiLanguage } from "@/lib/eta/types";
 import { Button } from "@/components/ui/button";
-
+import type { LrtStationSearchItem, UiLanguage } from "@/lib/eta/types";
+import { useLrtSchedule } from "@/lib/eta/use-lrt-schedule";
 import type { FavoritesItem } from "@/lib/store";
 
 export type LrtPaneState = {

@@ -117,7 +117,8 @@ function getCitybusRouteBadgeStyle(route: string): RouteBadgeStyle {
 
   const numMatch = r.match(/(\d+)/);
   const num = numMatch ? parseInt(numMatch[1], 10) : null;
-  const isWhc = r.startsWith("E11") || (num !== null && num >= 900 && num < 1000);
+  const isWhc =
+    r.startsWith("E11") || (num !== null && num >= 900 && num < 1000);
 
   if (isWhc) {
     return { textColor: "#FFFFFF", bgColor: "#009140" };
@@ -177,7 +178,7 @@ export function getRouteBadgeStyle(
   }
 
   if (co === "lrtfeeder") {
-    return { textColor: "#FFFFFF", bgColor: "#0E2A51" };
+    return { textColor: "#0E2A51", bgColor: "#FFFFFF" };
   }
 
   return { textColor: "#000000", bgColor: "#FFFFFF" };

@@ -5,6 +5,7 @@ import { getRouteBadgeStyle } from "@/lib/eta/route-badge";
 
 type Props = {
   route: string;
+  company?: string;
   size?: "sm" | "md" | "lg";
   className?: string;
 };
@@ -13,8 +14,8 @@ type Props = {
  * KMB Route Badge with color-coded styling based on route type.
  * Uses header font (DM Sans) with bold weight.
  */
-export function RouteBadge({ route, size = "md", className }: Props) {
-  const style = getRouteBadgeStyle(route);
+export function RouteBadge({ route, company, size = "md", className }: Props) {
+  const style = getRouteBadgeStyle(route, company);
 
   const sizeClasses = {
     sm: "px-2 py-0.5 text-xs",

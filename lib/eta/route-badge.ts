@@ -1,16 +1,5 @@
 /**
- * KMB Route Badge Styling
- *
- * Route number coloring rules (in priority order):
- * 1. Premium routes (P...) - white text on #CA856A
- * 2. Airport Night routes (NA...) - #FFFF00 text on black
- * 3. Overnight routes (N...) - white text on black
- * 4. Airport routes (A...) - #FFFF00 text on #263576
- * 5. External/shuttle routes (E... or S...) - white text on #FFA500
- * 6. HK routes (HK...) - #00AEEE text on white
- * 7. Cross harbour routes (1XX, 3XX, 6XX) - white text on red
- * 8. Western harbour crossing (9XX) - white text on #008000
- * 9. Default/normal routes - black text on white
+ * Route badge styling by operator.
  */
 
 export type RouteBadgeStyle = {
@@ -18,7 +7,7 @@ export type RouteBadgeStyle = {
   bgColor: string;
 };
 
-export function getRouteBadgeStyle(route: string): RouteBadgeStyle {
+function getKmbRouteBadgeStyle(route: string): RouteBadgeStyle {
   const r = route.toUpperCase().trim();
 
   // Priority 1: Premium routes (P...)
@@ -72,5 +61,124 @@ export function getRouteBadgeStyle(route: string): RouteBadgeStyle {
   }
 
   // Default: normal routes - black on white
+  return { textColor: "#000000", bgColor: "#FFFFFF" };
+}
+
+function getCitybusRouteBadgeStyle(route: string): RouteBadgeStyle {
+  const r = route.toUpperCase().trim();
+
+  if (r === "H1S") {
+    return { textColor: "#FFFFFF", bgColor: "#714F2C" };
+  }
+
+  if (r === "H1") {
+    return { textColor: "#FFFFFF", bgColor: "#87BD42" };
+  }
+
+  if (r === "H2K") {
+    return { textColor: "#FFFFFF", bgColor: "#792888" };
+  }
+
+  if (r === "H2") {
+    return { textColor: "#FFFFFF", bgColor: "#DD1E5C" };
+  }
+
+  if (r === "H3" || r === "H4") {
+    return { textColor: "#FFFFFF", bgColor: "#679AD1" };
+  }
+
+  if (r === "R8") {
+    return { textColor: "#213769", bgColor: "#9CC6E5" };
+  }
+
+  if (/^15(?!\d)/.test(r)) {
+    return { textColor: "#FFFFFF", bgColor: "#3CC3D9" };
+  }
+
+  if (r.startsWith("NA")) {
+    return { textColor: "#FFFFFF", bgColor: "#BB2B44" };
+  }
+
+  if (r.startsWith("N")) {
+    return { textColor: "#FFFF00", bgColor: "#000000" };
+  }
+
+  if (r.startsWith("A")) {
+    return { textColor: "#FFFFFF", bgColor: "#BB2B44" };
+  }
+
+  if (r.startsWith("B")) {
+    return { textColor: "#FFFFFF", bgColor: "#EF1C22" };
+  }
+
+  if (r.startsWith("E") && !r.startsWith("E11")) {
+    return { textColor: "#FFFFFF", bgColor: "#DB3831" };
+  }
+
+  const numMatch = r.match(/(\d+)/);
+  const num = numMatch ? parseInt(numMatch[1], 10) : null;
+  const isWhc = r.startsWith("E11") || (num !== null && num >= 900 && num < 1000);
+
+  if (isWhc) {
+    return { textColor: "#FFFFFF", bgColor: "#009140" };
+  }
+
+  if (num !== null) {
+    if ((num >= 100 && num < 200) || (num >= 600 && num < 700)) {
+      return { textColor: "#FFFFFF", bgColor: "#FF0000" };
+    }
+  }
+
+  return { textColor: "#FFFFFF", bgColor: "#0059BD" };
+}
+
+function getNlbRouteBadgeStyle(route: string): RouteBadgeStyle {
+  const r = route.toUpperCase().trim();
+
+  if (r === "1R") {
+    return { textColor: "#FFFFFF", bgColor: "#885729" };
+  }
+
+  if (r === "A35") {
+    return { textColor: "#FFFFFF", bgColor: "#C4031C" };
+  }
+
+  if (r === "X11R") {
+    return { textColor: "#F8F801", bgColor: "#02027E" };
+  }
+
+  if (r.startsWith("N")) {
+    return { textColor: "#FFFF00", bgColor: "#000000" };
+  }
+
+  return { textColor: "#FFFFFF", bgColor: "#02027E" };
+}
+
+export function getRouteBadgeStyle(
+  route: string,
+  company?: string,
+): RouteBadgeStyle {
+  const co = String(company ?? "kmb").toLowerCase();
+
+  if (co === "kmb") {
+    return getKmbRouteBadgeStyle(route);
+  }
+
+  if (co === "ctb" || co === "nwfb") {
+    return getCitybusRouteBadgeStyle(route);
+  }
+
+  if (co === "nlb") {
+    return getNlbRouteBadgeStyle(route);
+  }
+
+  if (co === "gmb") {
+    return { textColor: "#000000", bgColor: "#CCFFCC" };
+  }
+
+  if (co === "lrtfeeder") {
+    return { textColor: "#FFFFFF", bgColor: "#0E2A51" };
+  }
+
   return { textColor: "#000000", bgColor: "#FFFFFF" };
 }

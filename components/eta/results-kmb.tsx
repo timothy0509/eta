@@ -382,7 +382,7 @@ function RouteVariantCard({
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
-            <RouteBadge route={route} size="lg" />
+            <RouteBadge route={route} company={co} size="lg" />
             {operatorBadge}
             <Marquee className="min-w-0 flex-1 text-sm font-medium">
               {label || "Route"}
@@ -421,7 +421,7 @@ function RouteVariantCard({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-            <RouteBadge route={route} size="lg" />
+            <RouteBadge route={route} company={co} size="lg" />
             {operatorBadge}
             <Marquee className="min-w-0 flex-1 text-sm font-medium">
               {label || "Route"}

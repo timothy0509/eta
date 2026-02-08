@@ -39,6 +39,11 @@ export type RouteFilterOption = {
   label: string;
 };
 
+function getCompanyFromVariantKey(key: string) {
+  const [co] = key.split("|");
+  return co || "kmb";
+}
+
 type Props = {
   lang: UiLanguage;
   mode: RouteFilterMode;
@@ -199,7 +204,11 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                       >
                         {selected ? (
                           <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <RouteBadge route={selected.route} size="md" />
+                            <RouteBadge
+                              route={selected.route}
+                              company={getCompanyFromVariantKey(selected.key)}
+                              size="md"
+                            />
                             <Marquee className="min-w-0 flex-1 text-left text-muted-foreground">
                               {selected.label}
                             </Marquee>
@@ -239,7 +248,11 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                                       picked ? "opacity-100" : "opacity-0"
                                     )}
                                   />
-                                  <RouteBadge route={opt.route} size="sm" />
+                                  <RouteBadge
+                                    route={opt.route}
+                                    company={getCompanyFromVariantKey(opt.key)}
+                                    size="sm"
+                                  />
                                   <span className="ml-2 min-w-0 truncate text-muted-foreground">
                                     {opt.label}
                                   </span>

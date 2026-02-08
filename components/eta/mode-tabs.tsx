@@ -12,7 +12,7 @@ const MODES: Array<{
 }> = [
   {
     mode: "kmb",
-    labels: { en: "KMB Bus", tc: "九巴", sc: "九巴" },
+    labels: { en: "Bus", tc: "巴士", sc: "巴士" },
     icon: Bus,
   },
   {
@@ -61,4 +61,3 @@ export function ModeTabs({ lang, value, onChange }: Props) {
     </Tabs>
   );
 }
-

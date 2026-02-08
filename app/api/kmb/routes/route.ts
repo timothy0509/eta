@@ -12,7 +12,7 @@ export async function GET() {
     return NextResponse.json(
       {
         routes: routes.map((entry) => ({
-          co: "kmb",
+          co: entry.co,
           route: entry.route,
           bound: entry.bound,
           service_type: entry.serviceType,

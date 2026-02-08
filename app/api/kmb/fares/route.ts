@@ -6,6 +6,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 
 const VariantSchema = z.object({
+  co: z.string().optional(),
   route: z.string(),
   dir: z.string(),
   serviceType: z.string(),
@@ -63,6 +64,7 @@ export async function POST(request: Request) {
       const routeStops = await listKmbRouteStops();
       const lite: KmbRouteStopLite[] = routeStops
         .map((entry) => ({
+          co: entry.co,
           route: entry.route,
           bound: entry.bound,
           serviceType: String(entry.serviceType),
@@ -76,12 +78,14 @@ export async function POST(request: Request) {
     const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }> = {};
 
     for (const v of parsed.data.variants) {
+      const co = String(v.co ?? "kmb");
       const route = v.route.toUpperCase();
-      const vKey = `${route}|${v.dir}|${v.serviceType}`;
+      const vKey = `${co}|${route}|${v.dir}|${v.serviceType}`;
 
       if (faresByVariantKey[vKey]) continue;
 
       const fare = await getStopToTerminusFare({
+        co,
         route,
         dir: v.dir,
         serviceType: v.serviceType,

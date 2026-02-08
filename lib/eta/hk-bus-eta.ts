@@ -1,5 +1,5 @@
 import { fetchEtaDb, fetchEtaDbMd5, fetchEtas } from "hk-bus-eta";
-import type { Eta, EtaDb, RouteListEntry, StopList } from "hk-bus-eta";
+import type { Company, Eta, EtaDb, RouteListEntry, StopList } from "hk-bus-eta";
 
 import { etaDbCache } from "@/lib/eta/cache";
 import type { UiLanguage } from "@/lib/eta/types";
@@ -16,7 +16,7 @@ type EtaDbIndexes = {
   kmbRouteStops: KmbRouteStopLite[];
   mtrRoutes: RouteListEntry[];
   lrtRoutes: RouteListEntry[];
-  stationToRouteIndex: Map<string, RouteListEntry[]>;
+  stationToRouteIndex: Map<string, BusRouteCandidate[]>;
 };
 
 const ETA_DB_CACHE_KEY = "hk-bus-eta:db";
@@ -35,6 +35,7 @@ export type KmbStopSearchItem = {
 };
 
 export type KmbRouteStopLite = {
+  co: Company;
   route: string;
   bound: "I" | "O" | string;
   serviceType: string;
@@ -43,6 +44,7 @@ export type KmbRouteStopLite = {
 };
 
 export type KmbRouteInfoLite = {
+  co: Company;
   route: string;
   bound: "I" | "O" | string;
   serviceType: string;
@@ -58,6 +60,26 @@ export type KmbRouteInfoLite = {
   };
   routeEntry: RouteListEntry;
 };
+
+type BusRouteCandidate = {
+  entry: RouteListEntry;
+  co: Company;
+};
+
+const BUS_COMPANIES: Company[] = [
+  "kmb",
+  "ctb",
+  "nlb",
+  "gmb",
+  "lrtfeeder",
+  "sunferry",
+  "hkkf",
+  "fortuneferry",
+];
+
+function isBusCompany(company: Company): boolean {
+  return BUS_COMPANIES.includes(company);
+}
 
 export function toHkBusEtaLanguage(lang: UiLanguage): "en" | "zh" {
   if (lang === "en") return "en";
@@ -90,9 +112,27 @@ export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
   }
 
   const kmbRouteListEntries = Object.values(db.routeList).filter((entry) =>
-    entry.co.includes("kmb") && entry.stops.kmb?.length
+    entry.co.some((co) => isBusCompany(co) && entry.stops[co]?.length)
   );
 
+  const kmbRouteStops: KmbRouteStopLite[] = kmbRouteListEntries.flatMap((entry) =>
+    entry.co
+      .filter((co) => isBusCompany(co))
+      .flatMap((co) => {
+        const stops = entry.stops[co] ?? [];
+        const bound = normalizeBound(entry.bound[co]);
+        return stops.map((stopId, idx) => ({
+          co,
+          route: entry.route,
+          bound,
+          serviceType: entry.serviceType,
+          seq: idx + 1,
+          stopId: normalizeStopId(stopId),
+        }));
+      })
+  );
+
+  const busStopIds = new Set(kmbRouteStops.map((entry) => entry.stopId).filter(Boolean));
   const kmbStops = Object.entries(db.stopList)
     .map(([stopId, stop]) => ({
       stopId: normalizeStopId(stopId),
@@ -102,31 +142,29 @@ export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
       lat: stop.location.lat,
       lng: stop.location.lng,
     }))
-    .filter((s) => s.stopId && s.nameEn);
-
-  const kmbRouteStops: KmbRouteStopLite[] = kmbRouteListEntries.flatMap((entry) => {
-    const stops = entry.stops.kmb ?? [];
-    return stops.map((stopId, idx) => ({
-      route: entry.route,
-      bound: normalizeBound(entry.bound.kmb),
-      serviceType: entry.serviceType,
-      seq: idx + 1,
-      stopId: normalizeStopId(stopId),
-    }));
-  });
+    .filter((s) => s.stopId && s.nameEn && busStopIds.has(s.stopId));
 
   const mtrRoutes = Object.values(db.routeList).filter((entry) => entry.co.includes("mtr"));
   const lrtRoutes = Object.values(db.routeList).filter((entry) => entry.co.includes("lightRail"));
 
-  const stationToRouteIndex = new Map<string, RouteListEntry[]>();
+  const stationToRouteIndex = new Map<string, BusRouteCandidate[]>();
+  const stationToRouteDedup = new Map<string, Set<string>>();
   for (const entry of kmbRouteListEntries) {
-    const stops = entry.stops.kmb ?? [];
-    for (const stopId of stops) {
-      const key = normalizeStopId(stopId);
-      if (!key) continue;
-      const list = stationToRouteIndex.get(key) ?? [];
-      list.push(entry);
-      stationToRouteIndex.set(key, list);
+    for (const co of entry.co) {
+      if (!isBusCompany(co)) continue;
+      const stops = entry.stops[co] ?? [];
+      for (const stopId of stops) {
+        const key = normalizeStopId(stopId);
+        if (!key) continue;
+        const candidateKey = `${co}|${entry.route.toUpperCase()}|${normalizeBound(entry.bound[co])}|${entry.serviceType}`;
+        const seen = stationToRouteDedup.get(key) ?? new Set<string>();
+        if (seen.has(candidateKey)) continue;
+        seen.add(candidateKey);
+        stationToRouteDedup.set(key, seen);
+        const list = stationToRouteIndex.get(key) ?? [];
+        list.push({ entry, co });
+        stationToRouteIndex.set(key, list);
+      }
     }
   }
 
@@ -168,14 +206,19 @@ export async function listKmbStops(): Promise<KmbStopSearchItem[]> {
 
 export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
   const { kmbRouteListEntries } = await getEtaDbIndexes();
-  return kmbRouteListEntries.map((entry) => ({
-    route: entry.route,
-    bound: normalizeBound(entry.bound.kmb),
-    serviceType: entry.serviceType,
-    origin: mapEtaLangToUi(entry.orig),
-    destination: mapEtaLangToUi(entry.dest),
-    routeEntry: entry,
-  }));
+  return kmbRouteListEntries.flatMap((entry) =>
+    entry.co
+      .filter((co) => isBusCompany(co) && entry.stops[co]?.length)
+      .map((co) => ({
+        co,
+        route: entry.route,
+        bound: normalizeBound(entry.bound[co]),
+        serviceType: entry.serviceType,
+        origin: mapEtaLangToUi(entry.orig),
+        destination: mapEtaLangToUi(entry.dest),
+        routeEntry: entry,
+      }))
+  );
 }
 
 export async function listKmbRouteStops(): Promise<KmbRouteStopLite[]> {
@@ -184,6 +227,7 @@ export async function listKmbRouteStops(): Promise<KmbRouteStopLite[]> {
 }
 
 export async function findKmbRouteInfo(params: {
+  co?: Company;
   route: string;
   bound: string;
   serviceType: string;
@@ -192,18 +236,21 @@ export async function findKmbRouteInfo(params: {
   const routeName = params.route.toUpperCase();
   const bound = normalizeBound(params.bound);
   const serviceType = String(params.serviceType ?? "");
+  const co = (params.co ?? "kmb") as Company;
 
   const entry = kmbRouteListEntries.find((item) => {
+    if (!item.co.includes(co)) return false;
     if (item.route.toUpperCase() !== routeName) return false;
     if (String(item.serviceType) !== serviceType) return false;
-    return normalizeBound(item.bound.kmb) === bound;
+    return normalizeBound(item.bound[co]) === bound;
   });
 
   if (!entry) return null;
 
   return {
+    co,
     route: entry.route,
-    bound: normalizeBound(entry.bound.kmb),
+    bound: normalizeBound(entry.bound[co]),
     serviceType: entry.serviceType,
     origin: mapEtaLangToUi(entry.orig),
     destination: mapEtaLangToUi(entry.dest),
@@ -212,6 +259,7 @@ export async function findKmbRouteInfo(params: {
 }
 
 export type KmbEta = Eta & {
+  co: Company;
   route: string;
   dir: string;
   serviceType: string;
@@ -232,7 +280,7 @@ export async function fetchKmbEtasForStop(params: {
   const serviceType = params.serviceType ? String(params.serviceType) : null;
   const language = toHkBusEtaLanguage(params.language);
 
-  const candidates = (stationToRouteIndex.get(stopId) ?? []).filter((entry) => {
+  const candidates = (stationToRouteIndex.get(stopId) ?? []).filter(({ entry }) => {
     if (routeFilter && entry.route.toUpperCase() !== routeFilter) return false;
     if (serviceType && String(entry.serviceType) !== serviceType) return false;
     return true;
@@ -240,12 +288,33 @@ export async function fetchKmbEtasForStop(params: {
 
   if (candidates.length === 0) return [] as KmbEta[];
 
+  const candidateMap = new Map<
+    string,
+    { entry: RouteListEntry; co: Company; stopIndex: number }
+  >();
+
+  for (const { entry, co } of candidates) {
+    const stops = entry.stops[co] ?? [];
+    let smallestIndex = -1;
+    for (let idx = 0; idx < stops.length; idx += 1) {
+      if (normalizeStopId(stops[idx]) === stopId) {
+        smallestIndex = idx;
+        break;
+      }
+    }
+    if (smallestIndex < 0) continue;
+    const key = `${co}|${entry.route.toUpperCase()}|${normalizeBound(entry.bound[co])}|${entry.serviceType}`;
+    const existing = candidateMap.get(key);
+    if (!existing || smallestIndex < existing.stopIndex) {
+      candidateMap.set(key, { entry, co, stopIndex: smallestIndex });
+    }
+  }
+
   const etas = await Promise.all(
-    candidates.map(async (entry) => {
-      const stopIndex = (entry.stops.kmb ?? []).findIndex((s) => normalizeStopId(s) === stopId);
-      if (stopIndex < 0) return [] as KmbEta[];
+    Array.from(candidateMap.values()).map(async ({ entry, co, stopIndex }) => {
       const result = await fetchEtas({
         ...entry,
+        co: [co],
         seq: stopIndex,
         language,
         stopList: db.stopList as StopList,
@@ -254,8 +323,9 @@ export async function fetchKmbEtasForStop(params: {
       });
       return result.map((eta, idx) => ({
         ...eta,
+        co: eta.co ?? co,
         route: entry.route,
-        dir: normalizeBound(entry.bound.kmb),
+        dir: normalizeBound(entry.bound[co]),
         serviceType: entry.serviceType,
         seq: stopIndex + 1,
         etaSeq: idx + 1,
@@ -263,7 +333,14 @@ export async function fetchKmbEtasForStop(params: {
     })
   );
 
-  return etas.flat();
+  const flat = etas.flat();
+  const deduped = new Map<string, KmbEta>();
+  for (const eta of flat) {
+    const key = `${eta.co}|${eta.route}|${eta.dir}|${eta.serviceType}|${eta.etaSeq}|${eta.eta ?? ""}`;
+    if (!deduped.has(key)) deduped.set(key, eta);
+  }
+
+  return Array.from(deduped.values());
 }
 
 export async function listMtrRoutes(): Promise<RouteListEntry[]> {

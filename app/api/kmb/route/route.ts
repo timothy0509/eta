@@ -1,5 +1,6 @@
 import { ApiError, UpstreamTimeoutError } from "@/lib/eta/http";
 import { findKmbRouteInfo } from "@/lib/eta/hk-bus-eta";
+import type { Company } from "hk-bus-eta";
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from "@/lib/eta/kmb-cache";
 import { NextResponse } from "next/server";
 import { z } from "zod";
@@ -39,7 +40,9 @@ export async function GET(request: Request) {
         : parsed.data.direction === "O"
           ? "O"
           : parsed.data.direction;
+    const coParam = url.searchParams.get("co") ?? undefined;
     const data = await findKmbRouteInfo({
+      co: coParam ? (coParam as Company) : undefined,
       route: parsed.data.route,
       bound,
       serviceType: parsed.data.serviceType,
@@ -59,6 +62,7 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         data: {
+          co: data.co,
           route: data.route,
           bound: data.bound,
           service_type: data.serviceType,

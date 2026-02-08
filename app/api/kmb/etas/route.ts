@@ -12,6 +12,7 @@ const BodySchema = z.object({
         stopId: z.string().trim().min(1),
         route: z.string().trim().min(1),
         serviceType: z.string().trim().min(1).default("1"),
+        co: z.string().optional(),
       })
     )
     .min(1)
@@ -39,8 +40,11 @@ export async function POST(request: Request) {
 
   const unique = new Map<string, (typeof parsed.data.plans)[number]>();
   for (const plan of parsed.data.plans) {
-    const key = `${plan.stopId}|${plan.route.toUpperCase()}|${plan.serviceType}`;
-    if (!unique.has(key)) unique.set(key, { ...plan, route: plan.route.toUpperCase() });
+    const co = plan.co ? plan.co.toLowerCase() : "";
+    const key = `${co}|${plan.stopId}|${plan.route.toUpperCase()}|${plan.serviceType}`;
+    if (!unique.has(key)) {
+      unique.set(key, { ...plan, route: plan.route.toUpperCase(), co: plan.co });
+    }
   }
 
   const plans = Array.from(unique.values()).slice(0, 80);
@@ -72,10 +76,11 @@ export async function POST(request: Request) {
         .filter(
           (entry) =>
             String(entry.route ?? "").toUpperCase() === route &&
-            String(entry.serviceType ?? "") === p.serviceType
+            String(entry.serviceType ?? "") === p.serviceType &&
+            (p.co ? entry.co === p.co : true)
         )
         .map((entry, idx) => ({
-          co: "kmb",
+          co: entry.co ?? "kmb",
           route: entry.route,
           dir: entry.dir,
           service_type: entry.serviceType,

@@ -34,7 +34,7 @@ export type RouteFilterState = {
 };
 
 export type RouteFilterOption = {
-  key: string; // `${route}|${direction}|${serviceType}`
+  key: string; // `${co}|${route}|${direction}|${serviceType}`
   route: string;
   label: string;
 };
@@ -54,9 +54,11 @@ function normalizeAdvancedEntries(entries: RouteFilterEntry[] | undefined) {
   const next: RouteFilterEntry[] = [];
   for (const entry of list) {
     if (!entry.variantKey) continue;
-    if (seen.has(entry.variantKey)) continue;
-    seen.add(entry.variantKey);
-    next.push(entry);
+    const parts = entry.variantKey.split("|");
+    const normalizedKey = parts.length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey;
+    if (seen.has(normalizedKey)) continue;
+    seen.add(normalizedKey);
+    next.push({ ...entry, variantKey: normalizedKey });
   }
   return next;
 }

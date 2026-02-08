@@ -23,13 +23,27 @@ import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { UiLanguage } from "@/lib/eta/types";
 import { cn } from "@/lib/utils";
 
-function pickLang(
-  fields: { en: string; tc: string; sc: string },
-  lang: UiLanguage,
-) {
+function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
   if (lang === "sc") return fields.sc;
   if (lang === "en") return fields.en;
   return fields.tc;
+}
+
+function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
+  const key = String(co ?? "kmb").toLowerCase();
+  const map: Record<string, { en: string; tc: string; sc: string }> = {
+    kmb: { en: "KMB", tc: "九巴", sc: "九巴" },
+    ctb: { en: "CTB", tc: "城巴", sc: "城巴" },
+    nwfb: { en: "NWFB", tc: "新巴", sc: "新巴" },
+    nlb: { en: "NLB", tc: "新大嶼山巴士", sc: "新大屿山巴士" },
+    gmb: { en: "GMB", tc: "專線小巴", sc: "专线小巴" },
+    lrtfeeder: { en: "LRTF", tc: "輕鐵接駁", sc: "轻铁接驳" },
+    sunferry: { en: "SF", tc: "新渡輪", sc: "新渡轮" },
+    hkkf: { en: "HKKF", tc: "港九小輪", sc: "港九小轮" },
+    fortuneferry: { en: "FF", tc: "富裕小輪", sc: "富裕小轮" },
+  };
+  const label = map[key] ?? { en: key.toUpperCase(), tc: key, sc: key };
+  return pickLang(label, lang);
 }
 
 function formatRouteVariantLabel(
@@ -217,7 +231,7 @@ function RouteVariantCard({
   stopChips,
 }: {
   variantKey: string;
-  /** Base variant key without leg suffix (route|dir|service_type) for route info & fare lookup */
+  /** Base variant key without leg suffix (co|route|dir|service_type) for route info & fare lookup */
   baseKey: string;
   items: KmbEtaEntryWithLeg[];
   hasEta: boolean;
@@ -235,7 +249,7 @@ function RouteVariantCard({
   staggerClass?: string;
   stopChips: StopChips;
 }) {
-  const [route] = variantKey.split("|");
+  const [co = "kmb", route = ""] = variantKey.split("|");
   const first = items[0];
   // Use baseKey for route info lookup (full key may have leg suffix)
   const routeInfo = routeInfos[baseKey];
@@ -261,12 +275,19 @@ function RouteVariantCard({
     </Badge>
   );
 
+  const operatorBadge = (
+    <Badge variant="secondary" className="shrink-0 rounded-lg text-xs">
+      {formatOperatorLabel(first?.co ?? co, lang)}
+    </Badge>
+  );
+
   const i18n = {
     details: lang === "en" ? "Details" : lang === "sc" ? "詳情" : "詳情",
     routeDetails: lang === "en" ? "Route details" : lang === "sc" ? "路線詳情" : "路線詳情",
     routeAndStopDetails:
       lang === "en" ? "Route and stop details" : lang === "sc" ? "路線及車站詳情" : "路線及車站詳情",
     stop: lang === "en" ? "Stop" : lang === "sc" ? "車站" : "車站",
+    operator: lang === "en" ? "Operator" : lang === "sc" ? "營辦商" : "營辦商",
     route: lang === "en" ? "Route" : lang === "sc" ? "路線" : "路線",
     fare: lang === "en" ? "Fare" : lang === "sc" ? "車費" : "車費",
     unknown: lang === "en" ? "Unknown" : lang === "sc" ? "未知" : "未知",
@@ -286,61 +307,66 @@ function RouteVariantCard({
           <Info className="h-4 w-4" />
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-base">
-            {route} {destination ? `→ ${destination}` : label}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            {i18n.routeAndStopDetails}
-          </DialogDescription>
-        </DialogHeader>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {route} {destination ? `→ ${destination}` : label}
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              {i18n.routeAndStopDetails}
+            </DialogDescription>
+          </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">{i18n.stop}</div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="min-w-0 flex-1 truncate text-sm font-medium">
-                {stopChips.name ?? i18n.unknown}
-              </div>
-              {stopChips.platform ? (
-                <Badge
-                  variant="secondary"
-                  className="shrink-0 rounded-lg font-mono text-xs"
-                >
-                  {stopChips.platform}
-                </Badge>
-              ) : null}
-              {stopChips.stopCode ? (
-                <Badge
-                  variant="secondary"
-                  className="shrink-0 rounded-lg font-mono text-xs"
-                >
-                  {stopChips.stopCode}
-                </Badge>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-xs text-muted-foreground">{i18n.route}</div>
-            <div className="text-sm">
-              {origin && destination
-                ? `${origin} → ${destination}`
-                : label || destination || i18n.unknown}
-            </div>
-          </div>
-
-          {fare ? (
+          <div className="space-y-4">
             <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">{i18n.fare}</div>
-              <div className="text-sm font-medium">
-                HK$ {fare.hkd.toFixed(1)}
+              <div className="text-xs text-muted-foreground">{i18n.stop}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="min-w-0 flex-1 truncate text-sm font-medium">
+                  {stopChips.name ?? i18n.unknown}
+                </div>
+                {stopChips.platform ? (
+                  <Badge
+                    variant="secondary"
+                    className="shrink-0 rounded-lg font-mono text-xs"
+                  >
+                    {stopChips.platform}
+                  </Badge>
+                ) : null}
+                {stopChips.stopCode ? (
+                  <Badge
+                    variant="secondary"
+                    className="shrink-0 rounded-lg font-mono text-xs"
+                  >
+                    {stopChips.stopCode}
+                  </Badge>
+                ) : null}
               </div>
             </div>
-          ) : null}
-        </div>
-      </DialogContent>
+
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">{i18n.operator}</div>
+              <div className="text-sm">{formatOperatorLabel(first?.co ?? co, lang)}</div>
+            </div>
+
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">{i18n.route}</div>
+              <div className="text-sm">
+                {origin && destination
+                  ? `${origin} → ${destination}`
+                  : label || destination || i18n.unknown}
+              </div>
+            </div>
+
+            {fare ? (
+              <div className="space-y-1">
+                <div className="text-xs text-muted-foreground">{i18n.fare}</div>
+                <div className="text-sm font-medium">
+                  HK$ {fare.hkd.toFixed(1)}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </DialogContent>
     </Dialog>
   );
 
@@ -357,6 +383,7 @@ function RouteVariantCard({
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <RouteBadge route={route} size="lg" />
+            {operatorBadge}
             <Marquee className="min-w-0 flex-1 text-sm font-medium">
               {label || "Route"}
             </Marquee>
@@ -394,10 +421,11 @@ function RouteVariantCard({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <RouteBadge route={route} size="lg" />
-          <Marquee className="min-w-0 flex-1 text-sm font-medium">
-            {label || "Route"}
-          </Marquee>
+            <RouteBadge route={route} size="lg" />
+            {operatorBadge}
+            <Marquee className="min-w-0 flex-1 text-sm font-medium">
+              {label || "Route"}
+            </Marquee>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div className="hidden items-center gap-2 sm:flex">
@@ -626,12 +654,13 @@ export function KmbResults({
     // Fall back to full computation for multipleStops mode
     const byVariant = new Map<string, KmbEtaEntryWithLeg[]>();
     for (const entry of eta) {
+      const co = String(entry.co ?? "kmb");
       const route = (entry.route ?? "").toUpperCase();
       const dir = String(entry.dir ?? "");
       const serviceType = String(entry.service_type ?? "");
       // Include leg in key to separate departing/arriving ETAs
       const legSuffix = entry.leg ?? "_";
-      const baseKey = `${route}|${dir}|${serviceType}`;
+      const baseKey = `${co}|${route}|${dir}|${serviceType}`;
       const key = multipleStops
         ? `${baseKey}|${legSuffix}|${entry.stop ?? ""}`
         : `${baseKey}|${legSuffix}`;
@@ -644,12 +673,13 @@ export function KmbResults({
     const groups = Array.from(byVariant.entries()).map(([key, items]) => {
       const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq);
       const parts = key.split("|");
-      const baseKey = parts.slice(0, 3).join("|");
-      const legPart = parts[3];
+      const baseKey = parts.slice(0, 4).join("|");
+      const legPart = parts[4];
       const isArrivingLeg = legPart === "B";
+      const [co = "kmb"] = parts;
 
       // Find the stop code for this route (from the first entry)
-      const stopId = multipleStops ? parts[4] : sorted[0]?.stop;
+      const stopId = multipleStops ? parts[5] : sorted[0]?.stop;
       let stop = stopId ? stopLookup.get(stopId) : undefined;
       if (!stop && stopId) {
         const normalized = stopId.toUpperCase();
@@ -680,8 +710,8 @@ export function KmbResults({
     // 3) No ETA
     // Within each tier, sort alphabetically by route number
     const sortByRoute = (a: { key: string }, b: { key: string }) => {
-      const [routeA] = a.key.split("|");
-      const [routeB] = b.key.split("|");
+      const [, routeA] = a.key.split("|");
+      const [, routeB] = b.key.split("|");
       return routeA.localeCompare(routeB, undefined, { numeric: true });
     };
 
@@ -692,7 +722,7 @@ export function KmbResults({
       hasFare: boolean;
     };
     const hasFareLoaded = (g: GroupWithFare) =>
-      g.hasFare && faresByVariantKey && Boolean(faresByVariantKey[g.baseKey]);
+    g.hasFare && faresByVariantKey && Boolean(faresByVariantKey[g.baseKey]);
 
     // Tier 1: ETA + fare loaded
     const withEtaAndFare = groups
@@ -722,7 +752,7 @@ export function KmbResults({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <CardTitle className="truncate text-base">
-              {title || "KMB ETAs"}
+              {title || (lang === "en" ? "Bus ETAs" : lang === "sc" ? "巴士到站预报" : "巴士到站預報")}
             </CardTitle>
             {stopCode ? (
               <Badge

@@ -1,4 +1,5 @@
 import type { KmbEtaEntry, KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
+import type { Company } from "hk-bus-eta";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 import type { KmbStopSearchItem } from "@/lib/eta/types";
 
@@ -83,6 +84,7 @@ export async function fetchKmbRoutes(): Promise<KmbRouteListEntry[]> {
 }
 
 export type KmbRouteStopLite = {
+  co: Company;
   route: string;
   bound: "I" | "O" | string;
   serviceType: string;
@@ -111,6 +113,7 @@ export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
 
   return json.data
     .map((entry) => ({
+      co: (entry as { co?: Company }).co ?? "kmb",
       route: entry.route,
       bound: entry.bound,
       serviceType: String(entry.service_type),
@@ -121,6 +124,7 @@ export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
 }
 
 export type KmbRouteInfoLite = {
+  co: Company;
   route: string;
   bound: "I" | "O" | string;
   serviceType: string;
@@ -158,11 +162,13 @@ export async function fetchKmbEtas(plans: Array<{ stopId: string; route: string;
 }
 
 export async function fetchKmbRouteInfo(params: {
+  co?: Company;
   route: string;
   direction: "I" | "O" | "inbound" | "outbound" | string;
   serviceType: string;
 }): Promise<KmbRouteInfoLite> {
   const query = new URLSearchParams();
+  if (params.co) query.set("co", params.co);
   query.set("route", params.route);
   query.set("direction", params.direction);
   query.set("serviceType", params.serviceType);
@@ -175,6 +181,7 @@ export async function fetchKmbRouteInfo(params: {
 
   const json = (await response.json()) as {
     data: {
+      co?: Company;
       route: string;
       bound: "I" | "O" | string;
       service_type: number | string;
@@ -188,6 +195,7 @@ export async function fetchKmbRouteInfo(params: {
   };
 
   return {
+    co: json.data.co ?? params.co ?? "kmb",
     route: json.data.route,
     bound: json.data.bound,
     serviceType: String(json.data.service_type),
@@ -214,6 +222,7 @@ export type KmbStopEtasResponse = {
   errors: string[];
   cached: number;
   fetched: number;
+  staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>;
 };
 
 export async function fetchKmbStopEtas(
@@ -243,6 +252,7 @@ export async function fetchKmbStopEtas(
  * Fetch fares for a list of route variants (deferred from stop-etas).
  */
 export type KmbFareVariant = {
+  co: Company;
   route: string;
   dir: string;
   serviceType: string;

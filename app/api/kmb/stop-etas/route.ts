@@ -109,6 +109,7 @@ export async function POST(request: Request) {
       const routeStops = await listKmbRouteStops();
       const lite: KmbRouteStopLite[] = routeStops
         .map((entry) => ({
+          co: entry.co,
           route: entry.route,
           bound: entry.bound,
           serviceType: String(entry.serviceType),
@@ -143,7 +144,7 @@ export async function POST(request: Request) {
           const results = await fetchKmbEtasForStop({ stopId, language: "tc" });
           const now = new Date().toISOString();
           return results.map((entry, idx) => ({
-            co: "kmb",
+            co: entry.co ?? "kmb",
             route: entry.route,
             dir: entry.dir,
             service_type: entry.serviceType,
@@ -211,10 +212,12 @@ export async function POST(request: Request) {
         const route = String(entry.route ?? "").toUpperCase();
         const dir = String(entry.dir ?? "");
         const serviceType = String(entry.service_type ?? "");
+        const co = String(entry.co ?? "kmb");
 
         // Compute leg for circular route disambiguation
         const etaSeq = entry.seq;
         const leg = computeEtaLeg({
+          co,
           route,
           dir,
           serviceType,
@@ -225,8 +228,8 @@ export async function POST(request: Request) {
 
         // Include leg in grouping key to separate departing/arriving ETAs
         const legSuffix = leg ?? "_";
-        const key = `${route}|${dir}|${serviceType}|${legSuffix}`;
-        
+        const key = `${co}|${route}|${dir}|${serviceType}|${legSuffix}`;
+
         const existing = byVariant.get(key) ?? [];
         if (existing.length < MAX_ETAS_PER_VARIANT) {
           existing.push({
@@ -246,6 +249,8 @@ export async function POST(request: Request) {
           stop: stopId,
         }))
         .sort((a, b) => {
+          const coCmp = String(a.co ?? "").localeCompare(String(b.co ?? ""));
+          if (coCmp !== 0) return coCmp;
           const routeCmp = (a.route ?? "").localeCompare(b.route ?? "", undefined, { numeric: true });
           if (routeCmp !== 0) return routeCmp;
           return (a.eta_seq ?? 0) - (b.eta_seq ?? 0);
@@ -255,7 +260,7 @@ export async function POST(request: Request) {
 
     }
 
-    // Compute fares per route variant (route|dir|service_type) - base key without leg
+    // Compute fares per route variant (co|route|dir|service_type) - base key without leg
     // Only compute if includeFares is true (deferred by default for faster initial load)
     let faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }> | undefined;
 
@@ -263,15 +268,17 @@ export async function POST(request: Request) {
       faresByVariantKey = {};
       for (const [stopId, entries] of Object.entries(byStopId)) {
         for (const entry of entries) {
+          const co = String(entry.co ?? "kmb");
           const route = String(entry.route ?? "").toUpperCase();
           const dir = String(entry.dir ?? "");
           const serviceType = String(entry.service_type ?? "");
-          const vKey = `${route}|${dir}|${serviceType}`;
+          const vKey = `${co}|${route}|${dir}|${serviceType}`;
 
           if (faresByVariantKey[vKey]) continue;
 
           const destCandidates = [entry.dest_en, entry.dest_tc, entry.dest_sc].filter(Boolean).map(String);
           const fare = await getStopToTerminusFare({
+            co,
             route,
             dir,
             serviceType,

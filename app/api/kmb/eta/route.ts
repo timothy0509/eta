@@ -8,6 +8,7 @@ const QuerySchema = z.object({
   stopId: z.string().trim().min(1),
   route: z.string().trim().min(1),
   serviceType: z.string().trim().min(1).default("1"),
+  co: z.string().optional(),
 });
 
 export async function GET(request: Request) {
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
     stopId: url.searchParams.get("stopId"),
     route: url.searchParams.get("route"),
     serviceType: url.searchParams.get("serviceType") ?? "1",
+    co: url.searchParams.get("co") ?? undefined,
   });
 
   if (!parsed.success) {
@@ -44,23 +46,25 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       {
-        eta: eta.map((entry) => ({
-          co: "kmb",
-          route: entry.route,
-          dir: entry.dir,
-          service_type: entry.serviceType,
-          seq: entry.seq,
-          stop: parsed.data.stopId,
-          dest_en: entry.dest?.en ?? "",
-          dest_tc: entry.dest?.zh ?? "",
-          dest_sc: entry.dest?.zh ?? "",
-          eta_seq: entry.etaSeq,
-          eta: entry.eta ?? "",
-          rmk_en: entry.remark?.en ?? "",
-          rmk_tc: entry.remark?.zh ?? "",
-          rmk_sc: entry.remark?.zh ?? "",
-          data_timestamp: now,
-        })),
+        eta: eta
+          .filter((entry) => (parsed.data.co ? entry.co === parsed.data.co : true))
+          .map((entry) => ({
+            co: entry.co ?? "kmb",
+            route: entry.route,
+            dir: entry.dir,
+            service_type: entry.serviceType,
+            seq: entry.seq,
+            stop: parsed.data.stopId,
+            dest_en: entry.dest?.en ?? "",
+            dest_tc: entry.dest?.zh ?? "",
+            dest_sc: entry.dest?.zh ?? "",
+            eta_seq: entry.etaSeq,
+            eta: entry.eta ?? "",
+            rmk_en: entry.remark?.en ?? "",
+            rmk_tc: entry.remark?.zh ?? "",
+            rmk_sc: entry.remark?.zh ?? "",
+            data_timestamp: now,
+          })),
       },
       {
         headers: KMB_NO_STORE_HEADERS,

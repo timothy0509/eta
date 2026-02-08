@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     template: "%s | TimoETA",
   },
   description:
-    "Fast, clean Hong Kong transit ETAs for KMB buses, MTR trains, and Light Rail. Pin stops, save favorites, and auto-refresh arrivals.",
+    "Fast, clean Hong Kong transit ETAs for buses, MTR trains, and Light Rail. Pin stops, save favorites, and auto-refresh arrivals.",
   alternates: {
     canonical: "/",
   },
@@ -68,7 +68,7 @@ export const metadata: Metadata = {
     url: "/",
     title: "TimoETA",
     description:
-      "Fast, clean Hong Kong transit ETAs for KMB buses, MTR trains, and Light Rail.",
+      "Fast, clean Hong Kong transit ETAs for buses, MTR trains, and Light Rail.",
     siteName: "TimoETA",
     images: [
       {
@@ -83,7 +83,7 @@ export const metadata: Metadata = {
     card: "summary",
     title: "TimoETA",
     description:
-      "Fast, clean Hong Kong transit ETAs for KMB buses, MTR trains, and Light Rail.",
+      "Fast, clean Hong Kong transit ETAs for buses, MTR trains, and Light Rail.",
     images: ["/timoeta_new.png"],
   },
 };
@@ -113,7 +113,7 @@ export default function RootLayout({
                 name: "TimoETA",
                 url: siteUrl.toString(),
                 description:
-                  "Fast, clean Hong Kong transit ETAs for KMB buses, MTR trains, and Light Rail.",
+                  "Fast, clean Hong Kong transit ETAs for buses, MTR trains, and Light Rail.",
               }),
             }}
           />

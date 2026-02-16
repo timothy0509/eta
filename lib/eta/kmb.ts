@@ -6,9 +6,11 @@ import {
   listKmbStops,
   type KmbEta,
 } from "@/lib/eta/hk-bus-eta";
+import type { Company } from "hk-bus-eta";
 
 export type KmbStop = {
   stop: string;
+  co?: string;
   name_en: string;
   name_tc: string;
   name_sc: string;
@@ -43,7 +45,7 @@ function normalizeDirection(direction: string): "I" | "O" | string {
 function mapKmbEtaEntry(eta: KmbEta, stopId: string): KmbEtaEntry {
   const now = new Date().toISOString();
   return {
-    co: "kmb",
+    co: eta.co ?? "kmb",
     route: eta.route,
     dir: eta.dir,
     service_type: eta.serviceType,
@@ -101,6 +103,7 @@ export async function getKmbStopEta(stopId: string): Promise<KmbEtaEntry[]> {
 }
 
 export type KmbRouteStopEntry = {
+  co: Company;
   route: string;
   bound: "I" | "O" | string;
   service_type: number | string;
@@ -111,6 +114,7 @@ export type KmbRouteStopEntry = {
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
   const routeStops = await listKmbRouteStops();
   return routeStops.map((entry) => ({
+    co: entry.co,
     route: entry.route,
     bound: entry.bound,
     service_type: entry.serviceType,
@@ -120,6 +124,7 @@ export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
 }
 
 export type KmbRouteInfo = {
+  co: Company;
   route: string;
   bound: "I" | "O" | string;
   service_type: number | string;
@@ -132,7 +137,7 @@ export type KmbRouteInfo = {
 };
 
 export type KmbRouteListEntry = {
-  co: string;
+  co: Company;
   route: string;
   bound: "I" | "O" | string;
   service_type: number | string;
@@ -148,7 +153,7 @@ export type KmbRouteListEntry = {
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
   const routes = await listKmbRoutes();
   return routes.map((entry) => ({
-    co: "kmb",
+    co: entry.co,
     route: entry.route,
     bound: entry.bound,
     service_type: entry.serviceType,
@@ -162,12 +167,14 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
 }
 
 export async function getKmbRouteInfo(params: {
+  co?: Company;
   route: string;
   direction: "I" | "O" | "inbound" | "outbound" | string;
   serviceType: string;
 }): Promise<KmbRouteInfo> {
   const bound = normalizeDirection(params.direction);
   const info = await findKmbRouteInfo({
+    co: params.co,
     route: params.route,
     bound,
     serviceType: params.serviceType,
@@ -178,6 +185,7 @@ export async function getKmbRouteInfo(params: {
   }
 
   return {
+    co: info.co,
     route: info.route,
     bound: info.bound,
     service_type: info.serviceType,

@@ -1,29 +1,14 @@
-import { fetchEtaDb, fetchEtaDbMd5, fetchEtas } from "hk-bus-eta";
-import type { Company, Eta, EtaDb, RouteListEntry, StopList } from "hk-bus-eta";
+import { fetchEtas } from "hk-bus-eta";
+import type { Company, Eta, EtaDb, RouteListEntry } from "hk-bus-eta";
 
-import { etaDbCache } from "@/lib/eta/cache";
+import { idbGet, idbSet } from "@/lib/eta/cache/idb";
+import { ETA_DB_CACHE_KEY, ETA_DB_MD5_KEY } from "@/lib/eta/cache/keys";
+import { CACHE_POLICIES, createMetaForPolicy, isFresh } from "@/lib/eta/cache/policy";
+import { MicroCache } from "@/lib/eta/cache/micro-cache";
+import { getEtaDbSnapshot, type EtaDbCacheValue as SnapshotValue } from "@/lib/eta/direct/eta-db-list";
 import type { UiLanguage } from "@/lib/eta/types";
 
-type EtaDbCacheValue = {
-  db: EtaDb;
-  md5: string;
-  fetchedAt: number;
-};
-
-type EtaDbIndexes = {
-  kmbRouteListEntries: RouteListEntry[];
-  kmbStops: KmbStopSearchItem[];
-  kmbRouteStops: KmbRouteStopLite[];
-  mtrRoutes: RouteListEntry[];
-  lrtRoutes: RouteListEntry[];
-  stationToRouteIndex: Map<string, BusRouteCandidate[]>;
-};
-
-const ETA_DB_CACHE_KEY = "hk-bus-eta:db";
-const ETA_DB_MD5_KEY = "hk-bus-eta:md5";
-const ETA_DB_TTL_MS = 24 * 60 * 60 * 1000;
-
-let cachedIndexes: { md5: string; value: EtaDbIndexes } | null = null;
+type EtaDbCacheValue = SnapshotValue;
 
 export type KmbStopSearchItem = {
   stopId: string;
@@ -66,16 +51,37 @@ type BusRouteCandidate = {
   co: Company;
 };
 
-const BUS_COMPANIES: Company[] = [
+type EtaDbIndexes = {
+  kmbRouteListEntries: RouteListEntry[];
+  kmbStops: KmbStopSearchItem[];
+  kmbRouteStops: KmbRouteStopLite[];
+  mtrRoutes: RouteListEntry[];
+  lrtRoutes: RouteListEntry[];
+  stationToRouteIndex: Map<string, BusRouteCandidate[]>;
+};
+
+const ETA_DB_POLICY = CACHE_POLICIES.etaDb;
+const etaDbCache = new MicroCache<EtaDbCacheValue>({
+  ttlMs: ETA_DB_POLICY.ttlMs,
+  maxSize: 2,
+});
+const etaDbMd5Cache = new MicroCache<string>({
+  ttlMs: ETA_DB_POLICY.ttlMs,
+  maxSize: 2,
+});
+
+let cachedIndexes: { md5: string; value: EtaDbIndexes } | null = null;
+
+const BUS_COMPANIES = [
   "kmb",
   "ctb",
   "nlb",
+  "nwfb",
   "gmb",
   "lrtfeeder",
-  "sunferry",
-  "hkkf",
-  "fortuneferry",
-];
+  "lightRail",
+  "mtr",
+] as Company[];
 
 function isBusCompany(company: Company): boolean {
   return BUS_COMPANIES.includes(company);
@@ -103,11 +109,56 @@ function mapEtaLangToUi(eta: { en: string; zh: string }) {
   };
 }
 
-export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
-  const db = await getEtaDbCached();
-  const cachedMd5 = etaDbCache.get(ETA_DB_MD5_KEY) as string | undefined;
+async function getEtaDbRecord(): Promise<EtaDbCacheValue> {
+  const memory = etaDbCache.get(ETA_DB_CACHE_KEY);
+  if (memory) return memory;
 
-  if (cachedIndexes && cachedMd5 && cachedIndexes.md5 === cachedMd5) {
+  const stored = await idbGet<EtaDbCacheValue>(ETA_DB_CACHE_KEY);
+  const storedMd5 = await idbGet<string>(ETA_DB_MD5_KEY);
+  const storedValue = stored?.value ?? null;
+  const storedIsFresh = stored ? isFresh(stored) : false;
+
+  if (storedValue && storedIsFresh) {
+    etaDbCache.set(ETA_DB_CACHE_KEY, storedValue);
+    if (storedMd5?.value) {
+      etaDbMd5Cache.set(ETA_DB_MD5_KEY, storedMd5.value);
+    }
+    return storedValue;
+  }
+
+  try {
+    const payload = await getEtaDbSnapshot();
+    etaDbCache.set(ETA_DB_CACHE_KEY, payload);
+    etaDbMd5Cache.set(ETA_DB_MD5_KEY, payload.md5);
+    return payload;
+  } catch (error) {
+    if (storedValue) return storedValue;
+    throw error;
+  }
+}
+
+export async function getEtaDbCached(): Promise<EtaDb> {
+  const record = await getEtaDbRecord();
+  return record.db;
+}
+
+export async function getEtaDbMd5Cached(): Promise<string> {
+  const memory = etaDbMd5Cache.get(ETA_DB_MD5_KEY);
+  if (memory) return memory;
+  const stored = await idbGet<string>(ETA_DB_MD5_KEY);
+  if (stored?.value && isFresh(stored)) {
+    etaDbMd5Cache.set(ETA_DB_MD5_KEY, stored.value);
+    return stored.value;
+  }
+  const record = await getEtaDbRecord();
+  etaDbMd5Cache.set(ETA_DB_MD5_KEY, record.md5);
+  return record.md5;
+}
+
+export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
+  const [db, md5] = await Promise.all([getEtaDbCached(), getEtaDbMd5Cached()]);
+
+  if (cachedIndexes && cachedIndexes.md5 === md5) {
     return cachedIndexes.value;
   }
 
@@ -156,7 +207,9 @@ export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
       for (const stopId of stops) {
         const key = normalizeStopId(stopId);
         if (!key) continue;
-        const candidateKey = `${co}|${entry.route.toUpperCase()}|${normalizeBound(entry.bound[co])}|${entry.serviceType}`;
+        const candidateKey = `${co}|${entry.route.toUpperCase()}|${normalizeBound(entry.bound[co])}|${
+          entry.serviceType
+        }`;
         const seen = stationToRouteDedup.get(key) ?? new Set<string>();
         if (seen.has(candidateKey)) continue;
         seen.add(candidateKey);
@@ -177,26 +230,8 @@ export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
     stationToRouteIndex,
   };
 
-  if (cachedMd5) {
-    cachedIndexes = { md5: cachedMd5, value };
-  }
-
+  cachedIndexes = { md5, value };
   return value;
-}
-
-export async function getEtaDbCached(): Promise<EtaDb> {
-  const cached = etaDbCache.get(ETA_DB_CACHE_KEY) as EtaDbCacheValue | undefined;
-  if (cached) return cached.db;
-
-  const [db, md5] = await Promise.all([fetchEtaDb(), fetchEtaDbMd5()]);
-  const payload: EtaDbCacheValue = {
-    db,
-    md5,
-    fetchedAt: Date.now(),
-  };
-  etaDbCache.set(ETA_DB_CACHE_KEY, payload, ETA_DB_TTL_MS);
-  etaDbCache.set(ETA_DB_MD5_KEY, md5, ETA_DB_TTL_MS);
-  return db;
 }
 
 export async function listKmbStops(): Promise<KmbStopSearchItem[]> {
@@ -288,10 +323,7 @@ export async function fetchKmbEtasForStop(params: {
 
   if (candidates.length === 0) return [] as KmbEta[];
 
-  const candidateMap = new Map<
-    string,
-    { entry: RouteListEntry; co: Company; stopIndex: number }
-  >();
+  const candidateMap = new Map<string, { entry: RouteListEntry; co: Company; stopIndex: number }>();
 
   for (const { entry, co } of candidates) {
     const stops = entry.stops[co] ?? [];
@@ -303,7 +335,9 @@ export async function fetchKmbEtasForStop(params: {
       }
     }
     if (smallestIndex < 0) continue;
-    const key = `${co}|${entry.route.toUpperCase()}|${normalizeBound(entry.bound[co])}|${entry.serviceType}`;
+    const key = `${co}|${entry.route.toUpperCase()}|${normalizeBound(entry.bound[co])}|${
+      entry.serviceType
+    }`;
     const existing = candidateMap.get(key);
     if (!existing || smallestIndex < existing.stopIndex) {
       candidateMap.set(key, { entry, co, stopIndex: smallestIndex });
@@ -317,9 +351,6 @@ export async function fetchKmbEtasForStop(params: {
         co: [co],
         seq: stopIndex,
         language,
-        stopList: db.stopList as StopList,
-        holidays: db.holidays,
-        serviceDayMap: db.serviceDayMap,
       });
       return result.map((eta, idx) => ({
         ...eta,
@@ -381,9 +412,6 @@ export async function fetchMtrEtasForStop(params: {
     ...entry,
     seq,
     language: toHkBusEtaLanguage(params.language),
-    stopList: db.stopList as StopList,
-    holidays: db.holidays,
-    serviceDayMap: db.serviceDayMap,
   });
 }
 
@@ -416,48 +444,5 @@ export async function fetchLrtEtasForStop(params: {
     ...entry,
     seq,
     language: toHkBusEtaLanguage(params.language),
-    stopList: db.stopList as StopList,
-    holidays: db.holidays,
-    serviceDayMap: db.serviceDayMap,
   });
-}
-
-/**
- * Get fare for a specific route variant from hk-bus-eta data.
- * Fares array index corresponds to stop sequence (0-indexed).
- */
-export async function getKmbFareFromEtaDb(params: {
-  route: string;
-  bound: string;
-  serviceType: string;
-  stopSeq: number;
-  isHoliday?: boolean;
-}): Promise<{ hkd: number; source: string } | null> {
-  const { kmbRouteListEntries } = await getEtaDbIndexes();
-  const routeName = params.route.toUpperCase();
-  const bound = normalizeBound(params.bound);
-  const serviceType = String(params.serviceType ?? "");
-  const stopSeq = params.stopSeq - 1; // Convert to 0-indexed
-
-  const entry = kmbRouteListEntries.find((item) => {
-    if (item.route.toUpperCase() !== routeName) return false;
-    if (String(item.serviceType) !== serviceType) return false;
-    return normalizeBound(item.bound.kmb) === bound;
-  });
-
-  if (!entry) return null;
-
-  const fares = params.isHoliday ? entry.faresHoliday : entry.fares;
-  if (!fares || stopSeq < 0 || stopSeq >= fares.length) return null;
-
-  const fareStr = fares[stopSeq];
-  if (!fareStr) return null;
-
-  const fare = Number(fareStr);
-  if (!Number.isFinite(fare) || fare < 0) return null;
-
-  return {
-    hkd: fare,
-    source: "hk-bus-eta",
-  };
 }

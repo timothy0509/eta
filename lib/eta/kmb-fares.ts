@@ -8,7 +8,7 @@ export type KmbFareInfo = {
   source: "hk-bus-eta";
 };
 
-type VariantKey = `${string}|${string}|${string}`;
+type VariantKey = `${string}|${string}|${string}|${string}`;
 
 export type VariantStops = {
   variantKey: VariantKey;
@@ -24,15 +24,17 @@ function normalizeRouteName(route: string): string {
   return String(route ?? "").trim().toUpperCase();
 }
 
-function variantKey(route: string, bound: string, serviceType: string): VariantKey {
-  return `${normalizeRouteName(route)}|${String(bound ?? "")}|${String(serviceType ?? "")}`;
+function variantKey(co: string, route: string, bound: string, serviceType: string): VariantKey {
+  return `${String(co ?? "kmb")}|${normalizeRouteName(route)}|${String(bound ?? "")}|${String(
+    serviceType ?? ""
+  )}`;
 }
 
 export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]) {
   const byVariantKey = new Map<VariantKey, VariantStops>();
 
   for (const rs of routeStops) {
-    const key = variantKey(rs.route, rs.bound, rs.serviceType);
+    const key = variantKey(rs.co, rs.route, rs.bound, rs.serviceType);
     const existing = byVariantKey.get(key);
     const stopId = String(rs.stopId ?? "").trim();
     if (!stopId) continue;
@@ -93,6 +95,7 @@ export function kmbFareCacheControlHeader() {
  * where each entry represents the fare from that stop to the terminus.
  */
 export async function getStopToTerminusFare(params: {
+  co: string;
   route: string;
   dir: string;
   serviceType: string;
@@ -102,7 +105,7 @@ export async function getStopToTerminusFare(params: {
   byVariantStops: Map<VariantKey, VariantStops>;
 }): Promise<KmbFareInfo | null> {
   const routeName = normalizeRouteName(params.route);
-  const key = variantKey(routeName, params.dir, params.serviceType);
+  const key = variantKey(params.co, routeName, params.dir, params.serviceType);
   const variant = params.byVariantStops.get(key);
   if (!variant) return null;
 
@@ -116,18 +119,25 @@ export async function getStopToTerminusFare(params: {
   const bound = String(params.dir ?? "");
   const serviceType = String(params.serviceType ?? "");
 
-  const entry = kmbRouteListEntries.find((item: { route: string; serviceType: string; bound: { kmb: string } }) => {
-    if (item.route.toUpperCase() !== routeName) return false;
-    if (String(item.serviceType) !== serviceType) return false;
-    const itemBound = item.bound.kmb;
-    return itemBound === bound || (bound === "I" && itemBound === "I") || (bound !== "I" && itemBound === "O");
-  });
+  const entry = kmbRouteListEntries.find(
+    (item: { route: string; serviceType: string; bound: Record<string, string>; co: string[] }) => {
+      if (!item.co?.includes(params.co as string)) return false;
+      if (item.route.toUpperCase() !== routeName) return false;
+      if (String(item.serviceType) !== serviceType) return false;
+      const itemBound = String(item.bound?.[params.co] ?? "");
+      return itemBound === bound || (bound === "I" && itemBound === "I") || (bound !== "I" && itemBound === "O");
+    }
+  );
 
   if (!entry) return null;
 
   // fares array is 0-indexed, so subtract 1 from the 1-indexed sequence
   const fareIndex = onSeq - 1;
-  const fares = entry.fares;
+  const fares = Array.isArray(entry.fares)
+    ? entry.fares
+    : (entry.fares && typeof entry.fares === "object"
+        ? (entry.fares as Record<string, string[] | undefined>)[params.co]
+        : undefined);
 
   if (!fares || fareIndex < 0 || fareIndex >= fares.length) return null;
 
@@ -153,6 +163,7 @@ export async function getStopToTerminusFare(params: {
  * - null if the stop only appears once (no leg disambiguation needed)
  */
 export function computeEtaLeg(params: {
+  co: string;
   route: string;
   dir: string;
   serviceType: string;
@@ -161,7 +172,7 @@ export function computeEtaLeg(params: {
   byVariantStops: Map<VariantKey, VariantStops>;
 }): "A" | "B" | null {
   const routeName = normalizeRouteName(params.route);
-  const key = variantKey(routeName, params.dir, params.serviceType);
+  const key = variantKey(params.co, routeName, params.dir, params.serviceType);
   const variant = params.byVariantStops.get(key);
   if (!variant) return null;
 

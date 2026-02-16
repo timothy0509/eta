@@ -34,10 +34,15 @@ export type RouteFilterState = {
 };
 
 export type RouteFilterOption = {
-  key: string; // `${route}|${direction}|${serviceType}`
+  key: string; // `${co}|${route}|${direction}|${serviceType}`
   route: string;
   label: string;
 };
+
+function getCompanyFromVariantKey(key: string) {
+  const [co] = key.split("|");
+  return co || "kmb";
+}
 
 type Props = {
   lang: UiLanguage;
@@ -54,9 +59,11 @@ function normalizeAdvancedEntries(entries: RouteFilterEntry[] | undefined) {
   const next: RouteFilterEntry[] = [];
   for (const entry of list) {
     if (!entry.variantKey) continue;
-    if (seen.has(entry.variantKey)) continue;
-    seen.add(entry.variantKey);
-    next.push(entry);
+    const parts = entry.variantKey.split("|");
+    const normalizedKey = parts.length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey;
+    if (seen.has(normalizedKey)) continue;
+    seen.add(normalizedKey);
+    next.push({ ...entry, variantKey: normalizedKey });
   }
   return next;
 }
@@ -197,7 +204,11 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                       >
                         {selected ? (
                           <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <RouteBadge route={selected.route} size="md" />
+                            <RouteBadge
+                              route={selected.route}
+                              company={getCompanyFromVariantKey(selected.key)}
+                              size="md"
+                            />
                             <Marquee className="min-w-0 flex-1 text-left text-muted-foreground">
                               {selected.label}
                             </Marquee>
@@ -237,7 +248,11 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                                       picked ? "opacity-100" : "opacity-0"
                                     )}
                                   />
-                                  <RouteBadge route={opt.route} size="sm" />
+                                  <RouteBadge
+                                    route={opt.route}
+                                    company={getCompanyFromVariantKey(opt.key)}
+                                    size="sm"
+                                  />
                                   <span className="ml-2 min-w-0 truncate text-muted-foreground">
                                     {opt.label}
                                   </span>

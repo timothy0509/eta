@@ -147,10 +147,10 @@ export default function Home() {
   const heading =
     mode === "kmb"
       ? lang === "en"
-        ? "KMB bus ETAs"
+        ? "Bus ETAs"
         : lang === "sc"
-          ? "九巴到站预报"
-          : "九巴到站預報"
+          ? "巴士到站预报"
+          : "巴士到站預報"
       : mode === "mtr"
         ? lang === "en"
           ? "MTR Next Train"
@@ -175,7 +175,7 @@ export default function Home() {
         : lang === "sc"
           ? "搜尋並釘選常用車站。"
           : "搜尋並釘選常用車站。",
-    kmbTitle: lang === "en" ? "KMB ETAs" : lang === "sc" ? "九巴到站预报" : "九巴到站預報",
+    kmbTitle: lang === "en" ? "Bus ETAs" : lang === "sc" ? "巴士到站预报" : "巴士到站預報",
     mtrTitle: lang === "en" ? "MTR" : lang === "sc" ? "港铁" : "港鐵",
     lrtTitle: lang === "en" ? "Light Rail" : "輕鐵",
   };

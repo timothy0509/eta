@@ -25,6 +25,7 @@ import {
 } from "@/lib/eta/client";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
+import type { Company } from "hk-bus-eta";
 import { useInfiniteScroll } from "@/lib/eta/use-infinite-scroll";
 import { cn } from "@/lib/utils";
 import type { FavoritesItem, RouteFilterMode } from "@/lib/store";
@@ -161,7 +162,7 @@ function searchStopsByContains(
 // ============================================================================
 
 type RouteStopIndex = {
-  /** stopId -> Set of variant keys (route|bound|serviceType) */
+  /** stopId -> Set of variant keys (co|route|bound|serviceType) */
   byStopId: Map<string, Set<string>>;
   /** Version counter */
   version: number;
@@ -170,7 +171,7 @@ type RouteStopIndex = {
 function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
   const byStopId = new Map<string, Set<string>>();
   for (const entry of routeStops) {
-    const key = `${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`;
+    const key = `${entry.co}|${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`;
     let set = byStopId.get(entry.stopId);
     if (!set) {
       set = new Set();
@@ -200,7 +201,7 @@ function getVariantKeysForStops(index: RouteStopIndex, stopIds: string[]): strin
 
 export type EtaGroup = {
   key: string;
-  /** Base variant key without leg suffix (route|dir|service_type) for fare lookup */
+  /** Base variant key without leg suffix (co|route|dir|service_type) for fare lookup */
   baseKey: string;
   items: KmbEtaEntryWithLeg[];
   hasEta: boolean;
@@ -227,12 +228,13 @@ function groupEtasByVariant(
 ): EtaGroup[] {
   const byVariant = new Map<string, KmbEtaEntryWithLeg[]>();
   for (const entry of eta) {
+    const co = String(entry.co ?? "kmb");
     const route = (entry.route ?? "").toUpperCase();
     const dir = String(entry.dir ?? "");
     const serviceType = String(entry.service_type ?? "");
     // Include leg in key to separate departing/arriving ETAs for circular routes
     const legSuffix = entry.leg ?? "_";
-    const key = `${route}|${dir}|${serviceType}|${legSuffix}`;
+    const key = `${co}|${route}|${dir}|${serviceType}|${legSuffix}`;
 
     const items = byVariant.get(key) ?? [];
     items.push(entry);
@@ -243,11 +245,12 @@ function groupEtasByVariant(
     const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq);
     const hasEta = hasValidEta(sorted);
     
-    // Extract base key (route|dir|service_type) for fare lookup
+    // Extract base key (co|route|dir|service_type) for fare lookup
     const parts = key.split("|");
-    const baseKey = parts.slice(0, 3).join("|");
-    const legPart = parts[3];
+    const baseKey = parts.slice(0, 4).join("|");
+    const legPart = parts[4];
     const isArrivingLeg = legPart === "B";
+    const [co = "kmb"] = parts;
     
     // hasFare = should show fare badge (true for non-arriving legs)
     // The actual fare may or may not be loaded yet (deferred loading)
@@ -261,9 +264,9 @@ function groupEtasByVariant(
   // 2) ETA only (hasEta && (!hasFare || fare not loaded))
   // 3) No ETA
   // Within each tier, sort alphabetically by route number
-  const sortByRoute = (a: { key: string }, b: { key: string }) => {
-    const [routeA = ""] = a.key.split("|");
-    const [routeB = ""] = b.key.split("|");
+   const sortByRoute = (a: { key: string }, b: { key: string }) => {
+    const [, routeA = ""] = a.key.split("|");
+    const [, routeB = ""] = b.key.split("|");
     return routeA.localeCompare(routeB, undefined, { numeric: true });
   };
 
@@ -616,7 +619,7 @@ export function KmbPane({
 
     return variantKeys
       .map((key) => {
-        const [route = ""] = key.split("|");
+        const [, route = ""] = key.split("|");
         const label = pickRouteVariantLabel(kmbRouteInfos[key]);
         return {
           key,
@@ -641,8 +644,8 @@ export function KmbPane({
     const load = async () => {
       const fetched = await Promise.allSettled(
         missing.map(async (key) => {
-          const [route = "", direction = "", serviceType = ""] = key.split("|");
-          const info = await fetchKmbRouteInfo({ route, direction, serviceType });
+          const [co = "kmb", route = "", direction = "", serviceType = ""] = key.split("|");
+          const info = await fetchKmbRouteInfo({ co: co as Company, route, direction, serviceType });
           return { key, info };
         })
       );
@@ -693,7 +696,7 @@ export function KmbPane({
       if (advancedEntries.length) {
         const routesFromAdvanced = new Set(
           advancedEntries
-            .map((e) => e.variantKey.split("|")[0])
+            .map((e) => e.variantKey.split("|")[1])
             .filter(Boolean)
         );
         return Array.from(routesFromAdvanced).join(",");
@@ -739,7 +742,7 @@ export function KmbPane({
         if (advancedKeys) {
           etas = etas.filter((eta) => {
             // Use base key (without leg) for advanced filter matching
-            const key = `${(eta.route ?? "").toUpperCase()}|${eta.dir}|${String(eta.service_type)}`;
+            const key = `${String(eta.co ?? "kmb")}|${(eta.route ?? "").toUpperCase()}|${eta.dir}|${String(eta.service_type)}`;
             return advancedKeys.has(key);
           });
         }
@@ -780,16 +783,18 @@ export function KmbPane({
       const fareVariants: KmbFareVariant[] = [];
 
       for (const { stopId, eta } of allEtas) {
+        const co = String(eta.co ?? "kmb") as Company;
         const route = (eta.route ?? "").toUpperCase();
         const dir = String(eta.dir ?? "");
         const serviceType = String(eta.service_type ?? "");
-        const vKey = `${route}|${dir}|${serviceType}`;
+        const vKey = `${co}|${route}|${dir}|${serviceType}`;
 
         // Skip if we already have this fare or already queued it
         if (etaState.faresByVariantKey[vKey] || seenVariants.has(vKey)) continue;
         seenVariants.add(vKey);
 
         fareVariants.push({
+          co,
           route,
           dir,
           serviceType,
@@ -872,7 +877,8 @@ export function KmbPane({
           const variantKeysFromEtas = Array.from(
             new Set(
               allEtas.map(
-                (eta) => `${(eta.route ?? "").toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
+                (eta) =>
+                  `${String(eta.co ?? "kmb")}|${(eta.route ?? "").toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
               )
             )
           );
@@ -888,8 +894,8 @@ export function KmbPane({
           if (missingKeys.length && !controller.signal.aborted) {
             const fetched = await Promise.allSettled(
               missingKeys.slice(0, 30).map(async (key) => {
-                const [route = "", direction = "", serviceType = ""] = key.split("|");
-                const info = await fetchKmbRouteInfo({ route, direction, serviceType });
+                const [co = "kmb", route = "", direction = "", serviceType = ""] = key.split("|");
+                const info = await fetchKmbRouteInfo({ co: co as Company, route, direction, serviceType });
                 return { key, info };
               })
             );
@@ -1014,10 +1020,10 @@ export function KmbPane({
       onRouteFilterModeChange(nextRouteFilterMode);
     }
 
-    const restoredEntries = (selectedItem.entries ?? []).map((entry, idx) => ({
-      id: `restored-${idx}`,
-      variantKey: entry.variantKey,
-    }));
+      const restoredEntries = (selectedItem.entries ?? []).map((entry, idx) => ({
+        id: `restored-${idx}`,
+        variantKey: entry.variantKey.split("|").length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey,
+      }));
 
     setRouteFilter({
       routes: selectedItem.route ?? "",
@@ -1179,7 +1185,12 @@ export function KmbPane({
   }, [routeFilterMode, debouncedRoutes, kmbDraftStopSelection, kmbRouteStops.length]);
 
   const kmbResultsInfo = React.useMemo(() => {
-    if (!kmbQuery) return { title: "KMB ETAs", code: null };
+    if (!kmbQuery) {
+      return {
+        title: lang === "en" ? "Bus ETAs" : lang === "sc" ? "巴士到站预报" : "巴士到站預報",
+        code: null,
+      };
+    }
     if (kmbQuery.mode === "stop") {
       const stop = kmbStops.find((s) => s.stopId === kmbQuery.stopId);
       if (stop) {
@@ -1267,7 +1278,7 @@ export function KmbPane({
 
     if (stopId) {
       const stop = kmbStops.find((s) => s.stopId === stopId);
-      const fullName = stop ? pickKmbStopTitle(stop, lang) : "KMB";
+      const fullName = stop ? pickKmbStopTitle(stop, lang) : lang === "en" ? "Bus" : "巴士";
       const { name } = parseKmbStopName(fullName);
       const title = `${name}${routeSuffix}`;
 

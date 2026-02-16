@@ -3,7 +3,10 @@
 import { Clock, Info, Loader2, RefreshCw } from "lucide-react";
 import * as React from "react";
 
-import type { EtaGroup, PrecomputedGroups } from "@/components/eta/panes/kmb-pane";
+import type {
+  EtaGroup,
+  PrecomputedGroups,
+} from "@/components/eta/panes/kmb-pane";
 import { RouteBadge } from "@/components/eta/route-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +26,10 @@ import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { UiLanguage } from "@/lib/eta/types";
 import { cn } from "@/lib/utils";
 
-function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
+function pickLang(
+  fields: { en: string; tc: string; sc: string },
+  lang: UiLanguage,
+) {
   if (lang === "sc") return fields.sc;
   if (lang === "en") return fields.en;
   return fields.tc;
@@ -35,9 +41,9 @@ function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
     kmb: { en: "KMB", tc: "九巴", sc: "九巴" },
     ctb: { en: "CTB", tc: "城巴", sc: "城巴" },
     nwfb: { en: "NWFB", tc: "新巴", sc: "新巴" },
-    nlb: { en: "NLB", tc: "新大嶼山巴士", sc: "新大屿山巴士" },
-    gmb: { en: "GMB", tc: "專線小巴", sc: "专线小巴" },
-    lrtfeeder: { en: "LRTF", tc: "輕鐵接駁", sc: "轻铁接驳" },
+    nlb: { en: "NLB", tc: "嶼巴", sc: "新大屿山巴士" },
+    gmb: { en: "GMB", tc: "小巴", sc: "专线小巴" },
+    lrtfeeder: { en: "LRTF", tc: "港鐵巴士", sc: "轻铁接驳" },
     sunferry: { en: "SF", tc: "新渡輪", sc: "新渡轮" },
     hkkf: { en: "HKKF", tc: "港九小輪", sc: "港九小轮" },
     fortuneferry: { en: "FF", tc: "富裕小輪", sc: "富裕小轮" },
@@ -283,9 +289,14 @@ function RouteVariantCard({
 
   const i18n = {
     details: lang === "en" ? "Details" : lang === "sc" ? "詳情" : "詳情",
-    routeDetails: lang === "en" ? "Route details" : lang === "sc" ? "路線詳情" : "路線詳情",
+    routeDetails:
+      lang === "en" ? "Route details" : lang === "sc" ? "路線詳情" : "路線詳情",
     routeAndStopDetails:
-      lang === "en" ? "Route and stop details" : lang === "sc" ? "路線及車站詳情" : "路線及車站詳情",
+      lang === "en"
+        ? "Route and stop details"
+        : lang === "sc"
+          ? "路線及車站詳情"
+          : "路線及車站詳情",
     stop: lang === "en" ? "Stop" : lang === "sc" ? "車站" : "車站",
     operator: lang === "en" ? "Operator" : lang === "sc" ? "營辦商" : "營辦商",
     route: lang === "en" ? "Route" : lang === "sc" ? "路線" : "路線",
@@ -307,66 +318,68 @@ function RouteVariantCard({
           <Info className="h-4 w-4" />
         </button>
       </DialogTrigger>
-        <DialogContent className="rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-base">
-              {route} {destination ? `→ ${destination}` : label}
-            </DialogTitle>
-            <DialogDescription className="sr-only">
-              {i18n.routeAndStopDetails}
-            </DialogDescription>
-          </DialogHeader>
+      <DialogContent className="rounded-2xl">
+        <DialogHeader>
+          <DialogTitle className="text-base">
+            {route} {destination ? `→ ${destination}` : label}
+          </DialogTitle>
+          <DialogDescription className="sr-only">
+            {i18n.routeAndStopDetails}
+          </DialogDescription>
+        </DialogHeader>
 
-          <div className="space-y-4">
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">{i18n.stop}</div>
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="min-w-0 flex-1 truncate text-sm font-medium">
-                  {stopChips.name ?? i18n.unknown}
-                </div>
-                {stopChips.platform ? (
-                  <Badge
-                    variant="secondary"
-                    className="shrink-0 rounded-lg font-mono text-xs"
-                  >
-                    {stopChips.platform}
-                  </Badge>
-                ) : null}
-                {stopChips.stopCode ? (
-                  <Badge
-                    variant="secondary"
-                    className="shrink-0 rounded-lg font-mono text-xs"
-                  >
-                    {stopChips.stopCode}
-                  </Badge>
-                ) : null}
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">{i18n.stop}</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="min-w-0 flex-1 truncate text-sm font-medium">
+                {stopChips.name ?? i18n.unknown}
               </div>
+              {stopChips.platform ? (
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 rounded-lg font-mono text-xs"
+                >
+                  {stopChips.platform}
+                </Badge>
+              ) : null}
+              {stopChips.stopCode ? (
+                <Badge
+                  variant="secondary"
+                  className="shrink-0 rounded-lg font-mono text-xs"
+                >
+                  {stopChips.stopCode}
+                </Badge>
+              ) : null}
             </div>
-
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">{i18n.operator}</div>
-              <div className="text-sm">{formatOperatorLabel(first?.co ?? co, lang)}</div>
-            </div>
-
-            <div className="space-y-1">
-              <div className="text-xs text-muted-foreground">{i18n.route}</div>
-              <div className="text-sm">
-                {origin && destination
-                  ? `${origin} → ${destination}`
-                  : label || destination || i18n.unknown}
-              </div>
-            </div>
-
-            {fare ? (
-              <div className="space-y-1">
-                <div className="text-xs text-muted-foreground">{i18n.fare}</div>
-                <div className="text-sm font-medium">
-                  HK$ {fare.hkd.toFixed(1)}
-                </div>
-              </div>
-            ) : null}
           </div>
-        </DialogContent>
+
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">{i18n.operator}</div>
+            <div className="text-sm">
+              {formatOperatorLabel(first?.co ?? co, lang)}
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <div className="text-xs text-muted-foreground">{i18n.route}</div>
+            <div className="text-sm">
+              {origin && destination
+                ? `${origin} → ${destination}`
+                : label || destination || i18n.unknown}
+            </div>
+          </div>
+
+          {fare ? (
+            <div className="space-y-1">
+              <div className="text-xs text-muted-foreground">{i18n.fare}</div>
+              <div className="text-sm font-medium">
+                HK$ {fare.hkd.toFixed(1)}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </DialogContent>
     </Dialog>
   );
 
@@ -421,11 +434,11 @@ function RouteVariantCard({
     >
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-            <RouteBadge route={route} company={co} size="lg" />
-            {operatorBadge}
-            <Marquee className="min-w-0 flex-1 text-sm font-medium">
-              {label || "Route"}
-            </Marquee>
+          <RouteBadge route={route} company={co} size="lg" />
+          {operatorBadge}
+          <Marquee className="min-w-0 flex-1 text-sm font-medium">
+            {label || "Route"}
+          </Marquee>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div className="hidden items-center gap-2 sm:flex">
@@ -722,7 +735,7 @@ export function KmbResults({
       hasFare: boolean;
     };
     const hasFareLoaded = (g: GroupWithFare) =>
-    g.hasFare && faresByVariantKey && Boolean(faresByVariantKey[g.baseKey]);
+      g.hasFare && faresByVariantKey && Boolean(faresByVariantKey[g.baseKey]);
 
     // Tier 1: ETA + fare loaded
     const withEtaAndFare = groups
@@ -752,7 +765,12 @@ export function KmbResults({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <CardTitle className="truncate text-base">
-              {title || (lang === "en" ? "Bus ETAs" : lang === "sc" ? "巴士到站预报" : "巴士到站預報")}
+              {title ||
+                (lang === "en"
+                  ? "Bus ETAs"
+                  : lang === "sc"
+                    ? "巴士到站预报"
+                    : "巴士到站預報")}
             </CardTitle>
             {stopCode ? (
               <Badge

@@ -1,7 +1,20 @@
-import type { KmbEtaEntry, KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
 import type { Company } from "hk-bus-eta";
+
+import type { LrtScheduleResponse } from "@/lib/eta/lrt";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 import type { KmbStopSearchItem } from "@/lib/eta/types";
+import type { KmbEtaEntry, KmbRouteListEntry, KmbStop } from "@/lib/eta/kmb";
+import {
+  fetchKmbFares as fetchKmbFaresDirect,
+  fetchKmbStopEtas as fetchKmbStopEtasDirect,
+  getKmbEta,
+  getKmbRouteInfo,
+  getKmbRouteList,
+  getKmbRouteStops,
+  getKmbStops,
+} from "@/lib/eta/direct/kmb";
+import { getLrtSchedule } from "@/lib/eta/direct/lrt";
+import { fetchMtrSchedules as fetchMtrSchedulesDirect } from "@/lib/eta/direct/mtr";
 
 type DedupeKey = string;
 
@@ -9,33 +22,22 @@ const inFlightJson = new Map<DedupeKey, Promise<unknown>>();
 
 async function fetchJsonDedupe<T>(
   key: DedupeKey,
-  input: RequestInfo | URL,
-  init?: RequestInit
+  fetcher: () => Promise<T>,
+  options?: { signal?: AbortSignal }
 ): Promise<T> {
-  // If the caller passes an AbortSignal, do not dedupe.
-  // Otherwise, one caller aborting can inadvertently cancel a shared request,
-  // causing spurious "operation was aborted" errors.
-  if (init?.signal) {
-    const response = await fetch(input, init);
-    if (!response.ok) {
-      throw new Error(`Request failed: ${response.status}`);
+  if (options?.signal) {
+    if (options.signal.aborted) {
+      throw new DOMException("The operation was aborted.", "AbortError");
     }
-    return (await response.json()) as T;
+    return await fetcher();
   }
 
   const existing = inFlightJson.get(key);
   if (existing) return existing as Promise<T>;
 
-  const promise = fetch(input, init)
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`Request failed: ${response.status}`);
-      }
-      return (await response.json()) as T;
-    })
-    .finally(() => {
-      inFlightJson.delete(key);
-    });
+  const promise = fetcher().finally(() => {
+    inFlightJson.delete(key);
+  });
 
   inFlightJson.set(key, promise);
   return promise;
@@ -48,17 +50,9 @@ export type KmbEtaEntryWithLeg = KmbEtaEntry & {
 };
 
 export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
-  const response = await fetch("/api/kmb/stops", {
-    cache: "force-cache",
-  });
+  const stops = await getKmbStops();
 
-  if (!response.ok) {
-    throw new Error(`Failed to load stops: ${response.status}`);
-  }
-
-  const json = (await response.json()) as { stops: KmbStop[] };
-
-  return json.stops
+  return stops
     .map((s) => ({
       stopId: s.stop,
       nameEn: (s.name_en ?? "").trim(),
@@ -71,16 +65,7 @@ export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
 }
 
 export async function fetchKmbRoutes(): Promise<KmbRouteListEntry[]> {
-  const response = await fetch("/api/kmb/routes", {
-    cache: "force-cache",
-  });
-
-  if (!response.ok) {
-    throw new Error(`Failed to load routes: ${response.status}`);
-  }
-
-  const json = (await response.json()) as { routes: KmbRouteListEntry[] };
-  return json.routes;
+  return await getKmbRouteList();
 }
 
 export type KmbRouteStopLite = {
@@ -93,27 +78,11 @@ export type KmbRouteStopLite = {
 };
 
 export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
-  const response = await fetch("/api/kmb/route-stop", {
-    cache: "force-cache",
-  });
+  const routeStops = await getKmbRouteStops();
 
-  if (!response.ok) {
-    throw new Error(`Failed to load route-stop: ${response.status}`);
-  }
-
-  const json = (await response.json()) as {
-    data: Array<{
-      route: string;
-      bound: "I" | "O" | string;
-      service_type: number | string;
-      seq: number | string;
-      stop: string;
-    }>;
-  };
-
-  return json.data
+  return routeStops
     .map((entry) => ({
-      co: (entry as { co?: Company }).co ?? "kmb",
+      co: entry.co ?? "kmb",
       route: entry.route,
       bound: entry.bound,
       serviceType: String(entry.service_type),
@@ -141,24 +110,24 @@ export type KmbRouteInfoLite = {
 };
 
 export async function fetchKmbEtas(plans: Array<{ stopId: string; route: string; serviceType: string }>) {
-  const response = await fetch("/api/kmb/etas", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ plans }),
-  });
+  const results = await Promise.allSettled(
+    plans.map(async (plan) => ({ plan, eta: await getKmbEta(plan) }))
+  );
 
-  if (!response.ok) {
-    throw new Error(`Failed to load ETAs: ${response.status}`);
+  const eta: KmbEtaEntry[] = [];
+  const errors: Array<{ stopId: string; route: string; serviceType: string }> = [];
+
+  for (const result of results) {
+    if (result.status === "fulfilled") {
+      eta.push(...result.value.eta);
+    } else {
+      const index = results.indexOf(result);
+      const plan = plans[index];
+      if (plan) errors.push(plan);
+    }
   }
 
-  const json = (await response.json()) as {
-    eta: KmbEtaEntry[];
-    errors?: Array<{ stopId: string; route: string; serviceType: string }>;
-  };
-
-  return json;
+  return errors.length ? { eta, errors } : { eta };
 }
 
 export async function fetchKmbRouteInfo(params: {
@@ -167,47 +136,22 @@ export async function fetchKmbRouteInfo(params: {
   direction: "I" | "O" | "inbound" | "outbound" | string;
   serviceType: string;
 }): Promise<KmbRouteInfoLite> {
-  const query = new URLSearchParams();
-  if (params.co) query.set("co", params.co);
-  query.set("route", params.route);
-  query.set("direction", params.direction);
-  query.set("serviceType", params.serviceType);
-
-  const response = await fetch(`/api/kmb/route?${query.toString()}`);
-
-  if (!response.ok) {
-    throw new Error(`Failed to load route info: ${response.status}`);
-  }
-
-  const json = (await response.json()) as {
-    data: {
-      co?: Company;
-      route: string;
-      bound: "I" | "O" | string;
-      service_type: number | string;
-      orig_en: string;
-      orig_tc: string;
-      orig_sc: string;
-      dest_en: string;
-      dest_tc: string;
-      dest_sc: string;
-    };
-  };
+  const info = await getKmbRouteInfo(params);
 
   return {
-    co: json.data.co ?? params.co ?? "kmb",
-    route: json.data.route,
-    bound: json.data.bound,
-    serviceType: String(json.data.service_type),
+    co: info.co ?? params.co ?? "kmb",
+    route: info.route,
+    bound: info.bound,
+    serviceType: String(info.service_type),
     origin: {
-      en: (json.data.orig_en ?? "").trim(),
-      tc: (json.data.orig_tc ?? "").trim(),
-      sc: (json.data.orig_sc ?? "").trim(),
+      en: (info.orig_en ?? "").trim(),
+      tc: (info.orig_tc ?? "").trim(),
+      sc: (info.orig_sc ?? "").trim(),
     },
     destination: {
-      en: (json.data.dest_en ?? "").trim(),
-      tc: (json.data.dest_tc ?? "").trim(),
-      sc: (json.data.dest_sc ?? "").trim(),
+      en: (info.dest_en ?? "").trim(),
+      tc: (info.dest_tc ?? "").trim(),
+      sc: (info.dest_sc ?? "").trim(),
     },
   };
 }
@@ -235,17 +179,17 @@ export async function fetchKmbStopEtas(
     includeFares: options?.includeFares ?? false,
   };
 
-  const key = `POST:/api/kmb/stop-etas:${JSON.stringify(body)}`;
-  const json = await fetchJsonDedupe<KmbStopEtasResponse>(key, "/api/kmb/stop-etas", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal: options?.signal,
-  });
+  const key = `kmb:stop-etas:${JSON.stringify(body)}`;
 
-  return json;
+  return await fetchJsonDedupe(
+    key,
+    async () =>
+      fetchKmbStopEtasDirect(stopIds, {
+        routeFilter: options?.routeFilter,
+        includeFares: options?.includeFares ?? false,
+      }),
+    { signal: options?.signal }
+  );
 }
 
 /**
@@ -269,16 +213,13 @@ export async function fetchKmbFares(
   options?: { signal?: AbortSignal }
 ): Promise<KmbFaresResponse> {
   const body = { variants };
-  const key = `POST:/api/kmb/fares:${JSON.stringify(body)}`;
+  const key = `kmb:fares:${JSON.stringify(body)}`;
 
-  return await fetchJsonDedupe<KmbFaresResponse>(key, "/api/kmb/fares", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal: options?.signal,
-  });
+  return await fetchJsonDedupe(
+    key,
+    async () => fetchKmbFaresDirect(variants),
+    { signal: options?.signal }
+  );
 }
 
 /**
@@ -297,14 +238,23 @@ export async function fetchMtrSchedules(
   options?: { signal?: AbortSignal }
 ): Promise<MtrSchedulesResponse> {
   const body = { queries };
-  const key = `POST:/api/mtr/schedules:${JSON.stringify(body)}`;
+  const key = `mtr:schedules:${JSON.stringify(body)}`;
 
-  return await fetchJsonDedupe<MtrSchedulesResponse>(key, "/api/mtr/schedules", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(body),
-    signal: options?.signal,
-  });
+  return await fetchJsonDedupe(
+    key,
+    async () => fetchMtrSchedulesDirect(queries),
+    { signal: options?.signal }
+  );
+}
+
+export async function fetchLrtSchedule(
+  params: { stationId: string },
+  options?: { signal?: AbortSignal }
+): Promise<LrtScheduleResponse> {
+  const key = `lrt:schedule:${params.stationId}`;
+  return await fetchJsonDedupe(
+    key,
+    async () => getLrtSchedule({ stationId: params.stationId }),
+    { signal: options?.signal }
+  );
 }

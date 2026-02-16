@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { fetchLrtSchedule } from "@/lib/eta/client";
 import type { LrtScheduleResponse } from "@/lib/eta/lrt";
 import type { LrtStationSearchItem, UiLanguage } from "@/lib/eta/types";
 
@@ -33,19 +34,14 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
       try {
         setError(null);
 
-        const response = await fetch(
-          `/api/lrt/schedule?stationId=${encodeURIComponent(stationId)}`,
+        const schedule = await fetchLrtSchedule(
+          { stationId },
           { signal: controller.signal }
         );
 
         if (controller.signal.aborted) return;
 
-        if (!response.ok) {
-          throw new Error(`Failed to load schedule: ${response.status}`);
-        }
-
-        const json = (await response.json()) as { schedule: LrtScheduleResponse };
-        setSchedule(json.schedule);
+        setSchedule(schedule);
         setLastUpdatedAt(Date.now());
         setStale(false);
       } catch (error) {

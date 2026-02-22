@@ -1,67 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import { useShallow } from "zustand/react/shallow";
+import Panel from "@/components/Panel";
+import StatusBadge from "@/components/StatusBadge";
 import StopPicker, { type StopPickerOption } from "@/components/StopPicker";
 import { MTR_LINES, MTR_STATIONS_BY_LINE } from "@/data/mtr-lines";
-
-type BusCompany =
-  | "kmb"
-  | "ctb"
-  | "nlb"
-  | "gmb"
-  | "lrtfeeder"
-  | "sunferry"
-  | "hkkf"
-  | "fortuneferry";
-
-type BusRouteSummary = {
-  id: string;
-  route: string;
-  orig: string;
-  dest: string;
-  companies: BusCompany[];
-  serviceType: string;
-};
-
-type BusStopOption = {
-  seq: number;
-  stopIds: Partial<Record<BusCompany, string>>;
-  names: Partial<Record<BusCompany, string>>;
-};
-
-type BusStopData = {
-  companies: BusCompany[];
-  isJoint: boolean;
-  stops: BusStopOption[];
-};
-
-type BusEta = {
-  time: string;
-  remark: string;
-  company: BusCompany;
-  destination: string;
-};
-
-type MtrEta = {
-  time: string;
-  platform: string;
-  destination: string;
-  destinationCode: string;
-  sequence: string;
-  timetype?: string;
-  route?: string;
-};
-
-type MtrResponse = {
-  status: "ok" | "empty" | "error";
-  message: string;
-  isDelay: boolean | null;
-  lastUpdated: string | null;
-  line?: { code: string; name: string };
-  station?: { code: string; name: string };
-  up: MtrEta[];
-  down: MtrEta[];
-};
+import { TRANSLATIONS, type Language } from "@/i18n/translations";
+import { formatEtaTime, type TimeMode } from "@/lib/time";
+import type { BusCompany } from "@/lib/types";
+import { useEtaStore } from "@/stores/etaStore";
 
 const BUS_COMPANY_LABELS: Record<BusCompany, string> = {
   kmb: "KMB",
@@ -76,154 +24,8 @@ const BUS_COMPANY_LABELS: Record<BusCompany, string> = {
 
 const REFRESH_MS = 25000;
 
-const COPY = {
-  en: {
-    headingTag: "Hong Kong Transit",
-    headingTitle: "ETA Control Room",
-    headingBody:
-      "Plan your next ride with real-time bus and MTR heavy rail arrival data. Select a mode, then drill down to route and stop for the freshest ETA signals across the city.",
-    liveUpdate: "Live updates every 25 seconds",
-    modeTitle: "Transit mode",
-    modeSubtitle: "Choose your feed",
-    busMode: "Bus & Ferry",
-    mtrMode: "MTR Heavy Rail",
-    routeLabel: "Route number",
-    routePlaceholder: "e.g. 1, 101, A21",
-    search: "Search",
-    matchingRoutes: "Matching routes",
-    searchHint: "Search a route number to begin.",
-    searchError: "Unable to search routes right now.",
-    loadingRoutes: "Loading routes...",
-    stopPreference: "Stop name preference",
-    stopPreferenceKmb: "KMB names",
-    stopPreferenceCtb: "Citybus names",
-    stopLabel: "Stop",
-    stopPlaceholder: "Select a stop",
-    upcoming: "Upcoming arrivals",
-    updating: "Updating...",
-    noEta: "No ETA available yet.",
-    etaError: "Service unavailable. Try again shortly.",
-    destinationMissing: "Destination unavailable",
-    lineLabel: "Line",
-    stationLabel: "Station",
-    selectLine: "Select line",
-    selectStation: "Select station",
-    heavyRail: "Heavy Rail ETA",
-    delay: "Delay reported",
-    onTime: "On time",
-    loadingMtr: "Loading ETA...",
-    chooseLineStation: "Choose line and station",
-    noTrains: "No trains listed.",
-    viewTitle: "Live ETA",
-    viewSubtitle: "Monitor arrivals in real time",
-    countdown: "Countdown",
-    exact: "Exact time",
-    due: "Due",
-    minutes: "min",
-    hours: "h",
-    language: "Language",
-    timeMode: "Time display",
-    operator: "Operator",
-    stopSearch: "Search stops",
-    noStops: "No stops found.",
-  },
-  tc: {
-    headingTag: "香港公共交通",
-    headingTitle: "到站時間中心",
-    headingBody:
-      "即時巴士及港鐵重鐵到站資訊。選擇模式後，再選路線及車站以獲得最新到站時間。",
-    liveUpdate: "每 25 秒更新",
-    modeTitle: "交通模式",
-    modeSubtitle: "選擇訊號",
-    busMode: "巴士及渡輪",
-    mtrMode: "港鐵重鐵",
-    routeLabel: "路線編號",
-    routePlaceholder: "例如 1、101、A21",
-    search: "搜尋",
-    matchingRoutes: "匹配路線",
-    searchHint: "請先輸入路線編號。",
-    searchError: "暫時無法搜尋路線。",
-    loadingRoutes: "載入路線...",
-    stopPreference: "站名偏好",
-    stopPreferenceKmb: "九巴站名",
-    stopPreferenceCtb: "城巴站名",
-    stopLabel: "車站",
-    stopPlaceholder: "選擇車站",
-    upcoming: "即將到站",
-    updating: "更新中...",
-    noEta: "暫無到站時間。",
-    etaError: "服務暫時不可用，請稍後再試。",
-    destinationMissing: "未有目的地",
-    lineLabel: "路線",
-    stationLabel: "車站",
-    selectLine: "選擇路線",
-    selectStation: "選擇車站",
-    heavyRail: "港鐵重鐵到站",
-    delay: "延誤",
-    onTime: "正常",
-    loadingMtr: "載入到站資訊...",
-    chooseLineStation: "選擇路線及車站",
-    noTrains: "暫無班次",
-    viewTitle: "即時到站",
-    viewSubtitle: "實時監察到站情況",
-    countdown: "倒數",
-    exact: "準確時間",
-    due: "即將到站",
-    minutes: "分鐘",
-    hours: "小時",
-    language: "語言",
-    timeMode: "時間顯示",
-    operator: "營辦商",
-    stopSearch: "搜尋車站",
-    noStops: "找不到車站。",
-  },
-} as const;
-
-type Language = keyof typeof COPY;
-type TimeMode = "countdown" | "exact";
-
-function parseTime(value: string) {
-  if (!value || value === "-") return null;
-  if (value.includes("T")) {
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  const match = value.match(/^(\d{4}-\d{2}-\d{2}) (\d{2}:\d{2}:\d{2})$/);
-  if (match) {
-    const parsed = new Date(`${match[1]}T${match[2]}+08:00`);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-  }
-
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function formatEtaTime(value: string, mode: TimeMode, language: Language) {
-  const labels = COPY[language];
-  const parsed = parseTime(value);
-  if (!parsed) return value || "-";
-
-  if (mode === "exact") {
-    return new Intl.DateTimeFormat(language === "tc" ? "zh-HK" : "en-HK", {
-      hour: "2-digit",
-      minute: "2-digit",
-    }).format(parsed);
-  }
-
-  const diffMs = parsed.getTime() - Date.now();
-  if (diffMs <= 0) return labels.due;
-  const totalMinutes = Math.max(1, Math.round(diffMs / 60000));
-  if (totalMinutes < 60) return `${totalMinutes} ${labels.minutes}`;
-  const hours = Math.floor(totalMinutes / 60);
-  const minutes = totalMinutes % 60;
-  return minutes
-    ? `${hours}${labels.hours} ${minutes} ${labels.minutes}`
-    : `${hours}${labels.hours}`;
-}
-
 function buildStopOptions(
-  data: BusStopData | null,
+  data: ReturnType<typeof useEtaStore.getState>["busStopData"],
   language: Language,
   preference: BusCompany | null,
 ): StopPickerOption[] {
@@ -257,208 +59,135 @@ function buildStopOptions(
 }
 
 export default function Home() {
-  const [mode, setMode] = useState<"bus" | "mtr">("bus");
-  const [language, setLanguage] = useState<Language>("en");
-  const [timeMode, setTimeMode] = useState<TimeMode>("countdown");
-
-  const labels = COPY[language];
-
-  const [busQuery, setBusQuery] = useState("");
-  const [busRoutes, setBusRoutes] = useState<BusRouteSummary[]>([]);
-  const [busRouteStatus, setBusRouteStatus] = useState<
-    "idle" | "loading" | "error"
-  >("idle");
-  const [selectedRoute, setSelectedRoute] = useState<BusRouteSummary | null>(
-    null,
+  const {
+    mode,
+    language,
+    timeMode,
+    busQuery,
+    busRoutes,
+    busRouteStatus,
+    selectedRoute,
+    busStopData,
+    stopPreference,
+    selectedStopSeq,
+    busEtas,
+    busEtaStatus,
+    mtrLine,
+    mtrStation,
+    mtrResponse,
+    mtrStatus,
+    lastBusFetchAt,
+    lastMtrFetchAt,
+    setMode,
+    setLanguage,
+    setTimeMode,
+    setBusQuery,
+    resetBusSelection,
+    searchRoutes,
+    selectRoute,
+    loadStops,
+    setStopPreference,
+    setSelectedStopSeq,
+    loadBusEtas,
+    setMtrLine,
+    setMtrStation,
+    loadMtr,
+  } = useEtaStore(
+    useShallow((state) => ({
+      mode: state.mode,
+      language: state.language,
+      timeMode: state.timeMode,
+      busQuery: state.busQuery,
+      busRoutes: state.busRoutes,
+      busRouteStatus: state.busRouteStatus,
+      selectedRoute: state.selectedRoute,
+      busStopData: state.busStopData,
+      stopPreference: state.stopPreference,
+      selectedStopSeq: state.selectedStopSeq,
+      busEtas: state.busEtas,
+      busEtaStatus: state.busEtaStatus,
+      mtrLine: state.mtrLine,
+      mtrStation: state.mtrStation,
+      mtrResponse: state.mtrResponse,
+      mtrStatus: state.mtrStatus,
+      lastBusFetchAt: state.lastBusFetchAt,
+      lastMtrFetchAt: state.lastMtrFetchAt,
+      setMode: state.setMode,
+      setLanguage: state.setLanguage,
+      setTimeMode: state.setTimeMode,
+      setBusQuery: state.setBusQuery,
+      resetBusSelection: state.resetBusSelection,
+      searchRoutes: state.searchRoutes,
+      selectRoute: state.selectRoute,
+      loadStops: state.loadStops,
+      setStopPreference: state.setStopPreference,
+      setSelectedStopSeq: state.setSelectedStopSeq,
+      loadBusEtas: state.loadBusEtas,
+      setMtrLine: state.setMtrLine,
+      setMtrStation: state.setMtrStation,
+      loadMtr: state.loadMtr,
+    })),
   );
-  const [busStopData, setBusStopData] = useState<BusStopData | null>(null);
-  const [stopPreference, setStopPreference] = useState<BusCompany | null>(null);
-  const [selectedStop, setSelectedStop] = useState<StopPickerOption | null>(null);
-  const [busEtas, setBusEtas] = useState<BusEta[]>([]);
-  const [busEtaStatus, setBusEtaStatus] = useState<
-    "idle" | "loading" | "error"
-  >("idle");
-  const [busEtaMessage, setBusEtaMessage] = useState("");
 
-  const [mtrLine, setMtrLine] = useState("");
-  const [mtrStation, setMtrStation] = useState("");
-  const [mtrResponse, setMtrResponse] = useState<MtrResponse | null>(null);
-  const [mtrStatus, setMtrStatus] = useState<
-    "idle" | "loading" | "error"
-  >("idle");
+  const labels = TRANSLATIONS[language];
+  const previousLanguageRef = useRef(language);
+  const stopOptions = useMemo(
+    () => buildStopOptions(busStopData, language, stopPreference),
+    [busStopData, language, stopPreference],
+  );
+  const selectedStop = useMemo(
+    () => stopOptions.find((option) => option.seq === selectedStopSeq) ?? null,
+    [stopOptions, selectedStopSeq],
+  );
 
   const availableStations = useMemo(
     () => (mtrLine ? MTR_STATIONS_BY_LINE[mtrLine] ?? [] : []),
     [mtrLine],
   );
 
-  const stopOptions = useMemo(
-    () => buildStopOptions(busStopData, language, stopPreference),
-    [busStopData, language, stopPreference],
-  );
+  const busStale =
+    lastBusFetchAt && Date.now() - lastBusFetchAt > REFRESH_MS * 2;
+  const mtrStale =
+    lastMtrFetchAt && Date.now() - lastMtrFetchAt > REFRESH_MS * 2;
 
   useEffect(() => {
-    if (!selectedStop) return;
-    const next = stopOptions.find((option) => option.seq === selectedStop.seq);
-    if (next && next.label !== selectedStop.label) {
-      setSelectedStop(next);
-    }
-  }, [stopOptions, selectedStop]);
-
-  async function fetchRoutes(query: string) {
-    const response = await fetch(
-      `/api/bus?action=search&query=${encodeURIComponent(query)}&lang=${language}`,
-    );
-    const payload = await response.json();
-    if (!response.ok || payload.status !== "ok") {
-      throw new Error(payload.message ?? "Unable to search routes.");
-    }
-    return payload.routes as BusRouteSummary[];
-  }
-
-  async function handleBusSearch(event: React.FormEvent) {
-    event.preventDefault();
-    const query = busQuery.trim();
-    if (!query) return;
-    setBusRouteStatus("loading");
-    setBusRoutes([]);
-    setSelectedRoute(null);
-    setBusStopData(null);
-    setSelectedStop(null);
-    setBusEtas([]);
-    setBusEtaMessage("");
-
-    try {
-      const routes = await fetchRoutes(query);
-      setBusRoutes(routes ?? []);
-      setBusRouteStatus("idle");
-    } catch (error) {
-      setBusRouteStatus("error");
-    }
-  }
+    if (!selectedRoute) return;
+    void loadStops(selectedRoute.id);
+  }, [selectedRoute, loadStops, language]);
 
   useEffect(() => {
-    async function loadStops() {
-      if (!selectedRoute) return;
-      setBusStopData(null);
-      setSelectedStop(null);
-      setBusEtas([]);
-      setBusEtaMessage("");
-      setBusEtaStatus("idle");
+    if (previousLanguageRef.current === language) return;
+    previousLanguageRef.current = language;
+    if (!busQuery.trim()) return;
+    void searchRoutes(busQuery);
+  }, [language, busQuery, searchRoutes]);
 
-      const response = await fetch(
-        `/api/bus?action=stops&routeId=${encodeURIComponent(
-          selectedRoute.id,
-        )}&lang=${language}`,
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (selectedRoute && selectedStopSeq !== null) {
+      void loadBusEtas(selectedRoute.id, selectedStopSeq);
+      timer = setInterval(
+        () => loadBusEtas(selectedRoute.id, selectedStopSeq),
+        REFRESH_MS,
       );
-      const payload = await response.json();
-      if (!response.ok || payload.status !== "ok") {
-        return;
-      }
-
-      setBusStopData({
-        companies: payload.companies ?? [],
-        isJoint: payload.isJoint ?? false,
-        stops: payload.stops ?? [],
-      });
-
-      if (payload.isJoint) {
-        setStopPreference("kmb");
-      } else if (payload.companies?.length) {
-        setStopPreference(payload.companies[0]);
-      } else {
-        setStopPreference(null);
-      }
-    }
-
-    void loadStops();
-  }, [selectedRoute, language]);
-
-  useEffect(() => {
-    if (!busQuery) return;
-    if (busRoutes.length === 0 && busRouteStatus === "idle") return;
-    void (async () => {
-      try {
-        const routes = await fetchRoutes(busQuery.trim());
-        setBusRoutes(routes ?? []);
-      } catch (error) {
-        setBusRouteStatus("error");
-      }
-    })();
-  }, [language]);
-
-  useEffect(() => {
-    let active = true;
-    let interval: NodeJS.Timeout | null = null;
-
-    async function loadEtas() {
-      if (!selectedRoute || !selectedStop) return;
-      setBusEtaStatus("loading");
-      try {
-        const response = await fetch(
-          `/api/bus?action=eta&routeId=${encodeURIComponent(
-            selectedRoute.id,
-          )}&seq=${selectedStop.seq}&lang=${language}`,
-        );
-        const payload = await response.json();
-        if (!active) return;
-        if (!response.ok || payload.status !== "ok") {
-          throw new Error(payload.message ?? "Unable to load ETA.");
-        }
-        setBusEtas(payload.etas ?? []);
-        setBusEtaMessage(payload.etas?.length ? "" : labels.noEta);
-        setBusEtaStatus("idle");
-      } catch (error) {
-        if (!active) return;
-        setBusEtaStatus("error");
-        setBusEtaMessage(labels.etaError);
-      }
-    }
-
-    if (selectedRoute && selectedStop) {
-      void loadEtas();
-      interval = setInterval(loadEtas, REFRESH_MS);
     }
 
     return () => {
-      active = false;
-      if (interval) clearInterval(interval);
+      if (timer) clearInterval(timer);
     };
-  }, [selectedRoute, selectedStop, language, labels]);
+  }, [selectedRoute, selectedStopSeq, loadBusEtas, language]);
 
   useEffect(() => {
-    let active = true;
-    let interval: NodeJS.Timeout | null = null;
-
-    async function loadMtr() {
-      if (!mtrLine || !mtrStation) return;
-      setMtrStatus("loading");
-      try {
-        const response = await fetch(
-          `/api/mtr?line=${encodeURIComponent(
-            mtrLine,
-          )}&station=${encodeURIComponent(mtrStation)}&lang=${language}`,
-        );
-        const payload = (await response.json()) as MtrResponse;
-        if (!active) return;
-        setMtrResponse(payload);
-        setMtrStatus(response.ok ? "idle" : "error");
-      } catch (error) {
-        if (!active) return;
-        setMtrStatus("error");
-      }
-    }
-
+    let timer: NodeJS.Timeout | null = null;
     if (mtrLine && mtrStation) {
-      void loadMtr();
-      interval = setInterval(loadMtr, REFRESH_MS);
+      void loadMtr(mtrLine, mtrStation);
+      timer = setInterval(() => loadMtr(mtrLine, mtrStation), REFRESH_MS);
     }
 
     return () => {
-      active = false;
-      if (interval) clearInterval(interval);
+      if (timer) clearInterval(timer);
     };
-  }, [mtrLine, mtrStation, language]);
+  }, [mtrLine, mtrStation, loadMtr, language]);
 
   return (
     <div className="min-h-screen">
@@ -483,7 +212,7 @@ export default function Home() {
                     key={option.key}
                     type="button"
                     onClick={() => setLanguage(option.key)}
-                    className={`rounded-full px-4 py-2 font-semibold transition ${
+                    className={`ui-press rounded-full px-4 py-2 font-semibold transition ${
                       language === option.key
                         ? "bg-[var(--accent)] text-white"
                         : "text-[var(--muted)]"
@@ -501,8 +230,8 @@ export default function Home() {
                   <button
                     key={option.key}
                     type="button"
-                    onClick={() => setTimeMode(option.key)}
-                    className={`rounded-full px-4 py-2 font-semibold transition ${
+                    onClick={() => setTimeMode(option.key as TimeMode)}
+                    className={`ui-press rounded-full px-4 py-2 font-semibold transition ${
                       timeMode === option.key
                         ? "bg-[var(--accent)] text-white"
                         : "text-[var(--muted)]"
@@ -523,9 +252,9 @@ export default function Home() {
           </div>
         </header>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-[0.8fr_1.4fr]">
-          <section className="space-y-6">
-            <div className="rounded-3xl border border-[var(--line)] bg-white/80 p-6 shadow-sm">
+        <div className="mt-10 grid gap-6 lg:grid-cols-[420px_1fr]">
+          <div className="space-y-6 lg:sticky lg:top-6">
+            <Panel className="bg-white/80">
               <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
                 {labels.modeTitle}
               </p>
@@ -542,7 +271,7 @@ export default function Home() {
                       key={option.key}
                       type="button"
                       onClick={() => setMode(option.key)}
-                      className={`rounded-full px-4 py-2 text-sm font-medium transition ${
+                      className={`ui-press rounded-full px-4 py-2 text-sm font-medium transition ${
                         mode === option.key
                           ? "bg-[var(--accent)] text-white shadow"
                           : "text-[var(--muted)] hover:text-[var(--foreground)]"
@@ -554,11 +283,18 @@ export default function Home() {
                   ))}
                 </div>
               </div>
-            </div>
+            </Panel>
 
             {mode === "bus" ? (
-              <div className="rounded-3xl border border-[var(--line)] bg-[var(--card)] p-6 shadow-[0_20px_60px_rgba(23,20,14,0.08)]">
-                <form onSubmit={handleBusSearch} className="space-y-3">
+              <Panel>
+                <form
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    resetBusSelection();
+                    void searchRoutes(busQuery);
+                  }}
+                  className="space-y-3"
+                >
                   <label className="text-sm font-medium text-[var(--foreground)]">
                     {labels.routeLabel}
                   </label>
@@ -571,7 +307,7 @@ export default function Home() {
                     />
                     <button
                       type="submit"
-                      className="rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
+                      className="ui-press rounded-2xl bg-[var(--accent)] px-6 py-3 text-sm font-semibold text-white transition hover:bg-[var(--accent-strong)]"
                     >
                       {labels.search}
                     </button>
@@ -597,19 +333,15 @@ export default function Home() {
                       {labels.searchHint}
                     </p>
                   )}
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="grid gap-3">
                     {busRoutes.map((route) => (
                       <button
                         key={route.id}
                         type="button"
-                        onClick={() => {
-                          setSelectedRoute(route);
-                          setBusStopData(null);
-                          setSelectedStop(null);
-                        }}
-                        className={`rounded-2xl border px-4 py-3 text-left transition ${
+                        onClick={() => selectRoute(route)}
+                        className={`ui-lift rounded-2xl border px-4 py-3 text-left transition ${
                           selectedRoute?.id === route.id
-                            ? "border-[var(--accent)] bg-white shadow"
+                            ? "border-[var(--accent)] bg-white"
                             : "border-[var(--line)] bg-white/70 hover:border-[var(--accent)]"
                         }`}
                       >
@@ -630,7 +362,7 @@ export default function Home() {
                 </div>
 
                 {selectedRoute && (
-                  <div className="mt-6 space-y-4 rounded-2xl border border-[var(--line)] bg-white/80 p-4">
+                  <div className="mt-6 space-y-4 rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -649,7 +381,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => setStopPreference("kmb")}
-                              className={`rounded-full px-3 py-1 font-semibold transition ${
+                              className={`ui-press rounded-full px-3 py-1 font-semibold transition ${
                                 stopPreference === "kmb"
                                   ? "bg-[var(--accent)] text-white"
                                   : "text-[var(--muted)]"
@@ -660,7 +392,7 @@ export default function Home() {
                             <button
                               type="button"
                               onClick={() => setStopPreference("ctb")}
-                              className={`rounded-full px-3 py-1 font-semibold transition ${
+                              className={`ui-press rounded-full px-3 py-1 font-semibold transition ${
                                 stopPreference === "ctb"
                                   ? "bg-[var(--accent)] text-white"
                                   : "text-[var(--muted)]"
@@ -679,24 +411,20 @@ export default function Home() {
                       emptyLabel={labels.noStops}
                       options={stopOptions}
                       value={selectedStop}
-                      onChange={setSelectedStop}
+                      onChange={(option) => setSelectedStopSeq(option.seq)}
                       disabled={!busStopData}
                     />
                   </div>
                 )}
-              </div>
+              </Panel>
             ) : (
-              <div className="rounded-3xl border border-[var(--line)] bg-[var(--card)] p-6 shadow-[0_20px_60px_rgba(23,20,14,0.08)]">
+              <Panel>
                 <div className="grid gap-4">
                   <label className="text-sm font-medium text-[var(--foreground)]">
                     {labels.lineLabel}
                     <select
                       value={mtrLine}
-                      onChange={(event) => {
-                        setMtrLine(event.target.value);
-                        setMtrStation("");
-                        setMtrResponse(null);
-                      }}
+                      onChange={(event) => setMtrLine(event.target.value)}
                       className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white px-4 py-3 text-sm"
                     >
                       <option value="">{labels.selectLine}</option>
@@ -724,11 +452,11 @@ export default function Home() {
                     </select>
                   </label>
                 </div>
-              </div>
+              </Panel>
             )}
-          </section>
+          </div>
 
-          <section className="rounded-3xl border border-[var(--line)] bg-white/80 p-6 shadow-[0_20px_60px_rgba(23,20,14,0.08)]">
+          <Panel className="min-h-[520px]">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
@@ -739,56 +467,65 @@ export default function Home() {
                 </h2>
               </div>
               {mode === "mtr" && mtrResponse?.isDelay !== null && (
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    mtrResponse.isDelay
-                      ? "bg-[var(--accent-warm)] text-white"
-                      : "bg-[var(--accent)] text-white"
-                  }`}
-                >
-                  {mtrResponse.isDelay ? labels.delay : labels.onTime}
-                </span>
+                <StatusBadge
+                  label={mtrResponse.isDelay ? labels.delay : labels.onTime}
+                  tone={mtrResponse.isDelay ? "warning" : "info"}
+                />
               )}
             </div>
 
             {mode === "bus" ? (
-              <div className="mt-6 space-y-4">
+              <div className="mt-6 space-y-4" aria-live="polite">
                 {!selectedRoute && (
                   <p className="text-sm text-[var(--muted)]">
                     {labels.searchHint}
                   </p>
                 )}
-                {selectedRoute && !selectedStop && (
+                {selectedRoute && selectedStopSeq === null && (
                   <p className="text-sm text-[var(--muted)]">
                     {labels.stopPlaceholder}
                   </p>
                 )}
-                {selectedRoute && selectedStop && (
-                  <div className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4">
+                {selectedRoute && selectedStopSeq !== null && (
+                  <div className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-[var(--foreground)]">
                         {labels.upcoming}
                       </p>
                       {busEtaStatus === "loading" && (
-                        <span className="text-xs text-[var(--muted)]">
+                        <span className="text-xs text-[var(--muted)] ui-pulse">
                           {labels.updating}
                         </span>
                       )}
                     </div>
-                    {busEtaMessage && (
-                      <p className="mt-2 text-sm text-[var(--muted)]">
-                        {busEtaMessage}
+                    {busStale && (
+                      <p className="mt-2 text-xs text-[var(--accent-warm)]">
+                        {labels.staleData}
                       </p>
                     )}
                     <div className="mt-3 space-y-2">
+                      {busEtas.length === 0 && busEtaStatus === "idle" && (
+                        <p className="text-sm text-[var(--muted)]">
+                          {labels.noEta}
+                        </p>
+                      )}
                       {busEtas.map((eta, index) => (
                         <div
                           key={`${eta.time}-${index}`}
-                          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-sm"
+                          className="ui-animate-in flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-sm"
                         >
                           <div>
-                            <p className="text-lg font-semibold text-[var(--foreground)]">
-                              {formatEtaTime(eta.time, timeMode, language)}
+                            <p className="text-lg font-semibold text-[var(--foreground)] tabular-nums">
+                              {formatEtaTime(
+                                eta.time,
+                                timeMode,
+                                {
+                                  due: labels.due,
+                                  minutes: labels.minutes,
+                                  hours: labels.hours,
+                                },
+                                language === "tc" ? "zh-HK" : "en-HK",
+                              )}
                             </p>
                             <p className="text-xs text-[var(--muted)]">
                               {eta.destination || labels.destinationMissing}
@@ -812,7 +549,7 @@ export default function Home() {
                 )}
               </div>
             ) : (
-              <div className="mt-6 space-y-4">
+              <div className="mt-6 space-y-4" aria-live="polite">
                 <div>
                   <p className="text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
                     {labels.heavyRail}
@@ -824,7 +561,19 @@ export default function Home() {
                   </p>
                 </div>
                 {mtrStatus === "loading" && (
-                  <p className="text-sm text-[var(--muted)]">{labels.loadingMtr}</p>
+                  <p className="text-sm text-[var(--muted)] ui-pulse">
+                    {labels.loadingMtr}
+                  </p>
+                )}
+                {mtrStale && (
+                  <p className="text-xs text-[var(--accent-warm)]">
+                    {labels.staleData}
+                  </p>
+                )}
+                {mtrResponse?.lastUpdated && (
+                  <p className="text-xs text-[var(--muted)]">
+                    {labels.lastUpdated}: {mtrResponse.lastUpdated}
+                  </p>
                 )}
                 {mtrResponse?.message && mtrResponse.status !== "ok" && (
                   <p className="text-sm text-[var(--accent-warm)]">
@@ -844,7 +593,7 @@ export default function Home() {
                     ].map((direction) => (
                       <div
                         key={direction.label}
-                        className="rounded-2xl border border-[var(--line)] bg-[var(--card)] p-4"
+                        className="rounded-2xl border border-[var(--line)] bg-[var(--surface-2)] p-4"
                       >
                         <div className="flex items-center justify-between text-xs uppercase tracking-[0.3em] text-[var(--muted)]">
                           <span>{direction.label}</span>
@@ -854,11 +603,20 @@ export default function Home() {
                           {direction.entries.map((entry, index) => (
                             <div
                               key={`${entry.time}-${index}`}
-                              className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-sm"
+                              className="ui-animate-in flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--line)] bg-white px-4 py-3 text-sm"
                             >
                               <div>
-                                <p className="text-lg font-semibold text-[var(--foreground)]">
-                                  {formatEtaTime(entry.time, timeMode, language)}
+                                <p className="text-lg font-semibold text-[var(--foreground)] tabular-nums">
+                                  {formatEtaTime(
+                                    entry.time,
+                                    timeMode,
+                                    {
+                                      due: labels.due,
+                                      minutes: labels.minutes,
+                                      hours: labels.hours,
+                                    },
+                                    language === "tc" ? "zh-HK" : "en-HK",
+                                  )}
                                 </p>
                                 <p className="text-xs text-[var(--muted)]">
                                   {entry.destination || entry.destinationCode}
@@ -881,7 +639,7 @@ export default function Home() {
                 )}
               </div>
             )}
-          </section>
+          </Panel>
         </div>
       </div>
     </div>

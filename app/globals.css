@@ -4,11 +4,16 @@
   --background: #f6f1ea;
   --foreground: #191815;
   --card: #fff9f2;
+  --surface-1: #fffaf4;
+  --surface-2: #f9f2e8;
   --muted: #6b6358;
   --accent: #0b6f6f;
   --accent-strong: #0a4f4f;
   --accent-warm: #d96a4a;
   --line: #e3d8cc;
+  --radius-card: 24px;
+  --shadow-card: 0 20px 60px rgba(23, 20, 14, 0.08);
+  --shadow-soft: 0 10px 30px rgba(23, 20, 14, 0.08);
 }
 
 @theme inline {
@@ -41,4 +46,52 @@ a {
 
 button {
   font-family: inherit;
+}
+
+@keyframes ui-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-pulse {
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
+}
+
+.ui-animate-in {
+  animation: ui-fade-up 0.35s ease both;
+}
+
+.ui-pulse {
+  animation: ui-pulse 1.4s ease-in-out infinite;
+}
+
+.ui-lift {
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.ui-lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-soft);
+}
+
+.ui-press {
+  transition: transform 100ms ease;
+}
+
+.ui-press:active {
+  transform: scale(0.98);
 }

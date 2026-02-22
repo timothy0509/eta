@@ -1,5 +1,6 @@
 import { fetchEtaDb, fetchEtas } from "hk-bus-eta";
 import type { Company, Eta, EtaDb, RouteListEntry } from "hk-bus-eta";
+import { parseTime } from "@/lib/time";
 
 const CACHE_TTL_MS = 1000 * 60 * 30;
 let cachedEtaDb: EtaDb | null = null;
@@ -47,6 +48,14 @@ export type BusEtaNormalized = {
   company: BusCompany;
   destination: string;
 };
+
+function sortEtas(entries: BusEtaNormalized[]): BusEtaNormalized[] {
+  return [...entries].sort((a, b) => {
+    const timeA = parseTime(a.time)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const timeB = parseTime(b.time)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    return timeA - timeB;
+  });
+}
 
 export function isBusCompany(value: string | null): value is BusCompany {
   if (!value) return false;
@@ -203,11 +212,15 @@ export async function getRouteEtas(
     serviceDayMap: etaDb.serviceDayMap,
   });
 
-  return etas.map((eta: Eta) => ({
+  const normalized = etas
+    .filter((eta: Eta) => eta.eta && eta.eta !== "-")
+    .map((eta: Eta) => ({
     time: eta.eta,
     remark: language === "zh" ? eta.remark?.zh ?? "" : eta.remark?.en ?? "",
     company: eta.co as BusCompany,
     destination:
       language === "zh" ? eta.dest?.zh ?? "" : eta.dest?.en ?? "",
   }));
+
+  return sortEtas(normalized);
 }

@@ -1,4 +1,5 @@
 import { MTR_LINES, MTR_STATION_NAME_BY_CODE } from "@/data/mtr-lines";
+import { parseTime } from "@/lib/time";
 
 export type MtrEta = {
   time: string;
@@ -50,7 +51,7 @@ type MtrRawResponse = {
 };
 
 function normalizeEntries(entries: MtrRawEta[] = []): MtrEta[] {
-  return entries
+  const normalized = entries
     .filter((entry) => entry.time && entry.time !== "-")
     .map((entry) => ({
       time: entry.time ?? "",
@@ -63,6 +64,12 @@ function normalizeEntries(entries: MtrRawEta[] = []): MtrEta[] {
       timetype: entry.timetype,
       route: entry.route,
     }));
+
+  return normalized.sort((a, b) => {
+    const timeA = parseTime(a.time)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const timeB = parseTime(b.time)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    return timeA - timeB;
+  });
 }
 
 function getLineMeta(line: string) {

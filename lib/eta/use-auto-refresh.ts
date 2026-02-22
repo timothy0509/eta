@@ -15,15 +15,21 @@ export function useAutoRefresh(refreshMs: number, refresh: () => void) {
   React.useEffect(() => {
     if (!refreshMs) return;
 
-    let interval: ReturnType<typeof setInterval> | undefined;
     let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    let lastRefreshTime = Date.now();
+
+    const refreshWithTimestamp = () => {
+      refresh();
+      lastRefreshTime = Date.now();
+    };
 
     const scheduleNext = () => {
       // Add jitter to each interval to prevent synchronized refreshes
       const nextMs = addJitter(refreshMs);
       timeout = setTimeout(() => {
         if (document.visibilityState === "visible") {
-          refresh();
+          refreshWithTimestamp();
         }
         scheduleNext();
       }, nextMs);
@@ -33,14 +39,12 @@ export function useAutoRefresh(refreshMs: number, refresh: () => void) {
 
     // Handle visibility change - refresh immediately when tab becomes visible
     // but only if enough time has passed since last refresh
-    let lastRefreshTime = Date.now();
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         const elapsed = Date.now() - lastRefreshTime;
         // Only refresh if at least 30% of the interval has passed
         if (elapsed > refreshMs * 0.3) {
-          refresh();
-          lastRefreshTime = Date.now();
+          refreshWithTimestamp();
         }
       }
     };
@@ -48,7 +52,6 @@ export function useAutoRefresh(refreshMs: number, refresh: () => void) {
     document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
-      if (interval) clearInterval(interval);
       if (timeout) clearTimeout(timeout);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };

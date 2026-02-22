@@ -331,11 +331,12 @@ export async function fetchKmbStopEtas(
     return { stopId, eta: cachedValue.value };
   });
 
-  for (const result of results) {
+  for (let i = 0; i < results.length; i += 1) {
+    const result = results[i];
     if (result.status === "rejected") {
-      const idx = results.indexOf(result);
-      if (idx >= 0 && uniqueStopIds[idx]) {
-        errors.push(uniqueStopIds[idx]);
+      const stopId = uniqueStopIds[i];
+      if (stopId) {
+        errors.push(stopId);
       }
       continue;
     }

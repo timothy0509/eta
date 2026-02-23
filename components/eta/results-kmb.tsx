@@ -155,9 +155,15 @@ type StopChips = {
 function getStopChips(
   items: KmbEtaEntryWithLeg[],
   stopLookup: Map<string, StopInfo>,
+  stopChipsById: Map<string, StopChips>,
   lang: UiLanguage,
 ): StopChips {
   const stopId = items[0]?.stop ? String(items[0].stop).trim() : null;
+
+  if (stopId) {
+    const cached = stopChipsById.get(stopId);
+    if (cached) return cached;
+  }
 
   // Primary: lookup by ETA entry stopId
   const stopFromEta = stopId ? stopLookup.get(stopId) : undefined;
@@ -515,6 +521,7 @@ function StopSection({
   now,
   isFirst,
   stopLookup,
+  stopChipsById,
 }: {
   stopId: string;
   stopInfo?: StopInfo;
@@ -528,6 +535,7 @@ function StopSection({
   now: Date;
   isFirst?: boolean;
   stopLookup: Map<string, StopInfo>;
+  stopChipsById: Map<string, StopChips>;
 }) {
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`;
   const parsed = parseKmbStopName(stopName);
@@ -578,7 +586,7 @@ function StopSection({
               faresByVariantKey={faresByVariantKey}
               lang={lang}
               now={now}
-              stopChips={getStopChips(g.items, stopLookup, lang)}
+              stopChips={stopChipsById.get(stopId) ?? getStopChips(g.items, stopLookup, stopChipsById, lang)}
               staggerClass={
                 isFirst
                   ? idx === 0
@@ -629,6 +637,23 @@ export function KmbResults({
     if (!stops) return new Map<string, StopInfo>();
     return new Map(stops.map((s) => [s.stopId, s]));
   }, [stops]);
+
+  const stopChipsById = React.useMemo(() => {
+    if (!stops) return new Map<string, StopChips>();
+    const next = new Map<string, StopChips>();
+    for (const stop of stops) {
+      const fullName = pickStopName(stop, lang);
+      const parsed = parseKmbStopName(fullName);
+      next.set(stop.stopId, {
+        stopId: stop.stopId,
+        fullName,
+        name: parsed.name ?? fullName,
+        platform: parsed.platform ?? null,
+        stopCode: parsed.stopCode ?? null,
+      });
+    }
+    return next;
+  }, [stops, lang]);
 
   // For keyphrase mode, use sectioned rendering
   const useStopSections =
@@ -866,6 +891,7 @@ export function KmbResults({
                 now={now}
                 isFirst={idx === 0}
                 stopLookup={stopLookup}
+                stopChipsById={stopChipsById}
               />
             ))}
 
@@ -915,7 +941,10 @@ export function KmbResults({
                     ? "ui-stagger-3"
                     : "";
 
-            const stopChips = getStopChips(g.items, stopLookup, lang);
+            const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null;
+            const stopChips = stopId
+              ? stopChipsById.get(stopId) ?? getStopChips(g.items, stopLookup, stopChipsById, lang)
+              : getStopChips(g.items, stopLookup, stopChipsById, lang);
 
             return (
               <RouteVariantCard

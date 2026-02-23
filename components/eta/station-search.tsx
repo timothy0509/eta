@@ -81,7 +81,9 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
     return hits.map((h: { item: MtrStationSearchItem }) => h.item);
   }, [fuse, showStationCode, stations, trimmedQuery]);
 
-  const displayResults = trimmedQuery ? results : stations.slice(0, 12);
+  const displayResults = React.useMemo(() => {
+    return trimmedQuery ? results : stations.slice(0, 12);
+  }, [results, stations, trimmedQuery]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>

@@ -45,7 +45,7 @@ export function LanguageToggle({ mode, value: lang, onChange }: Props) {
         </ToggleGroupItem>
         <Tooltip>
           <TooltipTrigger asChild>
-            <span>
+            <span aria-disabled={!supported.sc}>
               <ToggleGroupItem
                 value="sc"
                 aria-label="Simplified Chinese"

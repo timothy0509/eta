@@ -2,8 +2,8 @@
 
 import {
   DropdownMenu,
+  DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
@@ -49,10 +49,13 @@ export function AutoRefreshMenu({ lang, valueSeconds, onChange }: Props) {
         <DropdownMenuLabel>{t.title}</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {OPTIONS.map((s) => (
-          <DropdownMenuItem key={s} onClick={() => onChange(s)}>
+          <DropdownMenuCheckboxItem
+            key={s}
+            checked={s === valueSeconds}
+            onCheckedChange={() => onChange(s)}
+          >
             {s ? `${s}s` : t.off}
-            {s === valueSeconds ? " ✓" : ""}
-          </DropdownMenuItem>
+          </DropdownMenuCheckboxItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>

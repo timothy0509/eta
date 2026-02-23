@@ -113,6 +113,13 @@ export function LrtStationSearch({
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={lang === "en" ? "Type a stop name…" : lang === "sc" ? "输入车站名称…" : "輸入車站名稱…"}
+            aria-label={
+              lang === "en"
+                ? "Search LRT stop"
+                : lang === "sc"
+                  ? "搜索轻铁站"
+                  : "搜尋輕鐵站"
+            }
             value={query}
             onValueChange={setQuery}
           />

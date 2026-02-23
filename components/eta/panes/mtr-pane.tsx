@@ -2,6 +2,7 @@
 
 import * as React from "react";
 
+import { MtrSchematicMap } from "@/components/eta/mtr-schematic-map";
 import { MtrStationSearch } from "@/components/eta/station-search";
 import { Button } from "@/components/ui/button";
 import type { MtrStationSearchItem, UiLanguage } from "@/lib/eta/types";
@@ -94,24 +95,38 @@ export function MtrPane({
     onStateChange?.(paneState);
   }, [onStateChange, paneState]);
 
+  const handleSelectStation = React.useCallback(
+    (station: MtrStationSearchItem) => {
+      setSta(station.sta);
+      const item: FavoritesItem = {
+        id: `mtr:${station.sta}`,
+        mode: "mtr",
+        title: `${lang === "en" ? station.nameEn : station.nameTc} · ${station.lines.join("/")}/${station.sta}`,
+        line: station.lines[0] ?? "",
+        sta: station.sta,
+      };
+      onAddRecent(item);
+      void refresh({ toastOnError: false });
+    },
+    [lang, onAddRecent, refresh, setSta]
+  );
+
   return (
     <div className="space-y-4">
+      <MtrSchematicMap
+        lang={lang}
+        selectedSta={sta}
+        onSelectSta={(nextSta) => {
+          const station = stations.find((entry) => entry.sta === nextSta);
+          if (!station) return;
+          handleSelectStation(station);
+        }}
+      />
       <MtrStationSearch
         lang={lang}
         stations={stations}
         selectedSta={sta}
-        onSelect={(station) => {
-          setSta(station.sta);
-          const item: FavoritesItem = {
-            id: `mtr:${station.sta}`,
-            mode: "mtr",
-            title: `${lang === "en" ? station.nameEn : station.nameTc} · ${station.lines.join("/")}/${station.sta}`,
-            line: station.lines[0] ?? "",
-            sta: station.sta,
-          };
-          onAddRecent(item);
-          void refresh({ toastOnError: false });
-        }}
+        onSelect={handleSelectStation}
       />
 
       <div className="flex items-center gap-2">

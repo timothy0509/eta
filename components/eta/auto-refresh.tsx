@@ -52,7 +52,11 @@ export function AutoRefreshMenu({ lang, valueSeconds, onChange }: Props) {
           <DropdownMenuCheckboxItem
             key={s}
             checked={s === valueSeconds}
-            onCheckedChange={() => onChange(s)}
+            onCheckedChange={(checked) => {
+              if (checked === true) {
+                onChange(s);
+              }
+            }}
           >
             {s ? `${s}s` : t.off}
           </DropdownMenuCheckboxItem>

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Marquee } from "@/components/ui/marquee";
 import { getLineColor } from "@/lib/eta/line-colors";
+import { formatRelativeAgeLabel, isStaleByAge } from "@/lib/eta/stale";
 import type { LrtScheduleResponse } from "@/lib/eta/lrt";
 import type { UiLanguage } from "@/lib/eta/types";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,9 @@ type Props = {
 
 export function LrtResults({ title, lang, schedule, error, stale, lastUpdatedAt, onRefresh, loading }: Props) {
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
+  const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang });
+  const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: "lrt" });
+  const showStale = Boolean(stale || isAgeStale);
 
   const t = {
     systemTime: lang === "en" ? "System time" : lang === "sc" ? "系统时间" : "系統時間",
@@ -64,9 +68,15 @@ export function LrtResults({ title, lang, schedule, error, stale, lastUpdatedAt,
                       ? `更新 ${updatedAt.toLocaleTimeString()}`
                       : `更新 ${updatedAt.toLocaleTimeString()}`}
                 </span>
+                {relativeAgeLabel ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>{relativeAgeLabel}</span>
+                  </>
+                ) : null}
               </>
             ) : null}
-            {stale ? (
+            {showStale ? (
               <Badge variant="destructive" className="rounded-lg">
                 {lang === "en" ? "Stale" : lang === "sc" ? "未更新" : "未更新"}
               </Badge>

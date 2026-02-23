@@ -335,6 +335,7 @@ export default function Home() {
                   hasQuery={kmbPaneState?.hasQuery ?? false}
                   error={kmbPaneState?.error ?? null}
                   stale={kmbPaneState?.stale ?? false}
+                  staleByStopId={kmbPaneState?.staleByStopId}
                   lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
                   onRefresh={() => void kmbPaneState?.refresh({ toastOnError: true })}
                   loading={kmbPaneState?.loading}

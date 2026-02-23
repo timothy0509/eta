@@ -11,6 +11,7 @@ import type { FavoritesItem } from "@/lib/store";
 export type MtrPaneState = {
   title: string;
   lang: UiLanguage;
+  sta?: string;
   schedule: ReturnType<typeof useMtrSchedule>["schedule"];
   error?: string | null;
   stale?: boolean;
@@ -76,6 +77,7 @@ export function MtrPane({
     () => ({
       title,
       lang,
+      sta,
       schedule,
       loading,
       error,
@@ -83,7 +85,7 @@ export function MtrPane({
       lastUpdatedAt,
       onRefresh: () => void refresh({ toastOnError: true }),
     }),
-    [error, lang, lastUpdatedAt, loading, refresh, schedule, stale, title]
+    [error, lang, lastUpdatedAt, loading, refresh, schedule, sta, stale, title]
   );
 
   React.useEffect(() => {

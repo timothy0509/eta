@@ -20,10 +20,12 @@ import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { LRT_STATIONS } from "@/lib/data/lrt-stations";
 import { MTR_STATIONS } from "@/lib/data/mtr-stations";
+import { decodeUrlState, encodeUrlState } from "@/lib/eta/url-state";
 import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } from "@/lib/eta/types";
 import { isLanguageSupported } from "@/lib/eta/types";
 import { useAutoRefresh } from "@/lib/eta/use-auto-refresh";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/shallow";
 
 // ============================================================================
@@ -71,6 +73,12 @@ export default function Home() {
   const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(null);
 
   const canFavoriteRef = React.useRef(false);
+  const didHydrateFromUrlRef = React.useRef(false);
+  const lastEncodedRef = React.useRef<string>("");
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const mtrStations: MtrStationSearchItem[] = React.useMemo(
     () =>
@@ -117,6 +125,27 @@ export default function Home() {
     setLang("tc");
   }, [lang, mode, setLang]);
 
+  React.useEffect(() => {
+    if (didHydrateFromUrlRef.current) return;
+
+    const search = searchParams?.toString() ?? "";
+    const decoded = decodeUrlState(search);
+    if (decoded.state.mode) {
+      setMode(decoded.state.mode);
+    } else if (decoded.selectedItem) {
+      setMode(decoded.selectedItem.mode);
+    }
+    if (decoded.state.lang) setLang(decoded.state.lang);
+    if (decoded.state.routeFilterMode) setRouteFilterMode(decoded.state.routeFilterMode);
+    if (decoded.state.autoRefreshSeconds !== undefined) {
+      setAutoRefreshSeconds(decoded.state.autoRefreshSeconds);
+    }
+    if (decoded.selectedItem) setSelectedItem(decoded.selectedItem);
+
+    didHydrateFromUrlRef.current = true;
+    lastEncodedRef.current = search;
+  }, [searchParams, setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode]);
+
   const refreshRef = React.useRef<(() => Promise<void>) | null>(null);
   const inFlightRefreshRef = React.useRef(false);
 
@@ -143,6 +172,43 @@ export default function Home() {
     setMode(item.mode);
     setSavedOpen(false);
   };
+
+  React.useEffect(() => {
+    if (!didHydrateFromUrlRef.current) return;
+
+    const kmbQuery = kmbPaneState?.querySummary ?? null;
+    const query = encodeUrlState({
+      mode,
+      lang,
+      routeFilterMode,
+      autoRefreshSeconds,
+      kmb: kmbQuery
+        ? {
+            query: kmbQuery,
+            routeFilter: kmbPaneState?.routeFilter ?? null,
+          }
+        : null,
+      mtr: { sta: mtrPaneState?.sta ?? null },
+      lrt: { stationId: lrtPaneState?.stationId ?? null },
+    });
+
+    if (query === lastEncodedRef.current) return;
+    lastEncodedRef.current = query;
+
+    const nextUrl = query ? `${pathname}?${query}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [
+    autoRefreshSeconds,
+    kmbPaneState?.querySummary,
+    kmbPaneState?.routeFilter,
+    lang,
+    lrtPaneState?.stationId,
+    mode,
+    mtrPaneState?.sta,
+    pathname,
+    routeFilterMode,
+    router,
+  ]);
 
   const heading =
     mode === "kmb"

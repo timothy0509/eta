@@ -346,6 +346,7 @@ export default function Home() {
                   sentinelRef={kmbPaneState?.sentinelRef}
                   hasMoreStops={kmbPaneState?.hasMoreStops}
                   precomputedGroups={kmbPaneState?.precomputedGroups}
+                  registerStopRef={kmbPaneState?.registerStopRef}
                 />
 
               ) : null}

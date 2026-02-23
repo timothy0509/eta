@@ -225,6 +225,8 @@ type Props = {
   hasMoreStops?: boolean;
   /** Precomputed render groups from pane (avoids recomputation during render) */
   precomputedGroups?: PrecomputedGroups;
+  /** Register ref for stop sections (visible tracking) */
+  registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void;
 };
 
 /** Render a single route variant card */
@@ -521,6 +523,7 @@ function StopSection({
   now,
   isFirst,
   stopLookup,
+  registerStopRef,
   stopChipsById,
 }: {
   stopId: string;
@@ -535,14 +538,16 @@ function StopSection({
   now: Date;
   isFirst?: boolean;
   stopLookup: Map<string, StopInfo>;
+  registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void;
   stopChipsById: Map<string, StopChips>;
 }) {
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`;
   const parsed = parseKmbStopName(stopName);
   const stopCodeBadge = parsed.platform ?? parsed.stopCode ?? null;
+  const stopRef = registerStopRef ? registerStopRef(stopId) : undefined;
 
   return (
-    <div className={cn("space-y-3", !isFirst && "mt-6 border-t pt-6")}>
+    <div ref={stopRef} className={cn("space-y-3", !isFirst && "mt-6 border-t pt-6")}>
       {/* Stop header (sticky within results card) */}
       <div
         className={cn(
@@ -628,6 +633,7 @@ export function KmbResults({
   sentinelRef,
   hasMoreStops,
   precomputedGroups,
+  registerStopRef,
 }: Props) {
   const now = new Date();
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
@@ -891,6 +897,7 @@ export function KmbResults({
                 now={now}
                 isFirst={idx === 0}
                 stopLookup={stopLookup}
+                registerStopRef={registerStopRef}
                 stopChipsById={stopChipsById}
               />
             ))}

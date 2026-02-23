@@ -107,7 +107,7 @@ export async function getLrtSchedule(params: {
 
   const platformMap = new Map<number, LrtRouteEntry[]>();
 
-  const results = await Promise.all(
+  const results = await Promise.allSettled(
     variants.map(async (entry) => {
       const bound = entry.bound.lightRail ?? "";
       const stop = entry.stops.lightRail?.find((id) => id.toUpperCase() === stopId.toUpperCase()) ?? stopId;
@@ -141,8 +141,9 @@ export async function getLrtSchedule(params: {
     })
   );
 
-  for (const entries of results) {
-    for (const entry of entries) {
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    for (const entry of result.value) {
       if (!entry.platform_id) continue;
       const list = platformMap.get(entry.platform_id) ?? [];
       list.push(entry);

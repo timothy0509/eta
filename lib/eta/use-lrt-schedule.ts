@@ -23,6 +23,9 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
     async (options?: { toastOnError?: boolean }) => {
       if (!stationId) return;
 
+      const station = stations.find((entry) => entry.stationId === stationId);
+      if (!station) return;
+
       // Cancel any in-flight request
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
@@ -60,7 +63,7 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
         }
       }
     },
-    [stationId]
+    [stationId, stations]
   );
 
   // Cleanup abort controller on unmount

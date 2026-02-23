@@ -63,7 +63,8 @@ export function useMtrSchedule(params: {
         }
 
         if (!baseline) {
-          setSchedule(null);
+          setError("Failed to load schedule");
+          setStale(true);
           return;
         }
 

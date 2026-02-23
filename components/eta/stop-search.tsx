@@ -230,16 +230,21 @@ export function StopSearch({
 }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const listId = React.useId();
 
   // Defer the search query to keep input responsive during typing
   const deferredQuery = React.useDeferredValue(query);
   const isSearching = query !== deferredQuery;
 
+  const stopById = React.useMemo(() => {
+    return new Map(stops.map((stop) => [stop.stopId, stop]));
+  }, [stops]);
+
   // Find selected stop(s) for display in the button
   const selectedLabel = React.useMemo(() => {
     if (!value) return null;
     if (value.type === "stop") {
-      const stop = stops.find((s) => s.stopId === value.stopId);
+      const stop = stopById.get(value.stopId);
       if (stop) {
         const fullName = formatStopName(stop, lang);
         const parsed = parseKmbStopName(fullName);
@@ -249,7 +254,7 @@ export function StopSearch({
     }
     if (value.type === "stops") {
       // Find first stop to get base name
-      const firstStop = stops.find((s) => value.stopIds.includes(s.stopId));
+      const firstStop = value.stopIds.map((stopId) => stopById.get(stopId)).find(Boolean);
       if (!firstStop) return null;
 
       const fullName = formatStopName(firstStop, lang);
@@ -258,7 +263,7 @@ export function StopSearch({
       // Collect all codes for selected stops
       const codes: string[] = [];
       for (const stopId of value.stopIds) {
-        const stop = stops.find((s) => s.stopId === stopId);
+        const stop = stopById.get(stopId);
         if (stop) {
           const parsed = parseKmbStopName(formatStopName(stop, lang));
           if (parsed.stopCode) codes.push(parsed.stopCode);
@@ -274,7 +279,7 @@ export function StopSearch({
       return (lang === "en" ? "Contains: " : lang === "sc" ? "包含: " : "包含: ") + value.query;
     }
     return null;
-  }, [value, stops, lang]);
+  }, [value, stopById, lang]);
 
 
   const stopComputed = React.useMemo<StopComputed[]>(() => {
@@ -342,8 +347,14 @@ export function StopSearch({
     // This improves accuracy for common user behavior:
     // - typing stop code prefixes (KT31…)
     // - typing station name prefixes
+    type ScoredStop = {
+      item: StopComputed;
+      fuseScore: number;
+      boost: number;
+    };
+
     const scored = hits
-      .map((h: { item: StopComputed; score?: number }) => {
+      .map((h: { item: StopComputed; score?: number }): ScoredStop => {
         const item = h.item;
 
         const exact =
@@ -367,26 +378,26 @@ export function StopSearch({
         const boost = exact ? 0 : prefix ? 1 : includes ? 2 : 3;
         return { item, fuseScore, boost };
       })
-      .sort((a, b) => {
+      .sort((a: ScoredStop, b: ScoredStop) => {
         if (a.boost !== b.boost) return a.boost - b.boost;
         return a.fuseScore - b.fuseScore;
       })
       .slice(0, 60);
 
-    return groupStopsByName(scored.map((s) => s.item)).slice(0, 20);
+    return groupStopsByName(scored.map((s: ScoredStop) => s.item)).slice(0, 20);
   }, [fuse, deferredQuery, stopComputed]);
 
   const trimmedQuery = query.trim();
   const canSearchContains = trimmedQuery.length >= 3;
 
-  const handleSelectGroup = (group: StopGroup) => {
+  const handleSelectGroup = React.useCallback((group: StopGroup) => {
     if (group.stops.length === 1) {
       onSelectStop(group.stops[0]);
     } else {
       onSelectStops(group.stops);
     }
     setOpen(false);
-  };
+  }, [onSelectStop, onSelectStops]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -395,6 +406,8 @@ export function StopSearch({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-haspopup="listbox"
           className={cn(
             "w-full min-w-0 justify-start rounded-2xl border bg-card/70 text-left shadow-sm",
             "hover:bg-card",
@@ -414,7 +427,10 @@ export function StopSearch({
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList className={cn(isSearching && "opacity-60 transition-opacity")}>
+          <CommandList
+            id={listId}
+            className={cn(isSearching && "opacity-60 transition-opacity")}
+          >
             <CommandEmpty>{lang === "en" ? "No results." : "無結果。"}</CommandEmpty>
             <CommandGroup heading={lang === "en" ? "Stops" : lang === "sc" ? "车站" : "車站"}>
               {canSearchContains ? (

@@ -117,12 +117,12 @@ export async function fetchKmbEtas(plans: Array<{ stopId: string; route: string;
   const eta: KmbEtaEntry[] = [];
   const errors: Array<{ stopId: string; route: string; serviceType: string }> = [];
 
-  for (const result of results) {
+  for (let i = 0; i < results.length; i += 1) {
+    const result = results[i];
     if (result.status === "fulfilled") {
       eta.push(...result.value.eta);
     } else {
-      const index = results.indexOf(result);
-      const plan = plans[index];
+      const plan = plans[i];
       if (plan) errors.push(plan);
     }
   }

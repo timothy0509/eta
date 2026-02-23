@@ -42,14 +42,19 @@ function isStationCodeQuery(query: string) {
 export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const listId = React.useId();
 
   const trimmedQuery = query.trim();
   const showStationCode = isStationCodeQuery(trimmedQuery);
 
+  const stationsById = React.useMemo(() => {
+    return new Map(stations.map((station) => [station.sta, station]));
+  }, [stations]);
+
   const selectedStation = React.useMemo(() => {
     if (!selectedSta) return undefined;
-    return stations.find((s) => s.sta === selectedSta);
-  }, [stations, selectedSta]);
+    return stationsById.get(selectedSta);
+  }, [selectedSta, stationsById]);
 
   const fuse = React.useMemo(() => {
     return new Fuse(stations, {
@@ -73,8 +78,10 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
     }
 
     const hits = fuse.search(trimmedQuery).slice(0, 40);
-    return hits.map((h) => h.item);
+    return hits.map((h: { item: MtrStationSearchItem }) => h.item);
   }, [fuse, showStationCode, stations, trimmedQuery]);
+
+  const displayResults = trimmedQuery ? results : stations.slice(0, 12);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -83,6 +90,8 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-haspopup="listbox"
           className={cn(
             "w-full justify-start rounded-2xl border bg-card/70 text-left shadow-sm",
             "hover:bg-card",
@@ -102,10 +111,10 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList>
+          <CommandList id={listId}>
             <CommandEmpty>{lang === "en" ? "No results." : "無結果。"}</CommandEmpty>
             <CommandGroup heading={lang === "en" ? "Stations" : lang === "sc" ? "车站" : "車站"}>
-              {(results.length ? results : stations.slice(0, 12)).map((station) => (
+              {displayResults.map((station: MtrStationSearchItem) => (
                 <CommandItem
                   key={station.labelId}
                   value={station.labelId}

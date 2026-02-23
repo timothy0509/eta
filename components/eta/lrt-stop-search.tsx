@@ -47,14 +47,19 @@ export function LrtStationSearch({
 }: Props) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const listId = React.useId();
 
   const trimmedQuery = query.trim();
   const showStationId = isStationIdQuery(trimmedQuery);
 
-  const selected = React.useMemo(
-    () => stations.find((s) => s.stationId === selectedStationId),
-    [stations, selectedStationId]
-  );
+  const stationsById = React.useMemo(() => {
+    return new Map(stations.map((station) => [station.stationId, station]));
+  }, [stations]);
+
+  const selected = React.useMemo(() => {
+    if (!selectedStationId) return undefined;
+    return stationsById.get(selectedStationId);
+  }, [selectedStationId, stationsById]);
 
   const fuse = React.useMemo(() => {
     return new Fuse(stations, {
@@ -78,8 +83,10 @@ export function LrtStationSearch({
     }
 
     const hits = fuse.search(trimmedQuery).slice(0, 40);
-    return hits.map((h) => h.item);
+    return hits.map((h: { item: LrtStationSearchItem }) => h.item);
   }, [fuse, showStationId, stations, trimmedQuery]);
+
+  const displayResults = trimmedQuery ? results : stations.slice(0, 12);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -88,6 +95,8 @@ export function LrtStationSearch({
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-controls={open ? listId : undefined}
+          aria-haspopup="listbox"
           className={cn(
             "w-full justify-start rounded-2xl border bg-card/70 text-left shadow-sm",
             "hover:bg-card",
@@ -107,10 +116,10 @@ export function LrtStationSearch({
             value={query}
             onValueChange={setQuery}
           />
-          <CommandList>
+          <CommandList id={listId}>
             <CommandEmpty>{lang === "en" ? "No results." : "無結果。"}</CommandEmpty>
             <CommandGroup heading={lang === "en" ? "Stops" : lang === "sc" ? "车站" : "車站"}>
-              {(results.length ? results : stations.slice(0, 12)).map((station) => (
+              {displayResults.map((station: LrtStationSearchItem) => (
                 <CommandItem
                   key={station.stationId}
                   value={station.stationId}

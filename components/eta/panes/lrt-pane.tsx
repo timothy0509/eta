@@ -11,6 +11,7 @@ import type { FavoritesItem } from "@/lib/store";
 export type LrtPaneState = {
   title: string;
   lang: UiLanguage;
+  stationId?: string;
   schedule: ReturnType<typeof useLrtSchedule>["schedule"];
   error?: string | null;
   stale?: boolean;
@@ -54,6 +55,7 @@ export function LrtPane({
     () => ({
       title,
       lang,
+      stationId,
       schedule,
       loading,
       error,
@@ -61,7 +63,7 @@ export function LrtPane({
       lastUpdatedAt,
       onRefresh: () => void refresh({ toastOnError: true }),
     }),
-    [error, lang, lastUpdatedAt, loading, refresh, schedule, stale, title]
+    [error, lang, lastUpdatedAt, loading, refresh, schedule, stale, stationId, title]
   );
 
   React.useEffect(() => {

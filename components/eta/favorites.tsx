@@ -1,13 +1,14 @@
 "use client";
 
 import { Heart, History, Trash2 } from "lucide-react";
+import * as React from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { LRT_STATIONS } from "@/lib/data/lrt-stations";
-import { findMtrStationBySta } from "@/lib/data/mtr-stations";
+import { LRT_STATIONS, type LrtStation } from "@/lib/data/lrt-stations";
+import { MTR_STATIONS, type MtrStation } from "@/lib/data/mtr-stations";
 import { getLineColor } from "@/lib/eta/line-colors";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
@@ -32,14 +33,20 @@ function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
 function FavoriteItemDisplay({
   item,
   lang,
-  kmbStops,
+  kmbStopsById,
+  kmbStopIndexById,
+  mtrStationsBySta,
+  lrtStationsById,
 }: {
   item: FavoritesItem;
   lang: UiLanguage;
-  kmbStops?: KmbStopSearchItem[];
+  kmbStopsById: Map<string, KmbStopSearchItem>;
+  kmbStopIndexById: Map<string, number>;
+  mtrStationsBySta: Map<string, MtrStation>;
+  lrtStationsById: Map<string, LrtStation>;
 }) {
   if (item.mode === "mtr") {
-    const station = findMtrStationBySta(item.sta);
+    const station = mtrStationsBySta.get(item.sta);
     if (!station) return <span>{item.title}</span>;
 
     const name = lang === "en" ? station.nameEn : station.nameTc;
@@ -62,7 +69,7 @@ function FavoriteItemDisplay({
   }
 
   if (item.mode === "lrt") {
-    const station = LRT_STATIONS.find((s) => s.stationId === item.stationId);
+    const station = lrtStationsById.get(item.stationId);
     if (!station) return <span>{item.title}</span>;
 
     const name = lang === "en" ? station.nameEn : station.nameZh;
@@ -78,7 +85,7 @@ function FavoriteItemDisplay({
 
     // Single stop
     if ("stopId" in item) {
-      const stop = kmbStops?.find((s) => s.stopId === item.stopId);
+      const stop = kmbStopsById.get(item.stopId);
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang);
         const { name } = parseKmbStopName(fullName);
@@ -100,7 +107,18 @@ function FavoriteItemDisplay({
 
     // Grouped stops
     if ("stopIds" in item) {
-      const firstStop = kmbStops?.find((s) => item.stopIds.includes(s.stopId));
+      let firstStop: KmbStopSearchItem | undefined;
+      let firstStopIndex = Number.POSITIVE_INFINITY;
+      for (const stopId of item.stopIds) {
+        const index = kmbStopIndexById.get(stopId);
+        if (index !== undefined && index < firstStopIndex) {
+          const candidate = kmbStopsById.get(stopId);
+          if (candidate) {
+            firstStop = candidate;
+            firstStopIndex = index;
+          }
+        }
+      }
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang);
         const { name } = parseKmbStopName(fullName);
@@ -131,6 +149,24 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   const recents = useAppStore((s) => s.recents);
   const removeFavorite = useAppStore((s) => s.removeFavorite);
   const clearRecents = useAppStore((s) => s.clearRecents);
+
+  const mtrStationsBySta = React.useMemo(() => {
+    return new Map(MTR_STATIONS.map((station) => [station.sta, station]));
+  }, []);
+
+  const lrtStationsById = React.useMemo(() => {
+    return new Map(LRT_STATIONS.map((station) => [station.stationId, station]));
+  }, []);
+
+  const kmbStopsById = React.useMemo(() => {
+    if (!kmbStops) return new Map<string, KmbStopSearchItem>();
+    return new Map(kmbStops.map((stop) => [stop.stopId, stop]));
+  }, [kmbStops]);
+
+  const kmbStopIndexById = React.useMemo(() => {
+    if (!kmbStops) return new Map<string, number>();
+    return new Map(kmbStops.map((stop, index) => [stop.stopId, index]));
+  }, [kmbStops]);
 
   const t = {
     saved: lang === "en" ? "Saved" : lang === "sc" ? "已儲存" : "已儲存",
@@ -173,7 +209,14 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                       onClick={() => onSelect(f)}
                     >
                       <div className="text-sm font-medium">
-                        <FavoriteItemDisplay item={f} lang={lang} kmbStops={kmbStops} />
+                        <FavoriteItemDisplay
+                          item={f}
+                          lang={lang}
+                          kmbStopsById={kmbStopsById}
+                          kmbStopIndexById={kmbStopIndexById}
+                          mtrStationsBySta={mtrStationsBySta}
+                          lrtStationsById={lrtStationsById}
+                        />
                       </div>
                       <div className="truncate text-xs text-muted-foreground">
                         {f.mode.toUpperCase()}
@@ -220,7 +263,14 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                     onClick={() => onSelect(r)}
                   >
                      <div className="text-sm font-medium">
-                       <FavoriteItemDisplay item={r} lang={lang} kmbStops={kmbStops} />
+                        <FavoriteItemDisplay
+                          item={r}
+                          lang={lang}
+                          kmbStopsById={kmbStopsById}
+                          kmbStopIndexById={kmbStopIndexById}
+                          mtrStationsBySta={mtrStationsBySta}
+                          lrtStationsById={lrtStationsById}
+                        />
                      </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span>{r.mode.toUpperCase()}</span>

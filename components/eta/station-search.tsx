@@ -90,7 +90,7 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          aria-controls={listId}
+          aria-controls={open ? listId : undefined}
           aria-haspopup="listbox"
           className={cn(
             "w-full justify-start rounded-2xl border bg-card/70 text-left shadow-sm",

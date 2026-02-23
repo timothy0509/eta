@@ -108,6 +108,13 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={lang === "en" ? "Type a station name…" : lang === "sc" ? "输入车站名称…" : "輸入車站名稱…"}
+            aria-label={
+              lang === "en"
+                ? "Search station name"
+                : lang === "sc"
+                  ? "搜索车站"
+                  : "搜尋車站"
+            }
             value={query}
             onValueChange={setQuery}
           />

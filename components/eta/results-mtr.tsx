@@ -196,6 +196,13 @@ export function MtrResults({
                 href={schedule.url}
                 target="_blank"
                 rel="noreferrer"
+                aria-label={
+                  lang === "en"
+                    ? "View details (opens in new tab)"
+                    : lang === "sc"
+                      ? "查看详情（在新标签页打开）"
+                      : "查看詳情（在新分頁開啟）"
+                }
               >
                 {t.viewDetails} <ExternalLink className="h-4 w-4" />
               </a>

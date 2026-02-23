@@ -39,6 +39,12 @@ export function LrtResults({ title, lang, schedule, error, stale, lastUpdatedAt,
 
   const t = {
     systemTime: lang === "en" ? "System time" : lang === "sc" ? "系统时间" : "系統時間",
+    emptyPlatform:
+      lang === "en"
+        ? "No platform data right now."
+        : lang === "sc"
+          ? "暂时没有月台信息。"
+          : "暫時沒有月台資訊。",
   };
   return (
     <Card className="rounded-3xl border bg-card/60 shadow-sm">
@@ -93,6 +99,11 @@ export function LrtResults({ title, lang, schedule, error, stale, lastUpdatedAt,
           <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
             <Info className="h-4 w-4" />
             {lang === "en" ? "Select a station to view trains." : "選擇車站以查看班次"}
+          </div>
+        ) : (schedule.platform_list ?? []).length === 0 ? (
+          <div className="ui-animate-fade flex items-center gap-2 rounded-2xl border bg-background/40 p-4 text-sm text-muted-foreground">
+            <Info className="h-4 w-4" />
+            {t.emptyPlatform}
           </div>
         ) : (
           <>
@@ -162,7 +173,7 @@ export function LrtResults({ title, lang, schedule, error, stale, lastUpdatedAt,
                             {lang === "en" ? r.time_en : r.time_ch}
                           </div>
                           {r.stop ? (
-                            <div className="text-xs text-destructive">
+                            <div className="text-xs text-destructive" aria-live="polite">
                               {lang === "en" ? "Stopped" : lang === "sc" ? "暫停服務" : "暫停服務"}
                             </div>
                           ) : null}

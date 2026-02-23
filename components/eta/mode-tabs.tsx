@@ -50,6 +50,8 @@ export function ModeTabs({ lang, value, onChange }: Props) {
               value={m.mode}
               unstyledActive
               className="gap-2 rounded-xl"
+              aria-label={label}
+              title={label}
             >
               <Icon className="h-4 w-4" />
               <span className="hidden sm:inline">{label}</span>

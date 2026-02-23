@@ -131,6 +131,13 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   const recents = useAppStore((s) => s.recents);
   const removeFavorite = useAppStore((s) => s.removeFavorite);
   const clearRecents = useAppStore((s) => s.clearRecents);
+  const dateFormatter = new Intl.DateTimeFormat(
+    lang === "en" ? "en-HK" : lang === "sc" ? "zh-Hans-HK" : "zh-Hant-HK",
+    {
+      dateStyle: "medium",
+      timeStyle: "short",
+    },
+  );
 
   const t = {
     saved: lang === "en" ? "Saved" : lang === "sc" ? "已儲存" : "已儲存",
@@ -183,6 +190,13 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                       size="icon"
                       variant="ghost"
                       className="rounded-xl"
+                      aria-label={
+                        lang === "en"
+                          ? "Remove favorite"
+                          : lang === "sc"
+                            ? "移除收藏"
+                            : "移除收藏"
+                      }
                       onClick={() => removeFavorite(f.id)}
                     >
                       <Trash2 className="h-4 w-4" />
@@ -224,7 +238,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                      </div>
                     <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-muted-foreground">
                       <span>{r.mode.toUpperCase()}</span>
-                      <span>{new Date(r.at).toLocaleString()}</span>
+                      <span>{dateFormatter.format(new Date(r.at))}</span>
                     </div>
                   </button>
                 ))

@@ -424,6 +424,13 @@ export function StopSearch({
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={lang === "en" ? "Type a stop name…" : lang === "sc" ? "輸入車站名稱…" : "輸入車站名稱…"}
+            aria-label={
+              lang === "en"
+                ? "Search stop name"
+                : lang === "sc"
+                  ? "搜索车站"
+                  : "搜尋車站"
+            }
             value={query}
             onValueChange={setQuery}
           />

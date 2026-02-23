@@ -81,7 +81,9 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
     return hits.map((h: { item: MtrStationSearchItem }) => h.item);
   }, [fuse, showStationCode, stations, trimmedQuery]);
 
-  const displayResults = trimmedQuery ? results : stations.slice(0, 12);
+  const displayResults = React.useMemo(() => {
+    return trimmedQuery ? results : stations.slice(0, 12);
+  }, [results, stations, trimmedQuery]);
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
@@ -108,6 +110,13 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
         <Command shouldFilter={false}>
           <CommandInput
             placeholder={lang === "en" ? "Type a station name…" : lang === "sc" ? "输入车站名称…" : "輸入車站名稱…"}
+            aria-label={
+              lang === "en"
+                ? "Search station name"
+                : lang === "sc"
+                  ? "搜索车站"
+                  : "搜尋車站"
+            }
             value={query}
             onValueChange={setQuery}
           />

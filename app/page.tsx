@@ -198,6 +198,8 @@ export default function Home() {
                   size="sm"
                   className="rounded-xl"
                   onClick={() => setSavedOpen(!savedOpen)}
+                  aria-expanded={savedOpen}
+                  aria-controls={savedOpen ? "saved-panel" : undefined}
                 >
                   {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
                 </Button>
@@ -206,6 +208,13 @@ export default function Home() {
                   variant="outline"
                   size="sm"
                   className="rounded-xl"
+                  aria-label={
+                    lang === "en"
+                      ? "Toggle theme"
+                      : lang === "sc"
+                        ? "切换主题"
+                        : "切換主題"
+                  }
                   onClick={() => {
                     const actual = resolvedTheme ?? theme;
                     setTheme(actual === "dark" ? "light" : "dark");
@@ -228,7 +237,7 @@ export default function Home() {
 
           <Sheet open={savedOpen} onOpenChange={setSavedOpen}>
             {isDesktop ? (
-              <SheetContent side="right">
+              <SheetContent side="right" id="saved-panel">
                 <SheetHeader>
                   <SheetTitle>
                     {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
@@ -239,7 +248,7 @@ export default function Home() {
                 </SheetBody>
               </SheetContent>
             ) : (
-              <SheetContent side="bottom">
+              <SheetContent side="bottom" id="saved-panel">
                 <SheetHeader>
                   <SheetTitle>
                     {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}

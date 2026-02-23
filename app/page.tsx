@@ -199,7 +199,7 @@ export default function Home() {
                   className="rounded-xl"
                   onClick={() => setSavedOpen(!savedOpen)}
                   aria-expanded={savedOpen}
-                  aria-controls="saved-panel"
+                  aria-controls={savedOpen ? "saved-panel" : undefined}
                 >
                   {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
                 </Button>

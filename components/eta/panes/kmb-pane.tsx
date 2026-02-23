@@ -26,7 +26,7 @@ import {
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import type { Company } from "hk-bus-eta";
-import { useInfiniteScroll } from "@/lib/eta/use-infinite-scroll";
+import { useInfiniteScroll, useVisibleItems } from "@/lib/eta/use-infinite-scroll";
 import { cn } from "@/lib/utils";
 import type { FavoritesItem, RouteFilterMode } from "@/lib/store";
 
@@ -411,6 +411,10 @@ export type KmbPaneState = {
   hasMoreStops: boolean;
   /** Precomputed render groups to avoid recomputation during render */
   precomputedGroups: PrecomputedGroups;
+  /** Currently visible stop IDs in the list */
+  visibleStopIds: Set<string>;
+  /** Register ref for stop sections (visible tracking) */
+  registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void;
 };
 
 export function KmbPane({
@@ -519,6 +523,11 @@ export function KmbPane({
     pageSize: STOPS_PER_PAGE,
     rootMargin: "300px",
   });
+
+  const { visibleIds: visibleStopIds, registerRef: registerStopRef } = useVisibleItems(
+    loadedStopIds,
+    { rootMargin: "200px" }
+  );
 
   // Derived flat eta array for backwards compatibility
   const kmbEta = React.useMemo(() => {
@@ -717,6 +726,8 @@ export function KmbPane({
         routeFilterString?: string;
         signal?: AbortSignal;
         append?: boolean;
+        mergeExisting?: boolean;
+        replaceLoadedStopIds?: string[];
       }
     ) => {
       if (!stopIds.length) return;
@@ -764,11 +775,15 @@ export function KmbPane({
         });
       } else {
         // Replace mode: full refresh
+        const mergedByStopId = options.mergeExisting
+          ? { ...etaState.byStopId, ...filteredByStopId }
+          : filteredByStopId;
+        const nextLoadedStopIds = options.replaceLoadedStopIds ?? stopIds;
         dispatchEta({
           type: "REFRESH_SUCCESS",
           payload: {
-            byStopId: filteredByStopId,
-            loadedStopIds: stopIds,
+            byStopId: mergedByStopId,
+            loadedStopIds: nextLoadedStopIds,
             // Keep existing fares - they'll be updated in background
           },
         });
@@ -829,7 +844,10 @@ export function KmbPane({
 
   // Main refresh function - handles both initial load and refresh of loaded stops
   const refreshKmbEta = React.useCallback(
-    async (queryOverride?: KmbQuery | null, options?: { toastOnError?: boolean; isInitialLoad?: boolean }) => {
+    async (
+      queryOverride?: KmbQuery | null,
+      options?: { toastOnError?: boolean; isInitialLoad?: boolean; isAutoRefresh?: boolean }
+    ) => {
       const query = queryOverride ?? kmbQuery;
       if (!query) return;
 
@@ -859,12 +877,28 @@ export function KmbPane({
         ? queryStopIds.slice(0, STOPS_PER_PAGE)
         : loadedStopIds;
 
+      const shouldLimitToVisible =
+        Boolean(options?.isAutoRefresh) &&
+        !isNewQuery &&
+        loadedStopIds.length > STOPS_PER_PAGE;
+
+      const visibleStopIdsList = shouldLimitToVisible
+        ? loadedStopIds.filter((stopId) => visibleStopIds.has(stopId))
+        : [];
+
+      const refreshStopIds =
+        shouldLimitToVisible && visibleStopIdsList.length > 0
+          ? visibleStopIdsList
+          : stopIdsToFetch;
+
       dispatchEta({ type: "REFRESH_START" });
       try {
-        const fetchResult = await fetchStopEtas(stopIdsToFetch, {
+        const fetchResult = await fetchStopEtas(refreshStopIds, {
           routeFilterString,
           signal: controller.signal,
           append: false, // Always replace on refresh
+          mergeExisting: shouldLimitToVisible,
+          replaceLoadedStopIds: stopIdsToFetch,
         });
 
         if (controller.signal.aborted) return;
@@ -884,7 +918,7 @@ export function KmbPane({
           );
 
           // Use index instead of filtering entire kmbRouteStops array
-          const candidateKeysFromStops = getVariantKeysForStops(routeStopIndex, stopIdsToFetch);
+          const candidateKeysFromStops = getVariantKeysForStops(routeStopIndex, refreshStopIds);
 
           const allVariantKeys = new Set([...variantKeysFromEtas, ...candidateKeysFromStops]);
           const missingKeys = Array.from(allVariantKeys).filter(
@@ -930,7 +964,16 @@ export function KmbPane({
       }
       // Note: loading state is managed by REFRESH_START/REFRESH_SUCCESS/REFRESH_ERROR
     },
-    [kmbQuery, kmbRouteInfos, loadedStopIds, getRouteFilterString, fetchStopEtas, resolveContainsStopIds, routeStopIndex]
+    [
+      kmbQuery,
+      kmbRouteInfos,
+      loadedStopIds,
+      getRouteFilterString,
+      fetchStopEtas,
+      resolveContainsStopIds,
+      routeStopIndex,
+      visibleStopIds,
+    ]
   );
 
   const loadMoreLoadingRef = React.useRef(false);
@@ -1006,7 +1049,9 @@ export function KmbPane({
 
   React.useEffect(() => {
     if (!onRegisterRefresh) return;
-    onRegisterRefresh(() => refreshKmbEtaRef.current(kmbQuery, { toastOnError: false }));
+    onRegisterRefresh(() =>
+      refreshKmbEtaRef.current(kmbQuery, { toastOnError: false, isAutoRefresh: true })
+    );
   }, [kmbQuery, onRegisterRefresh]);
 
   const lastSelectedIdRef = React.useRef<string | null>(null);
@@ -1361,6 +1406,8 @@ export function KmbPane({
       sentinelRef: infiniteScroll.sentinelRef,
       hasMoreStops: infiniteScroll.hasMore,
       precomputedGroups,
+      visibleStopIds,
+      registerStopRef,
     }),
     [
       kmbEta,
@@ -1383,6 +1430,8 @@ export function KmbPane({
       infiniteScroll.sentinelRef,
       infiniteScroll.hasMore,
       precomputedGroups,
+      visibleStopIds,
+      registerStopRef,
     ]
   );
 

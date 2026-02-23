@@ -20,6 +20,37 @@ type DedupeKey = string;
 
 const inFlightJson = new Map<DedupeKey, Promise<unknown>>();
 
+function normalizeRouteFilterKey(routeFilter?: string) {
+  if (!routeFilter) return undefined;
+  const normalized = routeFilter
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => entry.toUpperCase())
+    .sort();
+  return normalized.length ? normalized.join(",") : undefined;
+}
+
+function normalizeStopIdsKey(stopIds: string[]) {
+  return Array.from(
+    new Set(stopIds.map((stopId) => String(stopId ?? "").trim()).filter(Boolean))
+  ).sort();
+}
+
+function normalizeFareVariantKey(variant: KmbFareVariant) {
+  const co = String(variant.co ?? "kmb").toLowerCase();
+  const route = String(variant.route ?? "").toUpperCase();
+  const dir = String(variant.dir ?? "");
+  const serviceType = String(variant.serviceType ?? "");
+  const stopId = String(variant.stopId ?? "").trim();
+  const destCandidates = (variant.destCandidates ?? [])
+    .map((dest) => String(dest ?? "").trim())
+    .filter(Boolean)
+    .sort()
+    .join("~");
+  return `${co}|${route}|${dir}|${serviceType}|${stopId}|${destCandidates}`;
+}
+
 async function fetchJsonDedupe<T>(
   key: DedupeKey,
   fetcher: () => Promise<T>,
@@ -173,13 +204,19 @@ export async function fetchKmbStopEtas(
   stopIds: string[],
   options?: { routeFilter?: string; signal?: AbortSignal; includeFares?: boolean }
 ): Promise<KmbStopEtasResponse> {
+  const keyPayload = {
+    stopIds: normalizeStopIdsKey(stopIds),
+    routeFilter: normalizeRouteFilterKey(options?.routeFilter),
+    includeFares: options?.includeFares ?? false,
+  };
+
   const body = {
     stopIds,
     routeFilter: options?.routeFilter,
     includeFares: options?.includeFares ?? false,
   };
 
-  const key = `kmb:stop-etas:${JSON.stringify(body)}`;
+  const key = `kmb:stop-etas:${JSON.stringify(keyPayload)}`;
 
   return await fetchJsonDedupe(
     key,
@@ -212,8 +249,10 @@ export async function fetchKmbFares(
   variants: KmbFareVariant[],
   options?: { signal?: AbortSignal }
 ): Promise<KmbFaresResponse> {
-  const body = { variants };
-  const key = `kmb:fares:${JSON.stringify(body)}`;
+  const normalizedKeys = Array.from(
+    new Set(variants.map((variant) => normalizeFareVariantKey(variant)))
+  ).sort();
+  const key = `kmb:fares:${JSON.stringify({ variants: normalizedKeys })}`;
 
   return await fetchJsonDedupe(
     key,

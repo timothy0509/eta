@@ -8,6 +8,7 @@ import {
   type RouteFilterOption,
   type RouteFilterState,
 } from "@/components/eta/route-filter";
+import { NearbyStops } from "@/components/eta/nearby-stops";
 import { StopSearch, type StopSearchSelection } from "@/components/eta/stop-search";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -1441,6 +1442,21 @@ export function KmbPane({
 
   return (
     <div className="space-y-4">
+      <NearbyStops
+        lang={lang}
+        stops={kmbStops}
+        loadingStops={loadingStops}
+        selectedStopId={kmbDraftStopSelection?.type === "stop" ? kmbDraftStopSelection.stopId : null}
+        onSelectStop={(stop) => {
+          setKmbDraftStopSelection({ type: "stop", stopId: stop.stopId });
+          onAddRecent({
+            id: `kmb:${stop.stopId}:__stop__`,
+            mode: "kmb",
+            title: pickKmbStopTitle(stop, lang),
+            stopId: stop.stopId,
+          });
+        }}
+      />
       <StopSearch
         lang={lang}
         stops={kmbStops}

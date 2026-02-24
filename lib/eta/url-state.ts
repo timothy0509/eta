@@ -88,9 +88,12 @@ function parseCommaList(value: string | null): string[] {
 function normalizeVariantKeys(entries: string[]): string[] {
   return entries
     .map((entry) => {
+      if (!entry) return "";
       const parts = entry.split("|");
       if (parts.length === 3) return `kmb|${entry}`;
-      return entry;
+      if (parts.length === 4) return entry;
+      // Invalid format: ensure this entry is filtered out
+      return "";
     })
     .filter(Boolean);
 }

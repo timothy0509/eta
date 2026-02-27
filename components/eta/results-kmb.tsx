@@ -232,7 +232,7 @@ type Props = {
 };
 
 /** Render a single route variant card */
-function RouteVariantCard({
+const RouteVariantCard = React.memo(function RouteVariantCard({
   variantKey,
   baseKey,
   items,
@@ -512,10 +512,10 @@ function RouteVariantCard({
       </div>
     </div>
   );
-}
+});
 
 /** Render a stop section with its routes */
-function StopSection({
+const StopSection = React.memo(function StopSection({
   stopId,
   stopInfo,
   groups,
@@ -611,7 +611,7 @@ function StopSection({
       )}
     </div>
   );
-}
+});
 
 export function KmbResults({
   lang,

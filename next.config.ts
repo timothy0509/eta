@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import withBundleAnalyzer from "@next/bundle-analyzer";
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -8,6 +9,20 @@ const nextConfig: NextConfig = {
   // Disable React Compiler to reduce memory usage during type checking
   // React Compiler does heavy type inference which can cause OOM on smaller heaps
   reactCompiler: false,
+
+  // Optimize images
+  images: {
+    formats: ["image/webp", "image/avif"],
+  },
+
+  // Enable compression
+  compress: true,
 };
 
-export default nextConfig;
+// Wrap with bundle analyzer only when ANALYZE env var is set
+export default process.env.ANALYZE === "true"
+  ? withBundleAnalyzer({
+      enabled: true,
+      openAnalyzer: false,
+    })(nextConfig)
+  : nextConfig;

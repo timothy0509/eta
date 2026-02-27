@@ -3,14 +3,16 @@
 import * as React from "react";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
+import dynamic from "next/dynamic";
 
 import { AutoRefreshMenu } from "@/components/eta/auto-refresh";
 import { FavoritesAndRecents } from "@/components/eta/favorites";
 import { LanguageToggle } from "@/components/eta/language-toggle";
 import { ModeTabs } from "@/components/eta/mode-tabs";
-import { KmbPane, type KmbPaneState } from "@/components/eta/panes/kmb-pane";
-import { LrtPane, type LrtPaneState } from "@/components/eta/panes/lrt-pane";
-import { MtrPane, type MtrPaneState } from "@/components/eta/panes/mtr-pane";
+import { PaneSkeleton } from "@/components/eta/pane-skeleton";
+import type { KmbPaneState } from "@/components/eta/panes/kmb-pane";
+import type { LrtPaneState } from "@/components/eta/panes/lrt-pane";
+import type { MtrPaneState } from "@/components/eta/panes/mtr-pane";
 import { KmbResults } from "@/components/eta/results-kmb";
 import { LrtResults } from "@/components/eta/results-lrt";
 import { MtrResults } from "@/components/eta/results-mtr";
@@ -27,6 +29,32 @@ import { useAutoRefresh } from "@/lib/eta/use-auto-refresh";
 import { useAppStore, type FavoritesItem } from "@/lib/store";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useShallow } from "zustand/shallow";
+
+// Dynamic imports for transport mode panes - loaded only when needed
+// This significantly reduces initial bundle size
+const KmbPane = dynamic(
+  () => import("@/components/eta/panes/kmb-pane").then((mod) => mod.KmbPane),
+  {
+    loading: () => <PaneSkeleton />,
+    ssr: false,
+  }
+);
+
+const MtrPane = dynamic(
+  () => import("@/components/eta/panes/mtr-pane").then((mod) => mod.MtrPane),
+  {
+    loading: () => <PaneSkeleton />,
+    ssr: false,
+  }
+);
+
+const LrtPane = dynamic(
+  () => import("@/components/eta/panes/lrt-pane").then((mod) => mod.LrtPane),
+  {
+    loading: () => <PaneSkeleton />,
+    ssr: false,
+  }
+);
 
 // ============================================================================
 // Consolidated store selectors with shallow equality for stable snapshots

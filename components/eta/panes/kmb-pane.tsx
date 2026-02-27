@@ -402,6 +402,11 @@ const STOPS_PER_PAGE = 10;
 export type KmbPaneState = {
   lang: UiLanguage;
   routeFilter: RouteFilterState;
+  querySummary:
+    | { mode: "stop"; stopId: string }
+    | { mode: "stops"; stopIds: string[] }
+    | { mode: "contains"; query: string }
+    | null;
   routeInfos: Record<string, KmbRouteInfoLite>;
   faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
   eta: KmbEtaEntryWithLeg[];
@@ -1413,6 +1418,12 @@ export function KmbPane({
   };
 
   const isKeyphraseMode = kmbQuery?.mode === "contains";
+  const querySummary = React.useMemo<KmbPaneState["querySummary"]>(() => {
+    if (!kmbQuery) return null;
+    if (kmbQuery.mode === "stop") return { mode: "stop", stopId: kmbQuery.stopId };
+    if (kmbQuery.mode === "stops") return { mode: "stops", stopIds: kmbQuery.stopIds };
+    return { mode: "contains", query: kmbQuery.query };
+  }, [kmbQuery]);
 
   // ========== OPTIMIZATION: Precompute render groups to avoid work during render ==========
   const precomputedGroups = React.useMemo<PrecomputedGroups>(() => {
@@ -1423,6 +1434,7 @@ export function KmbPane({
     () => ({
       lang,
       routeFilter,
+      querySummary,
       routeInfos: kmbRouteInfos,
       faresByVariantKey: kmbFaresByVariantKey,
       eta: kmbEta,
@@ -1462,6 +1474,7 @@ export function KmbPane({
       kmbRouteInfos,
       kmbStops,
       lang,
+      querySummary,
       refreshKmbEta,
       routeFilter,
       isKeyphraseMode,

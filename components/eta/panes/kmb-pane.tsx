@@ -23,6 +23,7 @@ import {
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
 } from "@/lib/eta/client";
+import { isStaleByFlagOrAge } from "@/lib/eta/stale";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import type { Company } from "hk-bus-eta";
@@ -41,6 +42,7 @@ type EtaState = {
   loading: boolean;
   error: string | null;
   stale: boolean;
+  staleByStopId: Record<string, { stale: boolean; ageMs: number | null }>;
   lastUpdatedAt: number | null;
 };
 
@@ -52,6 +54,7 @@ type EtaAction =
         byStopId: Record<string, KmbEtaEntryWithLeg[]>;
         loadedStopIds: string[];
         faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
+        staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>;
       };
     }
   | { type: "REFRESH_ERROR"; error: string }
@@ -61,6 +64,7 @@ type EtaAction =
         byStopId: Record<string, KmbEtaEntryWithLeg[]>;
         newStopIds: string[];
         faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: "hk-bus-eta" }>;
+        staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>;
       };
     }
   | {
@@ -78,6 +82,7 @@ const initialEtaState: EtaState = {
   loading: false,
   error: null,
   stale: false,
+  staleByStopId: {},
   lastUpdatedAt: null,
 };
 
@@ -94,11 +99,21 @@ function etaReducer(state: EtaState, action: EtaAction): EtaState {
         faresByVariantKey: action.payload.faresByVariantKey ?? state.faresByVariantKey,
         loading: false,
         error: null,
-        stale: false,
+        stale: Boolean(
+          action.payload.staleByStopId &&
+            Object.values(action.payload.staleByStopId).some((entry) => entry.stale)
+        ),
+        staleByStopId: action.payload.staleByStopId ?? {},
         lastUpdatedAt: Date.now(),
       };
     case "REFRESH_ERROR":
-      return { ...state, loading: false, error: action.error, stale: true };
+      return {
+        ...state,
+        loading: false,
+        error: action.error,
+        stale: true,
+        staleByStopId: {},
+      };
     case "APPEND_STOPS":
       return {
         ...state,
@@ -106,6 +121,7 @@ function etaReducer(state: EtaState, action: EtaAction): EtaState {
         loadedStopIds: [...state.loadedStopIds, ...action.payload.newStopIds],
         faresByVariantKey: { ...state.faresByVariantKey, ...(action.payload.faresByVariantKey ?? {}) },
         loading: false,
+        staleByStopId: { ...state.staleByStopId, ...(action.payload.staleByStopId ?? {}) },
       };
     case "FARES_SUCCESS":
       return {
@@ -396,6 +412,7 @@ export type KmbPaneState = {
   loading: boolean;
   error?: string | null;
   stale?: boolean;
+  staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>;
   lastUpdatedAt?: number;
   hasQuery: boolean;
   multipleStops: boolean;
@@ -459,6 +476,7 @@ export function KmbPane({
   const kmbEtaError = etaState.error;
   const kmbEtaLastUpdatedAt = etaState.lastUpdatedAt;
   const kmbEtaStale = etaState.stale;
+  const kmbEtaStaleByStopId = etaState.staleByStopId;
   const kmbFaresByVariantKey = etaState.faresByVariantKey;
 
   // ========== OPTIMIZATION: Build search index once when stops load ==========
@@ -760,6 +778,22 @@ export function KmbPane({
         filteredByStopId[stopId] = etas;
       }
 
+      const staleByStopId = result.staleByStopId
+        ? Object.fromEntries(
+            Object.entries(result.staleByStopId).map(([stopId, entry]) => [
+              stopId,
+              {
+                ...entry,
+                stale: isStaleByFlagOrAge({
+                  upstreamStale: entry.stale,
+                  ageMs: entry.ageMs,
+                  mode: "kmb",
+                }),
+              },
+            ])
+          )
+        : undefined;
+
       // Dispatch ETAs immediately (without fares)
       if (options.append) {
         // Append mode: merge with existing state
@@ -770,6 +804,7 @@ export function KmbPane({
           payload: {
             byStopId: filteredByStopId,
             newStopIds,
+            staleByStopId,
             // Don't include fares - they'll be fetched in background
           },
         });
@@ -784,6 +819,7 @@ export function KmbPane({
           payload: {
             byStopId: mergedByStopId,
             loadedStopIds: nextLoadedStopIds,
+            staleByStopId,
             // Keep existing fares - they'll be updated in background
           },
         });
@@ -1395,6 +1431,7 @@ export function KmbPane({
       loading: kmbEtaLoading,
       error: kmbEtaError,
       stale: kmbEtaStale,
+      staleByStopId: kmbEtaStaleByStopId,
       lastUpdatedAt: kmbEtaLastUpdatedAt ?? undefined,
       hasQuery: Boolean(kmbQuery),
       multipleStops: kmbQuery?.mode === "stops" || kmbQuery?.mode === "contains",
@@ -1418,6 +1455,7 @@ export function KmbPane({
       kmbEtaError,
       kmbEtaLastUpdatedAt,
       kmbEtaStale,
+      kmbEtaStaleByStopId,
       kmbQuery,
       kmbResultsInfo.code,
       kmbResultsInfo.title,

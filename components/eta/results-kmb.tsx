@@ -23,6 +23,7 @@ import { Marquee } from "@/components/ui/marquee";
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from "@/lib/eta/client";
 import { formatRelativeMinutes } from "@/lib/eta/format";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
+import { formatRelativeAgeLabel, isStaleByAge } from "@/lib/eta/stale";
 import type { UiLanguage } from "@/lib/eta/types";
 import { cn } from "@/lib/utils";
 
@@ -206,6 +207,7 @@ type Props = {
   hasQuery: boolean;
   lastUpdatedAt?: number;
   stale?: boolean;
+  staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>;
   error?: string | null;
   onRefresh: () => void;
   loading?: boolean;
@@ -622,6 +624,7 @@ export function KmbResults({
   hasQuery,
   lastUpdatedAt,
   stale,
+  staleByStopId,
   error,
   onRefresh,
   loading,
@@ -637,6 +640,12 @@ export function KmbResults({
 }: Props) {
   const now = new Date();
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
+  const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang, now });
+  const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: "kmb", now });
+  const hasStaleStops = Boolean(
+    staleByStopId && Object.values(staleByStopId).some((entry) => entry.stale)
+  );
+  const showStale = Boolean(stale || isAgeStale || hasStaleStops);
 
   // Create a lookup map for stops by ID
   const stopLookup = React.useMemo(() => {
@@ -842,10 +851,16 @@ export function KmbResults({
                       ? `更新 ${updatedAt.toLocaleTimeString()}`
                       : `更新 ${updatedAt.toLocaleTimeString()}`}
                 </span>
+                {relativeAgeLabel ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>{relativeAgeLabel}</span>
+                  </>
+                ) : null}
               </>
             ) : null}
 
-            {stale ? (
+            {showStale ? (
               <Badge variant="destructive" className="rounded-lg">
                 {lang === "en" ? "Stale" : lang === "sc" ? "未更新" : "未更新"}
               </Badge>

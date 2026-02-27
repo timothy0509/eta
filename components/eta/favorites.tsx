@@ -12,6 +12,7 @@ import {
   Trash2,
 } from "lucide-react";
 import * as React from "react";
+import { useShallow } from "zustand/shallow";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -169,9 +170,13 @@ function FavoriteItemDisplay({
 }
 
 export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
-  const favorites = useAppStore((s) => s.favorites);
-  const favoritesGroups = useAppStore((s) => s.favoritesGroups);
-  const recents = useAppStore((s) => s.recents);
+  const { favorites, favoritesGroups, recents } = useAppStore(
+    useShallow((s) => ({
+      favorites: s.favorites,
+      favoritesGroups: s.favoritesGroups,
+      recents: s.recents,
+    }))
+  );
   const removeFavorite = useAppStore((s) => s.removeFavorite);
   const toggleFavoritePin = useAppStore((s) => s.toggleFavoritePin);
   const moveFavorite = useAppStore((s) => s.moveFavorite);

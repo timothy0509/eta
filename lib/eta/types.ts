@@ -40,3 +40,30 @@ export type MtrStationSearchItem = {
   nameEn: string;
   nameTc: string;
 };
+
+// MTR System Map types for schematic map component
+export type MapBranch = {
+  id?: string;
+  from?: string;
+  sequence?: string[];
+  branches?: MapBranch[];
+  notes?: string;
+};
+
+export type MapLine = {
+  id: string;
+  name: string;
+  color: string;
+  loop?: boolean;
+  stations?: string[];
+  trunk?: string[];
+  branches?: MapBranch[];
+};
+
+export type LineSequence = {
+  key: string;
+  id: string;
+  name: string;
+  color: string;
+  stations: string[];
+};

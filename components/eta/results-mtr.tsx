@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Marquee } from "@/components/ui/marquee";
 import { findMtrStationBySta } from "@/lib/data/mtr-stations";
 import { getLineColor } from "@/lib/eta/line-colors";
+import { formatRelativeAgeLabel, isStaleByAge } from "@/lib/eta/stale";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 import type { UiLanguage } from "@/lib/eta/types";
 import { cn } from "@/lib/utils";
@@ -106,6 +107,9 @@ export function MtrResults({
   loading,
 }: Props) {
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
+  const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang });
+  const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: "mtr" });
+  const showStale = Boolean(stale || isAgeStale);
 
   const t = {
     nextTrain:
@@ -149,9 +153,15 @@ export function MtrResults({
                       ? `更新 ${updatedAt.toLocaleTimeString()}`
                       : `更新 ${updatedAt.toLocaleTimeString()}`}
                 </span>
+                {relativeAgeLabel ? (
+                  <>
+                    <span aria-hidden>·</span>
+                    <span>{relativeAgeLabel}</span>
+                  </>
+                ) : null}
               </>
             ) : null}
-            {stale ? (
+            {showStale ? (
               <Badge variant="destructive" className="rounded-lg">
                 {lang === "en" ? "Stale" : lang === "sc" ? "未更新" : "未更新"}
               </Badge>

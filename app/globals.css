@@ -49,7 +49,7 @@
 }
 
 :root {
-  --radius: 0.625rem;
+  --radius: 0.75rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -125,13 +125,13 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: "DM Sans", "Noto Sans HK", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-sans);
   }
 }
 
 /* Tabular numbers for ETA displays */
 .font-tabular {
-  font-family: "Rubik", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-numbers);
   font-variant-numeric: tabular-nums;
 }
 

@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useMediaQuery } from "@/lib/hooks/use-media-query";
 import { LRT_STATIONS } from "@/lib/data/lrt-stations";
 import { MTR_STATIONS } from "@/lib/data/mtr-stations";
 import { decodeUrlState, encodeUrlState } from "@/lib/eta/url-state";
@@ -88,8 +89,9 @@ export default function HomeClient() {
   // Actions are stable and don't cause re-renders
   const { setMode, setLang, setRouteFilterMode, setAutoRefreshSeconds, addFavorite, addRecent } = useAppStoreActions();
 
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
   const [savedOpen, setSavedOpen] = React.useState(false);
-  const [isDesktop, setIsDesktop] = React.useState(false);
+  const [savedSide, setSavedSide] = React.useState<"right" | "bottom">("bottom");
 
   const { theme, setTheme, resolvedTheme } = useTheme();
   const [themeMounted, setThemeMounted] = React.useState(false);
@@ -135,18 +137,19 @@ export default function HomeClient() {
   }, []);
 
   React.useEffect(() => {
-    const media = window.matchMedia("(min-width: 1024px)");
+    if (savedOpen) return;
+    setSavedSide(isDesktop ? "right" : "bottom");
+  }, [isDesktop, savedOpen]);
 
-    const onChange = () => {
-      setIsDesktop(media.matches);
-    };
-
-    onChange();
-    media.addEventListener("change", onChange);
-    return () => {
-      media.removeEventListener("change", onChange);
-    };
-  }, []);
+  const onSavedOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (nextOpen) {
+        setSavedSide(isDesktop ? "right" : "bottom");
+      }
+      setSavedOpen(nextOpen);
+    },
+    [isDesktop]
+  );
 
   React.useEffect(() => {
     if (isLanguageSupported(mode, lang)) return;
@@ -296,7 +299,7 @@ export default function HomeClient() {
                   className="rounded-xl"
                   onClick={() => setSavedOpen(!savedOpen)}
                   aria-expanded={savedOpen}
-                  aria-controls={savedOpen ? "saved-panel" : undefined}
+                  aria-controls="saved-panel"
                 >
                   {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
                 </Button>
@@ -332,30 +335,17 @@ export default function HomeClient() {
             </div>
 
 
-          <Sheet open={savedOpen} onOpenChange={setSavedOpen}>
-            {isDesktop ? (
-              <SheetContent side="right" id="saved-panel">
-                <SheetHeader>
-                  <SheetTitle>
-                    {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
-                  </SheetTitle>
-                </SheetHeader>
-                <SheetBody>
-                  <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
-                </SheetBody>
-              </SheetContent>
-            ) : (
-              <SheetContent side="bottom" id="saved-panel">
-                <SheetHeader>
-                  <SheetTitle>
-                    {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
-                  </SheetTitle>
-                </SheetHeader>
-                <SheetBody className="px-4">
-                  <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
-                </SheetBody>
-              </SheetContent>
-            )}
+          <Sheet open={savedOpen} onOpenChange={onSavedOpenChange}>
+            <SheetContent side={savedSide} id="saved-panel">
+              <SheetHeader>
+                <SheetTitle>
+                  {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
+                </SheetTitle>
+              </SheetHeader>
+              <SheetBody className={savedSide === "bottom" ? "px-4" : undefined}>
+                <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
+              </SheetBody>
+            </SheetContent>
           </Sheet>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">

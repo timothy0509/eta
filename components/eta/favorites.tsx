@@ -32,6 +32,7 @@ import { MTR_STATIONS, type MtrStation } from "@/lib/data/mtr-stations";
 import { getLineColor } from "@/lib/eta/line-colors";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
+import { getReadableForeground } from "@/lib/ui/color";
 import { cn } from "@/lib/utils";
 import {
   type FavoritesGroup,
@@ -82,7 +83,10 @@ function FavoriteItemDisplay({
           {station.lines.map((line) => (
             <span
               key={line}
-              className="inline-flex h-4 items-center rounded px-1 text-[10px] font-semibold text-white"
+              className={cn(
+                "inline-flex h-4 items-center rounded px-1 text-[10px] font-semibold ring-1 ring-black/10",
+                getReadableForeground(getLineColor(line)),
+              )}
               style={{ backgroundColor: getLineColor(line) }}
             >
               {line}

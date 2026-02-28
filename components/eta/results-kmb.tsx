@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Marquee } from "@/components/ui/marquee";
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from "@/lib/eta/client";
-import { formatRelativeMinutes } from "@/lib/eta/format";
+import { formatRelativeMinutes, formatUiTime } from "@/lib/eta/format";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import { formatRelativeAgeLabel, isStaleByAge } from "@/lib/eta/stale";
 import type { UiLanguage } from "@/lib/eta/types";
@@ -850,10 +850,10 @@ export function KmbResults({
                 <span aria-hidden>·</span>
                 <span>
                   {lang === "en"
-                    ? `Updated ${updatedAt.toLocaleTimeString()}`
+                    ? `Updated ${formatUiTime(updatedAt, lang)}`
                     : lang === "sc"
-                      ? `更新 ${updatedAt.toLocaleTimeString()}`
-                      : `更新 ${updatedAt.toLocaleTimeString()}`}
+                      ? `更新 ${formatUiTime(updatedAt, lang)}`
+                      : `更新 ${formatUiTime(updatedAt, lang)}`}
                 </span>
                 {relativeAgeLabel ? (
                   <>

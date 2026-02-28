@@ -7,9 +7,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Marquee } from "@/components/ui/marquee";
 import { getLineColor } from "@/lib/eta/line-colors";
+import { formatUiTime } from "@/lib/eta/format";
 import { formatRelativeAgeLabel, isStaleByAge } from "@/lib/eta/stale";
 import type { LrtScheduleResponse } from "@/lib/eta/lrt";
 import type { UiLanguage } from "@/lib/eta/types";
+import { getReadableForeground } from "@/lib/ui/color";
 import { cn } from "@/lib/utils";
 
 function formatTrainLength(length: number, lang: UiLanguage) {
@@ -63,10 +65,10 @@ export function LrtResults({ title, lang, schedule, error, stale, lastUpdatedAt,
                 <span aria-hidden>·</span>
                 <span>
                   {lang === "en"
-                    ? `Updated ${updatedAt.toLocaleTimeString()}`
+                    ? `Updated ${formatUiTime(updatedAt, lang)}`
                     : lang === "sc"
-                      ? `更新 ${updatedAt.toLocaleTimeString()}`
-                      : `更新 ${updatedAt.toLocaleTimeString()}`}
+                      ? `更新 ${formatUiTime(updatedAt, lang)}`
+                      : `更新 ${formatUiTime(updatedAt, lang)}`}
                 </span>
                 {relativeAgeLabel ? (
                   <>
@@ -165,8 +167,17 @@ export function LrtResults({ title, lang, schedule, error, stale, lastUpdatedAt,
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
                             <Badge
-                              className="shrink-0 rounded-xl text-white"
-                              style={{ backgroundColor: getLineColor(String(r.route_no ?? "")) }}
+                              className={cn(
+                                "shrink-0 rounded-xl ring-1 ring-black/10",
+                                getReadableForeground(
+                                  getLineColor(String(r.route_no ?? ""))
+                                )
+                              )}
+                              style={{
+                                backgroundColor: getLineColor(
+                                  String(r.route_no ?? "")
+                                ),
+                              }}
                             >
                               {r.route_no}
                             </Badge>

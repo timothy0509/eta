@@ -205,7 +205,7 @@ export function MtrResults({
                 className="ui-lift mt-3 inline-flex items-center gap-2 rounded-xl border bg-card/50 px-3 py-2 text-sm hover:bg-card"
                 href={schedule.url}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 aria-label={
                   lang === "en"
                     ? "View details (opens in new tab)"

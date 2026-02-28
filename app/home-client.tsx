@@ -195,11 +195,14 @@ export default function HomeClient() {
       });
   });
 
-  const onSelectFromLists = (item: FavoritesItem) => {
-    setSelectedItem(item);
-    setMode(item.mode);
-    setSavedOpen(false);
-  };
+  const onSelectFromLists = React.useCallback(
+    (item: FavoritesItem) => {
+      setSelectedItem(item);
+      setMode(item.mode);
+      setSavedOpen(false);
+    },
+    [setMode, setSelectedItem, setSavedOpen],
+  );
 
   React.useEffect(() => {
     if (!didHydrateFromUrlRef.current) return;

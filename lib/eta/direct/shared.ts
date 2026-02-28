@@ -37,15 +37,28 @@ export async function getCachedValue<T>(params: {
 }): Promise<{ value: T; cached: boolean; stale: boolean; ageMs: number | null }> {
   const { key, policyKey, policy, fetcher, allowStale = false } = params;
   const caches = getCaches<T>(policyKey, policy);
+  const now = Date.now();
+  const staleMaxMs = params.staleMaxMs ?? policy.maxStaleMs ?? 0;
+  const memoryStale =
+    allowStale && staleMaxMs > 0 ? caches.fresh.getStale(key, staleMaxMs) : undefined;
 
-  const memoryValue = caches.fresh.get(key);
-  if (memoryValue !== undefined) {
-    return { value: memoryValue, cached: true, stale: false, ageMs: 0 };
+  if (memoryStale && isFresh(memoryStale.meta, now)) {
+    return { value: memoryStale.value, cached: true, stale: false, ageMs: 0 };
+  }
+
+  if (!memoryStale) {
+    const memoryValue = caches.fresh.get(key);
+    if (memoryValue !== undefined) {
+      return { value: memoryValue, cached: true, stale: false, ageMs: 0 };
+    }
   }
 
   const stored = policy.persist ? await idbGet<T>(key) : null;
-  if (stored && isFresh(stored)) {
-    caches.fresh.set(key, stored.value, policy.ttlMs);
+  if (stored && isFresh(stored, now)) {
+    const remainingTtlMs = stored.expiresAt - now;
+    if (remainingTtlMs > 0) {
+      caches.fresh.set(key, stored.value, remainingTtlMs);
+    }
     return { value: stored.value, cached: true, stale: false, ageMs: 0 };
   }
 
@@ -76,15 +89,30 @@ export async function getCachedValue<T>(params: {
     const value = await fetchPromise;
     return { value, cached: false, stale: false, ageMs: null };
   } catch (error) {
-    if (allowStale && stored) {
-      const staleMaxMs = params.staleMaxMs ?? policy.maxStaleMs ?? 0;
-      if (staleMaxMs > 0 && isWithinStale(stored, staleMaxMs)) {
-        caches.fresh.set(key, stored.value, policy.ttlMs);
-        return {
+    if (allowStale && staleMaxMs > 0) {
+      const staleNow = Date.now();
+      const candidates: Array<{ value: T; meta: { createdAt: number; expiresAt: number } }> = [];
+
+      if (memoryStale && staleNow > memoryStale.meta.expiresAt) {
+        candidates.push({ value: memoryStale.value, meta: memoryStale.meta });
+      }
+
+      if (stored && isWithinStale(stored, staleMaxMs, staleNow)) {
+        candidates.push({
           value: stored.value,
+          meta: { createdAt: stored.createdAt, expiresAt: stored.expiresAt },
+        });
+      }
+
+      if (candidates.length > 0) {
+        const selected = candidates.reduce((latest, current) =>
+          current.meta.createdAt > latest.meta.createdAt ? current : latest,
+        );
+        return {
+          value: selected.value,
           cached: true,
           stale: true,
-          ageMs: Date.now() - stored.createdAt,
+          ageMs: staleNow - selected.meta.createdAt,
         };
       }
     }

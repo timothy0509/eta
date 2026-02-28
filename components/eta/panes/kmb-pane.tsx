@@ -455,6 +455,10 @@ export function KmbPane({
   const [loadingStops, setLoadingStops] = React.useState(false);
   const [stopsError, setStopsError] = React.useState<string | null>(null);
 
+  const kmbStopsById = React.useMemo(() => {
+    return new Map(kmbStops.map((stop) => [stop.stopId, stop]));
+  }, [kmbStops]);
+
   const [kmbRouteStops, setKmbRouteStops] = React.useState<KmbRouteStopLite[]>([]);
   const [loadingRouteStops, setLoadingRouteStops] = React.useState(false);
   const [routeStopsError, setRouteStopsError] = React.useState<string | null>(null);
@@ -620,11 +624,8 @@ export function KmbPane({
     const trimmed = kmbDraftStopSelection.query.trim();
     if (trimmed.length < 3) return [];
 
-    return kmbStops
-      .filter((stop) => stopNameContains(stop, trimmed))
-      .slice(0, 20)
-      .map((stop) => stop.stopId);
-  }, [kmbDraftStopSelection, kmbStops]);
+    return resolveContainsStopIds(trimmed).slice(0, 20);
+  }, [kmbDraftStopSelection, resolveContainsStopIds]);
 
   const pickRouteVariantLabel = React.useCallback(
     (info: KmbRouteInfoLite | undefined) => {
@@ -763,6 +764,12 @@ export function KmbPane({
       });
 
       if (options.signal?.aborted) return;
+
+      if (result.truncatedStopIds?.length) {
+        console.warn(
+          `KMB ETA truncated ${result.truncatedStopIds.length} stop(s) (limit 100 per request).`
+        );
+      }
 
       // Apply advanced filter client-side if needed
       const advancedEntries = routeFilterMode === "advanced" ? (routeFilter.entries ?? []) : [];
@@ -1278,7 +1285,7 @@ export function KmbPane({
       };
     }
     if (kmbQuery.mode === "stop") {
-      const stop = kmbStops.find((s) => s.stopId === kmbQuery.stopId);
+      const stop = kmbStopsById.get(kmbQuery.stopId);
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang);
         const parsed = parseKmbStopName(fullName);
@@ -1287,7 +1294,9 @@ export function KmbPane({
       return { title: `Stop ${kmbQuery.stopId}`, code: null };
     }
     if (kmbQuery.mode === "stops") {
-      const firstStop = kmbStops.find((s) => kmbQuery.stopIds.includes(s.stopId));
+      const firstStop = kmbQuery.stopIds
+        .map((stopId) => kmbStopsById.get(stopId))
+        .find(Boolean);
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang);
         const parsed = parseKmbStopName(fullName);
@@ -1302,7 +1311,7 @@ export function KmbPane({
           : `包含「${kmbQuery.query.trim()}」的車站`,
       code: null,
     };
-  }, [kmbQuery, kmbStops, lang]);
+  }, [kmbQuery, kmbStopsById, lang]);
 
   const canFavorite =
     (kmbQuery?.mode === "stop" && kmbQuery.stopId) ||
@@ -1363,7 +1372,7 @@ export function KmbPane({
     let item: FavoritesItem | null = null;
 
     if (stopId) {
-      const stop = kmbStops.find((s) => s.stopId === stopId);
+      const stop = kmbStopsById.get(stopId);
       const fullName = stop ? pickKmbStopTitle(stop, lang) : lang === "en" ? "Bus" : "巴士";
       const { name } = parseKmbStopName(fullName);
       const title = `${name}${routeSuffix}`;
@@ -1380,7 +1389,7 @@ export function KmbPane({
         entries: entriesForSave,
       };
     } else if (stopIds && stopIds.length > 0) {
-      const firstStop = kmbStops.find((s) => stopIds.includes(s.stopId));
+      const firstStop = stopIds.map((stopId) => kmbStopsById.get(stopId)).find(Boolean);
       const fullName = firstStop ? pickKmbStopTitle(firstStop, lang) : "Selected Stops";
       const { name } = parseKmbStopName(fullName);
       const title = `${name}${routeSuffix}`;

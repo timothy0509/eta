@@ -9,6 +9,10 @@ import type { LrtStationSearchItem, UiLanguage } from "@/lib/eta/types";
 export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang: UiLanguage }) {
   const { stations, lang } = params;
 
+  const stationsById = React.useMemo(() => {
+    return new Map(stations.map((station) => [station.stationId, station]));
+  }, [stations]);
+
   const [stationId, setStationId] = React.useState<string | undefined>(undefined);
   const [schedule, setSchedule] = React.useState<LrtScheduleResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -23,7 +27,7 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
     async (options?: { toastOnError?: boolean }) => {
       if (!stationId) return;
 
-      const station = stations.find((entry) => entry.stationId === stationId);
+      const station = stationsById.get(stationId);
       if (!station) return;
 
       // Cancel any in-flight request
@@ -63,7 +67,7 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
         }
       }
     },
-    [stationId, stations]
+    [stationId, stationsById]
   );
 
   // Cleanup abort controller on unmount
@@ -82,10 +86,10 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
 
   const title = React.useMemo(() => {
     if (!stationId) return "Light Rail";
-    const station = stations.find((s) => s.stationId === stationId);
+    const station = stationsById.get(stationId);
     if (station) return lang === "en" ? station.nameEn : station.nameZh;
     return `Station ${stationId}`;
-  }, [lang, stationId, stations]);
+  }, [lang, stationId, stationsById]);
 
   return {
     stationId,

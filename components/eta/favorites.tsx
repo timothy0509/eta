@@ -188,12 +188,16 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   const [newGroupName, setNewGroupName] = React.useState("");
   const [editingGroupId, setEditingGroupId] = React.useState<string | null>(null);
   const [editingGroupName, setEditingGroupName] = React.useState("");
-  const dateFormatter = new Intl.DateTimeFormat(
-    lang === "en" ? "en-HK" : lang === "sc" ? "zh-Hans-HK" : "zh-Hant-HK",
-    {
-      dateStyle: "medium",
-      timeStyle: "short",
-    },
+  const dateFormatter = React.useMemo(
+    () =>
+      new Intl.DateTimeFormat(
+        lang === "en" ? "en-HK" : lang === "sc" ? "zh-Hans-HK" : "zh-Hant-HK",
+        {
+          dateStyle: "medium",
+          timeStyle: "short",
+        },
+      ),
+    [lang],
   );
 
   const mtrStationsBySta = React.useMemo(() => {

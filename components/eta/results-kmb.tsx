@@ -177,13 +177,17 @@ function getStopChips(
   const fullName = stop ? pickStopName(stop, lang) : null;
   const parsed = fullName ? parseKmbStopName(fullName) : null;
 
-  return {
+  const result = {
     stopId,
     fullName,
     name: parsed?.name ?? fullName ?? null,
     platform: parsed?.platform ?? null,
     stopCode: parsed?.stopCode ?? null,
   };
+
+  if (stopId) stopChipsById.set(stopId, result);
+
+  return result;
 }
 
 type StopInfo = {
@@ -638,7 +642,7 @@ export function KmbResults({
   precomputedGroups,
   registerStopRef,
 }: Props) {
-  const now = new Date();
+  const now = React.useMemo(() => new Date(), [lastUpdatedAt]);
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang, now });
   const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: "kmb", now });

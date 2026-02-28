@@ -1,8 +1,9 @@
-export type FetchJsonOptions = {
+export type FetchJsonOptions = Omit<RequestInit, "signal" | "headers"> & {
   cache?: RequestCache;
   next?: NextFetchRequestConfig;
   signal?: AbortSignal;
   timeoutMs?: number;
+  headers?: HeadersInit;
 };
 
 export class ApiError extends Error {
@@ -45,14 +46,26 @@ export async function fetchJson<T>(url: string, options: FetchJsonOptions = {}):
     ? AbortSignal.any([options.signal, controller.signal])
     : controller.signal;
 
+  const headers = new Headers(options.headers);
+  if (!headers.has("accept")) {
+    headers.set("accept", "application/json");
+  }
+
   try {
     const response = await fetch(url, {
+      method: options.method,
+      body: options.body,
+      credentials: options.credentials,
+      mode: options.mode,
+      redirect: options.redirect,
+      referrer: options.referrer,
+      referrerPolicy: options.referrerPolicy,
+      integrity: options.integrity,
+      keepalive: options.keepalive,
       cache: options.cache,
       next: options.next,
       signal,
-      headers: {
-        accept: "application/json",
-      },
+      headers,
     });
 
     if (!response.ok) {

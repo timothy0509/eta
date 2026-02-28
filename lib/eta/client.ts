@@ -198,6 +198,7 @@ export type KmbStopEtasResponse = {
   cached: number;
   fetched: number;
   staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>;
+  truncatedStopIds?: string[];
 };
 
 export async function fetchKmbStopEtas(

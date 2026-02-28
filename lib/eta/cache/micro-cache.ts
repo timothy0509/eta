@@ -44,8 +44,8 @@ export class MicroCache<T> {
     const entry = this.cache.get(key);
     if (!entry) return undefined;
 
-    const ageMs = Date.now() - entry.createdAt;
-    if (ageMs > maxStaleAgeMs) return undefined;
+    const now = Date.now();
+    if (now > entry.expiresAt + maxStaleAgeMs) return undefined;
 
     return {
       value: entry.value,

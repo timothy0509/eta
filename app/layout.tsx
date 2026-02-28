@@ -3,6 +3,7 @@ import { DM_Sans, Noto_Sans_HK, Noto_Sans_SC, Rubik } from "next/font/google";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/toaster";
+import { LangSync } from "@/components/eta/lang-sync";
 import "./globals.css";
 
 const dmSans = DM_Sans({
@@ -35,7 +36,7 @@ const notoSansSC = Noto_Sans_SC({
 
 // Geist Mono is loaded via @fontsource in globals.css
 
-const siteUrl = new URL("https://eta.hkjc.uk");
+const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://eta.hkjc.uk");
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,
@@ -108,6 +109,13 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <LangSync />
+          <a
+            href="#main-content"
+            className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-background focus:px-3 focus:py-2 focus:text-sm focus:text-foreground focus:shadow-lg"
+          >
+            Skip to content
+          </a>
           <script
             type="application/ld+json"
             dangerouslySetInnerHTML={{
@@ -121,7 +129,7 @@ export default function RootLayout({
               }),
             }}
           />
-          {children}
+          <main id="main-content">{children}</main>
           <Toaster />
         </ThemeProvider>
       </body>

@@ -126,7 +126,7 @@ export async function getLrtSchedule(params: {
         if (!hasEta && !hasDest) {
           return [] as LrtRouteEntry[];
         }
-        const remark = eta.remark?.en ?? "";
+        const remark = eta.remark?.en ?? eta.remark?.zh ?? "";
         const platformMatch = remark.match(/Platform\s+(\d+)/i) || remark.match(/(\d+)\s*號月台/);
         const platformId = platformMatch?.[1] ? Number(platformMatch[1]) : 0;
         return [
@@ -144,7 +144,7 @@ export async function getLrtSchedule(params: {
   for (const result of results) {
     if (result.status !== "fulfilled") continue;
     for (const entry of result.value) {
-      if (!entry.platform_id) continue;
+      if (entry.platform_id == null) continue;
       const list = platformMap.get(entry.platform_id) ?? [];
       list.push(entry);
       platformMap.set(entry.platform_id, list);

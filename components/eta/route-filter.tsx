@@ -39,6 +39,19 @@ export type RouteFilterOption = {
   label: string;
 };
 
+export function countActiveFilters(state: RouteFilterState): number {
+  const entries = state.entries ?? [];
+  if (entries.length > 0) return entries.length;
+  
+  const routes = (state.routes ?? "").trim();
+  if (!routes) return 0;
+  
+  return routes
+    .split(",")
+    .map((r) => r.trim())
+    .filter(Boolean).length;
+}
+
 function getCompanyFromVariantKey(key: string) {
   const [co] = key.split("|");
   return co || "kmb";

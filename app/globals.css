@@ -125,13 +125,13 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: var(--font-sans);
+    font-family: "DM Sans", "Noto Sans HK", "Noto Sans SC", ui-sans-serif, system-ui, sans-serif;
   }
 }
 
 /* Tabular numbers for ETA displays */
 .font-tabular {
-  font-family: var(--font-numbers);
+  font-family: "Rubik", "DM Sans", ui-sans-serif, system-ui, sans-serif;
   font-variant-numeric: tabular-nums;
 }
 

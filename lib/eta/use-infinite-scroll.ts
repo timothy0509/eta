@@ -121,18 +121,23 @@ export function useVisibleItems<T extends string | number>(
     observerRef.current = new IntersectionObserver(
       (entries) => {
         setVisibleIds((prev) => {
+          let changed = false;
           const next = new Set(prev);
           for (const entry of entries) {
             const id = (entry.target as HTMLElement).dataset.itemId as T | undefined;
-            if (id !== undefined) {
-              if (entry.isIntersecting) {
+            if (id === undefined) continue;
+
+            if (entry.isIntersecting) {
+              if (!next.has(id)) {
                 next.add(id);
-              } else {
-                next.delete(id);
+                changed = true;
               }
+            } else if (next.has(id)) {
+              next.delete(id);
+              changed = true;
             }
           }
-          return next;
+          return changed ? next : prev;
         });
       },
       {

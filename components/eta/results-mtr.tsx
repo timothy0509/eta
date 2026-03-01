@@ -8,9 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Marquee } from "@/components/ui/marquee";
 import { findMtrStationBySta } from "@/lib/data/mtr-stations";
 import { getLineColor } from "@/lib/eta/line-colors";
+import { formatUiTime } from "@/lib/eta/format";
 import { formatRelativeAgeLabel, isStaleByAge } from "@/lib/eta/stale";
 import type { MtrScheduleResponse } from "@/lib/eta/mtr";
 import type { UiLanguage } from "@/lib/eta/types";
+import { getReadableForeground } from "@/lib/ui/color";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -148,10 +150,10 @@ export function MtrResults({
                 <span aria-hidden>·</span>
                 <span>
                   {lang === "en"
-                    ? `Updated ${updatedAt.toLocaleTimeString()}`
+                    ? `Updated ${formatUiTime(updatedAt, lang)}`
                     : lang === "sc"
-                      ? `更新 ${updatedAt.toLocaleTimeString()}`
-                      : `更新 ${updatedAt.toLocaleTimeString()}`}
+                      ? `更新 ${formatUiTime(updatedAt, lang)}`
+                      : `更新 ${formatUiTime(updatedAt, lang)}`}
                 </span>
                 {relativeAgeLabel ? (
                   <>
@@ -205,7 +207,7 @@ export function MtrResults({
                 className="ui-lift mt-3 inline-flex items-center gap-2 rounded-xl border bg-card/50 px-3 py-2 text-sm hover:bg-card"
                 href={schedule.url}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
                 aria-label={
                   lang === "en"
                     ? "View details (opens in new tab)"
@@ -248,7 +250,10 @@ export function MtrResults({
                 <div className="flex min-w-0 items-center gap-2">
                   {line ? (
                     <Badge
-                      className="rounded-xl text-white"
+                      className={cn(
+                        "rounded-xl ring-1 ring-black/10",
+                        getReadableForeground(getLineColor(line)),
+                      )}
                       style={{ backgroundColor: getLineColor(line) }}
                     >
                       {line}
@@ -307,7 +312,10 @@ export function MtrResults({
                                   <div className="flex shrink-0 items-center gap-2">
                                     {platform ? (
                                       <Badge
-                                        className="rounded-lg px-2 py-0.5 text-xs text-white"
+                                        className={cn(
+                                          "rounded-lg px-2 py-0.5 text-xs ring-1 ring-black/10",
+                                          getReadableForeground(getLineColor(line)),
+                                        )}
                                         style={{
                                           backgroundColor: getLineColor(line),
                                         }}

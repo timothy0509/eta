@@ -247,13 +247,16 @@ export type KmbStopEtasResponse = {
   cached: number;
   fetched: number;
   staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>;
+  truncatedStopIds?: string[];
 };
 
 export async function fetchKmbStopEtas(
   stopIds: string[],
   options?: { routeFilter?: string; includeFares?: boolean }
 ): Promise<KmbStopEtasResponse> {
-  const uniqueStopIds = Array.from(new Set(stopIds)).slice(0, 100);
+  const dedupedStopIds = Array.from(new Set(stopIds));
+  const uniqueStopIds = dedupedStopIds.slice(0, 100);
+  const truncatedStopIds = dedupedStopIds.length > 100 ? dedupedStopIds.slice(100) : [];
   const routeFilterSet = options?.routeFilter
     ? new Set(
         options.routeFilter
@@ -440,6 +443,7 @@ export async function fetchKmbStopEtas(
     cached,
     fetched,
     staleByStopId,
+    ...(truncatedStopIds.length > 0 ? { truncatedStopIds } : null),
   };
 }
 

@@ -32,5 +32,5 @@ export function isFresh(meta: CacheEntryMeta, now = Date.now()): boolean {
 }
 
 export function isWithinStale(meta: CacheEntryMeta, maxStaleMs: number, now = Date.now()): boolean {
-  return now - meta.createdAt <= maxStaleMs;
+  return now <= meta.expiresAt + maxStaleMs;
 }

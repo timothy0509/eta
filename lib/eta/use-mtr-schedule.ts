@@ -12,6 +12,10 @@ export function useMtrSchedule(params: {
 }) {
   const { lang, stations } = params;
 
+  const stationsById = React.useMemo(() => {
+    return new Map(stations.map((station) => [station.sta, station]));
+  }, [stations]);
+
   const [sta, setSta] = React.useState<string | undefined>(undefined);
   const [schedule, setSchedule] = React.useState<MtrScheduleResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -26,7 +30,7 @@ export function useMtrSchedule(params: {
     async (options?: { toastOnError?: boolean }) => {
       if (!sta) return;
 
-      const station = stations.find((s) => s.sta === sta);
+      const station = stationsById.get(sta);
       if (!station) return;
 
       // Cancel any in-flight request
@@ -68,13 +72,15 @@ export function useMtrSchedule(params: {
           return;
         }
 
+        const hadErrors = result.errors.length > 0;
+
         setSchedule({
           ...baseline,
           status: Object.keys(mergedData).length ? 1 : baseline.status,
           data: Object.keys(mergedData).length ? mergedData : baseline.data,
         });
         setLastUpdatedAt(Date.now());
-        setStale(false);
+        setStale(hadErrors);
 
         // Warn if we hit rate limiting
         if (result.backoff) {
@@ -96,7 +102,7 @@ export function useMtrSchedule(params: {
         }
       }
     },
-    [lang, sta, stations]
+    [lang, sta, stationsById]
   );
 
   // Cleanup abort controller on unmount
@@ -115,9 +121,9 @@ export function useMtrSchedule(params: {
 
   const title = React.useMemo(() => {
     if (!sta) return "MTR";
-    const station = stations.find((s) => s.sta === sta);
+    const station = stationsById.get(sta);
     return station ? (lang === "en" ? station.nameEn : station.nameTc) : `Station ${sta}`;
-  }, [lang, sta, stations]);
+  }, [lang, sta, stationsById]);
 
   return {
     sta,

@@ -125,7 +125,9 @@ export async function getStopToTerminusFare(params: {
       if (item.route.toUpperCase() !== routeName) return false;
       if (String(item.serviceType) !== serviceType) return false;
       const itemBound = String(item.bound?.[params.co] ?? "");
-      return itemBound === bound || (bound === "I" && itemBound === "I") || (bound !== "I" && itemBound === "O");
+      const normalizedBound = bound === "I" || bound === "O" ? bound : "";
+      if (normalizedBound) return itemBound === normalizedBound;
+      return itemBound === "" || itemBound === bound;
     }
   );
 

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { Marquee } from "@/components/ui/marquee";
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from "@/lib/eta/client";
-import { formatRelativeMinutes } from "@/lib/eta/format";
+import { formatRelativeMinutes, formatUiTime } from "@/lib/eta/format";
 import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import { formatRelativeAgeLabel, isStaleByAge } from "@/lib/eta/stale";
 import type { UiLanguage } from "@/lib/eta/types";
@@ -177,13 +177,17 @@ function getStopChips(
   const fullName = stop ? pickStopName(stop, lang) : null;
   const parsed = fullName ? parseKmbStopName(fullName) : null;
 
-  return {
+  const result = {
     stopId,
     fullName,
     name: parsed?.name ?? fullName ?? null,
     platform: parsed?.platform ?? null,
     stopCode: parsed?.stopCode ?? null,
   };
+
+  if (stopId) stopChipsById.set(stopId, result);
+
+  return result;
 }
 
 type StopInfo = {
@@ -232,7 +236,7 @@ type Props = {
 };
 
 /** Render a single route variant card */
-function RouteVariantCard({
+const RouteVariantCard = React.memo(function RouteVariantCard({
   variantKey,
   baseKey,
   items,
@@ -512,10 +516,10 @@ function RouteVariantCard({
       </div>
     </div>
   );
-}
+});
 
 /** Render a stop section with its routes */
-function StopSection({
+const StopSection = React.memo(function StopSection({
   stopId,
   stopInfo,
   groups,
@@ -611,7 +615,7 @@ function StopSection({
       )}
     </div>
   );
-}
+});
 
 export function KmbResults({
   lang,
@@ -638,7 +642,7 @@ export function KmbResults({
   precomputedGroups,
   registerStopRef,
 }: Props) {
-  const now = new Date();
+  const now = React.useMemo(() => new Date(), [lastUpdatedAt]);
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null;
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang, now });
   const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: "kmb", now });
@@ -846,10 +850,10 @@ export function KmbResults({
                 <span aria-hidden>·</span>
                 <span>
                   {lang === "en"
-                    ? `Updated ${updatedAt.toLocaleTimeString()}`
+                    ? `Updated ${formatUiTime(updatedAt, lang)}`
                     : lang === "sc"
-                      ? `更新 ${updatedAt.toLocaleTimeString()}`
-                      : `更新 ${updatedAt.toLocaleTimeString()}`}
+                      ? `更新 ${formatUiTime(updatedAt, lang)}`
+                      : `更新 ${formatUiTime(updatedAt, lang)}`}
                 </span>
                 {relativeAgeLabel ? (
                   <>

@@ -1,4 +1,4 @@
-import { fetchJson } from "@/lib/eta/fetch/fetch-json";
+import { fetchJson } from "@/lib/eta/http";
 import { mtrScheduleKey } from "@/lib/eta/cache/keys";
 import { CACHE_POLICIES } from "@/lib/eta/cache/policy";
 import { promisePool } from "@/lib/eta/promise-pool";
@@ -7,6 +7,7 @@ import { getCachedValue } from "@/lib/eta/direct/shared";
 const MTR_BASE_URL = "https://rt.data.gov.hk";
 const MTR_CONCURRENCY = 3;
 const BACKOFF_DURATION_MS = 30_000;
+const BACKOFF_STALE_MAX_MS = 30_000;
 let backoffUntil = 0;
 
 export type MtrLang = "EN" | "TC";
@@ -78,15 +79,18 @@ export async function fetchMtrSchedules(
   const errors: string[] = [];
   let cached = 0;
   let fetched = 0;
+  let sawRateLimit = false;
 
   const results = await promisePool(uniqueList, MTR_CONCURRENCY, async (q) => {
-    const resultKey = `${q.line}-${q.sta}`;
+    const resultKey = `${q.line}-${q.sta}-${q.lang}`;
     const cacheKey = mtrScheduleKey({ line: q.line, sta: q.sta, lang: q.lang });
 
     const cachedValue = await getCachedValue<MtrScheduleResponse>({
       key: cacheKey,
       policyKey: "mtrSchedule",
       policy: CACHE_POLICIES.mtrSchedule,
+      allowStale: inBackoff,
+      staleMaxMs: BACKOFF_STALE_MAX_MS,
       fetcher: async () => {
         if (inBackoff) {
           throw new Error("Rate limited - in backoff");
@@ -104,12 +108,13 @@ export async function fetchMtrSchedules(
   for (let i = 0; i < results.length; i++) {
     const result = results[i];
     const query = uniqueList[i];
-    const key = `${query.line}-${query.sta}`;
+    const key = `${query.line}-${query.sta}-${query.lang}`;
 
     if (result.status === "rejected") {
       const reason = result.reason as { status?: number } | undefined;
       if (reason && typeof reason.status === "number" && reason.status === 429) {
         backoffUntil = Date.now() + BACKOFF_DURATION_MS;
+        sawRateLimit = true;
       }
       errors.push(key);
       continue;
@@ -123,6 +128,6 @@ export async function fetchMtrSchedules(
     errors,
     cached,
     fetched,
-    backoff: inBackoff,
+    backoff: inBackoff || sawRateLimit,
   };
 }

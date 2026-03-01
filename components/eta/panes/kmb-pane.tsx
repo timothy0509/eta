@@ -1,9 +1,10 @@
 "use client";
 
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import * as React from "react";
 
 import {
+  countActiveFilters,
   RouteFilter,
   type RouteFilterOption,
   type RouteFilterState,
@@ -28,6 +29,7 @@ import { parseKmbStopName } from "@/lib/eta/kmb-stop-name";
 import type { KmbStopSearchItem, UiLanguage } from "@/lib/eta/types";
 import type { Company } from "hk-bus-eta";
 import { useInfiniteScroll, useVisibleItems } from "@/lib/eta/use-infinite-scroll";
+import { useMediaQuery } from "@/lib/hooks/use-media-query";
 import { cn } from "@/lib/utils";
 import type { FavoritesItem, RouteFilterMode } from "@/lib/store";
 
@@ -474,6 +476,14 @@ export function KmbPane({
     routes: "",
     entries: [],
   });
+
+  const isMobile = !useMediaQuery("(min-width: 1024px)");
+  const [filterExpanded, setFilterExpanded] = React.useState(false);
+
+  const activeFilterCount = React.useMemo(
+    () => countActiveFilters(routeFilter),
+    [routeFilter]
+  );
 
   // ========== OPTIMIZATION: Use reducer for batched ETA state updates ==========
   const [etaState, dispatchEta] = React.useReducer(etaReducer, initialEtaState);
@@ -1535,14 +1545,59 @@ export function KmbPane({
         }}
       />
 
-      <RouteFilter
-        lang={lang}
-        mode={routeFilterMode}
-        onModeChange={onRouteFilterModeChange}
-        value={routeFilter}
-        options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
-        onChange={(next) => setRouteFilter(next)}
-      />
+      {isMobile ? (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={() => setFilterExpanded(!filterExpanded)}
+            className="flex w-full items-center justify-between rounded-2xl border bg-card/50 p-4 text-left"
+            aria-expanded={filterExpanded}
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium">
+                {lang === "en" ? "Route Filter" : "路線篩選"}
+              </span>
+              {activeFilterCount > 0 && (
+                <Badge variant="secondary" className="rounded-lg px-2 py-0.5 text-xs">
+                  {activeFilterCount}
+                </Badge>
+              )}
+            </div>
+            {filterExpanded ? (
+              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+            ) : (
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            )}
+          </button>
+
+          <div
+            className={cn(
+              "grid transition-all duration-200 ease-in-out",
+              filterExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"
+            )}
+          >
+            <div className="overflow-hidden">
+              <RouteFilter
+                lang={lang}
+                mode={routeFilterMode}
+                onModeChange={onRouteFilterModeChange}
+                value={routeFilter}
+                options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
+                onChange={(next) => setRouteFilter(next)}
+              />
+            </div>
+          </div>
+        </div>
+      ) : (
+        <RouteFilter
+          lang={lang}
+          mode={routeFilterMode}
+          onModeChange={onRouteFilterModeChange}
+          value={routeFilter}
+          options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
+          onChange={(next) => setRouteFilter(next)}
+        />
+      )}
 
 
       {stopsError ? (

@@ -56,6 +56,17 @@ This app is deployed and running here:
 
 - https://eta.hkjc.uk
 
+### User Guide
+
+For comprehensive documentation on how to use TimoETA, see the **[User Guide](USER_GUIDE.md)**.
+
+The guide covers:
+- Detailed instructions for KMB Bus, MTR, and Light Rail features
+- Managing favorites and recent searches
+- Auto-refresh, language support, and themes
+- Deep linking and sharing
+- Tips, tricks, and troubleshooting
+
 ### Prerequisites
 
 - Node.js 18+

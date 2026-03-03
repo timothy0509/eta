@@ -1,5 +1,5 @@
-import { HomeLoading } from "@/app/home-loading";
+import { HomeLoading } from '@/app/home-loading'
 
 export default function Loading() {
-  return <HomeLoading />;
+  return <HomeLoading />
 }

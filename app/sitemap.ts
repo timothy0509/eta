@@ -1,14 +1,14 @@
-import type { MetadataRoute } from "next";
+import type { MetadataRoute } from 'next'
 
-const lastModified = new Date(process.env.NEXT_PUBLIC_BUILD_TIME ?? Date.now());
+const lastModified = new Date(process.env.NEXT_PUBLIC_BUILD_TIME ?? Date.now())
 
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
-      url: "https://eta.hkjc.uk",
+      url: 'https://eta.hkjc.uk',
       lastModified,
-      changeFrequency: "daily",
+      changeFrequency: 'daily',
       priority: 1,
     },
-  ];
+  ]
 }

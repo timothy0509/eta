@@ -88,10 +88,12 @@ For broader searches:
 ### Route Filtering
 
 #### Simple Mode (Default)
+
 - Enter route numbers separated by commas (e.g., "40, 68X, 260X")
 - Leave blank to show all routes at the stop
 
 #### Advanced Mode
+
 1. Toggle the **"Advanced"** switch
 2. Click **"Add"** to add route filters
 3. Select specific route variants from the dropdown
@@ -184,6 +186,7 @@ The display shows:
 ### LRT Route Information
 
 Light Rail routes are numbered (e.g., 505, 610, 705)
+
 - Routes serve specific areas in the Northwest New Territories
 - Some routes are circular (loop routes)
 
@@ -218,12 +221,14 @@ Keep your ETAs up-to-date automatically:
 Access your favorites in the **"Saved"** panel:
 
 **Favorites Tab:**
+
 - **Pin items** - Click the pin icon to keep important stops at the top
 - **Move items** - Use up/down arrows to reorder
 - **Group items** - Assign favorites to custom groups
 - **Remove items** - Click the trash icon to delete
 
 **Groups:**
+
 1. Type a group name and click **"Add group"**
 2. Assign favorites to groups using the **"Group"** dropdown
 3. Rename or delete groups as needed
@@ -247,6 +252,7 @@ TimoETA supports three languages:
 - **简** - Simplified Chinese (简体中文)
 
 **To change language:**
+
 1. Click the language toggle in the top-right corner
 2. Select your preferred language
 3. All UI elements update immediately
@@ -271,6 +277,7 @@ Share specific views with others:
 - Example: `https://eta.hkjc.uk/?mode=kmb&stop=...&routes=40,68X`
 
 **Use cases:**
+
 - Share your commute stops with friends
 - Bookmark frequently used views
 - Link to specific stops in messages or notes
@@ -378,6 +385,7 @@ A: All UI text updates, and stop/station names change to the selected language w
 #### "No results found" when searching
 
 **Solutions:**
+
 1. Check your spelling
 2. Try searching in a different language
 3. Use fewer characters (minimum 2-3)
@@ -387,6 +395,7 @@ A: All UI text updates, and stop/station names change to the selected language w
 #### ETAs not updating
 
 **Solutions:**
+
 1. Check your internet connection
 2. Verify auto-refresh is enabled (not "Off")
 3. Try a manual page refresh
@@ -396,6 +405,7 @@ A: All UI text updates, and stop/station names change to the selected language w
 #### Favorites disappeared
 
 **Solutions:**
+
 1. Check if you cleared browser data recently
 2. Verify you're using the same browser/device
 3. Check browser settings for local storage permissions
@@ -404,6 +414,7 @@ A: All UI text updates, and stop/station names change to the selected language w
 #### Slow performance
 
 **Solutions:**
+
 1. Reduce auto-refresh frequency (try 30s or 60s)
 2. Close unnecessary browser tabs
 3. Clear browser cache
@@ -413,6 +424,7 @@ A: All UI text updates, and stop/station names change to the selected language w
 #### Mobile display issues
 
 **Solutions:**
+
 1. Rotate to landscape mode for better table view
 2. Ensure you're using the latest browser version
 3. Check if your browser supports modern web features
@@ -421,6 +433,7 @@ A: All UI text updates, and stop/station names change to the selected language w
 #### Language not changing
 
 **Solutions:**
+
 1. Click the language toggle firmly
 2. Refresh the page and try again
 3. Clear browser cache
@@ -431,6 +444,7 @@ A: All UI text updates, and stop/station names change to the selected language w
 #### Stale data indicator appears
 
 This means the ETA data is old. Solutions:
+
 1. Manual refresh the page
 2. Check your internet connection
 3. Wait a few minutes for the system to recover
@@ -439,6 +453,7 @@ This means the ETA data is old. Solutions:
 #### Incorrect ETA times
 
 **Note:** ETAs are sourced from official APIs. If they seem incorrect:
+
 1. Check the scheduled time vs. real-time ETA
 2. Real-time ETAs can change due to traffic conditions
 3. Report persistent issues to the transit operator
@@ -446,6 +461,7 @@ This means the ETA data is old. Solutions:
 #### Missing routes
 
 **Solutions:**
+
 1. Some routes may not be available at certain times
 2. Check if it's an overnight route (N-series) running only at night
 3. Verify the route exists using the transit operator's official app
@@ -454,6 +470,7 @@ This means the ETA data is old. Solutions:
 ### Browser Compatibility
 
 **Supported browsers:**
+
 - Chrome (recommended)
 - Firefox
 - Safari
@@ -461,6 +478,7 @@ This means the ETA data is old. Solutions:
 - Mobile browsers (iOS Safari, Android Chrome)
 
 **Known issues:**
+
 - Internet Explorer is not supported
 - Some older browsers may have display issues
 - Privacy-focused browsers may block local storage
@@ -497,4 +515,4 @@ TimoETA is open source software licensed under the MIT License.
 
 ---
 
-*Thank you for using TimoETA! We hope this guide helps you make the most of your Hong Kong transit experience.*
+_Thank you for using TimoETA! We hope this guide helps you make the most of your Hong Kong transit experience._

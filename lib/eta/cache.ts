@@ -5,49 +5,49 @@
  */
 
 type CacheEntry<T> = {
-  value: T;
-  expiresAt: number;
+  value: T
+  expiresAt: number
   /** Timestamp when this entry was created */
-  createdAt: number;
-};
+  createdAt: number
+}
 
 type CacheEntryMeta = {
-  expiresAt: number;
-  createdAt: number;
-};
+  expiresAt: number
+  createdAt: number
+}
 
 type InFlightEntry<T> = {
-  promise: Promise<T>;
-  createdAt: number;
-};
+  promise: Promise<T>
+  createdAt: number
+}
 
-const DEFAULT_TTL_MS = 15_000; // 15 seconds
-const MAX_INFLIGHT_AGE_MS = 30_000; // 30 seconds max for in-flight dedup
+const DEFAULT_TTL_MS = 15_000 // 15 seconds
+const MAX_INFLIGHT_AGE_MS = 30_000 // 30 seconds max for in-flight dedup
 
 export class MicroCache<T> {
-  private cache = new Map<string, CacheEntry<T>>();
-  private inFlight = new Map<string, InFlightEntry<T>>();
-  private ttlMs: number;
-  private maxSize: number;
+  private cache = new Map<string, CacheEntry<T>>()
+  private inFlight = new Map<string, InFlightEntry<T>>()
+  private ttlMs: number
+  private maxSize: number
 
   constructor(options: { ttlMs?: number; maxSize?: number } = {}) {
-    this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS;
-    this.maxSize = options.maxSize ?? 500;
+    this.ttlMs = options.ttlMs ?? DEFAULT_TTL_MS
+    this.maxSize = options.maxSize ?? 500
   }
 
   /**
    * Get a cached value if it exists and hasn't expired.
    */
   get(key: string): T | undefined {
-    const entry = this.cache.get(key);
-    if (!entry) return undefined;
+    const entry = this.cache.get(key)
+    if (!entry) return undefined
 
     if (Date.now() > entry.expiresAt) {
-      this.cache.delete(key);
-      return undefined;
+      this.cache.delete(key)
+      return undefined
     }
 
-    return entry.value;
+    return entry.value
   }
 
   /**
@@ -55,11 +55,11 @@ export class MicroCache<T> {
    * NOTE: Only use this when you can clearly signal staleness to the client.
    */
   getStale(key: string, maxStaleAgeMs: number): { value: T; meta: CacheEntryMeta } | undefined {
-    const entry = this.cache.get(key);
-    if (!entry) return undefined;
+    const entry = this.cache.get(key)
+    if (!entry) return undefined
 
-    const ageMs = Date.now() - entry.createdAt;
-    if (ageMs > maxStaleAgeMs) return undefined;
+    const ageMs = Date.now() - entry.createdAt
+    if (ageMs > maxStaleAgeMs) return undefined
 
     return {
       value: entry.value,
@@ -67,7 +67,7 @@ export class MicroCache<T> {
         createdAt: entry.createdAt,
         expiresAt: entry.expiresAt,
       },
-    };
+    }
   }
 
   /**
@@ -76,31 +76,31 @@ export class MicroCache<T> {
   set(key: string, value: T, ttlMs?: number): void {
     // Evict oldest entries if we're at capacity
     if (this.cache.size >= this.maxSize) {
-      this.evictOldest();
+      this.evictOldest()
     }
 
-    const now = Date.now();
+    const now = Date.now()
     this.cache.set(key, {
       value,
       expiresAt: now + (ttlMs ?? this.ttlMs),
       createdAt: now,
-    });
+    })
   }
 
   /**
    * Delete a specific key from the cache.
    */
   delete(key: string): void {
-    this.cache.delete(key);
-    this.inFlight.delete(key);
+    this.cache.delete(key)
+    this.inFlight.delete(key)
   }
 
   /**
    * Clear all cached values.
    */
   clear(): void {
-    this.cache.clear();
-    this.inFlight.clear();
+    this.cache.clear()
+    this.inFlight.clear()
   }
 
   /**
@@ -109,31 +109,31 @@ export class MicroCache<T> {
    */
   async getOrFetch(key: string, fetcher: () => Promise<T>, ttlMs?: number): Promise<T> {
     // Check cache first
-    const cached = this.get(key);
+    const cached = this.get(key)
     if (cached !== undefined) {
-      return cached;
+      return cached
     }
 
     // Check for in-flight request (dedupe)
-    const existing = this.inFlight.get(key);
+    const existing = this.inFlight.get(key)
     if (existing && Date.now() - existing.createdAt < MAX_INFLIGHT_AGE_MS) {
-      return existing.promise;
+      return existing.promise
     }
 
     // Create new request
     const promise = fetcher()
       .then((value) => {
-        this.set(key, value, ttlMs);
-        this.inFlight.delete(key);
-        return value;
+        this.set(key, value, ttlMs)
+        this.inFlight.delete(key)
+        return value
       })
       .catch((error) => {
-        this.inFlight.delete(key);
-        throw error;
-      });
+        this.inFlight.delete(key)
+        throw error
+      })
 
-    this.inFlight.set(key, { promise, createdAt: Date.now() });
-    return promise;
+    this.inFlight.set(key, { promise, createdAt: Date.now() })
+    return promise
   }
 
   /**
@@ -143,26 +143,26 @@ export class MicroCache<T> {
     return {
       size: this.cache.size,
       inFlightCount: this.inFlight.size,
-    };
+    }
   }
 
   private evictOldest(): void {
     // Remove ~20% of oldest entries
-    const entriesToRemove = Math.max(1, Math.floor(this.maxSize * 0.2));
+    const entriesToRemove = Math.max(1, Math.floor(this.maxSize * 0.2))
     const entries = Array.from(this.cache.entries())
       .sort((a, b) => a[1].createdAt - b[1].createdAt)
-      .slice(0, entriesToRemove);
+      .slice(0, entriesToRemove)
 
     for (const [key] of entries) {
-      this.cache.delete(key);
+      this.cache.delete(key)
     }
   }
 }
 
 // Singleton caches for each provider
-export const kmbStopEtaCache = new MicroCache<unknown>({ ttlMs: 15_000, maxSize: 500 });
-export const mtrScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 200 });
-export const lrtScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 100 });
+export const kmbStopEtaCache = new MicroCache<unknown>({ ttlMs: 15_000, maxSize: 500 })
+export const mtrScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 200 })
+export const lrtScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 100 })
 
 // ETA database cache (24h TTL for the full DB, set per-key)
-export const etaDbCache = new MicroCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 10 });
+export const etaDbCache = new MicroCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 10 })

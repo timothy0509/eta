@@ -1,8 +1,8 @@
-"use client";
+'use client'
 
-import * as React from "react";
-import { Loader2 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import * as React from 'react'
+import { Loader2 } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 /**
  * Skeleton loading state for transport mode panes
@@ -12,12 +12,12 @@ export function PaneSkeleton({ className }: { className?: string }) {
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-3 py-8 text-muted-foreground",
+        'text-muted-foreground flex flex-col items-center justify-center gap-3 py-8',
         className
       )}
     >
       <Loader2 className="h-6 w-6 animate-spin" />
       <span className="text-sm">Loading...</span>
     </div>
-  );
+  )
 }

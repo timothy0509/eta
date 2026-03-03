@@ -1,18 +1,15 @@
-"use client"
+'use client'
 
-import * as React from "react"
-import * as TabsPrimitive from "@radix-ui/react-tabs"
+import * as React from 'react'
+import * as TabsPrimitive from '@radix-ui/react-tabs'
 
-import { cn } from "@/lib/utils"
+import { cn } from '@/lib/utils'
 
-function Tabs({
-  className,
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.Root>) {
+function Tabs({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
   return (
     <TabsPrimitive.Root
       data-slot="tabs"
-      className={cn("flex flex-col gap-2", className)}
+      className={cn('flex flex-col gap-2', className)}
       {...props}
     />
   )
@@ -84,7 +81,7 @@ function TabsList({
     mutationObserver.observe(list, {
       subtree: true,
       attributes: true,
-      attributeFilter: ["data-state"],
+      attributeFilter: ['data-state'],
     })
 
     return () => {
@@ -99,8 +96,8 @@ function TabsList({
       ref={listRef}
       data-slot="tabs-list"
       className={cn(
-        "bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
-        withIndicator && "relative isolate",
+        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
+        withIndicator && 'relative isolate',
         className
       )}
       {...props}
@@ -109,7 +106,7 @@ function TabsList({
         <span
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute left-0 top-0 z-0 rounded-md border border-transparent bg-background shadow-sm transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none dark:border-input dark:bg-input/30",
+            'bg-background dark:border-input dark:bg-input/30 pointer-events-none absolute top-0 left-0 z-0 rounded-md border border-transparent shadow-sm transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none',
             indicatorClassName
           )}
           style={{
@@ -138,9 +135,9 @@ function TabsTrigger({ className, unstyledActive = false, ...props }: TabsTrigge
     <TabsPrimitive.Trigger
       data-slot="tabs-trigger"
       className={cn(
-        "ui-press relative z-10 focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring text-foreground dark:text-muted-foreground dark:data-[state=active]:text-foreground inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+        "ui-press focus-visible:border-ring focus-visible:ring-ring/50 focus-visible:outline-ring text-foreground dark:text-muted-foreground dark:data-[state=active]:text-foreground relative z-10 inline-flex h-[calc(100%-1px)] flex-1 items-center justify-center gap-1.5 rounded-md border border-transparent px-2 py-1 text-sm font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:ring-[3px] focus-visible:outline-1 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
         !unstyledActive &&
-          "data-[state=active]:bg-background data-[state=active]:shadow-sm dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30",
+          'data-[state=active]:bg-background dark:data-[state=active]:border-input dark:data-[state=active]:bg-input/30 data-[state=active]:shadow-sm',
         className
       )}
       {...props}
@@ -148,14 +145,11 @@ function TabsTrigger({ className, unstyledActive = false, ...props }: TabsTrigge
   )
 }
 
-function TabsContent({
-  className,
-  ...props
-}: React.ComponentProps<typeof TabsPrimitive.Content>) {
+function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
   return (
     <TabsPrimitive.Content
       data-slot="tabs-content"
-      className={cn("flex-1 outline-none", className)}
+      className={cn('flex-1 outline-none', className)}
       {...props}
     />
   )

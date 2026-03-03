@@ -5,6 +5,7 @@ A clean, fast ETA (Estimated Time of Arrival) web application for Hong Kong publ
 ## Features
 
 ### KMB Bus ETAs
+
 - Real-time arrival times for KMB bus routes
 - Stop search by name/code with infinite scroll + fuzzy matching
 - Stop grouping for the same stop name (e.g., opposite road sides)
@@ -13,6 +14,7 @@ A clean, fast ETA (Estimated Time of Arrival) web application for Hong Kong publ
 - **Fare information** for routes with supported fare data
 
 ### MTR Next Train
+
 - Arrival times for MTR lines
 - Station search by name
 - View arrivals for all lines serving a station
@@ -20,11 +22,13 @@ A clean, fast ETA (Estimated Time of Arrival) web application for Hong Kong publ
 - Batched API with 429 backoff handling for improved reliability
 
 ### Light Rail Schedule
+
 - Real-time arrivals for LRT
 - Station search by name
 - View platform-specific arrivals
 
 ### General Features
+
 - Auto-refresh (10s, 15s, 30s, 60s, or off)
 - **Saved stops/stations management** via centralized sheet UI
 - **Favorites pinning and grouping** — Pin favorites to top and group by transport mode
@@ -61,6 +65,7 @@ This app is deployed and running here:
 For comprehensive documentation on how to use TimoETA, see the **[User Guide](USER_GUIDE.md)**.
 
 The guide covers:
+
 - Detailed instructions for KMB Bus, MTR, and Light Rail features
 - Managing favorites and recent searches
 - Auto-refresh, language support, and themes

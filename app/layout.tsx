@@ -9,28 +9,28 @@ import './globals.css'
 const dmSans = DM_Sans({
   variable: '--font-dm-sans',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '700'],
   display: 'swap',
 })
 
 const rubik = Rubik({
   variable: '--font-rubik',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '700'],
   display: 'swap',
 })
 
 const notoSansHK = Noto_Sans_HK({
   variable: '--font-noto-sans-hk',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '700'],
   display: 'swap',
 })
 
 const notoSansSC = Noto_Sans_SC({
   variable: '--font-noto-sans-sc',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '700'],
   display: 'swap',
 })
 
@@ -95,6 +95,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://data.etabus.gov.hk" />
+        <link rel="preconnect" href="https://opendata.mtr.com.hk" />
+        <link rel="preconnect" href="https://www.lrtetas.hk" />
+        <link rel="dns-prefetch" href="https://data.etabus.gov.hk" />
+        <link rel="dns-prefetch" href="https://opendata.mtr.com.hk" />
+        <link rel="dns-prefetch" href="https://www.lrtetas.hk" />
+      </head>
       <body
         className={`${dmSans.variable} ${rubik.variable} ${notoSansHK.variable} ${notoSansSC.variable} min-h-dvh antialiased`}
       >

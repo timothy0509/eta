@@ -1,129 +1,129 @@
-"use client";
+'use client'
 
-import type { TransportMode, UiLanguage } from "@/lib/eta/types";
-import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import type { TransportMode, UiLanguage } from '@/lib/eta/types'
+import { create } from 'zustand'
+import { persist } from 'zustand/middleware'
 
-export type RouteFilterMode = "simple" | "advanced";
+export type RouteFilterMode = 'simple' | 'advanced'
 
 type FavoritesMeta = {
-  pinned?: boolean;
-  groupId?: string | null;
-};
+  pinned?: boolean
+  groupId?: string | null
+}
 
-export type FavoritesItem = FavoritesMeta & (
+export type FavoritesItem = FavoritesMeta &
   // KMB: single stop
-  | {
-      id: string;
-      mode: "kmb";
-      title: string;
-      stopId: string;
-      // Route filter - simple mode (legacy field name for backward compat)
-      route?: string;
-      serviceType?: string;
-      // Extended route filter fields
-      routeFilterMode?: RouteFilterMode;
-      entries?: { variantKey: string }[];
-    }
-  // KMB: grouped stops (multiple stops with same name)
-  | {
-      id: string;
-      mode: "kmb";
-      title: string;
-      stopIds: string[];
-      // Route filter
-      routeFilterMode?: RouteFilterMode;
-      route?: string;
-      entries?: { variantKey: string }[];
-    }
-  // KMB: contains query
-  | {
-      id: string;
-      mode: "kmb";
-      title: string;
-      query: string;
-      // Route filter - simple mode (legacy field name for backward compat)
-      route?: string;
-      serviceType?: string;
-      // Extended route filter fields
-      routeFilterMode?: RouteFilterMode;
-      entries?: { variantKey: string }[];
-    }
-  | {
-      id: string;
-      mode: "mtr";
-      // Titles are stored for display convenience only.
-      // They may be regenerated in the current UI language.
-      title: string;
-      // Keep one representative line for backward compatibility.
-      line: string;
-      sta: string;
-    }
-  | {
-      id: string;
-      mode: "lrt";
-      title: string;
-      stationId: string;
-    }
-);
+  (| {
+        id: string
+        mode: 'kmb'
+        title: string
+        stopId: string
+        // Route filter - simple mode (legacy field name for backward compat)
+        route?: string
+        serviceType?: string
+        // Extended route filter fields
+        routeFilterMode?: RouteFilterMode
+        entries?: { variantKey: string }[]
+      }
+    // KMB: grouped stops (multiple stops with same name)
+    | {
+        id: string
+        mode: 'kmb'
+        title: string
+        stopIds: string[]
+        // Route filter
+        routeFilterMode?: RouteFilterMode
+        route?: string
+        entries?: { variantKey: string }[]
+      }
+    // KMB: contains query
+    | {
+        id: string
+        mode: 'kmb'
+        title: string
+        query: string
+        // Route filter - simple mode (legacy field name for backward compat)
+        route?: string
+        serviceType?: string
+        // Extended route filter fields
+        routeFilterMode?: RouteFilterMode
+        entries?: { variantKey: string }[]
+      }
+    | {
+        id: string
+        mode: 'mtr'
+        // Titles are stored for display convenience only.
+        // They may be regenerated in the current UI language.
+        title: string
+        // Keep one representative line for backward compatibility.
+        line: string
+        sta: string
+      }
+    | {
+        id: string
+        mode: 'lrt'
+        title: string
+        stationId: string
+      }
+  )
 
 export type RecentItem = FavoritesItem & {
-  at: number;
-};
+  at: number
+}
 
 export type FavoritesGroup = {
-  id: string;
-  name: string;
-};
+  id: string
+  name: string
+}
 
 type AppState = {
-  mode: TransportMode;
-  lang: UiLanguage;
-  routeFilterMode: RouteFilterMode;
-  autoRefreshSeconds: number;
+  mode: TransportMode
+  lang: UiLanguage
+  routeFilterMode: RouteFilterMode
+  autoRefreshSeconds: number
 
-  favorites: FavoritesItem[];
-  favoritesGroups: FavoritesGroup[];
-  recents: RecentItem[];
+  favorites: FavoritesItem[]
+  favoritesGroups: FavoritesGroup[]
+  recents: RecentItem[]
 
-  setMode: (mode: TransportMode) => void;
-  setLang: (lang: UiLanguage) => void;
-  setRouteFilterMode: (mode: RouteFilterMode) => void;
-  setAutoRefreshSeconds: (seconds: number) => void;
-  addFavorite: (item: FavoritesItem) => void;
-  removeFavorite: (id: string) => void;
-  toggleFavoritePin: (id: string) => void;
-  moveFavorite: (id: string, direction: "up" | "down") => void;
-  addFavoriteGroup: (name: string) => void;
-  renameFavoriteGroup: (id: string, name: string) => void;
-  deleteFavoriteGroup: (id: string) => void;
-  assignFavoriteGroup: (favoriteId: string, groupId: string | null) => void;
+  setMode: (mode: TransportMode) => void
+  setLang: (lang: UiLanguage) => void
+  setRouteFilterMode: (mode: RouteFilterMode) => void
+  setAutoRefreshSeconds: (seconds: number) => void
+  addFavorite: (item: FavoritesItem) => void
+  removeFavorite: (id: string) => void
+  toggleFavoritePin: (id: string) => void
+  moveFavorite: (id: string, direction: 'up' | 'down') => void
+  addFavoriteGroup: (name: string) => void
+  renameFavoriteGroup: (id: string, name: string) => void
+  deleteFavoriteGroup: (id: string) => void
+  assignFavoriteGroup: (favoriteId: string, groupId: string | null) => void
 
-  addRecent: (item: FavoritesItem) => void;
-  clearRecents: () => void;
-};
+  addRecent: (item: FavoritesItem) => void
+  clearRecents: () => void
+}
 
-const RECENTS_LIMIT = 12;
+const RECENTS_LIMIT = 12
 
 const createId = () => {
-  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
-    return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID()
   }
-  return Math.random().toString(36).slice(2, 10);
-};
+  return Math.random().toString(36).slice(2, 10)
+}
 
 const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
   ...item,
   pinned: item.pinned ?? false,
   groupId: item.groupId ?? null,
-});
+})
 
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
-      mode: "kmb",
-      lang: "tc",
-      routeFilterMode: "simple",
+      mode: 'kmb',
+      lang: 'tc',
+      routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
 
       favorites: [],
@@ -137,8 +137,8 @@ export const useAppStore = create<AppState>()(
 
       addFavorite: (item) =>
         set((state) => {
-          if (state.favorites.some((f) => f.id === item.id)) return state;
-          return { favorites: [withFavoriteMeta(item), ...state.favorites] };
+          if (state.favorites.some((f) => f.id === item.id)) return state
+          return { favorites: [withFavoriteMeta(item), ...state.favorites] }
         }),
 
       removeFavorite: (id) =>
@@ -148,62 +148,62 @@ export const useAppStore = create<AppState>()(
 
       toggleFavoritePin: (id) =>
         set((state) => {
-          const favorites = [...state.favorites];
-          const index = favorites.findIndex((f) => f.id === id);
-          if (index === -1) return state;
+          const favorites = [...state.favorites]
+          const index = favorites.findIndex((f) => f.id === id)
+          if (index === -1) return state
 
-          const current = favorites[index];
-          const nextPinned = !current.pinned;
-          const updated = { ...current, pinned: nextPinned };
-          favorites.splice(index, 1);
+          const current = favorites[index]
+          const nextPinned = !current.pinned
+          const updated = { ...current, pinned: nextPinned }
+          favorites.splice(index, 1)
 
           if (nextPinned) {
-            favorites.unshift(updated);
+            favorites.unshift(updated)
           } else {
-            let insertIndex = 0;
+            let insertIndex = 0
             while (insertIndex < favorites.length && favorites[insertIndex].pinned) {
-              insertIndex += 1;
+              insertIndex += 1
             }
-            favorites.splice(insertIndex, 0, updated);
+            favorites.splice(insertIndex, 0, updated)
           }
 
-          return { favorites };
+          return { favorites }
         }),
 
       moveFavorite: (id, direction) =>
         set((state) => {
-          const favorites = [...state.favorites];
-          const index = favorites.findIndex((f) => f.id === id);
-          if (index === -1) return state;
+          const favorites = [...state.favorites]
+          const index = favorites.findIndex((f) => f.id === id)
+          if (index === -1) return state
 
-          const targetIndex = direction === "up" ? index - 1 : index + 1;
-          if (targetIndex < 0 || targetIndex >= favorites.length) return state;
+          const targetIndex = direction === 'up' ? index - 1 : index + 1
+          if (targetIndex < 0 || targetIndex >= favorites.length) return state
           if (Boolean(favorites[index].pinned) !== Boolean(favorites[targetIndex].pinned)) {
-            return state;
+            return state
           }
 
-          const [moved] = favorites.splice(index, 1);
-          favorites.splice(targetIndex, 0, moved);
-          return { favorites };
+          const [moved] = favorites.splice(index, 1)
+          favorites.splice(targetIndex, 0, moved)
+          return { favorites }
         }),
 
       addFavoriteGroup: (name) =>
         set((state) => {
-          const trimmed = name.trim();
-          if (!trimmed) return state;
-          const group: FavoritesGroup = { id: createId(), name: trimmed };
-          return { favoritesGroups: [...state.favoritesGroups, group] };
+          const trimmed = name.trim()
+          if (!trimmed) return state
+          const group: FavoritesGroup = { id: createId(), name: trimmed }
+          return { favoritesGroups: [...state.favoritesGroups, group] }
         }),
 
       renameFavoriteGroup: (id, name) =>
         set((state) => {
-          const trimmed = name.trim();
-          if (!trimmed) return state;
+          const trimmed = name.trim()
+          if (!trimmed) return state
           return {
             favoritesGroups: state.favoritesGroups.map((group) =>
               group.id === id ? { ...group, name: trimmed } : group
             ),
-          };
+          }
         }),
 
       deleteFavoriteGroup: (id) =>
@@ -217,45 +217,41 @@ export const useAppStore = create<AppState>()(
       assignFavoriteGroup: (favoriteId, groupId) =>
         set((state) => ({
           favorites: state.favorites.map((favorite) =>
-            favorite.id === favoriteId
-              ? { ...favorite, groupId: groupId ?? null }
-              : favorite
+            favorite.id === favoriteId ? { ...favorite, groupId: groupId ?? null } : favorite
           ),
         })),
 
       addRecent: (item) =>
         set((state) => {
-          const now = Date.now();
-          const recent: RecentItem = { ...item, at: now };
+          const now = Date.now()
+          const recent: RecentItem = { ...item, at: now }
 
-          const updated = [
-            recent,
-            ...state.recents.filter((r) => r.id !== item.id),
-          ].slice(0, RECENTS_LIMIT);
+          const updated = [recent, ...state.recents.filter((r) => r.id !== item.id)].slice(
+            0,
+            RECENTS_LIMIT
+          )
 
-          return { recents: updated };
+          return { recents: updated }
         }),
 
       clearRecents: () => set({ recents: [] }),
     }),
     {
-      name: "hk-eta",
+      name: 'hk-eta',
       version: 2,
       migrate: (persistedState) => {
-        const state = persistedState as Partial<AppState> | undefined;
-        const favorites = (state?.favorites ?? []).map((favorite) =>
-          withFavoriteMeta(favorite)
-        );
+        const state = persistedState as Partial<AppState> | undefined
+        const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
 
         return {
-          mode: state?.mode ?? "kmb",
-          lang: state?.lang ?? "tc",
-          routeFilterMode: state?.routeFilterMode ?? "simple",
+          mode: state?.mode ?? 'kmb',
+          lang: state?.lang ?? 'tc',
+          routeFilterMode: state?.routeFilterMode ?? 'simple',
           autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
           favorites,
           favoritesGroups: state?.favoritesGroups ?? [],
           recents: state?.recents ?? [],
-        };
+        }
       },
       partialize: (state) => ({
         mode: state.mode,
@@ -268,4 +264,4 @@ export const useAppStore = create<AppState>()(
       }),
     }
   )
-);
+)

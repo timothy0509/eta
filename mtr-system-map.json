@@ -185,26 +185,14 @@
       "name": "Airport Express",
       "color": "#00888A",
       "loop": false,
-      "stations": [
-        "Hong Kong",
-        "Kowloon",
-        "Tsing Yi",
-        "Airport",
-        "AsiaWorld-Expo"
-      ]
+      "stations": ["Hong Kong", "Kowloon", "Tsing Yi", "Airport", "AsiaWorld-Expo"]
     },
     {
       "id": "SIL",
       "name": "South Island Line",
       "color": "#B5BD00",
       "loop": false,
-      "stations": [
-        "Admiralty",
-        "Ocean Park",
-        "Wong Chuk Hang",
-        "Lei Tung",
-        "South Horizons"
-      ]
+      "stations": ["Admiralty", "Ocean Park", "Wong Chuk Hang", "Lei Tung", "South Horizons"]
     },
     {
       "id": "EAL",
@@ -263,13 +251,7 @@
       "name": "Tseung Kwan O Line",
       "color": "#6A1B9A",
       "type": "branched",
-      "trunk": [
-        "North Point",
-        "Quarry Bay",
-        "Yau Tong",
-        "Tiu Keng Leng",
-        "Tseung Kwan O"
-      ],
+      "trunk": ["North Point", "Quarry Bay", "Yau Tong", "Tiu Keng Leng", "Tseung Kwan O"],
       "branches": [
         {
           "id": "TKL_PO_LAM",

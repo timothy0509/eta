@@ -5,66 +5,66 @@ import {
   listKmbRoutes,
   listKmbStops,
   type KmbEta,
-} from "@/lib/eta/hk-bus-eta";
-import type { Company } from "hk-bus-eta";
+} from '@/lib/eta/hk-bus-eta'
+import type { Company } from 'hk-bus-eta'
 
 export type KmbStop = {
-  stop: string;
-  co?: string;
-  name_en: string;
-  name_tc: string;
-  name_sc: string;
-  lat: string | number;
-  long: string | number;
-};
+  stop: string
+  co?: string
+  name_en: string
+  name_tc: string
+  name_sc: string
+  lat: string | number
+  long: string | number
+}
 
 export type KmbEtaEntry = {
-  co: string;
-  route: string;
-  dir: "I" | "O" | string;
-  service_type: number | string;
-  seq: number;
-  stop: string;
-  dest_en: string;
-  dest_tc: string;
-  dest_sc: string;
-  eta_seq: number;
-  eta: string; // ISO timestamp, may be empty
-  rmk_en: string;
-  rmk_tc: string;
-  rmk_sc: string;
-  data_timestamp: string;
-};
+  co: string
+  route: string
+  dir: 'I' | 'O' | string
+  service_type: number | string
+  seq: number
+  stop: string
+  dest_en: string
+  dest_tc: string
+  dest_sc: string
+  eta_seq: number
+  eta: string // ISO timestamp, may be empty
+  rmk_en: string
+  rmk_tc: string
+  rmk_sc: string
+  data_timestamp: string
+}
 
-function normalizeDirection(direction: string): "I" | "O" | string {
-  if (direction === "inbound") return "I";
-  if (direction === "outbound") return "O";
-  return direction;
+function normalizeDirection(direction: string): 'I' | 'O' | string {
+  if (direction === 'inbound') return 'I'
+  if (direction === 'outbound') return 'O'
+  return direction
 }
 
 function mapKmbEtaEntry(eta: KmbEta, stopId: string): KmbEtaEntry {
-  const now = new Date().toISOString();
+  const now = new Date().toISOString()
   return {
-    co: eta.co ?? "kmb",
+    co: eta.co ?? 'kmb',
     route: eta.route,
     dir: eta.dir,
     service_type: eta.serviceType,
     seq: eta.seq,
     stop: stopId,
-    dest_en: eta.dest?.en ?? "",
-    dest_tc: eta.dest?.zh ?? "",
-    dest_sc: eta.dest?.zh ?? "",
+    dest_en: eta.dest?.en ?? '',
+    dest_tc: eta.dest?.zh ?? '',
+    dest_sc: eta.dest?.zh ?? '',
     eta_seq: eta.etaSeq,
-    eta: eta.eta ?? "",
-    rmk_en: eta.remark?.en ?? "",
-    rmk_tc: eta.remark?.zh ?? "",
-    rmk_sc: eta.remark?.zh ?? "",
+    eta: eta.eta ?? '',
+    rmk_en: eta.remark?.en ?? '',
+    rmk_tc: eta.remark?.zh ?? '',
+    rmk_sc: eta.remark?.zh ?? '',
     data_timestamp: now,
-  };
+  }
 }
 
 export async function getKmbStops(): Promise<KmbStop[]> {
-  const stops = await listKmbStops();
+  const stops = await listKmbStops()
   return stops.map((stop) => ({
     stop: stop.stopId,
     name_en: stop.nameEn,
@@ -72,21 +72,21 @@ export async function getKmbStops(): Promise<KmbStop[]> {
     name_sc: stop.nameSc,
     lat: stop.lat,
     long: stop.lng,
-  }));
+  }))
 }
 
 export async function getKmbEta(params: {
-  stopId: string;
-  route: string;
-  serviceType: string;
+  stopId: string
+  route: string
+  serviceType: string
 }): Promise<KmbEtaEntry[]> {
   const etas = await fetchKmbEtasForStop({
     stopId: params.stopId,
     route: params.route,
     serviceType: params.serviceType,
-    language: "tc",
-  });
-  return etas.map((eta) => mapKmbEtaEntry(eta, params.stopId));
+    language: 'tc',
+  })
+  return etas.map((eta) => mapKmbEtaEntry(eta, params.stopId))
 }
 
 /**
@@ -97,22 +97,22 @@ export async function getKmbEta(params: {
 export async function getKmbStopEta(stopId: string): Promise<KmbEtaEntry[]> {
   const etas = await fetchKmbEtasForStop({
     stopId,
-    language: "tc",
-  });
-  return etas.map((eta) => mapKmbEtaEntry(eta, stopId));
+    language: 'tc',
+  })
+  return etas.map((eta) => mapKmbEtaEntry(eta, stopId))
 }
 
 export type KmbRouteStopEntry = {
-  co: Company;
-  route: string;
-  bound: "I" | "O" | string;
-  service_type: number | string;
-  seq: number | string;
-  stop: string;
-};
+  co: Company
+  route: string
+  bound: 'I' | 'O' | string
+  service_type: number | string
+  seq: number | string
+  stop: string
+}
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
-  const routeStops = await listKmbRouteStops();
+  const routeStops = await listKmbRouteStops()
   return routeStops.map((entry) => ({
     co: entry.co,
     route: entry.route,
@@ -120,38 +120,38 @@ export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
     service_type: entry.serviceType,
     seq: entry.seq,
     stop: entry.stopId,
-  }));
+  }))
 }
 
 export type KmbRouteInfo = {
-  co: Company;
-  route: string;
-  bound: "I" | "O" | string;
-  service_type: number | string;
-  orig_en: string;
-  orig_tc: string;
-  orig_sc: string;
-  dest_en: string;
-  dest_tc: string;
-  dest_sc: string;
-};
+  co: Company
+  route: string
+  bound: 'I' | 'O' | string
+  service_type: number | string
+  orig_en: string
+  orig_tc: string
+  orig_sc: string
+  dest_en: string
+  dest_tc: string
+  dest_sc: string
+}
 
 export type KmbRouteListEntry = {
-  co: Company;
-  route: string;
-  bound: "I" | "O" | string;
-  service_type: number | string;
-  orig_en: string;
-  orig_tc: string;
-  orig_sc: string;
-  dest_en: string;
-  dest_tc: string;
-  dest_sc: string;
-  data_timestamp?: string;
-};
+  co: Company
+  route: string
+  bound: 'I' | 'O' | string
+  service_type: number | string
+  orig_en: string
+  orig_tc: string
+  orig_sc: string
+  dest_en: string
+  dest_tc: string
+  dest_sc: string
+  data_timestamp?: string
+}
 
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
-  const routes = await listKmbRoutes();
+  const routes = await listKmbRoutes()
   return routes.map((entry) => ({
     co: entry.co,
     route: entry.route,
@@ -163,25 +163,25 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
     dest_en: entry.destination.en,
     dest_tc: entry.destination.tc,
     dest_sc: entry.destination.sc,
-  }));
+  }))
 }
 
 export async function getKmbRouteInfo(params: {
-  co?: Company;
-  route: string;
-  direction: "I" | "O" | "inbound" | "outbound" | string;
-  serviceType: string;
+  co?: Company
+  route: string
+  direction: 'I' | 'O' | 'inbound' | 'outbound' | string
+  serviceType: string
 }): Promise<KmbRouteInfo> {
-  const bound = normalizeDirection(params.direction);
+  const bound = normalizeDirection(params.direction)
   const info = await findKmbRouteInfo({
     co: params.co,
     route: params.route,
     bound,
     serviceType: params.serviceType,
-  });
+  })
 
   if (!info) {
-    throw new Error("KMB route info not found");
+    throw new Error('KMB route info not found')
   }
 
   return {
@@ -195,5 +195,5 @@ export async function getKmbRouteInfo(params: {
     dest_en: info.destination.en,
     dest_tc: info.destination.tc,
     dest_sc: info.destination.sc,
-  };
+  }
 }

@@ -1,37 +1,37 @@
-"use client";
+'use client'
 
-import { Bus, TrainFront, TramFront } from "lucide-react";
+import { Bus, TrainFront, TramFront } from 'lucide-react'
 
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { TransportMode, UiLanguage } from "@/lib/eta/types";
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { TransportMode, UiLanguage } from '@/lib/eta/types'
 
 const MODES: Array<{
-  mode: TransportMode;
-  labels: Record<UiLanguage, string>;
-  icon: React.ComponentType<{ className?: string }>;
+  mode: TransportMode
+  labels: Record<UiLanguage, string>
+  icon: React.ComponentType<{ className?: string }>
 }> = [
   {
-    mode: "kmb",
-    labels: { en: "Bus", tc: "巴士", sc: "巴士" },
+    mode: 'kmb',
+    labels: { en: 'Bus', tc: '巴士', sc: '巴士' },
     icon: Bus,
   },
   {
-    mode: "mtr",
-    labels: { en: "MTR", tc: "港鐵", sc: "港铁" },
+    mode: 'mtr',
+    labels: { en: 'MTR', tc: '港鐵', sc: '港铁' },
     icon: TrainFront,
   },
   {
-    mode: "lrt",
-    labels: { en: "Light Rail", tc: "輕鐵", sc: "轻铁" },
+    mode: 'lrt',
+    labels: { en: 'Light Rail', tc: '輕鐵', sc: '轻铁' },
     icon: TramFront,
   },
-];
+]
 
 type Props = {
-  lang: UiLanguage;
-  value: TransportMode;
-  onChange: (mode: TransportMode) => void;
-};
+  lang: UiLanguage
+  value: TransportMode
+  onChange: (mode: TransportMode) => void
+}
 
 export function ModeTabs({ lang, value, onChange }: Props) {
   return (
@@ -42,8 +42,8 @@ export function ModeTabs({ lang, value, onChange }: Props) {
         className="grid w-full grid-cols-3 rounded-2xl"
       >
         {MODES.map((m) => {
-          const Icon = m.icon;
-          const label = m.labels[lang];
+          const Icon = m.icon
+          const label = m.labels[lang]
           return (
             <TabsTrigger
               key={m.mode}
@@ -57,9 +57,9 @@ export function ModeTabs({ lang, value, onChange }: Props) {
               <span className="hidden sm:inline">{label}</span>
               <span className="sm:hidden">{m.mode.toUpperCase()}</span>
             </TabsTrigger>
-          );
+          )
         })}
       </TabsList>
     </Tabs>
-  );
+  )
 }

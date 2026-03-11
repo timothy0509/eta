@@ -1,61 +1,61 @@
-"use client";
+'use client'
 
-import * as React from "react";
-import { Moon, Sun } from "lucide-react";
-import { useTheme } from "next-themes";
-import dynamic from "next/dynamic";
+import * as React from 'react'
+import { Moon, Sun } from 'lucide-react'
+import { useTheme } from 'next-themes'
+import dynamic from 'next/dynamic'
 
-import { AutoRefreshMenu } from "@/components/eta/auto-refresh";
-import { FavoritesAndRecents } from "@/components/eta/favorites";
-import { LanguageToggle } from "@/components/eta/language-toggle";
-import { ModeTabs } from "@/components/eta/mode-tabs";
-import { PaneSkeleton } from "@/components/eta/pane-skeleton";
-import type { KmbPaneState } from "@/components/eta/panes/kmb-pane";
-import type { LrtPaneState } from "@/components/eta/panes/lrt-pane";
-import type { MtrPaneState } from "@/components/eta/panes/mtr-pane";
-import { KmbResults } from "@/components/eta/results-kmb";
-import { LrtResults } from "@/components/eta/results-lrt";
-import { MtrResults } from "@/components/eta/results-mtr";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
-import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useMediaQuery } from "@/lib/hooks/use-media-query";
-import { LRT_STATIONS } from "@/lib/data/lrt-stations";
-import { MTR_STATIONS } from "@/lib/data/mtr-stations";
-import { decodeUrlState, encodeUrlState } from "@/lib/eta/url-state";
-import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } from "@/lib/eta/types";
-import { isLanguageSupported } from "@/lib/eta/types";
-import { useAutoRefresh } from "@/lib/eta/use-auto-refresh";
-import { useAppStore, type FavoritesItem } from "@/lib/store";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useShallow } from "zustand/shallow";
+import { AutoRefreshMenu } from '@/components/eta/auto-refresh'
+import { FavoritesAndRecents } from '@/components/eta/favorites'
+import { LanguageToggle } from '@/components/eta/language-toggle'
+import { ModeTabs } from '@/components/eta/mode-tabs'
+import { PaneSkeleton } from '@/components/eta/pane-skeleton'
+import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
+import type { LrtPaneState } from '@/components/eta/panes/lrt-pane'
+import type { MtrPaneState } from '@/components/eta/panes/mtr-pane'
+import { KmbResults } from '@/components/eta/results-kmb'
+import { LrtResults } from '@/components/eta/results-lrt'
+import { MtrResults } from '@/components/eta/results-mtr'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Separator } from '@/components/ui/separator'
+import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { useMediaQuery } from '@/lib/hooks/use-media-query'
+import { LRT_STATIONS } from '@/lib/data/lrt-stations'
+import { MTR_STATIONS } from '@/lib/data/mtr-stations'
+import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
+import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } from '@/lib/eta/types'
+import { isLanguageSupported } from '@/lib/eta/types'
+import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
+import { useAppStore, type FavoritesItem } from '@/lib/store'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
+import { useShallow } from 'zustand/shallow'
 
 // Dynamic imports for transport mode panes - loaded only when needed
 // This significantly reduces initial bundle size
 const KmbPane = dynamic(
-  () => import("@/components/eta/panes/kmb-pane").then((mod) => mod.KmbPane),
+  () => import('@/components/eta/panes/kmb-pane').then((mod) => mod.KmbPane),
   {
     loading: () => <PaneSkeleton />,
     ssr: false,
   }
-);
+)
 
 const MtrPane = dynamic(
-  () => import("@/components/eta/panes/mtr-pane").then((mod) => mod.MtrPane),
+  () => import('@/components/eta/panes/mtr-pane').then((mod) => mod.MtrPane),
   {
     loading: () => <PaneSkeleton />,
     ssr: false,
   }
-);
+)
 
 const LrtPane = dynamic(
-  () => import("@/components/eta/panes/lrt-pane").then((mod) => mod.LrtPane),
+  () => import('@/components/eta/panes/lrt-pane').then((mod) => mod.LrtPane),
   {
     loading: () => <PaneSkeleton />,
     ssr: false,
   }
-);
+)
 
 // ============================================================================
 // Consolidated store selectors with shallow equality for stable snapshots
@@ -68,7 +68,7 @@ const useAppStoreState = () =>
       routeFilterMode: s.routeFilterMode,
       autoRefreshSeconds: s.autoRefreshSeconds,
     }))
-  );
+  )
 
 const useAppStoreActions = () =>
   useAppStore(
@@ -80,35 +80,36 @@ const useAppStoreActions = () =>
       addFavorite: s.addFavorite,
       addRecent: s.addRecent,
     }))
-  );
+  )
 
 export default function HomeClient() {
   // Consolidated state subscription (single re-render when any state changes)
-  const { mode, lang, routeFilterMode, autoRefreshSeconds } = useAppStoreState();
-  
+  const { mode, lang, routeFilterMode, autoRefreshSeconds } = useAppStoreState()
+
   // Actions are stable and don't cause re-renders
-  const { setMode, setLang, setRouteFilterMode, setAutoRefreshSeconds, addFavorite, addRecent } = useAppStoreActions();
+  const { setMode, setLang, setRouteFilterMode, setAutoRefreshSeconds, addFavorite, addRecent } =
+    useAppStoreActions()
 
-  const isDesktop = useMediaQuery("(min-width: 1024px)");
-  const [savedOpen, setSavedOpen] = React.useState(false);
-  const [savedSide, setSavedSide] = React.useState<"right" | "bottom">("bottom");
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
+  const [savedOpen, setSavedOpen] = React.useState(false)
+  const [savedSide, setSavedSide] = React.useState<'right' | 'bottom'>('bottom')
 
-  const { theme, setTheme, resolvedTheme } = useTheme();
-  const [themeMounted, setThemeMounted] = React.useState(false);
+  const { theme, setTheme, resolvedTheme } = useTheme()
+  const [themeMounted, setThemeMounted] = React.useState(false)
 
-  const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([]);
-  const [kmbPaneState, setKmbPaneState] = React.useState<KmbPaneState | null>(null);
-  const [mtrPaneState, setMtrPaneState] = React.useState<MtrPaneState | null>(null);
-  const [lrtPaneState, setLrtPaneState] = React.useState<LrtPaneState | null>(null);
-  const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(null);
+  const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([])
+  const [kmbPaneState, setKmbPaneState] = React.useState<KmbPaneState | null>(null)
+  const [mtrPaneState, setMtrPaneState] = React.useState<MtrPaneState | null>(null)
+  const [lrtPaneState, setLrtPaneState] = React.useState<LrtPaneState | null>(null)
+  const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(null)
 
-  const canFavoriteRef = React.useRef(false);
-  const didHydrateFromUrlRef = React.useRef(false);
-  const lastEncodedRef = React.useRef<string>("");
+  const canFavoriteRef = React.useRef(false)
+  const didHydrateFromUrlRef = React.useRef(false)
+  const lastEncodedRef = React.useRef<string>('')
 
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
 
   const mtrStations: MtrStationSearchItem[] = React.useMemo(
     () =>
@@ -120,7 +121,7 @@ export default function HomeClient() {
         nameTc: s.nameTc,
       })),
     []
-  );
+  )
 
   const lrtStations: LrtStationSearchItem[] = React.useMemo(
     () =>
@@ -130,87 +131,88 @@ export default function HomeClient() {
         nameZh: s.nameZh,
       })),
     []
-  );
+  )
 
   React.useEffect(() => {
-    setThemeMounted(true);
-  }, []);
+    setThemeMounted(true)
+  }, [])
 
   React.useEffect(() => {
-    if (savedOpen) return;
-    setSavedSide(isDesktop ? "right" : "bottom");
-  }, [isDesktop, savedOpen]);
+    if (savedOpen) return
+    setSavedSide(isDesktop ? 'right' : 'bottom')
+  }, [isDesktop, savedOpen])
 
   const onSavedOpenChange = React.useCallback(
     (nextOpen: boolean) => {
       if (nextOpen) {
-        setSavedSide(isDesktop ? "right" : "bottom");
+        setSavedSide(isDesktop ? 'right' : 'bottom')
       }
-      setSavedOpen(nextOpen);
+      setSavedOpen(nextOpen)
     },
     [isDesktop]
-  );
+  )
 
   React.useEffect(() => {
-    if (isLanguageSupported(mode, lang)) return;
-    setLang("tc");
-  }, [lang, mode, setLang]);
+    if (isLanguageSupported(mode, lang)) return
+    setLang('tc')
+  }, [lang, mode, setLang])
 
   React.useEffect(() => {
-    if (didHydrateFromUrlRef.current) return;
+    if (didHydrateFromUrlRef.current) return
 
-    const search = searchParams?.toString() ?? "";
-    const decoded = decodeUrlState(search);
+    const search = searchParams?.toString() ?? ''
+    const decoded = decodeUrlState(search)
     if (decoded.state.mode) {
-      setMode(decoded.state.mode);
+      setMode(decoded.state.mode)
     } else if (decoded.selectedItem) {
-      setMode(decoded.selectedItem.mode);
+      setMode(decoded.selectedItem.mode)
     }
-    if (decoded.state.lang) setLang(decoded.state.lang);
-    if (decoded.state.routeFilterMode) setRouteFilterMode(decoded.state.routeFilterMode);
+    if (decoded.state.lang) setLang(decoded.state.lang)
+    if (decoded.state.routeFilterMode) setRouteFilterMode(decoded.state.routeFilterMode)
     if (decoded.state.autoRefreshSeconds !== undefined) {
-      setAutoRefreshSeconds(decoded.state.autoRefreshSeconds);
+      setAutoRefreshSeconds(decoded.state.autoRefreshSeconds)
     }
-    if (decoded.selectedItem) setSelectedItem(decoded.selectedItem);
+    if (decoded.selectedItem) setSelectedItem(decoded.selectedItem)
 
-    didHydrateFromUrlRef.current = true;
-    lastEncodedRef.current = search;
-  }, [searchParams, setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode]);
+    didHydrateFromUrlRef.current = true
+    lastEncodedRef.current = search
+  }, [searchParams, setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode])
 
-  const refreshRef = React.useRef<(() => Promise<void>) | null>(null);
-  const inFlightRefreshRef = React.useRef(false);
+  const refreshRef = React.useRef<(() => Promise<void>) | null>(null)
+  const inFlightRefreshRef = React.useRef(false)
 
   const onRegisterRefresh = React.useCallback((refresh: () => Promise<void>) => {
-    refreshRef.current = refresh;
-  }, []);
+    refreshRef.current = refresh
+  }, [])
 
   useAutoRefresh(autoRefreshSeconds * 1000, () => {
-    if (!refreshRef.current) return;
-    if (inFlightRefreshRef.current) return;
+    if (!refreshRef.current) return
+    if (inFlightRefreshRef.current) return
 
-    inFlightRefreshRef.current = true;
-    refreshRef.current()
+    inFlightRefreshRef.current = true
+    refreshRef
+      .current()
       .catch(() => {
         // ignore auto-refresh errors
       })
       .finally(() => {
-        inFlightRefreshRef.current = false;
-      });
-  });
+        inFlightRefreshRef.current = false
+      })
+  })
 
   const onSelectFromLists = React.useCallback(
     (item: FavoritesItem) => {
-      setSelectedItem(item);
-      setMode(item.mode);
-      setSavedOpen(false);
+      setSelectedItem(item)
+      setMode(item.mode)
+      setSavedOpen(false)
     },
-    [setMode, setSelectedItem, setSavedOpen],
-  );
+    [setMode, setSelectedItem, setSavedOpen]
+  )
 
   React.useEffect(() => {
-    if (!didHydrateFromUrlRef.current) return;
+    if (!didHydrateFromUrlRef.current) return
 
-    const kmbQuery = kmbPaneState?.querySummary ?? null;
+    const kmbQuery = kmbPaneState?.querySummary ?? null
     const query = encodeUrlState({
       mode,
       lang,
@@ -224,13 +226,13 @@ export default function HomeClient() {
         : null,
       mtr: { sta: mtrPaneState?.sta ?? null },
       lrt: { stationId: lrtPaneState?.stationId ?? null },
-    });
+    })
 
-    if (query === lastEncodedRef.current) return;
-    lastEncodedRef.current = query;
+    if (query === lastEncodedRef.current) return
+    lastEncodedRef.current = query
 
-    const nextUrl = query ? `${pathname}?${query}` : pathname;
-    router.replace(nextUrl, { scroll: false });
+    const nextUrl = query ? `${pathname}?${query}` : pathname
+    router.replace(nextUrl, { scroll: false })
   }, [
     autoRefreshSeconds,
     kmbPaneState?.querySummary,
@@ -242,107 +244,114 @@ export default function HomeClient() {
     pathname,
     routeFilterMode,
     router,
-  ]);
+  ])
 
   const heading =
-    mode === "kmb"
-      ? lang === "en"
-        ? "Bus ETAs"
-        : lang === "sc"
-          ? "巴士到站预报"
-          : "巴士到站預報"
-      : mode === "mtr"
-        ? lang === "en"
-          ? "MTR Next Train"
-          : lang === "sc"
-            ? "港铁下班车"
-            : "港鐵下班車"
-        : lang === "en"
-          ? "Light Rail"
-          : "輕鐵";
+    mode === 'kmb'
+      ? lang === 'en'
+        ? 'Bus ETAs'
+        : lang === 'sc'
+          ? '巴士到站预报'
+          : '巴士到站預報'
+      : mode === 'mtr'
+        ? lang === 'en'
+          ? 'MTR Next Train'
+          : lang === 'sc'
+            ? '港铁下班车'
+            : '港鐵下班車'
+        : lang === 'en'
+          ? 'Light Rail'
+          : '輕鐵'
 
   const t = {
     desc:
-      lang === "en"
-        ? "Clean, fast ETAs for Hong Kong transit."
-        : lang === "sc"
-          ? "簡潔又快速的香港交通到站預報。"
-          : "簡潔又快速的香港交通到站預報。",
-    theme: lang === "en" ? "Theme" : lang === "sc" ? "主题" : "主題",
+      lang === 'en'
+        ? 'Clean, fast ETAs for Hong Kong transit.'
+        : lang === 'sc'
+          ? '簡潔又快速的香港交通到站預報。'
+          : '簡潔又快速的香港交通到站預報。',
+    theme: lang === 'en' ? 'Theme' : lang === 'sc' ? '主题' : '主題',
     searchPin:
-      lang === "en"
-        ? "Search and pin your go-to stops."
-        : lang === "sc"
-          ? "搜尋並釘選常用車站。"
-          : "搜尋並釘選常用車站。",
-    kmbTitle: lang === "en" ? "Bus ETAs" : lang === "sc" ? "巴士到站预报" : "巴士到站預報",
-    mtrTitle: lang === "en" ? "MTR" : lang === "sc" ? "港铁" : "港鐵",
-    lrtTitle: lang === "en" ? "Light Rail" : "輕鐵",
-  };
+      lang === 'en'
+        ? 'Search and pin your go-to stops.'
+        : lang === 'sc'
+          ? '搜尋並釘選常用車站。'
+          : '搜尋並釘選常用車站。',
+    kmbTitle: lang === 'en' ? 'Bus ETAs' : lang === 'sc' ? '巴士到站预报' : '巴士到站預報',
+    mtrTitle: lang === 'en' ? 'MTR' : lang === 'sc' ? '港铁' : '港鐵',
+    lrtTitle: lang === 'en' ? 'Light Rail' : '輕鐵',
+  }
 
   return (
-    <div className="relative min-h-dvh bg-gradient-to-b from-background via-background to-muted/30">
+    <div className="from-background via-background to-muted/30 relative min-h-dvh bg-gradient-to-b">
       <div className="pointer-events-none absolute inset-0 opacity-40 [background:radial-gradient(80%_40%_at_50%_0%,hsl(var(--primary)/0.18),transparent_70%)]" />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="flex flex-col gap-2">
-            <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">TimoETA</h1>
-                <p className="mt-1 text-sm text-muted-foreground">{t.desc}</p>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl"
-                  onClick={() => setSavedOpen(!savedOpen)}
-                  aria-expanded={savedOpen}
-                  aria-controls="saved-panel"
-                >
-                  {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
-                </Button>
-                <AutoRefreshMenu lang={lang} valueSeconds={autoRefreshSeconds} onChange={setAutoRefreshSeconds} />
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="rounded-xl"
-                  aria-label={
-                    lang === "en"
-                      ? "Toggle theme"
-                      : lang === "sc"
-                        ? "切换主题"
-                        : "切換主題"
-                  }
-                  onClick={() => {
-                    const actual = resolvedTheme ?? theme;
-                    setTheme(actual === "dark" ? "light" : "dark");
-                  }}
-                >
-                  {themeMounted ? (
-                    (resolvedTheme ?? theme) === "dark" ? (
-                      <Sun className="mr-2 h-4 w-4" />
-                    ) : (
-                      <Moon className="mr-2 h-4 w-4" />
-                    )
-                  ) : (
-                    <span className="mr-2 inline-block h-4 w-4" aria-hidden />
-                  )}
-                  {t.theme}
-                </Button>
-              </div>
+          <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">TimoETA</h1>
+              <p className="text-muted-foreground mt-1 text-sm">{t.desc}</p>
             </div>
 
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                onClick={() => setSavedOpen(!savedOpen)}
+                aria-expanded={savedOpen}
+                aria-controls="saved-panel"
+              >
+                {lang === 'en'
+                  ? 'Saved'
+                  : lang === 'sc'
+                    ? '\u5df2\u50a8\u5b58'
+                    : '\u5df2\u5132\u5b58'}
+              </Button>
+              <AutoRefreshMenu
+                lang={lang}
+                valueSeconds={autoRefreshSeconds}
+                onChange={setAutoRefreshSeconds}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-xl"
+                aria-label={
+                  lang === 'en' ? 'Toggle theme' : lang === 'sc' ? '切换主题' : '切換主題'
+                }
+                onClick={() => {
+                  const actual = resolvedTheme ?? theme
+                  setTheme(actual === 'dark' ? 'light' : 'dark')
+                }}
+              >
+                {themeMounted ? (
+                  (resolvedTheme ?? theme) === 'dark' ? (
+                    <Sun className="mr-2 h-4 w-4" />
+                  ) : (
+                    <Moon className="mr-2 h-4 w-4" />
+                  )
+                ) : (
+                  <span className="mr-2 inline-block h-4 w-4" aria-hidden />
+                )}
+                {t.theme}
+              </Button>
+            </div>
+          </div>
 
           <Sheet open={savedOpen} onOpenChange={onSavedOpenChange}>
             <SheetContent side={savedSide} id="saved-panel">
               <SheetHeader>
                 <SheetTitle>
-                  {lang === "en" ? "Saved" : lang === "sc" ? "\u5df2\u50a8\u5b58" : "\u5df2\u5132\u5b58"}
+                  {lang === 'en'
+                    ? 'Saved'
+                    : lang === 'sc'
+                      ? '\u5df2\u50a8\u5b58'
+                      : '\u5df2\u5132\u5b58'}
                 </SheetTitle>
               </SheetHeader>
-              <SheetBody className={savedSide === "bottom" ? "px-4" : undefined}>
+              <SheetBody className={savedSide === 'bottom' ? 'px-4' : undefined}>
                 <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
               </SheetBody>
             </SheetContent>
@@ -350,21 +359,21 @@ export default function HomeClient() {
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
             <div className="space-y-4">
-              <Card className="rounded-3xl border bg-card/60 p-0 shadow-sm">
+              <Card className="bg-card/60 rounded-3xl border p-0 shadow-sm">
                 <CardContent className="space-y-4 p-5">
                   <ModeTabs lang={lang} value={mode} onChange={setMode} />
 
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">{heading}</div>
-                      <div className="text-xs text-muted-foreground">{t.searchPin}</div>
+                      <div className="text-muted-foreground text-xs">{t.searchPin}</div>
                     </div>
                     <LanguageToggle mode={mode} value={lang} onChange={setLang} />
                   </div>
 
                   <Separator />
 
-                  {mode === "kmb" ? (
+                  {mode === 'kmb' ? (
                     <KmbPane
                       lang={lang}
                       routeFilterMode={routeFilterMode}
@@ -379,7 +388,7 @@ export default function HomeClient() {
                     />
                   ) : null}
 
-                  {mode === "mtr" ? (
+                  {mode === 'mtr' ? (
                     <MtrPane
                       lang={lang}
                       stations={mtrStations}
@@ -392,7 +401,7 @@ export default function HomeClient() {
                     />
                   ) : null}
 
-                  {mode === "lrt" ? (
+                  {mode === 'lrt' ? (
                     <LrtPane
                       lang={lang}
                       stations={lrtStations}
@@ -409,13 +418,12 @@ export default function HomeClient() {
             </div>
 
             <div className="space-y-4">
-
-              {mode === "kmb" ? (
+              {mode === 'kmb' ? (
                 <KmbResults
                   lang={kmbPaneState?.lang ?? lang}
                   title={kmbPaneState?.title ?? t.kmbTitle}
                   stopCode={kmbPaneState?.stopCode ?? null}
-                  routesFilter={kmbPaneState?.routeFilter.routes ?? ""}
+                  routesFilter={kmbPaneState?.routeFilter.routes ?? ''}
                   eta={kmbPaneState?.eta ?? []}
                   routeInfos={kmbPaneState?.routeInfos ?? {}}
                   faresByVariantKey={kmbPaneState?.faresByVariantKey ?? {}}
@@ -434,10 +442,9 @@ export default function HomeClient() {
                   hasMoreStops={kmbPaneState?.hasMoreStops}
                   precomputedGroups={kmbPaneState?.precomputedGroups}
                 />
-
               ) : null}
 
-              {mode === "mtr" ? (
+              {mode === 'mtr' ? (
                 <MtrResults
                   title={mtrPaneState?.title ?? t.mtrTitle}
                   lang={mtrPaneState?.lang ?? lang}
@@ -448,10 +455,9 @@ export default function HomeClient() {
                   onRefresh={mtrPaneState?.onRefresh ?? (() => {})}
                   loading={mtrPaneState?.loading}
                 />
-
               ) : null}
 
-              {mode === "lrt" ? (
+              {mode === 'lrt' ? (
                 <LrtResults
                   title={lrtPaneState?.title ?? t.lrtTitle}
                   lang={lrtPaneState?.lang ?? lang}
@@ -462,12 +468,11 @@ export default function HomeClient() {
                   onRefresh={lrtPaneState?.onRefresh ?? (() => {})}
                   loading={lrtPaneState?.loading}
                 />
-
               ) : null}
             </div>
           </div>
         </div>
       </div>
     </div>
-  );
+  )
 }

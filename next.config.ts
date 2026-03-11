@@ -1,28 +1,28 @@
-import type { NextConfig } from "next";
-import withBundleAnalyzer from "@next/bundle-analyzer";
+import type { NextConfig } from 'next'
+import withBundleAnalyzer from '@next/bundle-analyzer'
 
 const securityHeaders = [
   {
-    key: "Strict-Transport-Security",
-    value: "max-age=31536000; includeSubDomains; preload",
+    key: 'Strict-Transport-Security',
+    value: 'max-age=31536000; includeSubDomains; preload',
   },
   {
-    key: "X-Content-Type-Options",
-    value: "nosniff",
+    key: 'X-Content-Type-Options',
+    value: 'nosniff',
   },
   {
-    key: "X-Frame-Options",
-    value: "DENY",
+    key: 'X-Frame-Options',
+    value: 'DENY',
   },
   {
-    key: "Referrer-Policy",
-    value: "strict-origin-when-cross-origin",
+    key: 'Referrer-Policy',
+    value: 'strict-origin-when-cross-origin',
   },
   {
-    key: "Permissions-Policy",
-    value: "geolocation=(), camera=(), microphone=()",
+    key: 'Permissions-Policy',
+    value: 'geolocation=(), camera=(), microphone=()',
   },
-];
+]
 
 const nextConfig: NextConfig = {
   experimental: {
@@ -35,7 +35,7 @@ const nextConfig: NextConfig = {
 
   // Optimize images
   images: {
-    formats: ["image/webp", "image/avif"],
+    formats: ['image/webp', 'image/avif'],
   },
 
   // Enable compression
@@ -44,17 +44,17 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: "/(.*)",
+        source: '/(.*)',
         headers: securityHeaders,
       },
-    ];
+    ]
   },
-};
+}
 
 // Wrap with bundle analyzer only when ANALYZE env var is set
-export default process.env.ANALYZE === "true"
+export default process.env.ANALYZE === 'true'
   ? withBundleAnalyzer({
       enabled: true,
       openAnalyzer: false,
     })(nextConfig)
-  : nextConfig;
+  : nextConfig

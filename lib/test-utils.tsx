@@ -1,7 +1,7 @@
-import { ReactElement } from 'react'
+import { type ReactNode, ReactElement } from 'react'
 import { render, RenderOptions } from '@testing-library/react'
 
-function AllProviders({ children }: { children: React.ReactNode }) {
+function AllProviders({ children }: { children: ReactNode }) {
   return <>{children}</>
 }
 

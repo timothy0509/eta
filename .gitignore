@@ -50,3 +50,6 @@ AGENTS.md
 
 .opencode/
 feedback.md
+
+package-lock.json
+bun.lock

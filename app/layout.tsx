@@ -9,28 +9,28 @@ import './globals.css'
 const dmSans = DM_Sans({
   variable: '--font-dm-sans',
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
 })
 
 const rubik = Rubik({
   variable: '--font-rubik',
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
 })
 
 const notoSansHK = Noto_Sans_HK({
   variable: '--font-noto-sans-hk',
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
 })
 
 const notoSansSC = Noto_Sans_SC({
   variable: '--font-noto-sans-sc',
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
+  weight: ['400', '500', '600', '700'],
   display: 'swap',
 })
 

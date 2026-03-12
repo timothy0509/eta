@@ -6,16 +6,13 @@ import { useTheme } from 'next-themes'
 import dynamic from 'next/dynamic'
 
 import { AutoRefreshMenu } from '@/components/eta/auto-refresh'
-import { FavoritesAndRecents } from '@/components/eta/favorites'
 import { LanguageToggle } from '@/components/eta/language-toggle'
 import { ModeTabs } from '@/components/eta/mode-tabs'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
 import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
 import type { LrtPaneState } from '@/components/eta/panes/lrt-pane'
 import type { MtrPaneState } from '@/components/eta/panes/mtr-pane'
-import { KmbResults } from '@/components/eta/results-kmb'
-import { LrtResults } from '@/components/eta/results-lrt'
-import { MtrResults } from '@/components/eta/results-mtr'
+import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
@@ -53,6 +50,37 @@ const LrtPane = dynamic(
   () => import('@/components/eta/panes/lrt-pane').then((mod) => mod.LrtPane),
   {
     loading: () => <PaneSkeleton />,
+    ssr: false,
+  }
+)
+
+const KmbResults = dynamic(
+  () => import('@/components/eta/results-kmb').then((mod) => ({ default: mod.KmbResults })),
+  {
+    loading: () => <ResultsSkeleton />,
+    ssr: false,
+  }
+)
+
+const MtrResults = dynamic(
+  () => import('@/components/eta/results-mtr').then((mod) => ({ default: mod.MtrResults })),
+  {
+    loading: () => <ResultsSkeleton />,
+    ssr: false,
+  }
+)
+
+const LrtResults = dynamic(
+  () => import('@/components/eta/results-lrt').then((mod) => ({ default: mod.LrtResults })),
+  {
+    loading: () => <ResultsSkeleton />,
+    ssr: false,
+  }
+)
+
+const FavoritesAndRecents = dynamic(
+  () => import('@/components/eta/favorites').then((mod) => ({ default: mod.FavoritesAndRecents })),
+  {
     ssr: false,
   }
 )

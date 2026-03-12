@@ -95,6 +95,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link rel="preconnect" href="https://data.etabus.gov.hk" />
+        <link rel="preconnect" href="https://opendata.mtr.com.hk" />
+        <link rel="preconnect" href="https://www.lrtetas.hk" />
+        <link rel="dns-prefetch" href="https://data.etabus.gov.hk" />
+        <link rel="dns-prefetch" href="https://opendata.mtr.com.hk" />
+        <link rel="dns-prefetch" href="https://www.lrtetas.hk" />
+      </head>
       <body
         className={`${dmSans.variable} ${rubik.variable} ${notoSansHK.variable} ${notoSansSC.variable} min-h-dvh antialiased`}
       >

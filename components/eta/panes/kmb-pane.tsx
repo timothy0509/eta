@@ -1743,60 +1743,63 @@ export function KmbPane({
 
   return (
     <div className="space-y-4">
-      <StopSearch
-        lang={lang}
-        stops={kmbStops}
-        value={kmbDraftStopSelection}
-        onSelectStop={(stop) => {
-          setKmbDraftStopSelection({ type: "stop", stopId: stop.stopId });
-          onAddRecent({
-            id: `kmb:${stop.stopId}:__stop__`,
-            mode: "kmb",
-            title: pickKmbStopTitle(stop, lang),
-            stopId: stop.stopId,
-          });
-        }}
-        onSelectStops={(stops) => {
-          const stopIds = stops.map((s) => s.stopId);
-          setKmbDraftStopSelection({ type: "stops", stopIds });
-          if (stops.length > 0) {
-            const firstStop = stops[0]!;
-            const fullName = pickKmbStopTitle(firstStop, lang);
-            const { name } = parseKmbStopName(fullName);
-            const firstStopId = stopIds[0]!;
-            onAddRecent({
-              id: `kmb:${stopIds.join(",")}:__stops__`,
-              mode: "kmb",
-              title: name,
-              stopId: firstStopId,
-            });
-          }
-        }}
-        onSelectContains={(query) => {
-          setKmbDraftStopSelection({ type: "contains", query });
-        }}
-      />
-
-      <NearbyStopsButton
-        lang={lang}
-        stops={kmbStops}
-        disabled={loadingStops || kmbStops.length === 0}
-        onNearbyStops={(stopIds) => {
-          if (stopIds.length === 0) return;
-          setKmbDraftStopSelection({ type: "stops", stopIds });
-          const firstStop = kmbStopsById.get(stopIds[0]);
-          if (firstStop) {
-            const fullName = pickKmbStopTitle(firstStop, lang);
-            const { name } = parseKmbStopName(fullName);
-            onAddRecent({
-              id: `kmb:nearby:${stopIds.join(",")}`,
-              mode: "kmb",
-              title: lang === "en" ? `Nearby: ${name}` : `附近: ${name}`,
-              stopId: stopIds[0]!,
-            });
-          }
-        }}
-      />
+      <div className="flex items-start gap-2">
+        <div className="flex-1 min-w-0">
+          <StopSearch
+            lang={lang}
+            stops={kmbStops}
+            value={kmbDraftStopSelection}
+            onSelectStop={(stop) => {
+              setKmbDraftStopSelection({ type: "stop", stopId: stop.stopId });
+              onAddRecent({
+                id: `kmb:${stop.stopId}:__stop__`,
+                mode: "kmb",
+                title: pickKmbStopTitle(stop, lang),
+                stopId: stop.stopId,
+              });
+            }}
+            onSelectStops={(stops) => {
+              const stopIds = stops.map((s) => s.stopId);
+              setKmbDraftStopSelection({ type: "stops", stopIds });
+              if (stops.length > 0) {
+                const firstStop = stops[0]!;
+                const fullName = pickKmbStopTitle(firstStop, lang);
+                const { name } = parseKmbStopName(fullName);
+                const firstStopId = stopIds[0]!;
+                onAddRecent({
+                  id: `kmb:${stopIds.join(",")}:__stops__`,
+                  mode: "kmb",
+                  title: name,
+                  stopId: firstStopId,
+                });
+              }
+            }}
+            onSelectContains={(query) => {
+              setKmbDraftStopSelection({ type: "contains", query });
+            }}
+          />
+        </div>
+        <NearbyStopsButton
+          lang={lang}
+          stops={kmbStops}
+          disabled={loadingStops || kmbStops.length === 0}
+          onNearbyStops={(stopIds) => {
+            if (stopIds.length === 0) return;
+            setKmbDraftStopSelection({ type: "stops", stopIds });
+            const firstStop = kmbStopsById.get(stopIds[0]);
+            if (firstStop) {
+              const fullName = pickKmbStopTitle(firstStop, lang);
+              const { name } = parseKmbStopName(fullName);
+              onAddRecent({
+                id: `kmb:nearby:${stopIds.join(",")}`,
+                mode: "kmb",
+                title: lang === "en" ? `Nearby: ${name}` : `附近: ${name}`,
+                stopId: stopIds[0]!,
+              });
+            }
+          }}
+        />
+      </div>
 
       {isMobile ? (
         <div className="space-y-2">

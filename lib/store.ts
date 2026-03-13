@@ -6,66 +6,72 @@ import { persist } from "zustand/middleware";
 
 export type RouteFilterMode = "simple" | "advanced";
 
+export type CachedLocation = {
+  lat: number;
+  lng: number;
+  timestamp: number;
+};
+
 type FavoritesMeta = {
   pinned?: boolean;
   groupId?: string | null;
 };
 
-export type FavoritesItem = FavoritesMeta & (
+export type FavoritesItem = FavoritesMeta &
   // KMB: single stop
-  | {
-      id: string;
-      mode: "kmb";
-      title: string;
-      stopId: string;
-      // Route filter - simple mode (legacy field name for backward compat)
-      route?: string;
-      serviceType?: string;
-      // Extended route filter fields
-      routeFilterMode?: RouteFilterMode;
-      entries?: { variantKey: string }[];
-    }
-  // KMB: grouped stops (multiple stops with same name)
-  | {
-      id: string;
-      mode: "kmb";
-      title: string;
-      stopIds: string[];
-      // Route filter
-      routeFilterMode?: RouteFilterMode;
-      route?: string;
-      entries?: { variantKey: string }[];
-    }
-  // KMB: contains query
-  | {
-      id: string;
-      mode: "kmb";
-      title: string;
-      query: string;
-      // Route filter - simple mode (legacy field name for backward compat)
-      route?: string;
-      serviceType?: string;
-      // Extended route filter fields
-      routeFilterMode?: RouteFilterMode;
-      entries?: { variantKey: string }[];
-    }
-  | {
-      id: string;
-      mode: "mtr";
-      // Titles are stored for display convenience only.
-      // They may be regenerated in the current UI language.
-      title: string;
-      // Keep one representative line for backward compatibility.
-      line: string;
-      sta: string;
-    }
-  | {
-      id: string;
-      mode: "lrt";
-      title: string;
-      stationId: string;
-    }
-);
+  (| {
+        id: string;
+        mode: "kmb";
+        title: string;
+        stopId: string;
+        // Route filter - simple mode (legacy field name for backward compat)
+        route?: string;
+        serviceType?: string;
+        // Extended route filter fields
+        routeFilterMode?: RouteFilterMode;
+        entries?: { variantKey: string }[];
+      }
+    // KMB: grouped stops (multiple stops with same name)
+    | {
+        id: string;
+        mode: "kmb";
+        title: string;
+        stopIds: string[];
+        // Route filter
+        routeFilterMode?: RouteFilterMode;
+        route?: string;
+        entries?: { variantKey: string }[];
+      }
+    // KMB: contains query
+    | {
+        id: string;
+        mode: "kmb";
+        title: string;
+        query: string;
+        // Route filter - simple mode (legacy field name for backward compat)
+        route?: string;
+        serviceType?: string;
+        // Extended route filter fields
+        routeFilterMode?: RouteFilterMode;
+        entries?: { variantKey: string }[];
+      }
+    | {
+        id: string;
+        mode: "mtr";
+        // Titles are stored for display convenience only.
+        // They may be regenerated in the current UI language.
+        title: string;
+        // Keep one representative line for backward compatibility.
+        line: string;
+        sta: string;
+      }
+    | {
+        id: string;
+        mode: "lrt";
+        title: string;
+        stationId: string;
+      }
+  );
 
 export type RecentItem = FavoritesItem & {
   at: number;
@@ -86,6 +92,8 @@ type AppState = {
   favoritesGroups: FavoritesGroup[];
   recents: RecentItem[];
 
+  lastKnownLocation: CachedLocation | null;
+
   setMode: (mode: TransportMode) => void;
   setLang: (lang: UiLanguage) => void;
   setRouteFilterMode: (mode: RouteFilterMode) => void;
@@ -101,6 +109,7 @@ type AppState = {
 
   addRecent: (item: FavoritesItem) => void;
   clearRecents: () => void;
+  setLastKnownLocation: (loc: CachedLocation | null) => void;
 };
 
 const RECENTS_LIMIT = 12;
@@ -129,6 +138,8 @@ export const useAppStore = create<AppState>()(
       favorites: [],
       favoritesGroups: [],
       recents: [],
+
+      lastKnownLocation: null,
 
       setMode: (mode) => set({ mode }),
       setLang: (lang) => set({ lang }),
@@ -161,7 +172,10 @@ export const useAppStore = create<AppState>()(
             favorites.unshift(updated);
           } else {
             let insertIndex = 0;
-            while (insertIndex < favorites.length && favorites[insertIndex].pinned) {
+            while (
+              insertIndex < favorites.length &&
+              favorites[insertIndex].pinned
+            ) {
               insertIndex += 1;
             }
             favorites.splice(insertIndex, 0, updated);
@@ -178,7 +192,10 @@ export const useAppStore = create<AppState>()(
 
           const targetIndex = direction === "up" ? index - 1 : index + 1;
           if (targetIndex < 0 || targetIndex >= favorites.length) return state;
-          if (Boolean(favorites[index].pinned) !== Boolean(favorites[targetIndex].pinned)) {
+          if (
+            Boolean(favorites[index].pinned) !==
+            Boolean(favorites[targetIndex].pinned)
+          ) {
             return state;
           }
 
@@ -201,7 +218,7 @@ export const useAppStore = create<AppState>()(
           if (!trimmed) return state;
           return {
             favoritesGroups: state.favoritesGroups.map((group) =>
-              group.id === id ? { ...group, name: trimmed } : group
+              group.id === id ? { ...group, name: trimmed } : group,
             ),
           };
         }),
@@ -209,9 +226,11 @@ export const useAppStore = create<AppState>()(
       deleteFavoriteGroup: (id) =>
         set((state) => ({
           favorites: state.favorites.map((favorite) =>
-            favorite.groupId === id ? { ...favorite, groupId: null } : favorite
+            favorite.groupId === id ? { ...favorite, groupId: null } : favorite,
           ),
-          favoritesGroups: state.favoritesGroups.filter((group) => group.id !== id),
+          favoritesGroups: state.favoritesGroups.filter(
+            (group) => group.id !== id,
+          ),
         })),
 
       assignFavoriteGroup: (favoriteId, groupId) =>
@@ -219,7 +238,7 @@ export const useAppStore = create<AppState>()(
           favorites: state.favorites.map((favorite) =>
             favorite.id === favoriteId
               ? { ...favorite, groupId: groupId ?? null }
-              : favorite
+              : favorite,
           ),
         })),
 
@@ -237,14 +256,16 @@ export const useAppStore = create<AppState>()(
         }),
 
       clearRecents: () => set({ recents: [] }),
+
+      setLastKnownLocation: (loc) => set({ lastKnownLocation: loc }),
     }),
     {
       name: "hk-eta",
-      version: 2,
+      version: 3,
       migrate: (persistedState) => {
         const state = persistedState as Partial<AppState> | undefined;
         const favorites = (state?.favorites ?? []).map((favorite) =>
-          withFavoriteMeta(favorite)
+          withFavoriteMeta(favorite),
         );
 
         return {
@@ -255,6 +276,7 @@ export const useAppStore = create<AppState>()(
           favorites,
           favoritesGroups: state?.favoritesGroups ?? [],
           recents: state?.recents ?? [],
+          lastKnownLocation: state?.lastKnownLocation ?? null,
         };
       },
       partialize: (state) => ({
@@ -265,7 +287,8 @@ export const useAppStore = create<AppState>()(
         favorites: state.favorites,
         favoritesGroups: state.favoritesGroups,
         recents: state.recents,
+        lastKnownLocation: state.lastKnownLocation,
       }),
-    }
-  )
+    },
+  ),
 );

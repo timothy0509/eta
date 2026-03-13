@@ -23,8 +23,19 @@ export function NearbyStopsButton({
   disabled,
   onNearbyStops,
 }: NearbyStopsButtonProps) {
-  const { loading, requestLocation } = useGeolocation();
-  const [hasRequested, setHasRequested] = React.useState(false);
+  const { loading, error, requestLocation } = useGeolocation();
+
+  React.useEffect(() => {
+    if (error) {
+      toast.error(
+        lang === "en"
+          ? error
+          : lang === "sc"
+            ? `定位失败: ${error}`
+            : `定位失敗: ${error}`,
+      );
+    }
+  }, [error, lang]);
 
   const handleClick = React.useCallback(async () => {
     if (stops.length === 0) {
@@ -33,12 +44,10 @@ export function NearbyStopsButton({
           ? "Stop data not loaded yet"
           : lang === "sc"
             ? "车站数据未加载"
-            : "車站數據未載入"
+            : "車站數據未載入",
       );
       return;
     }
-
-    setHasRequested(true);
 
     const loc = await requestLocation();
 
@@ -53,7 +62,7 @@ export function NearbyStopsButton({
       {
         maxDistanceMeters: 300,
         maxGroups: 5,
-      }
+      },
     );
 
     if (nearbyStopIds.length === 0) {
@@ -62,7 +71,7 @@ export function NearbyStopsButton({
           ? "No nearby stops found within 300m"
           : lang === "sc"
             ? "300米内未找到附近车站"
-            : "300米內未找到附近車站"
+            : "300米內未找到附近車站",
       );
       return;
     }
@@ -70,18 +79,7 @@ export function NearbyStopsButton({
     onNearbyStops(nearbyStopIds);
   }, [stops, lang, onNearbyStops, requestLocation]);
 
-  React.useEffect(() => {
-    if (hasRequested) {
-      setHasRequested(false);
-    }
-  }, [hasRequested]);
-
-  const label =
-    lang === "en"
-      ? "Nearby"
-      : lang === "sc"
-        ? "附近"
-        : "附近";
+  const label = lang === "en" ? "Nearby" : lang === "sc" ? "附近" : "附近";
 
   return (
     <Button
@@ -91,9 +89,7 @@ export function NearbyStopsButton({
       disabled={disabled || loading || stops.length === 0}
       onClick={handleClick}
     >
-      <MapPin
-        className={cn("mr-2 h-4 w-4", loading && "animate-pulse")}
-      />
+      <MapPin className={cn("mr-2 h-4 w-4", loading && "animate-pulse")} />
       {loading
         ? lang === "en"
           ? "Locating..."

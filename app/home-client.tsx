@@ -1,6 +1,7 @@
 'use client'
 
 import * as React from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import dynamic from 'next/dynamic'
@@ -24,6 +25,7 @@ import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
 import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } from '@/lib/eta/types'
 import { isLanguageSupported } from '@/lib/eta/types'
 import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
+import { fadeScale } from '@/lib/eta/animations'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
@@ -401,102 +403,156 @@ export default function HomeClient() {
 
                   <Separator />
 
-                  {mode === 'kmb' ? (
-                    <KmbPane
-                      lang={lang}
-                      routeFilterMode={routeFilterMode}
-                      onRouteFilterModeChange={setRouteFilterMode}
-                      onAddRecent={addRecent}
-                      onAddFavorite={addFavorite}
-                      canFavoriteRef={canFavoriteRef}
-                      selectedItem={selectedItem}
-                      onRegisterRefresh={onRegisterRefresh}
-                      onStopsChange={setKmbStops}
-                      onStateChange={setKmbPaneState}
-                    />
-                  ) : null}
-
-                  {mode === 'mtr' ? (
-                    <MtrPane
-                      lang={lang}
-                      stations={mtrStations}
-                      onAddRecent={addRecent}
-                      onAddFavorite={addFavorite}
-                      canFavoriteRef={canFavoriteRef}
-                      onRegisterRefresh={onRegisterRefresh}
-                      selectedItem={selectedItem}
-                      onStateChange={setMtrPaneState}
-                    />
-                  ) : null}
-
-                  {mode === 'lrt' ? (
-                    <LrtPane
-                      lang={lang}
-                      stations={lrtStations}
-                      onAddRecent={addRecent}
-                      onAddFavorite={addFavorite}
-                      canFavoriteRef={canFavoriteRef}
-                      onRegisterRefresh={onRegisterRefresh}
-                      selectedItem={selectedItem}
-                      onStateChange={setLrtPaneState}
-                    />
-                  ) : null}
+                  <AnimatePresence mode="wait">
+                    {mode === 'kmb' && (
+                      <motion.div
+                        key="kmb"
+                        variants={fadeScale}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+                      >
+                        <KmbPane
+                          lang={lang}
+                          routeFilterMode={routeFilterMode}
+                          onRouteFilterModeChange={setRouteFilterMode}
+                          onAddRecent={addRecent}
+                          onAddFavorite={addFavorite}
+                          canFavoriteRef={canFavoriteRef}
+                          selectedItem={selectedItem}
+                          onRegisterRefresh={onRegisterRefresh}
+                          onStopsChange={setKmbStops}
+                          onStateChange={setKmbPaneState}
+                        />
+                      </motion.div>
+                    )}
+                    {mode === 'mtr' && (
+                      <motion.div
+                        key="mtr"
+                        variants={fadeScale}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+                      >
+                        <MtrPane
+                          lang={lang}
+                          stations={mtrStations}
+                          onAddRecent={addRecent}
+                          onAddFavorite={addFavorite}
+                          canFavoriteRef={canFavoriteRef}
+                          onRegisterRefresh={onRegisterRefresh}
+                          selectedItem={selectedItem}
+                          onStateChange={setMtrPaneState}
+                        />
+                      </motion.div>
+                    )}
+                    {mode === 'lrt' && (
+                      <motion.div
+                        key="lrt"
+                        variants={fadeScale}
+                        initial="initial"
+                        animate="animate"
+                        exit="exit"
+                        transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+                      >
+                        <LrtPane
+                          lang={lang}
+                          stations={lrtStations}
+                          onAddRecent={addRecent}
+                          onAddFavorite={addFavorite}
+                          canFavoriteRef={canFavoriteRef}
+                          onRegisterRefresh={onRegisterRefresh}
+                          selectedItem={selectedItem}
+                          onStateChange={setLrtPaneState}
+                        />
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </CardContent>
               </Card>
             </div>
 
             <div className="space-y-4">
-              {mode === 'kmb' ? (
-                <KmbResults
-                  lang={kmbPaneState?.lang ?? lang}
-                  title={kmbPaneState?.title ?? t.kmbTitle}
-                  stopCode={kmbPaneState?.stopCode ?? null}
-                  routesFilter={kmbPaneState?.routeFilter.routes ?? ''}
-                  eta={kmbPaneState?.eta ?? []}
-                  routeInfos={kmbPaneState?.routeInfos ?? {}}
-                  faresByVariantKey={kmbPaneState?.faresByVariantKey ?? {}}
-                  hasQuery={kmbPaneState?.hasQuery ?? false}
-                  error={kmbPaneState?.error ?? null}
-                  stale={kmbPaneState?.stale ?? false}
-                  lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
-                  onRefresh={() => void kmbPaneState?.refresh({ toastOnError: true })}
-                  loading={kmbPaneState?.loading}
-                  stops={kmbPaneState?.stops ?? undefined}
-                  multipleStops={kmbPaneState?.multipleStops}
-                  isKeyphraseMode={kmbPaneState?.isKeyphraseMode}
-                  etaByStopId={kmbPaneState?.etaByStopId}
-                  loadedStopIds={kmbPaneState?.loadedStopIds}
-                  sentinelRef={kmbPaneState?.sentinelRef}
-                  hasMoreStops={kmbPaneState?.hasMoreStops}
-                  precomputedGroups={kmbPaneState?.precomputedGroups}
-                />
-              ) : null}
-
-              {mode === 'mtr' ? (
-                <MtrResults
-                  title={mtrPaneState?.title ?? t.mtrTitle}
-                  lang={mtrPaneState?.lang ?? lang}
-                  schedule={mtrPaneState?.schedule ?? null}
-                  error={mtrPaneState?.error ?? null}
-                  stale={mtrPaneState?.stale ?? false}
-                  lastUpdatedAt={mtrPaneState?.lastUpdatedAt ?? null}
-                  onRefresh={mtrPaneState?.onRefresh ?? (() => {})}
-                  loading={mtrPaneState?.loading}
-                />
-              ) : null}
-
-              {mode === 'lrt' ? (
-                <LrtResults
-                  title={lrtPaneState?.title ?? t.lrtTitle}
-                  lang={lrtPaneState?.lang ?? lang}
-                  schedule={lrtPaneState?.schedule ?? null}
-                  error={lrtPaneState?.error ?? null}
-                  stale={lrtPaneState?.stale ?? false}
-                  lastUpdatedAt={lrtPaneState?.lastUpdatedAt ?? null}
-                  onRefresh={lrtPaneState?.onRefresh ?? (() => {})}
-                  loading={lrtPaneState?.loading}
-                />
-              ) : null}
+              <AnimatePresence mode="wait">
+                {mode === 'kmb' && (
+                  <motion.div
+                    key="kmb-results"
+                    variants={fadeScale}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+                  >
+                    <KmbResults
+                      lang={kmbPaneState?.lang ?? lang}
+                      title={kmbPaneState?.title ?? t.kmbTitle}
+                      stopCode={kmbPaneState?.stopCode ?? null}
+                      routesFilter={kmbPaneState?.routeFilter.routes ?? ''}
+                      eta={kmbPaneState?.eta ?? []}
+                      routeInfos={kmbPaneState?.routeInfos ?? {}}
+                      faresByVariantKey={kmbPaneState?.faresByVariantKey ?? {}}
+                      hasQuery={kmbPaneState?.hasQuery ?? false}
+                      error={kmbPaneState?.error ?? null}
+                      stale={kmbPaneState?.stale ?? false}
+                      lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
+                      onRefresh={() => void kmbPaneState?.refresh({ toastOnError: true })}
+                      loading={kmbPaneState?.loading}
+                      stops={kmbPaneState?.stops ?? undefined}
+                      multipleStops={kmbPaneState?.multipleStops}
+                      isKeyphraseMode={kmbPaneState?.isKeyphraseMode}
+                      etaByStopId={kmbPaneState?.etaByStopId}
+                      loadedStopIds={kmbPaneState?.loadedStopIds}
+                      sentinelRef={kmbPaneState?.sentinelRef}
+                      hasMoreStops={kmbPaneState?.hasMoreStops}
+                      precomputedGroups={kmbPaneState?.precomputedGroups}
+                    />
+                  </motion.div>
+                )}
+                {mode === 'mtr' && (
+                  <motion.div
+                    key="mtr-results"
+                    variants={fadeScale}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+                  >
+                    <MtrResults
+                      title={mtrPaneState?.title ?? t.mtrTitle}
+                      lang={mtrPaneState?.lang ?? lang}
+                      schedule={mtrPaneState?.schedule ?? null}
+                      error={mtrPaneState?.error ?? null}
+                      stale={mtrPaneState?.stale ?? false}
+                      lastUpdatedAt={mtrPaneState?.lastUpdatedAt ?? null}
+                      onRefresh={mtrPaneState?.onRefresh ?? (() => {})}
+                      loading={mtrPaneState?.loading}
+                    />
+                  </motion.div>
+                )}
+                {mode === 'lrt' && (
+                  <motion.div
+                    key="lrt-results"
+                    variants={fadeScale}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+                  >
+                    <LrtResults
+                      title={lrtPaneState?.title ?? t.lrtTitle}
+                      lang={lrtPaneState?.lang ?? lang}
+                      schedule={lrtPaneState?.schedule ?? null}
+                      error={lrtPaneState?.error ?? null}
+                      stale={lrtPaneState?.stale ?? false}
+                      lastUpdatedAt={lrtPaneState?.lastUpdatedAt ?? null}
+                      onRefresh={lrtPaneState?.onRefresh ?? (() => {})}
+                      loading={lrtPaneState?.loading}
+                    />
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
         </div>

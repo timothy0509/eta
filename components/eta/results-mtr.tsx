@@ -122,7 +122,7 @@ export function MtrResults({
   }
 
   return (
-    <Card className="bg-card/60 rounded-3xl border shadow-sm">
+    <Card variant="glass" className="rounded-3xl">
       <CardHeader className="flex flex-row items-center justify-between gap-6">
         <div>
           <CardTitle className="text-base">{title}</CardTitle>
@@ -156,7 +156,7 @@ export function MtrResults({
         </div>
         <Button
           size="sm"
-          variant="outline"
+          variant="glass"
           className="rounded-xl"
           onClick={onRefresh}
           disabled={loading}
@@ -167,7 +167,7 @@ export function MtrResults({
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? (
-          <div className="ui-animate-fade bg-destructive/10 text-destructive rounded-2xl border p-4 text-sm">
+          <div className="ui-animate-fade glass bg-destructive/10 text-destructive rounded-2xl p-4 text-sm">
             {lang === 'en'
               ? `Update failed. Showing last results. (${error})`
               : lang === 'sc'
@@ -176,19 +176,19 @@ export function MtrResults({
           </div>
         ) : null}
         {!schedule ? (
-          <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+          <div className="ui-animate-fade glass text-muted-foreground flex items-center gap-2 rounded-2xl p-4 text-sm">
             <Info className="h-4 w-4" />
             {t.selectStation}
           </div>
         ) : schedule.status === 0 ? (
-          <div className="ui-animate-in bg-background/50 rounded-2xl border p-4">
+          <div className="ui-animate-in glass-interactive rounded-2xl p-4">
             <div className="text-sm font-medium">{t.serviceMessage}</div>
             <div className="text-muted-foreground mt-1 text-sm">
               {schedule.message ?? t.noSchedule}
             </div>
             {schedule.url ? (
               <a
-                className="ui-lift bg-card/50 hover:bg-card mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+                className="glass ui-lift mt-3 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm"
                 href={schedule.url}
                 target="_blank"
                 rel="noopener noreferrer"
@@ -222,10 +222,7 @@ export function MtrResults({
             return (
               <div
                 key={key}
-                className={cn(
-                  'ui-animate-in ui-lift bg-background/40 rounded-2xl border p-4',
-                  staggerClass
-                )}
+                className={cn('ui-animate-in glass-interactive rounded-2xl p-4', staggerClass)}
               >
                 <div className="flex min-w-0 items-center gap-2">
                   {line ? (
@@ -246,7 +243,7 @@ export function MtrResults({
                   {(['UP', 'DOWN'] as const).map((dir) => {
                     const trains = payload[dir] ?? []
                     return (
-                      <div key={dir} className="bg-card/30 rounded-2xl border p-3">
+                      <div key={dir} className="glass rounded-2xl p-3">
                         <div className="text-muted-foreground text-xs font-medium">
                           {dir === 'UP' ? t.up : t.down}
                         </div>
@@ -273,7 +270,7 @@ export function MtrResults({
                               return (
                                 <div
                                   key={`${dir}-${idx}`}
-                                  className="ui-lift bg-background/30 flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+                                  className="glass ui-lift flex items-center justify-between gap-3 rounded-xl px-3 py-2"
                                 >
                                   <Marquee className="min-w-0 flex-1 text-sm font-medium">
                                     {destText}

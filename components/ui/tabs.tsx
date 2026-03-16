@@ -96,7 +96,7 @@ function TabsList({
       ref={listRef}
       data-slot="tabs-list"
       className={cn(
-        'bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
+        'glass text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]',
         withIndicator && 'relative isolate',
         className
       )}
@@ -106,7 +106,7 @@ function TabsList({
         <span
           aria-hidden="true"
           className={cn(
-            'bg-background dark:border-input dark:bg-input/30 pointer-events-none absolute top-0 left-0 z-0 rounded-md border border-transparent shadow-sm transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none',
+            'bg-background/80 dark:bg-input/30 pointer-events-none absolute top-0 left-0 z-0 rounded-md border border-transparent shadow-sm backdrop-blur-sm transition-[transform,width,height] duration-200 ease-out motion-reduce:transition-none',
             indicatorClassName
           )}
           style={{

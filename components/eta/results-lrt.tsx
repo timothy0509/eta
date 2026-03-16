@@ -61,7 +61,7 @@ export function LrtResults({
           : '暫時沒有月台資訊。',
   }
   return (
-    <Card className="bg-card/60 rounded-3xl border shadow-sm">
+    <Card variant="glass" className="rounded-3xl">
       <CardHeader className="flex flex-row items-center justify-between gap-6">
         <div>
           <CardTitle className="text-base">{title}</CardTitle>
@@ -95,7 +95,7 @@ export function LrtResults({
         </div>
         <Button
           size="sm"
-          variant="outline"
+          variant="glass"
           className="rounded-xl"
           onClick={onRefresh}
           disabled={loading}
@@ -106,7 +106,7 @@ export function LrtResults({
       </CardHeader>
       <CardContent className="space-y-4">
         {error ? (
-          <div className="ui-animate-fade bg-destructive/10 text-destructive rounded-2xl border p-4 text-sm">
+          <div className="ui-animate-fade glass bg-destructive/10 text-destructive rounded-2xl p-4 text-sm">
             {lang === 'en'
               ? `Update failed. Showing last results. (${error})`
               : lang === 'sc'
@@ -115,12 +115,12 @@ export function LrtResults({
           </div>
         ) : null}
         {!schedule ? (
-          <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+          <div className="ui-animate-fade glass text-muted-foreground flex items-center gap-2 rounded-2xl p-4 text-sm">
             <Info className="h-4 w-4" />
             {lang === 'en' ? 'Select a station to view trains.' : '選擇車站以查看班次'}
           </div>
         ) : (schedule.platform_list ?? []).length === 0 ? (
-          <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+          <div className="ui-animate-fade glass text-muted-foreground flex items-center gap-2 rounded-2xl p-4 text-sm">
             <Info className="h-4 w-4" />
             {t.emptyPlatform}
           </div>
@@ -145,10 +145,7 @@ export function LrtResults({
                 return (
                   <div
                     key={p.platform_id}
-                    className={cn(
-                      'ui-animate-in ui-lift bg-background/40 rounded-2xl border p-4',
-                      staggerClass
-                    )}
+                    className={cn('ui-animate-in glass-interactive rounded-2xl p-4', staggerClass)}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="text-sm font-medium">
@@ -168,7 +165,7 @@ export function LrtResults({
                       {(p.route_list ?? []).map((r, idx) => (
                         <div
                           key={`${p.platform_id}-${r.route_no}-${idx}`}
-                          className="ui-lift bg-card/30 flex items-start justify-between gap-3 rounded-2xl border p-3"
+                          className="glass ui-lift flex items-start justify-between gap-3 rounded-2xl p-3"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-2">

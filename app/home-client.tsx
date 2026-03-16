@@ -312,7 +312,14 @@ export default function HomeClient() {
 
   return (
     <div className="from-background via-background to-muted/30 relative min-h-dvh bg-gradient-to-b">
-      <div className="pointer-events-none absolute inset-0 opacity-40 [background:radial-gradient(80%_40%_at_50%_0%,hsl(var(--primary)/0.18),transparent_70%)]" />
+      {/* Animated background blobs */}
+      <div className="blob-container">
+        <div className="blob blob-1" />
+        <div className="blob blob-2" />
+        <div className="blob blob-3" />
+      </div>
+      {/* Radial gradient overlay */}
+      <div className="pointer-events-none absolute inset-0 opacity-30 [background:radial-gradient(80%_40%_at_50%_0%,hsl(var(--primary)/0.15),transparent_70%)]" />
 
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="flex flex-col gap-2">
@@ -324,7 +331,7 @@ export default function HomeClient() {
 
             <div className="flex items-center gap-2">
               <Button
-                variant="outline"
+                variant="glass"
                 size="sm"
                 className="rounded-xl"
                 onClick={() => setSavedOpen(!savedOpen)}
@@ -343,7 +350,7 @@ export default function HomeClient() {
                 onChange={setAutoRefreshSeconds}
               />
               <Button
-                variant="outline"
+                variant="glass"
                 size="sm"
                 className="rounded-xl"
                 aria-label={
@@ -387,7 +394,7 @@ export default function HomeClient() {
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
             <div className="space-y-4">
-              <Card className="bg-card/60 rounded-3xl border p-0 shadow-sm">
+              <Card variant="glass" className="rounded-3xl p-0">
                 <CardContent className="space-y-4 p-5">
                   <ModeTabs lang={lang} value={mode} onChange={setMode} />
 

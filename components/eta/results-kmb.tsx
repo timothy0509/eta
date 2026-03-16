@@ -304,8 +304,8 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
         <button
           type="button"
           className={cn(
-            'ui-lift bg-background/30 text-muted-foreground inline-flex h-8 w-8 items-center justify-center rounded-lg border',
-            'hover:bg-background/40 hover:text-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
+            'glass ui-lift inline-flex h-8 w-8 items-center justify-center rounded-lg',
+            'text-muted-foreground hover:text-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
           )}
           aria-label={i18n.routeDetails}
         >
@@ -370,10 +370,7 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
     const remark = getGroupRemark(items, lang)
     return (
       <div
-        className={cn(
-          'ui-animate-in ui-lift bg-background/40 rounded-2xl border p-4 opacity-70',
-          staggerClass
-        )}
+        className={cn('ui-animate-in glass-interactive rounded-2xl p-4 opacity-70', staggerClass)}
       >
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -403,9 +400,7 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
   }
 
   return (
-    <div
-      className={cn('ui-animate-in ui-lift bg-background/40 rounded-2xl border p-4', staggerClass)}
-    >
+    <div className={cn('ui-animate-in glass-interactive rounded-2xl p-4', staggerClass)}>
       <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <RouteBadge route={route} company={co} size="lg" />
@@ -441,8 +436,9 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
             <div
               key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
               className={cn(
-                'ui-lift bg-card/40 min-w-[150px] shrink-0 rounded-2xl border p-3 sm:min-w-0',
-                entry.eta_seq === 1 && 'bg-card/60'
+                'glass rounded-2xl p-3 sm:min-w-0',
+                'min-w-[150px] shrink-0 sm:min-w-0',
+                entry.eta_seq === 1 && 'bg-primary/10 border-primary/30'
               )}
             >
               <div className="text-muted-foreground text-xs">
@@ -503,12 +499,7 @@ const StopSection = React.memo(function StopSection({
   return (
     <div ref={stopRef} className={cn('space-y-3', !isFirst && 'mt-6 border-t pt-6')}>
       {/* Stop header (sticky within results card) */}
-      <div
-        className={cn(
-          'bg-card/70 supports-[backdrop-filter]:bg-card/50 sticky top-0 z-10 -mx-6 -mt-5 border-b px-6 py-2.5 backdrop-blur',
-          !isFirst && 'pt-4'
-        )}
-      >
+      <div className={cn('glass sticky top-0 z-10 -mx-6 -mt-5 px-6 py-2.5', !isFirst && 'pt-4')}>
         <div className="flex items-center gap-2">
           <h3 className="text-foreground min-w-0 truncate text-sm font-semibold">{parsed.name}</h3>
           {stopCodeBadge ? (
@@ -521,7 +512,7 @@ const StopSection = React.memo(function StopSection({
 
       {/* Route cards for this stop */}
       {groups.length === 0 ? (
-        <div className="bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+        <div className="glass text-muted-foreground flex items-center gap-2 rounded-2xl p-4 text-sm">
           <Info className="h-4 w-4" />
           {formatNoScheduledText(lang)}
         </div>
@@ -737,7 +728,7 @@ export function KmbResults({
   }, [eta, stopLookup, lang, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
   return (
-    <Card className="bg-card/60 rounded-3xl border shadow-sm">
+    <Card variant="glass" className="rounded-3xl">
       <CardHeader className="flex flex-row items-center justify-between gap-6">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
@@ -810,7 +801,7 @@ export function KmbResults({
       </CardHeader>
       <CardContent className="space-y-5">
         {error ? (
-          <div className="ui-animate-fade bg-destructive/10 text-destructive rounded-2xl border p-4 text-sm">
+          <div className="ui-animate-fade glass bg-destructive/10 text-destructive rounded-2xl p-4 text-sm">
             {lang === 'en'
               ? `Update failed. Showing last results. (${error})`
               : lang === 'sc'
@@ -819,7 +810,7 @@ export function KmbResults({
           </div>
         ) : null}
         {!hasQuery ? (
-          <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+          <div className="ui-animate-fade glass text-muted-foreground flex items-center gap-2 rounded-2xl p-4 text-sm">
             <Info className="h-4 w-4" />
             {lang === 'en'
               ? 'Select a stop to load ETAs.'
@@ -874,7 +865,7 @@ export function KmbResults({
             ) : null}
           </>
         ) : grouped.length === 0 ? (
-          <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+          <div className="ui-animate-fade glass text-muted-foreground flex items-center gap-2 rounded-2xl p-4 text-sm">
             <Info className="h-4 w-4" />
             {formatNoScheduledText(lang)}
           </div>

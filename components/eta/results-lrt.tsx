@@ -25,6 +25,15 @@ function formatArrivalDeparture(code: string, lang: UiLanguage) {
   return code === 'A' ? '到達' : '離開'
 }
 
+function isImminentLrt(timeEn: string | undefined, timeCh: string | undefined): boolean {
+  const time = timeEn ?? timeCh ?? ''
+  const match = time.match(/(\d+)/)
+  if (!match) return false
+  const minutes = Number(match[1])
+  if (Number.isNaN(minutes)) return false
+  return minutes > 0 && minutes <= 3
+}
+
 type Props = {
   title: string
   lang: UiLanguage
@@ -190,7 +199,12 @@ export function LrtResults({
                             </div>
                           </div>
                           <div className="shrink-0 text-right">
-                            <div className="font-tabular text-lg font-semibold">
+                            <div
+                              className={cn(
+                                'font-tabular text-lg font-semibold',
+                                isImminentLrt(r.time_en, r.time_ch) && 'eta-pulse'
+                              )}
+                            >
                               {lang === 'en' ? r.time_en : r.time_ch}
                             </div>
                             {r.stop ? (

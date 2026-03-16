@@ -16,7 +16,7 @@ function Card({
       className={cn(
         'ui-animate-in text-card-foreground flex flex-col gap-6 rounded-xl py-6',
         variant === 'default' && 'bg-card border shadow-sm',
-        variant === 'glass' && 'glass-card',
+        variant === 'glass' && 'glass-card glass-shimmer',
         className
       )}
       {...props}

@@ -438,7 +438,12 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
               className={cn(
                 'glass rounded-2xl p-3 sm:min-w-0',
                 'min-w-[150px] shrink-0 sm:min-w-0',
-                entry.eta_seq === 1 && 'bg-primary/10 border-primary/30'
+                entry.eta_seq === 1 && 'bg-primary/10 border-primary/30',
+                minutes !== null &&
+                  !Number.isNaN(minutes) &&
+                  minutes <= 3 &&
+                  minutes > 0 &&
+                  'eta-pulse'
               )}
             >
               <div className="text-muted-foreground text-xs">

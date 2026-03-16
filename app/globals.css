@@ -422,6 +422,116 @@
       transform: translate(-20px, 20px) scale(0.95);
     }
   }
+
+  @keyframes glass-shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+
+  @keyframes eta-pulse {
+    0%,
+    100% {
+      transform: scale(1);
+      opacity: 1;
+    }
+    50% {
+      transform: scale(1.02);
+      opacity: 0.9;
+    }
+  }
+
+  @keyframes glass-float {
+    0%,
+    100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-3px);
+    }
+  }
+
+  @keyframes border-glow {
+    0%,
+    100% {
+      border-color: var(--glass-border-subtle);
+    }
+    50% {
+      border-color: var(--glass-border);
+    }
+  }
+
+  @keyframes blob-morph {
+    0%,
+    100% {
+      transform: translate(0, 0) scale(1) rotate(0deg);
+    }
+    25% {
+      transform: translate(40px, -30px) scale(1.1) rotate(5deg);
+    }
+    50% {
+      transform: translate(-20px, 20px) scale(0.95) rotate(-3deg);
+    }
+    75% {
+      transform: translate(30px, 10px) scale(1.05) rotate(2deg);
+    }
+  }
+
+  .glass-shimmer {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .glass-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      105deg,
+      transparent 40%,
+      oklch(1 0 0 / 0.08) 45%,
+      oklch(1 0 0 / 0.12) 50%,
+      oklch(1 0 0 / 0.08) 55%,
+      transparent 60%
+    );
+    background-size: 200% 100%;
+    opacity: 0;
+    transition: opacity var(--ui-dur-fast) var(--ui-ease-out);
+    pointer-events: none;
+    border-radius: inherit;
+  }
+
+  .glass-shimmer:hover::after {
+    opacity: 1;
+    animation: glass-shimmer 1.5s ease-in-out infinite;
+  }
+
+  .eta-pulse {
+    animation: eta-pulse 2s ease-in-out infinite;
+  }
+
+  .glass-float {
+    animation: glass-float 6s ease-in-out infinite;
+  }
+
+  .glass-border-glow {
+    animation: border-glow 3s ease-in-out infinite;
+  }
+
+  .ui-stagger-4 {
+    animation-delay: 160ms;
+  }
+
+  .ui-stagger-5 {
+    animation-delay: 200ms;
+  }
+
+  .ui-stagger-6 {
+    animation-delay: 240ms;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -430,7 +540,10 @@
   .ui-animate-fade,
   .ui-pop,
   .ui-spin,
-  .blob {
+  .blob,
+  .eta-pulse,
+  .glass-float,
+  .glass-border-glow {
     animation: none !important;
   }
 
@@ -448,5 +561,10 @@
   .glass-interactive:hover,
   .glass-interactive:active {
     transform: none !important;
+  }
+
+  .glass-shimmer::after {
+    animation: none !important;
+    opacity: 0 !important;
   }
 }

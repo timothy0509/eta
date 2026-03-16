@@ -84,6 +84,14 @@ function formatMinutes(ttnt: unknown, lang: UiLanguage) {
   return lang === 'en' ? `${minutes} min` : lang === 'sc' ? `${minutes} 分` : `${minutes} 分`
 }
 
+function isImminent(ttnt: unknown): boolean {
+  const raw = String(ttnt ?? '').trim()
+  if (!raw) return false
+  const minutes = Number(raw)
+  if (Number.isNaN(minutes)) return false
+  return minutes > 0 && minutes <= 3
+}
+
 function formatPlatform(plat: unknown) {
   const raw = String(plat ?? '').trim()
   if (!raw) return ''
@@ -289,7 +297,13 @@ export function MtrResults({
                                         {platform}
                                       </Badge>
                                     ) : null}
-                                    <Badge className="font-tabular rounded-xl" variant="outline">
+                                    <Badge
+                                      className={cn(
+                                        'font-tabular rounded-xl',
+                                        isImminent(t.ttnt) && 'eta-pulse'
+                                      )}
+                                      variant="outline"
+                                    >
                                       {formatMinutes(t.ttnt, lang)}
                                     </Badge>
                                   </div>

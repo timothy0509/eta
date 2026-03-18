@@ -41,13 +41,6 @@ const nextConfig: NextConfig = {
   // Enable compression
   compress: true,
 
-  // Optimize lucide-react tree-shaking
-  modularizeImports: {
-    'lucide-react': {
-      transform: 'lucide-react/dist/esm/icons/{{kebabCase member}}',
-    },
-  },
-
   async headers() {
     return [
       {

@@ -56,15 +56,31 @@ async function fetchJsonDedupe<T>(
   fetcher: () => Promise<T>,
   options?: { signal?: AbortSignal }
 ): Promise<T> {
-  if (options?.signal) {
-    if (options.signal.aborted) {
-      throw new DOMException('The operation was aborted.', 'AbortError')
-    }
-    return await fetcher()
+  if (options?.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
   }
 
   const existing = inFlightJson.get(key)
-  if (existing) return existing as Promise<T>
+  if (existing) {
+    if (options?.signal) {
+      return new Promise((resolve, reject) => {
+        const onAbort = () => {
+          reject(new DOMException('The operation was aborted.', 'AbortError'))
+        }
+        options.signal!.addEventListener('abort', onAbort, { once: true })
+        existing
+          .then((result) => {
+            options.signal!.removeEventListener('abort', onAbort)
+            resolve(result as T)
+          })
+          .catch((err) => {
+            options.signal!.removeEventListener('abort', onAbort)
+            reject(err)
+          })
+      })
+    }
+    return existing as Promise<T>
+  }
 
   const promise = fetcher().finally(() => {
     inFlightJson.delete(key)

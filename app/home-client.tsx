@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS } from '@/lib/data/mtr-stations'
@@ -208,6 +209,9 @@ export default function HomeClient() {
 
   const refreshRef = React.useRef<(() => Promise<void>) | null>(null)
   const inFlightRefreshRef = React.useRef(false)
+  const refreshTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const MAX_REFRESH_DURATION_MS = 30_000
 
   const onRegisterRefresh = React.useCallback((refresh: () => Promise<void>) => {
     refreshRef.current = refresh
@@ -218,15 +222,35 @@ export default function HomeClient() {
     if (inFlightRefreshRef.current) return
 
     inFlightRefreshRef.current = true
+
+    refreshTimeoutRef.current = setTimeout(() => {
+      if (inFlightRefreshRef.current) {
+        console.warn('Auto-refresh timeout - forcing unlock')
+        inFlightRefreshRef.current = false
+      }
+    }, MAX_REFRESH_DURATION_MS)
+
     refreshRef
       .current()
       .catch(() => {
         // ignore auto-refresh errors
       })
       .finally(() => {
+        if (refreshTimeoutRef.current) {
+          clearTimeout(refreshTimeoutRef.current)
+          refreshTimeoutRef.current = null
+        }
         inFlightRefreshRef.current = false
       })
   })
+
+  React.useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current)
+      }
+    }
+  }, [])
 
   const onSelectFromLists = React.useCallback(
     (item: FavoritesItem) => {
@@ -402,44 +426,50 @@ export default function HomeClient() {
                   <Separator />
 
                   {mode === 'kmb' ? (
-                    <KmbPane
-                      lang={lang}
-                      routeFilterMode={routeFilterMode}
-                      onRouteFilterModeChange={setRouteFilterMode}
-                      onAddRecent={addRecent}
-                      onAddFavorite={addFavorite}
-                      canFavoriteRef={canFavoriteRef}
-                      selectedItem={selectedItem}
-                      onRegisterRefresh={onRegisterRefresh}
-                      onStopsChange={setKmbStops}
-                      onStateChange={setKmbPaneState}
-                    />
+                    <ErrorBoundary>
+                      <KmbPane
+                        lang={lang}
+                        routeFilterMode={routeFilterMode}
+                        onRouteFilterModeChange={setRouteFilterMode}
+                        onAddRecent={addRecent}
+                        onAddFavorite={addFavorite}
+                        canFavoriteRef={canFavoriteRef}
+                        selectedItem={selectedItem}
+                        onRegisterRefresh={onRegisterRefresh}
+                        onStopsChange={setKmbStops}
+                        onStateChange={setKmbPaneState}
+                      />
+                    </ErrorBoundary>
                   ) : null}
 
                   {mode === 'mtr' ? (
-                    <MtrPane
-                      lang={lang}
-                      stations={mtrStations}
-                      onAddRecent={addRecent}
-                      onAddFavorite={addFavorite}
-                      canFavoriteRef={canFavoriteRef}
-                      onRegisterRefresh={onRegisterRefresh}
-                      selectedItem={selectedItem}
-                      onStateChange={setMtrPaneState}
-                    />
+                    <ErrorBoundary>
+                      <MtrPane
+                        lang={lang}
+                        stations={mtrStations}
+                        onAddRecent={addRecent}
+                        onAddFavorite={addFavorite}
+                        canFavoriteRef={canFavoriteRef}
+                        onRegisterRefresh={onRegisterRefresh}
+                        selectedItem={selectedItem}
+                        onStateChange={setMtrPaneState}
+                      />
+                    </ErrorBoundary>
                   ) : null}
 
                   {mode === 'lrt' ? (
-                    <LrtPane
-                      lang={lang}
-                      stations={lrtStations}
-                      onAddRecent={addRecent}
-                      onAddFavorite={addFavorite}
-                      canFavoriteRef={canFavoriteRef}
-                      onRegisterRefresh={onRegisterRefresh}
-                      selectedItem={selectedItem}
-                      onStateChange={setLrtPaneState}
-                    />
+                    <ErrorBoundary>
+                      <LrtPane
+                        lang={lang}
+                        stations={lrtStations}
+                        onAddRecent={addRecent}
+                        onAddFavorite={addFavorite}
+                        canFavoriteRef={canFavoriteRef}
+                        onRegisterRefresh={onRegisterRefresh}
+                        selectedItem={selectedItem}
+                        onStateChange={setLrtPaneState}
+                      />
+                    </ErrorBoundary>
                   ) : null}
                 </CardContent>
               </Card>

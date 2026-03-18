@@ -493,6 +493,23 @@ export function KmbPane({
   const kmbEtaStaleByStopId = etaState.staleByStopId
   const kmbFaresByVariantKey = etaState.faresByVariantKey
 
+  // Keep refs for stable callback access without triggering recreations
+  const routeFilterEntriesRef = React.useRef(routeFilter.entries)
+  const routeFilterModeRef = React.useRef(routeFilterMode)
+  const etaStateRef = React.useRef(etaState)
+
+  React.useEffect(() => {
+    routeFilterEntriesRef.current = routeFilter.entries
+  }, [routeFilter.entries])
+
+  React.useEffect(() => {
+    routeFilterModeRef.current = routeFilterMode
+  }, [routeFilterMode])
+
+  React.useEffect(() => {
+    etaStateRef.current = etaState
+  }, [etaState])
+
   // ========== OPTIMIZATION: Build search index once when stops load ==========
   const stopSearchIndex = React.useMemo<StopSearchIndex>(() => {
     return buildStopSearchIndex(kmbStops)
@@ -723,6 +740,9 @@ export function KmbPane({
   // AbortController for cancelling in-flight requests
   const abortControllerRef = React.useRef<AbortController | null>(null)
 
+  // Coordination ref to prevent overlapping refresh triggers from multiple effects
+  const pendingRefreshTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
+
   // Build route filter string based on current filter state
   const getRouteFilterString = React.useCallback(
     (query: KmbQuery) => {
@@ -744,6 +764,7 @@ export function KmbPane({
 
   // Fetch ETAs for a specific set of stop IDs and merge into state
   // Fares are fetched in a separate background request for faster initial load
+  // Uses refs for stable callback to avoid stale closure issues
   const fetchStopEtas = React.useCallback(
     async (
       stopIds: string[],
@@ -761,7 +782,7 @@ export function KmbPane({
       const result = await fetchKmbStopEtas(stopIds, {
         routeFilter: options.routeFilterString,
         signal: options.signal,
-        includeFares: false, // Skip fare computation for speed
+        includeFares: false,
       })
 
       if (options.signal?.aborted) return
@@ -772,8 +793,10 @@ export function KmbPane({
         )
       }
 
-      // Apply advanced filter client-side if needed
-      const advancedEntries = routeFilterMode === 'advanced' ? (routeFilter.entries ?? []) : []
+      // Apply advanced filter client-side if needed (using refs for stable access)
+      const currentFilterMode = routeFilterModeRef.current
+      const currentFilterEntries = routeFilterEntriesRef.current
+      const advancedEntries = currentFilterMode === 'advanced' ? (currentFilterEntries ?? []) : []
       const advancedKeys = advancedEntries.length
         ? new Set(advancedEntries.map((e) => e.variantKey).filter(Boolean))
         : null
@@ -807,10 +830,13 @@ export function KmbPane({
           )
         : undefined
 
+      // Get current state from refs to avoid stale closure issues
+      const currentEtaState = etaStateRef.current
+
       // Dispatch ETAs immediately (without fares)
       if (options.append) {
         // Append mode: merge with existing state
-        const existingSet = new Set(etaState.loadedStopIds)
+        const existingSet = new Set(currentEtaState.loadedStopIds)
         const newStopIds = stopIds.filter((id) => !existingSet.has(id))
         dispatchEta({
           type: 'APPEND_STOPS',
@@ -818,13 +844,12 @@ export function KmbPane({
             byStopId: filteredByStopId,
             newStopIds,
             staleByStopId,
-            // Don't include fares - they'll be fetched in background
           },
         })
       } else {
         // Replace mode: full refresh
         const mergedByStopId = options.mergeExisting
-          ? { ...etaState.byStopId, ...filteredByStopId }
+          ? { ...currentEtaState.byStopId, ...filteredByStopId }
           : filteredByStopId
         const nextLoadedStopIds = options.replaceLoadedStopIds ?? stopIds
         dispatchEta({
@@ -833,7 +858,6 @@ export function KmbPane({
             byStopId: mergedByStopId,
             loadedStopIds: nextLoadedStopIds,
             staleByStopId,
-            // Keep existing fares - they'll be updated in background
           },
         })
       }
@@ -853,8 +877,9 @@ export function KmbPane({
         const serviceType = String(eta.service_type ?? '')
         const vKey = `${co}|${route}|${dir}|${serviceType}`
 
-        // Skip if we already have this fare or already queued it
-        if (etaState.faresByVariantKey[vKey] || seenVariants.has(vKey)) continue
+        // Skip if we already have this fare or already queued it (use ref for latest state)
+        const currentFares = etaStateRef.current.faresByVariantKey
+        if (currentFares[vKey] || seenVariants.has(vKey)) continue
         seenVariants.add(vKey)
 
         fareVariants.push({
@@ -879,7 +904,6 @@ export function KmbPane({
             }
           })
           .catch((err) => {
-            // Silently ignore fare errors - fares are optional enhancement
             if (!options.signal?.aborted) {
               console.warn('Failed to load fares:', err)
             }
@@ -888,7 +912,7 @@ export function KmbPane({
 
       return { filteredByStopId, result }
     },
-    [routeFilter.entries, routeFilterMode, etaState.loadedStopIds, etaState.faresByVariantKey]
+    []
   )
 
   // Main refresh function - handles both initial load and refresh of loaded stops
@@ -899,6 +923,12 @@ export function KmbPane({
     ) => {
       const query = queryOverride ?? kmbQuery
       if (!query) return
+
+      // Cancel any pending debounced refresh
+      if (pendingRefreshTimeoutRef.current) {
+        clearTimeout(pendingRefreshTimeoutRef.current)
+        pendingRefreshTimeoutRef.current = null
+      }
 
       // Cancel any in-flight request
       if (abortControllerRef.current) {
@@ -1077,11 +1107,14 @@ export function KmbPane({
     }
   }, [infiniteScroll.visibleCount, infiniteScroll.hasMore, loadedStopIds.length, loadMoreStops])
 
-  // Cleanup abort controller on unmount
+  // Cleanup abort controller and pending refresh on unmount
   React.useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort()
+      }
+      if (pendingRefreshTimeoutRef.current) {
+        clearTimeout(pendingRefreshTimeoutRef.current)
       }
     }
   }, [])

@@ -231,9 +231,20 @@ export function StopSearch({
   const [query, setQuery] = React.useState('')
   const listId = React.useId()
 
-  // Defer the search query to keep input responsive during typing
-  const deferredQuery = React.useDeferredValue(query)
-  const isSearching = query !== deferredQuery
+  // Debounce the search query (150ms) to reduce Fuse.js invocations
+  const [debouncedQuery, setDebouncedQuery] = React.useState('')
+  React.useEffect(() => {
+    if (!query.trim()) {
+      setDebouncedQuery('')
+      return
+    }
+    const timer = setTimeout(() => setDebouncedQuery(query), 150)
+    return () => clearTimeout(timer)
+  }, [query])
+  const isSearching = query !== debouncedQuery && query.trim().length > 0
+
+  // Track if popover is open for performance optimization
+  const isOpen = open
 
   const stopById = React.useMemo(() => {
     return new Map(stops.map((stop) => [stop.stopId, stop]))
@@ -331,14 +342,17 @@ export function StopSearch({
     })
   }, [stopComputed])
 
-  // Search and group results
+  // Search and group results (only when popover is open to save CPU)
   const groupedResults = React.useMemo(() => {
-    if (!deferredQuery.trim()) {
+    // Skip expensive computation when popover is closed
+    if (!isOpen) return []
+
+    if (!debouncedQuery.trim()) {
       // Default: show first 12 stops, grouped
       return groupStopsByName(stopComputed.slice(0, 30)).slice(0, 12)
     }
 
-    const needle = deferredQuery.trim().toLowerCase()
+    const needle = debouncedQuery.trim().toLowerCase()
 
     const hits = fuse.search(needle).slice(0, 80)
 
@@ -384,7 +398,7 @@ export function StopSearch({
       .slice(0, 60)
 
     return groupStopsByName(scored.map((s: ScoredStop) => s.item)).slice(0, 20)
-  }, [fuse, deferredQuery, stopComputed])
+  }, [fuse, debouncedQuery, stopComputed, isOpen])
 
   const trimmedQuery = query.trim()
   const canSearchContains = trimmedQuery.length >= 3

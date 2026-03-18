@@ -51,7 +51,7 @@ function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
 /**
  * Generate display content for a favorite item based on current language.
  */
-function FavoriteItemDisplay({
+const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
   item,
   lang,
   kmbStopsById,
@@ -171,7 +171,7 @@ function FavoriteItemDisplay({
 
   // Fallback to stored title
   return <span className="truncate">{item.title}</span>
-}
+})
 
 export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   const { favorites, favoritesGroups, recents } = useAppStore(

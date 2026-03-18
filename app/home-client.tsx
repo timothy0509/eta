@@ -315,24 +315,27 @@ export default function HomeClient() {
           ? 'Light Rail'
           : '輕鐵'
 
-  const t = {
-    desc:
-      lang === 'en'
-        ? 'Clean, fast ETAs for Hong Kong transit.'
-        : lang === 'sc'
-          ? '簡潔又快速的香港交通到站預報。'
-          : '簡潔又快速的香港交通到站預報。',
-    theme: lang === 'en' ? 'Theme' : lang === 'sc' ? '主题' : '主題',
-    searchPin:
-      lang === 'en'
-        ? 'Search and pin your go-to stops.'
-        : lang === 'sc'
-          ? '搜尋並釘選常用車站。'
-          : '搜尋並釘選常用車站。',
-    kmbTitle: lang === 'en' ? 'Bus ETAs' : lang === 'sc' ? '巴士到站预报' : '巴士到站預報',
-    mtrTitle: lang === 'en' ? 'MTR' : lang === 'sc' ? '港铁' : '港鐵',
-    lrtTitle: lang === 'en' ? 'Light Rail' : '輕鐵',
-  }
+  const t = React.useMemo(
+    () => ({
+      desc:
+        lang === 'en'
+          ? 'Clean, fast ETAs for Hong Kong transit.'
+          : lang === 'sc'
+            ? '簡潔又快速的香港交通到站預報。'
+            : '簡潔又快速的香港交通到站預報。',
+      theme: lang === 'en' ? 'Theme' : lang === 'sc' ? '主题' : '主題',
+      searchPin:
+        lang === 'en'
+          ? 'Search and pin your go-to stops.'
+          : lang === 'sc'
+            ? '搜尋並釘選常用車站。'
+            : '搜尋並釘選常用車站。',
+      kmbTitle: lang === 'en' ? 'Bus ETAs' : lang === 'sc' ? '巴士到站预报' : '巴士到站預報',
+      mtrTitle: lang === 'en' ? 'MTR' : lang === 'sc' ? '港铁' : '港鐵',
+      lrtTitle: lang === 'en' ? 'Light Rail' : '輕鐵',
+    }),
+    [lang]
+  )
 
   return (
     <div className="from-background via-background to-muted/30 relative min-h-dvh bg-gradient-to-b">

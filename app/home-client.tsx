@@ -25,6 +25,7 @@ import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
 import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } from '@/lib/eta/types'
 import { isLanguageSupported } from '@/lib/eta/types'
 import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
+import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
@@ -170,6 +171,11 @@ export default function HomeClient() {
     if (savedOpen) return
     setSavedSide(isDesktop ? 'right' : 'bottom')
   }, [isDesktop, savedOpen])
+
+  // Clear parsed stop name cache when language changes
+  React.useEffect(() => {
+    clearKmbStopNameCache()
+  }, [lang])
 
   const onSavedOpenChange = React.useCallback(
     (nextOpen: boolean) => {

@@ -30,7 +30,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
 import { getLineColor } from '@/lib/eta/line-colors'
-import { parseKmbStopName } from '@/lib/eta/kmb-stop-name'
+import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
@@ -112,7 +112,7 @@ function FavoriteItemDisplay({
       const stop = kmbStopsById.get(item.stopId)
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang)
-        const { name } = parseKmbStopName(fullName)
+        const { name } = parseKmbStopNameCached(fullName)
 
         // Build suffix from saved data
         let suffix = ''
@@ -148,7 +148,7 @@ function FavoriteItemDisplay({
       }
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang)
-        const { name } = parseKmbStopName(fullName)
+        const { name } = parseKmbStopNameCached(fullName)
 
         // Build suffix from saved data
         let suffix = ''

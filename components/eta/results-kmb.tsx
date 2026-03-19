@@ -19,7 +19,7 @@ import {
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatRelativeMinutes, formatUiTime } from '@/lib/eta/format'
-import { parseKmbStopName } from '@/lib/eta/kmb-stop-name'
+import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -165,7 +165,7 @@ function getStopChips(
 
   const stop = stopFromEta ?? stopFromBuiltInId
   const fullName = stop ? pickStopName(stop, lang) : null
-  const parsed = fullName ? parseKmbStopName(fullName) : null
+  const parsed = fullName ? parseKmbStopNameCached(fullName) : null
 
   const result = {
     stopId,
@@ -496,7 +496,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById: Map<string, StopChips>
 }) {
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
-  const parsed = parseKmbStopName(stopName)
+  const parsed = parseKmbStopNameCached(stopName)
   const stopCodeBadge = parsed.platform ?? parsed.stopCode ?? null
   const stopRef = registerStopRef ? registerStopRef(stopId) : undefined
 
@@ -607,7 +607,7 @@ export function KmbResults({
     const next = new Map<string, StopChips>()
     for (const stop of stops) {
       const fullName = pickStopName(stop, lang)
-      const parsed = parseKmbStopName(fullName)
+      const parsed = parseKmbStopNameCached(fullName)
       next.set(stop.stopId, {
         stopId: stop.stopId,
         fullName,
@@ -639,7 +639,7 @@ export function KmbResults({
           const normalized = stopId.toUpperCase()
           stop = stopLookup.get(normalized)
         }
-        const parsed = stop ? parseKmbStopName(pickStopName(stop, lang)) : null
+        const parsed = stop ? parseKmbStopNameCached(pickStopName(stop, lang)) : null
         const routeStopLabel = parsed?.platform ?? parsed?.stopCode ?? null
         return {
           key: g.key,
@@ -688,7 +688,7 @@ export function KmbResults({
         stop = stopLookup.get(normalized)
       }
 
-      const parsed = stop ? parseKmbStopName(pickStopName(stop, lang)) : null
+      const parsed = stop ? parseKmbStopNameCached(pickStopName(stop, lang)) : null
       const routeStopLabel = parsed?.platform ?? parsed?.stopCode ?? null
 
       // hasFare = should show fare badge (true for non-arriving legs)

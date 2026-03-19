@@ -13,7 +13,7 @@ import {
   CommandList,
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { parseKmbStopName } from '@/lib/eta/kmb-stop-name'
+import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import Fuse from 'fuse.js'
@@ -246,7 +246,7 @@ export function StopSearch({
       const stop = stopById.get(value.stopId)
       if (stop) {
         const fullName = formatStopName(stop, lang)
-        const parsed = parseKmbStopName(fullName)
+        const parsed = parseKmbStopNameCached(fullName)
         return parsed.stopCode ? `${parsed.name} (${parsed.stopCode})` : parsed.name
       }
       return null
@@ -257,14 +257,14 @@ export function StopSearch({
       if (!firstStop) return null
 
       const fullName = formatStopName(firstStop, lang)
-      const { name: baseName } = parseKmbStopName(fullName)
+      const { name: baseName } = parseKmbStopNameCached(fullName)
 
       // Collect all codes for selected stops
       const codes: string[] = []
       for (const stopId of value.stopIds) {
         const stop = stopById.get(stopId)
         if (stop) {
-          const parsed = parseKmbStopName(formatStopName(stop, lang))
+          const parsed = parseKmbStopNameCached(formatStopName(stop, lang))
           if (parsed.stopCode) codes.push(parsed.stopCode)
         }
       }
@@ -283,7 +283,7 @@ export function StopSearch({
   const stopComputed = React.useMemo<StopComputed[]>(() => {
     return stops.map((stop) => {
       const fullName = formatStopName(stop, lang)
-      const parsed = parseKmbStopName(fullName)
+      const parsed = parseKmbStopNameCached(fullName)
       const baseName = parsed.name
       const stopCode = parsed.stopCode
       const displayName = baseName

@@ -25,7 +25,7 @@ import {
   type KmbRouteStopLite,
 } from '@/lib/eta/client'
 import { isStaleByFlagOrAge } from '@/lib/eta/stale'
-import { parseKmbStopName } from '@/lib/eta/kmb-stop-name'
+import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
 import { useInfiniteScroll, useVisibleItems } from '@/lib/eta/use-infinite-scroll'
@@ -1337,7 +1337,7 @@ export function KmbPane({
       const stop = kmbStopsById.get(kmbQuery.stopId)
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang)
-        const parsed = parseKmbStopName(fullName)
+        const parsed = parseKmbStopNameCached(fullName)
         return { title: parsed.name, code: parsed.stopCode }
       }
       return { title: `Stop ${kmbQuery.stopId}`, code: null }
@@ -1346,7 +1346,7 @@ export function KmbPane({
       const firstStop = kmbQuery.stopIds.map((stopId) => kmbStopsById.get(stopId)).find(Boolean)
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang)
-        const parsed = parseKmbStopName(fullName)
+        const parsed = parseKmbStopNameCached(fullName)
         return { title: parsed.name, code: null }
       }
       return { title: lang === 'en' ? 'Selected stops' : '已選車站', code: null }
@@ -1418,7 +1418,7 @@ export function KmbPane({
     if (stopId) {
       const stop = kmbStopsById.get(stopId)
       const fullName = stop ? pickKmbStopTitle(stop, lang) : lang === 'en' ? 'Bus' : '巴士'
-      const { name } = parseKmbStopName(fullName)
+      const { name } = parseKmbStopNameCached(fullName)
       const title = `${name}${routeSuffix}`
 
       const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? '__all__')
@@ -1435,7 +1435,7 @@ export function KmbPane({
     } else if (stopIds && stopIds.length > 0) {
       const firstStop = stopIds.map((stopId) => kmbStopsById.get(stopId)).find(Boolean)
       const fullName = firstStop ? pickKmbStopTitle(firstStop, lang) : 'Selected Stops'
-      const { name } = parseKmbStopName(fullName)
+      const { name } = parseKmbStopNameCached(fullName)
       const title = `${name}${routeSuffix}`
 
       const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? '__all__')
@@ -1564,7 +1564,7 @@ export function KmbPane({
           if (stops.length > 0) {
             const firstStop = stops[0]!
             const fullName = pickKmbStopTitle(firstStop, lang)
-            const { name } = parseKmbStopName(fullName)
+            const { name } = parseKmbStopNameCached(fullName)
             const firstStopId = stopIds[0]!
             onAddRecent({
               id: `kmb:${stopIds.join(',')}:__stops__`,

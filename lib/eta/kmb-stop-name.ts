@@ -43,3 +43,17 @@ export function parseKmbStopName(fullName: string): ParsedKmbStopName {
 
   return { name: fullName, platform: null, stopCode: null }
 }
+
+const parseCache = new Map<string, ParsedKmbStopName>()
+
+export function parseKmbStopNameCached(fullName: string): ParsedKmbStopName {
+  const cached = parseCache.get(fullName)
+  if (cached) return cached
+  const parsed = parseKmbStopName(fullName)
+  parseCache.set(fullName, parsed)
+  return parsed
+}
+
+export function clearKmbStopNameCache(): void {
+  parseCache.clear()
+}

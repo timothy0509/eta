@@ -6,7 +6,7 @@ import {
   buildEtaDbIndexes,
   normalizeBound,
   normalizeStopId,
-  routeStopSeqKey,
+  routeVariantKey,
   type EtaDbIndexes,
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
@@ -178,48 +178,34 @@ export async function fetchKmbEtasForStop(params: {
   language: UiLanguage
 }): Promise<KmbEta[]> {
   const db = await getEtaDbCached()
-  const { stationToRouteIndex, routeStopSeqIndex } = await getEtaDbIndexes()
+  const { stopRoutesIndex, routeVariantIndex } = await getEtaDbIndexes()
   const stopId = normalizeStopId(params.stopId)
   const routeFilter = params.route ? params.route.toUpperCase() : null
   const serviceType = params.serviceType ? String(params.serviceType) : null
   const language = toHkBusEtaLanguage(params.language)
 
-  const candidates = (stationToRouteIndex.get(stopId) ?? []).filter(({ entry }) => {
-    if (routeFilter && entry.route.toUpperCase() !== routeFilter) return false
-    if (serviceType && String(entry.serviceType) !== serviceType) return false
+  const routeEntries = (stopRoutesIndex.get(stopId) ?? []).filter((e) => {
+    if (routeFilter && e.route.toUpperCase() !== routeFilter) return false
+    if (serviceType && String(e.serviceType) !== serviceType) return false
     return true
   })
 
-  if (candidates.length === 0) return [] as KmbEta[]
+  if (routeEntries.length === 0) return [] as KmbEta[]
 
   const candidateMap = new Map<string, { entry: RouteListEntry; co: Company; stopIndex: number }>()
 
-  for (const { entry, co } of candidates) {
-    const bound = normalizeBound(entry.bound[co])
-    const seqKey = routeStopSeqKey({
-      co,
-      route: entry.route,
-      bound,
-      serviceType: entry.serviceType,
-      stopId,
+  for (const re of routeEntries) {
+    const variantKey = routeVariantKey({
+      co: re.co,
+      route: re.route,
+      bound: re.bound,
+      serviceType: re.serviceType,
     })
-    let smallestIndex = routeStopSeqIndex.get(seqKey) ?? -1
-
-    if (smallestIndex < 0) {
-      const stops = entry.stops[co] ?? []
-      for (let idx = 0; idx < stops.length; idx += 1) {
-        if (normalizeStopId(stops[idx]) === stopId) {
-          smallestIndex = idx
-          break
-        }
-      }
-    }
-
-    if (smallestIndex < 0) continue
-    const key = `${co}|${entry.route.toUpperCase()}|${bound}|${entry.serviceType}`
-    const existing = candidateMap.get(key)
-    if (!existing || smallestIndex < existing.stopIndex) {
-      candidateMap.set(key, { entry, co, stopIndex: smallestIndex })
+    const entry = routeVariantIndex.get(variantKey)
+    if (!entry) continue
+    const existing = candidateMap.get(variantKey)
+    if (!existing || re.seq < existing.stopIndex) {
+      candidateMap.set(variantKey, { entry, co: re.co, stopIndex: re.seq })
     }
   }
 

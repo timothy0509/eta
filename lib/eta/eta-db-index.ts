@@ -41,6 +41,26 @@ type BusRouteCandidate = {
   co: Company
 }
 
+export type StopRouteEntry = {
+  stopId: string
+  co: Company
+  route: string
+  bound: string
+  serviceType: string
+  seq: number
+}
+
+export type RouteVariantKey = {
+  co: Company
+  route: string
+  bound: string
+  serviceType: string
+}
+
+export function routeVariantKey(k: RouteVariantKey): string {
+  return `${k.co}|${k.route.toUpperCase()}|${k.bound}|${k.serviceType}`
+}
+
 export type EtaDbIndexes = {
   kmbRouteListEntries: RouteListEntry[]
   kmbStops: KmbStopSearchItem[]
@@ -50,6 +70,10 @@ export type EtaDbIndexes = {
   stationToRouteIndex: Map<string, BusRouteCandidate[]>
   /** O(1) lookup for stop sequence (0-indexed) by route variant + stopId. */
   routeStopSeqIndex: Map<string, number>
+  /** Consolidated index: stopId → route variants with pre-computed sequences. */
+  stopRoutesIndex: Map<string, StopRouteEntry[]>
+  /** Route variant key → RouteListEntry for fetching ETAs. */
+  routeVariantIndex: Map<string, RouteListEntry>
 }
 
 export type BuildEtaDbIndexesOptions = {
@@ -132,15 +156,26 @@ export function buildEtaDbIndexes(db: EtaDb, options: BuildEtaDbIndexesOptions):
 
   const stationToRouteIndex = new Map<string, BusRouteCandidate[]>()
   const stationToRouteDedup = new Map<string, Set<string>>()
+  const stopRoutesIndex = new Map<string, StopRouteEntry[]>()
+  const routeVariantIndex = new Map<string, RouteListEntry>()
   for (const entry of kmbRouteListEntries) {
     for (const co of entry.co) {
       if (!busCompanies.includes(co)) continue
       const stops = entry.stops[co] ?? []
       const bound = normalizeBound(entry.bound[co])
+      const variantKey = routeVariantKey({
+        co,
+        route: entry.route,
+        bound,
+        serviceType: entry.serviceType,
+      })
+      if (!routeVariantIndex.has(variantKey)) {
+        routeVariantIndex.set(variantKey, entry)
+      }
       for (const stopId of stops) {
         const key = normalizeStopId(stopId)
         if (!key) continue
-        const candidateKey = `${co}|${entry.route.toUpperCase()}|${bound}|${entry.serviceType}`
+        const candidateKey = variantKey
         const seen = stationToRouteDedup.get(key) ?? new Set<string>()
         if (seen.has(candidateKey)) continue
         seen.add(candidateKey)
@@ -149,6 +184,20 @@ export function buildEtaDbIndexes(db: EtaDb, options: BuildEtaDbIndexesOptions):
         list.push({ entry, co })
         stationToRouteIndex.set(key, list)
       }
+      stops.forEach((stopId, idx) => {
+        const key = normalizeStopId(stopId)
+        if (!key) return
+        const routeList = stopRoutesIndex.get(key) ?? []
+        routeList.push({
+          stopId: key,
+          co,
+          route: entry.route,
+          bound,
+          serviceType: entry.serviceType,
+          seq: idx,
+        })
+        stopRoutesIndex.set(key, routeList)
+      })
     }
   }
 
@@ -160,5 +209,7 @@ export function buildEtaDbIndexes(db: EtaDb, options: BuildEtaDbIndexesOptions):
     lrtRoutes,
     stationToRouteIndex,
     routeStopSeqIndex,
+    stopRoutesIndex,
+    routeVariantIndex,
   }
 }

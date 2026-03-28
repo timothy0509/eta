@@ -1,9 +1,9 @@
 import { fetchEtas } from 'hk-bus-eta'
 import type { Company, Eta, EtaDb, RouteListEntry } from 'hk-bus-eta'
 
-import { idbGet, idbSet } from '@/lib/eta/cache/idb'
+import { idbGet } from '@/lib/eta/cache/idb'
 import { ETA_DB_CACHE_KEY, ETA_DB_MD5_KEY } from '@/lib/eta/cache/keys'
-import { CACHE_POLICIES, createMetaForPolicy, isFresh } from '@/lib/eta/cache/policy'
+import { CACHE_POLICIES, isFresh } from '@/lib/eta/cache/policy'
 import { MicroCache } from '@/lib/eta/cache/micro-cache'
 import {
   getEtaDbSnapshot,
@@ -198,7 +198,6 @@ export async function fetchKmbEtasForStop(params: {
   serviceType?: string
   language: UiLanguage
 }): Promise<KmbEta[]> {
-  const db = await getEtaDbCached()
   const { stopRoutesIndex, routeVariantIndex } = await getEtaDbIndexes()
   const stopId = normalizeStopId(params.stopId)
   const routeFilter = params.route ? params.route.toUpperCase() : null

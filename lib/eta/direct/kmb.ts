@@ -282,7 +282,6 @@ export async function fetchKmbStopEtas(
   const staleByStopId: Record<string, { stale: boolean; ageMs: number | null }> = {}
   let cached = 0
   let fetched = 0
-  let staleServed = 0
 
   const results = await promisePool(uniqueStopIds, KMB_CONCURRENCY, async (stopId) => {
     const cacheKey = kmbStopEtaKey(stopId)
@@ -320,7 +319,7 @@ export async function fetchKmbStopEtas(
     if (cachedValue.cached) cached += 1
     if (!cachedValue.cached) fetched += 1
     if (cachedValue.stale) {
-      staleServed += 1
+      // stale entry served from cache
     }
     staleByStopId[stopId] = {
       stale: cachedValue.stale,

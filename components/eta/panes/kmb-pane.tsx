@@ -271,7 +271,7 @@ function groupEtasByVariant(
     const baseKey = parts.slice(0, 4).join('|')
     const legPart = parts[4]
     const isArrivingLeg = legPart === 'B'
-    const [co = 'kmb'] = parts
+    const [_co = 'kmb'] = parts
 
     // hasFare = should show fare badge (true for non-arriving legs)
     // The actual fare may or may not be loaded yet (deferred loading)
@@ -382,18 +382,6 @@ function normalizeKmbRoutesInput(input: string) {
     : null
 
   return requestedRoutes?.length ? requestedRoutes : null
-}
-
-/** Legacy function - still used for small filter operations where index isn't needed */
-function stopNameContains(stop: KmbStopSearchItem, query: string) {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return false
-
-  return (
-    stop.nameEn.toLowerCase().includes(needle) ||
-    stop.nameTc.toLowerCase().includes(needle) ||
-    stop.nameSc.toLowerCase().includes(needle)
-  )
 }
 
 /** Stops per page for infinite scroll */

@@ -587,7 +587,7 @@ export function KmbResults({
   precomputedGroups,
   registerStopRef,
 }: Props) {
-  const now = React.useMemo(() => new Date(), [lastUpdatedAt])
+  const now = React.useMemo(() => new Date(), [])
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang, now })
   const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })
@@ -678,7 +678,7 @@ export function KmbResults({
       const baseKey = parts.slice(0, 4).join('|')
       const legPart = parts[4]
       const isArrivingLeg = legPart === 'B'
-      const [co = 'kmb'] = parts
+      const [_co = 'kmb'] = parts
 
       // Find the stop code for this route (from the first entry)
       const stopId = multipleStops ? parts[5] : sorted[0]?.stop

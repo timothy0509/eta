@@ -78,7 +78,10 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
 
   React.useEffect(() => {
     if (!stationId) return
-    void refresh({ toastOnError: false })
+    const id = setTimeout(() => {
+      void refresh({ toastOnError: false })
+    }, 0)
+    return () => clearTimeout(id)
   }, [refresh, stationId])
 
   const title = React.useMemo(() => {

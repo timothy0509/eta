@@ -125,13 +125,21 @@ export default function HomeClient() {
   const [savedSide, setSavedSide] = React.useState<'right' | 'bottom'>('bottom')
 
   const { theme, setTheme, resolvedTheme } = useTheme()
-  const [themeMounted, setThemeMounted] = React.useState(false)
+  const themeMounted = resolvedTheme !== undefined
 
   const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([])
   const [kmbPaneState, setKmbPaneState] = React.useState<KmbPaneState | null>(null)
   const [mtrPaneState, setMtrPaneState] = React.useState<MtrPaneState | null>(null)
   const [lrtPaneState, setLrtPaneState] = React.useState<LrtPaneState | null>(null)
-  const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(null)
+  const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(() => {
+    if (typeof window === 'undefined') return null
+    try {
+      const decoded = decodeUrlState(window.location.search.slice(1))
+      return decoded.selectedItem ?? null
+    } catch {
+      return null
+    }
+  })
 
   const canFavoriteRef = React.useRef(false)
   const didHydrateFromUrlRef = React.useRef(false)
@@ -162,15 +170,6 @@ export default function HomeClient() {
       })),
     []
   )
-
-  React.useEffect(() => {
-    setThemeMounted(true)
-  }, [])
-
-  React.useEffect(() => {
-    if (savedOpen) return
-    setSavedSide(isDesktop ? 'right' : 'bottom')
-  }, [isDesktop, savedOpen])
 
   // Clear parsed stop name cache when language changes
   React.useEffect(() => {
@@ -207,8 +206,6 @@ export default function HomeClient() {
     if (decoded.state.autoRefreshSeconds !== undefined) {
       setAutoRefreshSeconds(decoded.state.autoRefreshSeconds)
     }
-    if (decoded.selectedItem) setSelectedItem(decoded.selectedItem)
-
     didHydrateFromUrlRef.current = true
     lastEncodedRef.current = search
   }, [searchParams, setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode])

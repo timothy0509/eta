@@ -113,7 +113,10 @@ export function useMtrSchedule(params: { lang: UiLanguage; stations: MtrStationS
 
   React.useEffect(() => {
     if (!sta) return
-    void refresh({ toastOnError: false })
+    const id = setTimeout(() => {
+      void refresh({ toastOnError: false })
+    }, 0)
+    return () => clearTimeout(id)
   }, [refresh, sta])
 
   const title = React.useMemo(() => {

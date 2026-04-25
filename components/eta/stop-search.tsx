@@ -234,14 +234,10 @@ export function StopSearch({
   // Debounce the search query (150ms) to reduce Fuse.js invocations
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
   React.useEffect(() => {
-    if (!query.trim()) {
-      setDebouncedQuery('')
-      return
-    }
-    const timer = setTimeout(() => setDebouncedQuery(query), 150)
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 150)
     return () => clearTimeout(timer)
   }, [query])
-  const isSearching = query !== debouncedQuery && query.trim().length > 0
+  const isSearching = query.trim() !== debouncedQuery && query.trim().length > 0
 
   // Track if popover is open for performance optimization
   const isOpen = open

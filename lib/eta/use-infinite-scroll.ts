@@ -147,24 +147,26 @@ export function useVisibleItems<T extends string | number>(
     }
   }, [options?.rootMargin])
 
-  // Re-observe when itemIds change
+  // Re-observe when itemIds change — only unobserve removed ids, observe new ones
   React.useEffect(() => {
     const observer = observerRef.current
     if (!observer) return
 
-    // Observe all registered elements
     const validIds = new Set(itemIds)
+
+    // Unobserve elements whose ids are no longer valid
     for (const [id, el] of elementsRef.current.entries()) {
-      if (validIds.has(id)) {
-        observer.observe(el)
-      } else {
+      if (!validIds.has(id)) {
         observer.unobserve(el)
         elementsRef.current.delete(id)
       }
     }
 
-    return () => {
-      observer.disconnect()
+    // Observe any newly registered elements that aren't already observed
+    for (const [id, el] of elementsRef.current.entries()) {
+      if (validIds.has(id)) {
+        observer.observe(el)
+      }
     }
   }, [itemIds])
 

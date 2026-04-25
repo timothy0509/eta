@@ -24,27 +24,27 @@ describe('isStaleByAge', () => {
     expect(isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })).toBe(true)
   })
 
-  it('returns true for kmb mode when age exceeds 120 seconds', () => {
+  it('returns true for kmb mode when age exceeds 60 seconds', () => {
     const now = 1000000
-    const lastUpdatedAt = now - 130000 // 130 seconds ago
+    const lastUpdatedAt = now - 70000 // 70 seconds ago
     expect(isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })).toBe(true)
   })
 
-  it('returns true for mtr mode when age exceeds 180 seconds', () => {
+  it('returns true for mtr mode when age exceeds 90 seconds', () => {
     const now = 1000000
-    const lastUpdatedAt = now - 190000 // 190 seconds ago
+    const lastUpdatedAt = now - 100000 // 100 seconds ago
     expect(isStaleByAge({ lastUpdatedAt, mode: 'mtr', now })).toBe(true)
   })
 
-  it('returns true for lrt mode when age exceeds 180 seconds', () => {
+  it('returns true for lrt mode when age exceeds 90 seconds', () => {
     const now = 1000000
-    const lastUpdatedAt = now - 190000 // 190 seconds ago
+    const lastUpdatedAt = now - 100000 // 100 seconds ago
     expect(isStaleByAge({ lastUpdatedAt, mode: 'lrt', now })).toBe(true)
   })
 
-  it('returns false for mtr mode at 120 seconds (below 180s threshold)', () => {
+  it('returns false for mtr mode at 60 seconds (below 90s threshold)', () => {
     const now = 1000000
-    const lastUpdatedAt = now - 120000 // 120 seconds ago
+    const lastUpdatedAt = now - 60000 // 60 seconds ago
     expect(isStaleByAge({ lastUpdatedAt, mode: 'mtr', now })).toBe(false)
   })
 

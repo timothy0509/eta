@@ -4,9 +4,9 @@ import type { UiLanguage } from './types'
 export type StaleMode = 'kmb' | 'mtr' | 'lrt'
 
 export const STALE_THRESHOLDS_MS: Record<StaleMode, number> = {
-  kmb: 120_000,
-  mtr: 180_000,
-  lrt: 180_000,
+  kmb: 60_000,
+  mtr: 90_000,
+  lrt: 90_000,
 }
 
 export function isStaleByAge(params: {

@@ -6,8 +6,8 @@ import { getCachedValue } from '@/lib/eta/direct/shared'
 
 const MTR_BASE_URL = 'https://rt.data.gov.hk'
 const MTR_CONCURRENCY = 3
-const BACKOFF_DURATION_MS = 30_000
-const BACKOFF_STALE_MAX_MS = 30_000
+const BACKOFF_DURATION_MS = 15_000
+const BACKOFF_STALE_MAX_MS = 20_000
 let backoffUntil = 0
 
 export type MtrLang = 'EN' | 'TC'

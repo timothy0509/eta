@@ -7,6 +7,35 @@ export function formatRelativeMinutes(targetIso: string, now = new Date()) {
   return diffMin
 }
 
+/**
+ * Compute relative minutes with drift correction.
+ * When data is stale (fetched `dataTimestampMs` ago), subtract that age
+ * from the computed ETA so the display reflects the *current* expected arrival.
+ *
+ * Example: if a bus was 3 min away when data was fetched 30s ago,
+ * it is now approximately 2.5 min away.
+ */
+export function formatRelativeMinutesWithDrift(
+  targetIso: string,
+  dataTimestampIso: string | undefined,
+  now = new Date()
+): number {
+  const target = new Date(targetIso)
+  let diffMs = target.getTime() - now.getTime()
+
+  if (dataTimestampIso) {
+    const dataTimestamp = new Date(dataTimestampIso)
+    const dataAgeMs = now.getTime() - dataTimestamp.getTime()
+    if (!Number.isNaN(dataAgeMs) && dataAgeMs > 0) {
+      diffMs -= dataAgeMs
+    }
+  }
+
+  const minutes = Math.round(diffMs / 60000)
+  // Normalize -0 to 0 for consistent comparisons
+  return minutes === 0 ? 0 : minutes
+}
+
 export function getUiLocale(lang: UiLanguage) {
   if (lang === 'en') return 'en-HK'
   if (lang === 'sc') return 'zh-Hans-HK'

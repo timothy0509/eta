@@ -18,9 +18,10 @@ import {
 } from '@/components/ui/dialog'
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
-import { formatRelativeMinutes, formatUiTime } from '@/lib/eta/format'
+import { formatRelativeMinutesWithDrift, formatUiTime } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
+import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 
@@ -220,6 +221,8 @@ type Props = {
   precomputedGroups?: PrecomputedGroups
   /** Register ref for stop sections (visible tracking) */
   registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void
+  /** Currently visible stop IDs for virtualization */
+  visibleStopIds?: Set<string>
 }
 
 /** Render a single route variant card */
@@ -428,7 +431,9 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
 
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
         {items.slice(0, 3).map((entry, entryIdx) => {
-          const minutes = entry.eta ? formatRelativeMinutes(entry.eta, now) : null
+          const minutes = entry.eta
+            ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
+            : null
           const remark = pickLang(
             {
               en: entry.rmk_en ?? '',
@@ -586,8 +591,9 @@ export function KmbResults({
   hasMoreStops,
   precomputedGroups,
   registerStopRef,
+  visibleStopIds,
 }: Props) {
-  const now = React.useMemo(() => new Date(), [])
+  const now = useTickingNow(15_000)
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang, now })
   const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })
@@ -623,49 +629,23 @@ export function KmbResults({
   const useStopSections =
     isKeyphraseMode && etaByStopId && loadedStopIds && loadedStopIds.length > 0
 
-  // Legacy grouped mode (flat list with stop codes per route)
-  // Uses precomputed groups when available for single-stop mode
+  // For flat mode, use precomputed groups directly (computed once in pane)
   const precomputedFlat = precomputedGroups?.flat
+
+  // Fallback grouped computation for multipleStops mode only
   const grouped = React.useMemo(() => {
     if (useStopSections) return [] // Not used in sectioned mode
+    if (precomputedFlat && !multipleStops) return [] // Use precomputed directly
 
-    // Use precomputed flat groups for single-stop queries (no multipleStops)
-    if (precomputedFlat && !multipleStops) {
-      // Map to legacy format with stopCode
-      return precomputedFlat.map((g) => {
-        const stopId = g.items[0]?.stop
-        let stop = stopId ? stopLookup.get(stopId) : undefined
-        if (!stop && stopId) {
-          const normalized = stopId.toUpperCase()
-          stop = stopLookup.get(normalized)
-        }
-        const parsed = stop ? parseKmbStopNameCached(pickStopName(stop, lang)) : null
-        const routeStopLabel = parsed?.platform ?? parsed?.stopCode ?? null
-        return {
-          key: g.key,
-          baseKey: g.baseKey,
-          items: g.items,
-          hasEta: g.hasEta,
-          hasFare: g.hasFare,
-          isArrivingLeg: g.isArrivingLeg,
-          stopCode: routeStopLabel,
-        }
-      })
-    }
-
-    // Fall back to full computation for multipleStops mode
     const byVariant = new Map<string, KmbEtaEntryWithLeg[]>()
     for (const entry of eta) {
       const co = String(entry.co ?? 'kmb')
       const route = (entry.route ?? '').toUpperCase()
       const dir = String(entry.dir ?? '')
       const serviceType = String(entry.service_type ?? '')
-      // Include leg in key to separate departing/arriving ETAs
       const legSuffix = entry.leg ?? '_'
       const baseKey = `${co}|${route}|${dir}|${serviceType}`
-      const key = multipleStops
-        ? `${baseKey}|${legSuffix}|${entry.stop ?? ''}`
-        : `${baseKey}|${legSuffix}`
+      const key = `${baseKey}|${legSuffix}|${entry.stop ?? ''}`
 
       const items = byVariant.get(key) ?? []
       items.push(entry)
@@ -678,63 +658,32 @@ export function KmbResults({
       const baseKey = parts.slice(0, 4).join('|')
       const legPart = parts[4]
       const isArrivingLeg = legPart === 'B'
-      const [_co = 'kmb'] = parts
-
-      // Find the stop code for this route (from the first entry)
-      const stopId = multipleStops ? parts[5] : sorted[0]?.stop
-      let stop = stopId ? stopLookup.get(stopId) : undefined
-      if (!stop && stopId) {
-        const normalized = stopId.toUpperCase()
-        stop = stopLookup.get(normalized)
-      }
-
-      const parsed = stop ? parseKmbStopNameCached(pickStopName(stop, lang)) : null
-      const routeStopLabel = parsed?.platform ?? parsed?.stopCode ?? null
-
-      // hasFare = should show fare badge (true for non-arriving legs)
-      // The actual fare may or may not be loaded yet (deferred loading)
-      const hasFare = !isArrivingLeg
 
       return {
         key,
         baseKey,
         items: sorted,
         hasEta: hasValidEta(sorted),
-        hasFare,
+        hasFare: !isArrivingLeg,
         isArrivingLeg,
-        stopCode: routeStopLabel,
       }
     })
 
-    // Sort with 3-tier ordering:
-    // 1) ETA + fare loaded (hasEta && hasFare && fare exists in faresByVariantKey)
-    // 2) ETA only (hasEta && (!hasFare || fare not loaded))
-    // 3) No ETA
-    // Within each tier, sort alphabetically by route number
     const sortByRoute = (a: { key: string }, b: { key: string }) => {
       const [, routeA] = a.key.split('|')
       const [, routeB] = b.key.split('|')
       return routeA.localeCompare(routeB, undefined, { numeric: true })
     }
 
-    type GroupWithFare = {
-      key: string
-      baseKey: string
-      hasEta: boolean
-      hasFare: boolean
-    }
-    const hasFareLoaded = (g: GroupWithFare) =>
+    const hasFareLoaded = (g: { hasFare: boolean; baseKey: string }) =>
       g.hasFare && faresByVariantKey && Boolean(faresByVariantKey[g.baseKey])
 
-    // Tier 1: ETA + fare loaded
     const withEtaAndFare = groups.filter((g) => g.hasEta && hasFareLoaded(g)).sort(sortByRoute)
-    // Tier 2: ETA only (no fare or fare not loaded yet)
     const withEtaOnly = groups.filter((g) => g.hasEta && !hasFareLoaded(g)).sort(sortByRoute)
-    // Tier 3: No ETA
     const withoutEtas = groups.filter((g) => !g.hasEta).sort(sortByRoute)
 
     return [...withEtaAndFare, ...withEtaOnly, ...withoutEtas]
-  }, [eta, stopLookup, lang, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
+  }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
   return (
     <Card className="bg-card/60 rounded-3xl border shadow-sm">
@@ -828,9 +777,34 @@ export function KmbResults({
                 : '選擇車站以載入到站時間'}
           </div>
         ) : useStopSections ? (
-          // Keyphrase mode: sectioned by stop
+          // Keyphrase mode: sectioned by stop with virtualization
           <>
-            {loadedStopIds!.map((stopId, idx) => (
+            {(() => {
+              // If visibleStopIds is available, render visible stops + buffer
+              // Otherwise render all (fallback for backwards compatibility)
+              const allIds = loadedStopIds!
+              if (!visibleStopIds || visibleStopIds.size === 0) {
+                return allIds
+              }
+              // Find indices of visible stops and include a buffer of 3 on each side
+              const visibleIndices = new Set<number>()
+              for (let i = 0; i < allIds.length; i++) {
+                if (visibleStopIds.has(allIds[i]!)) {
+                  for (let j = Math.max(0, i - 3); j <= Math.min(allIds.length - 1, i + 3); j++) {
+                    visibleIndices.add(j)
+                  }
+                }
+              }
+              // Always render at least the first page
+              if (visibleIndices.size === 0) {
+                for (let i = 0; i < Math.min(allIds.length, 10); i++) {
+                  visibleIndices.add(i)
+                }
+              }
+              return Array.from(visibleIndices)
+                .sort((a, b) => a - b)
+                .map((idx) => allIds[idx]!)
+            })().map((stopId, idx, _arr) => (
               <StopSection
                 key={stopId}
                 stopId={stopId}
@@ -857,7 +831,7 @@ export function KmbResults({
                       ? 'Loading more stops...'
                       : lang === 'sc'
                         ? '正在载入更多车站...'
-                        : '正在載入更多車站...'}
+                        : '正在载入更多车站...'}
                   </div>
                 ) : (
                   <div className="h-1" /> // Invisible sentinel
@@ -869,17 +843,53 @@ export function KmbResults({
                   ? `All ${loadedStopIds!.length} stops loaded`
                   : lang === 'sc'
                     ? `已载入全部 ${loadedStopIds!.length} 个车站`
-                    : `已載入全部 ${loadedStopIds!.length} 個車站`}
+                    : `已载入全部 ${loadedStopIds!.length} 個车站`}
               </div>
             ) : null}
           </>
+        ) : precomputedFlat && !multipleStops ? (
+          // Flat mode: use precomputed groups directly (no recomputation)
+          precomputedFlat.map((g, idx) => {
+            const staggerClass =
+              idx === 0
+                ? 'ui-stagger-1'
+                : idx === 1
+                  ? 'ui-stagger-2'
+                  : idx === 2
+                    ? 'ui-stagger-3'
+                    : ''
+
+            const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
+            const stopChips = stopId
+              ? (stopChipsById.get(stopId) ??
+                getStopChips(g.items, stopLookup, stopChipsById, lang))
+              : getStopChips(g.items, stopLookup, stopChipsById, lang)
+
+            return (
+              <RouteVariantCard
+                key={g.key}
+                variantKey={g.key}
+                baseKey={g.baseKey}
+                items={g.items}
+                hasEta={g.hasEta}
+                hasFare={g.hasFare}
+                isArrivingLeg={g.isArrivingLeg}
+                routeInfos={routeInfos}
+                faresByVariantKey={faresByVariantKey}
+                lang={lang}
+                now={now}
+                staggerClass={staggerClass}
+                stopChips={stopChips}
+              />
+            )
+          })
         ) : grouped.length === 0 ? (
           <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
             <Info className="h-4 w-4" />
             {formatNoScheduledText(lang)}
           </div>
         ) : (
-          // Legacy flat list mode
+          // Fallback flat list mode (multipleStops)
           grouped.map((g, idx) => {
             const staggerClass =
               idx === 0

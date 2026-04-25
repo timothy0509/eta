@@ -10,9 +10,9 @@ export type CacheEntryMeta = {
 }
 
 export const CACHE_POLICIES = {
-  kmbStopEta: { ttlMs: 15_000, maxStaleMs: 30_000, persist: false },
-  mtrSchedule: { ttlMs: 12_000, persist: false },
-  lrtSchedule: { ttlMs: 12_000, persist: false },
+  kmbStopEta: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
+  mtrSchedule: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
+  lrtSchedule: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
   etaDb: { ttlMs: 24 * 60 * 60 * 1000, persist: true },
 } as const satisfies Record<string, CachePolicy>
 

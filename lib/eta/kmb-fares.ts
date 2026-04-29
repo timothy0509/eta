@@ -1,4 +1,4 @@
-import type { RouteListEntry } from 'hk-bus-eta'
+import type { Company, RouteListEntry } from 'hk-bus-eta'
 
 import type { KmbRouteStopLite } from '@/lib/eta/client'
 import { routeVariantKey } from '@/lib/eta/eta-db-index'
@@ -123,7 +123,7 @@ export function getStopToTerminusFare(params: {
 
   const entry = params.routeVariantIndex.get(
     routeVariantKey({
-      co: params.co,
+      co: params.co as Company,
       route: routeName,
       bound: params.dir,
       serviceType: params.serviceType,

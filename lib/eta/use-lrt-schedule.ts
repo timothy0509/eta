@@ -3,7 +3,7 @@
 import * as React from 'react'
 
 import { fetchLrtSchedule } from '@/lib/eta/client'
-import type { LrtScheduleResponse } from '@/lib/eta/lrt'
+import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { LrtStationSearchItem, UiLanguage } from '@/lib/eta/types'
 
 export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang: UiLanguage }) {

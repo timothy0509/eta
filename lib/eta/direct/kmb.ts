@@ -6,6 +6,7 @@ import type { KmbRouteStopLite } from '@/lib/eta/client'
 import {
   fetchKmbEtasForStop,
   findKmbRouteInfo,
+  getEtaDbIndexes,
   listKmbRouteStops,
   listKmbRoutes,
   listKmbStops,
@@ -401,6 +402,20 @@ export async function fetchKmbStopEtas(
 
   if (options?.includeFares) {
     faresByVariantKey = {}
+    const { routeVariantIndex } = await getEtaDbIndexes()
+
+    // Collect unique fare variants to avoid duplicate lookups
+    const fareVariants = new Map<
+      string,
+      {
+        co: string
+        route: string
+        dir: string
+        serviceType: string
+        stopId: string
+        destCandidates: string[]
+      }
+    >()
     for (const [stopId, entries] of Object.entries(byStopId)) {
       for (const entry of entries) {
         const co = String(entry.co ?? 'kmb')
@@ -409,24 +424,29 @@ export async function fetchKmbStopEtas(
         const serviceType = String(entry.service_type ?? '')
         const vKey = `${co}|${route}|${dir}|${serviceType}`
 
-        if (faresByVariantKey[vKey]) continue
+        if (fareVariants.has(vKey)) continue
 
         const destCandidates = [entry.dest_en, entry.dest_tc, entry.dest_sc]
           .filter(Boolean)
           .map(String)
-        const fare = await getStopToTerminusFare({
-          co,
-          route,
-          dir,
-          serviceType,
-          stopId,
-          etaDestCandidates: destCandidates,
-          byVariantStops,
-        })
+        fareVariants.set(vKey, { co, route, dir, serviceType, stopId, destCandidates })
+      }
+    }
 
-        if (fare) {
-          faresByVariantKey[vKey] = fare
-        }
+    const variantArray = Array.from(fareVariants.entries())
+    const fareResults = await promisePool(variantArray, 5, async ([vKey, variant]) => {
+      const fare = getStopToTerminusFare({
+        ...variant,
+        etaDestCandidates: variant.destCandidates,
+        byVariantStops,
+        routeVariantIndex,
+      })
+      return { vKey, fare }
+    })
+
+    for (const result of fareResults) {
+      if (result.status === 'fulfilled' && result.value.fare) {
+        faresByVariantKey[result.value.vKey] = result.value.fare
       }
     }
   }
@@ -471,17 +491,24 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
     return lite
   })
 
-  const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> =
-    {}
+  const { routeVariantIndex } = await getEtaDbIndexes()
 
+  // Deduplicate by variant key
+  const uniqueVariants = new Map<string, KmbFareVariant>()
   for (const v of variants) {
     const co = String(v.co ?? 'kmb')
     const route = v.route.toUpperCase()
     const vKey = `${co}|${route}|${v.dir}|${v.serviceType}`
+    if (!uniqueVariants.has(vKey)) {
+      uniqueVariants.set(vKey, v)
+    }
+  }
 
-    if (faresByVariantKey[vKey]) continue
-
-    const fare = await getStopToTerminusFare({
+  const variantArray = Array.from(uniqueVariants.entries())
+  const results = await promisePool(variantArray, 5, async ([vKey, v]) => {
+    const co = String(v.co ?? 'kmb')
+    const route = v.route.toUpperCase()
+    const fare = getStopToTerminusFare({
       co,
       route,
       dir: v.dir,
@@ -489,10 +516,16 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
       stopId: v.stopId,
       etaDestCandidates: v.destCandidates ?? [],
       byVariantStops,
+      routeVariantIndex,
     })
+    return { vKey, fare }
+  })
 
-    if (fare) {
-      faresByVariantKey[vKey] = fare
+  const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> =
+    {}
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value.fare) {
+      faresByVariantKey[result.value.vKey] = result.value.fare
     }
   }
 

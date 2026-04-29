@@ -118,7 +118,7 @@ export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
     return cachedIndexes.value
   }
 
-  const value = buildEtaDbIndexes(db, { busCompanies: BUS_COMPANIES })
+  const value = await buildEtaDbIndexes(db, { busCompanies: BUS_COMPANIES })
 
   cachedIndexes = { md5, value }
   return value

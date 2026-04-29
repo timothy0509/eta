@@ -1,9 +1,25 @@
-import type { LrtScheduleResponse } from '@/lib/eta/lrt'
-
 import { lrtScheduleKey } from '@/lib/eta/cache/keys'
 import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import { fetchLrtEtasForStop, listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { getCachedValue } from '@/lib/eta/direct/shared'
+
+export type LrtScheduleResponse = {
+  system_time?: string
+  platform_list?: Array<{
+    end_service_status?: number | string | boolean
+    platform_id: number
+    route_list: Array<{
+      train_length: number
+      arrival_departure: 'A' | 'D' | string
+      dest_en: string
+      dest_ch: string
+      time_en: string
+      time_ch: string
+      route_no: string
+      stop: number
+    }>
+  }>
+}
 
 type LrtRouteEntry = {
   platform_id: number

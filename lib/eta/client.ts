@@ -1,9 +1,9 @@
 import type { Company } from 'hk-bus-eta'
 
-import type { LrtScheduleResponse } from '@/lib/eta/lrt'
+import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
-import type { KmbEtaEntry, KmbRouteListEntry } from '@/lib/eta/kmb'
+import type { KmbEtaEntry, KmbRouteListEntry } from '@/lib/eta/direct/kmb'
 import {
   fetchKmbFares as fetchKmbFaresDirect,
   fetchKmbStopEtas as fetchKmbStopEtasDirect,

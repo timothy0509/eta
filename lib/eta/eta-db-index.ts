@@ -101,7 +101,16 @@ export function routeStopSeqKey(params: {
   )}|${normalizeStopId(params.stopId)}`
 }
 
-export function buildEtaDbIndexes(db: EtaDb, options: BuildEtaDbIndexesOptions): EtaDbIndexes {
+function yieldToMain(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0))
+}
+
+const CHUNK_SIZE = 500
+
+export async function buildEtaDbIndexes(
+  db: EtaDb,
+  options: BuildEtaDbIndexesOptions
+): Promise<EtaDbIndexes> {
   const { busCompanies } = options
 
   const kmbRouteListEntries = Object.values(db.routeList).filter((entry) =>
@@ -139,6 +148,8 @@ export function buildEtaDbIndexes(db: EtaDb, options: BuildEtaDbIndexesOptions):
       })
   )
 
+  await yieldToMain()
+
   const busStopIds = new Set(kmbRouteStops.map((entry) => entry.stopId).filter(Boolean))
   const kmbStops = Object.entries(db.stopList)
     .map(([stopId, stop]) => ({
@@ -151,6 +162,8 @@ export function buildEtaDbIndexes(db: EtaDb, options: BuildEtaDbIndexesOptions):
     }))
     .filter((s) => s.stopId && s.nameEn && busStopIds.has(s.stopId))
 
+  await yieldToMain()
+
   const mtrRoutes = Object.values(db.routeList).filter((entry) => entry.co.includes('mtr'))
   const lrtRoutes = Object.values(db.routeList).filter((entry) => entry.co.includes('lightRail'))
 
@@ -158,6 +171,8 @@ export function buildEtaDbIndexes(db: EtaDb, options: BuildEtaDbIndexesOptions):
   const stationToRouteDedup = new Map<string, Set<string>>()
   const stopRoutesIndex = new Map<string, StopRouteEntry[]>()
   const routeVariantIndex = new Map<string, RouteListEntry>()
+
+  let processed = 0
   for (const entry of kmbRouteListEntries) {
     for (const co of entry.co) {
       if (!busCompanies.includes(co)) continue
@@ -198,6 +213,10 @@ export function buildEtaDbIndexes(db: EtaDb, options: BuildEtaDbIndexesOptions):
         })
         stopRoutesIndex.set(key, routeList)
       })
+    }
+    processed += 1
+    if (processed % CHUNK_SIZE === 0) {
+      await yieldToMain()
     }
   }
 

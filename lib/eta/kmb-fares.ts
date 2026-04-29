@@ -1,5 +1,7 @@
+import type { RouteListEntry } from 'hk-bus-eta'
+
 import type { KmbRouteStopLite } from '@/lib/eta/client'
-import { getEtaDbIndexes } from '@/lib/eta/hk-bus-eta'
+import { routeVariantKey } from '@/lib/eta/eta-db-index'
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from '@/lib/eta/kmb-cache'
 
 export type KmbFareInfo = {
@@ -98,7 +100,7 @@ export function kmbFareCacheControlHeader() {
  * The fare arrays in hk-bus-eta are indexed by stop sequence (0-indexed),
  * where each entry represents the fare from that stop to the terminus.
  */
-export async function getStopToTerminusFare(params: {
+export function getStopToTerminusFare(params: {
   co: string
   route: string
   dir: string
@@ -107,7 +109,8 @@ export async function getStopToTerminusFare(params: {
   // For disambiguation: KMB ETA provides destination strings; use them if possible.
   etaDestCandidates?: string[]
   byVariantStops: Map<VariantKey, VariantStops>
-}): Promise<KmbFareInfo | null> {
+  routeVariantIndex: Map<string, RouteListEntry>
+}): KmbFareInfo | null {
   const routeName = normalizeRouteName(params.route)
   const key = variantKey(params.co, routeName, params.dir, params.serviceType)
   const variant = params.byVariantStops.get(key)
@@ -118,21 +121,13 @@ export async function getStopToTerminusFare(params: {
   const onSeq = seqs?.[0]
   if (!onSeq) return null
 
-  // Get fare from hk-bus-eta
-  const { kmbRouteListEntries } = await getEtaDbIndexes()
-  const bound = String(params.dir ?? '')
-  const serviceType = String(params.serviceType ?? '')
-
-  const entry = kmbRouteListEntries.find(
-    (item: { route: string; serviceType: string; bound: Record<string, string>; co: string[] }) => {
-      if (!item.co?.includes(params.co as string)) return false
-      if (item.route.toUpperCase() !== routeName) return false
-      if (String(item.serviceType) !== serviceType) return false
-      const itemBound = String(item.bound?.[params.co] ?? '')
-      const normalizedBound = bound === 'I' || bound === 'O' ? bound : ''
-      if (normalizedBound) return itemBound === normalizedBound
-      return itemBound === '' || itemBound === bound
-    }
+  const entry = params.routeVariantIndex.get(
+    routeVariantKey({
+      co: params.co,
+      route: routeName,
+      bound: params.dir,
+      serviceType: params.serviceType,
+    })
   )
 
   if (!entry) return null

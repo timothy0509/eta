@@ -36,6 +36,7 @@ const etaDbMd5Cache = new MicroCache<string>({
 })
 
 let cachedIndexes: { md5: string; value: EtaDbIndexes } | null = null
+let inFlightIndexes: Promise<EtaDbIndexes> | null = null
 
 const BUS_COMPANIES = [
   'kmb',
@@ -118,10 +119,21 @@ export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
     return cachedIndexes.value
   }
 
-  const value = await buildEtaDbIndexes(db, { busCompanies: BUS_COMPANIES })
+  if (inFlightIndexes) {
+    return await inFlightIndexes
+  }
 
-  cachedIndexes = { md5, value }
-  return value
+  inFlightIndexes = (async () => {
+    try {
+      const value = await buildEtaDbIndexes(db, { busCompanies: BUS_COMPANIES })
+      cachedIndexes = { md5, value }
+      return value
+    } finally {
+      inFlightIndexes = null
+    }
+  })()
+
+  return await inFlightIndexes
 }
 
 export async function listKmbStops(): Promise<KmbStopSearchItem[]> {

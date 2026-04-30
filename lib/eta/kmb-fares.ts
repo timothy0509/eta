@@ -24,6 +24,8 @@ let cachedVariantStops: {
   byVariantKey: Map<VariantKey, VariantStops>
 } | null = null
 
+let inFlightVariantStops: Promise<Map<VariantKey, VariantStops>> | null = null
+
 function normalizeRouteName(route: string): string {
   return String(route ?? '')
     .trim()
@@ -79,16 +81,28 @@ export async function getCachedKmbVariantStops(fetchRouteStops: () => Promise<Km
     return cachedVariantStops.byVariantKey
   }
 
-  const routeStops = await fetchRouteStops()
-  const byVariantKey = computeKmbRouteVariantStops(routeStops)
-
-  const ttlSeconds = secondsUntilNextKmbDailyUpdate()
-  cachedVariantStops = {
-    expiresAtMs: now + ttlSeconds * 1000,
-    byVariantKey,
+  if (inFlightVariantStops) {
+    return await inFlightVariantStops
   }
 
-  return byVariantKey
+  inFlightVariantStops = (async () => {
+    try {
+      const routeStops = await fetchRouteStops()
+      const byVariantKey = computeKmbRouteVariantStops(routeStops)
+
+      const ttlSeconds = secondsUntilNextKmbDailyUpdate()
+      cachedVariantStops = {
+        expiresAtMs: now + ttlSeconds * 1000,
+        byVariantKey,
+      }
+
+      return byVariantKey
+    } finally {
+      inFlightVariantStops = null
+    }
+  })()
+
+  return await inFlightVariantStops
 }
 
 export function kmbFareCacheControlHeader() {

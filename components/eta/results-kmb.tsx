@@ -780,27 +780,26 @@ export function KmbResults({
           // Keyphrase mode: sectioned by stop with virtualization
           <>
             {(() => {
-              // If visibleStopIds is available, render visible stops + buffer
-              // Otherwise render all (fallback for backwards compatibility)
               const allIds = loadedStopIds!
-              if (!visibleStopIds || visibleStopIds.size === 0) {
-                return allIds
-              }
-              // Find indices of visible stops and include a buffer of 3 on each side
               const visibleIndices = new Set<number>()
-              for (let i = 0; i < allIds.length; i++) {
-                if (visibleStopIds.has(allIds[i]!)) {
-                  for (let j = Math.max(0, i - 3); j <= Math.min(allIds.length - 1, i + 3); j++) {
-                    visibleIndices.add(j)
+
+              if (visibleStopIds && visibleStopIds.size > 0) {
+                for (let i = 0; i < allIds.length; i++) {
+                  if (visibleStopIds.has(allIds[i]!)) {
+                    for (let j = Math.max(0, i - 3); j <= Math.min(allIds.length - 1, i + 3); j++) {
+                      visibleIndices.add(j)
+                    }
                   }
                 }
               }
+
               // Always render at least the first page
               if (visibleIndices.size === 0) {
                 for (let i = 0; i < Math.min(allIds.length, 10); i++) {
                   visibleIndices.add(i)
                 }
               }
+
               return Array.from(visibleIndices)
                 .sort((a, b) => a - b)
                 .map((idx) => allIds[idx]!)

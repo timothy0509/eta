@@ -114,12 +114,11 @@ export class MicroCache<T> {
 
   private evictOldest(): void {
     const entriesToRemove = Math.max(1, Math.floor(this.maxSize * 0.2))
-    const entries = Array.from(this.cache.entries())
-      .sort((a, b) => a[1].createdAt - b[1].createdAt)
-      .slice(0, entriesToRemove)
-
-    for (const [key] of entries) {
+    let removed = 0
+    for (const [key] of this.cache) {
+      if (removed >= entriesToRemove) break
       this.cache.delete(key)
+      removed++
     }
   }
 }

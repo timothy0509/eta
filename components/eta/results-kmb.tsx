@@ -61,16 +61,16 @@ function formatRouteVariantLabel(
     // For arriving leg, show origin (where the bus came from) instead of destination
     if (isArrivingLeg) {
       const origin = pickLang(info.origin, lang)
-      if (origin) return `→ ${origin}`
+      if (origin) return origin
     }
     const destination = pickLang(info.destination, lang)
-    if (destination) return `→ ${destination}`
+    if (destination) return destination
   }
 
   // Fallback when route info not yet loaded
   if (isArrivingLeg && stopNameFallback) {
     // Use stop name as fallback for origin (they should be similar)
-    return `→ ${stopNameFallback}`
+    return stopNameFallback
   }
 
   if (!etaFallback) return ''
@@ -83,7 +83,7 @@ function formatRouteVariantLabel(
     },
     lang
   )
-  return dest ? `→ ${dest}` : ''
+  return dest
 }
 
 function formatArrivingText(lang: UiLanguage) {
@@ -318,7 +318,7 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
       <DialogContent className="rounded-2xl">
         <DialogHeader>
           <DialogTitle className="text-base">
-            {route} {destination ? `→ ${destination}` : label}
+            {route} {destination ? `→ ${destination}` : label ? `→ ${label}` : ''}
           </DialogTitle>
           <DialogDescription className="sr-only">{i18n.routeAndStopDetails}</DialogDescription>
         </DialogHeader>
@@ -382,6 +382,7 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
           <div className="flex min-w-0 flex-1 items-center gap-2">
             <RouteBadge route={route} company={co} size="lg" />
             {operatorBadge}
+            <span className="shrink-0 text-sm font-medium">→ </span>
             <Marquee className="min-w-0 flex-1 text-sm font-medium">{label || 'Route'}</Marquee>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -413,6 +414,7 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <RouteBadge route={route} company={co} size="lg" />
           {operatorBadge}
+          <span className="shrink-0 text-sm font-medium">→ </span>
           <Marquee className="min-w-0 flex-1 text-sm font-medium">{label || 'Route'}</Marquee>
         </div>
         <div className="flex shrink-0 items-center gap-2">

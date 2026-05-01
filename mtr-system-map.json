@@ -80,15 +80,24 @@
       "name": "Tseung Kwan O Line",
       "color": "#6A1B9A",
       "loop": false,
-      "stations": [
+      "trunk": [
         "North Point",
         "Quarry Bay",
         "Yau Tong",
         "Tiu Keng Leng",
-        "Tseung Kwan O",
-        "Hang Hau",
-        "Po Lam",
-        "LOHAS Park"
+        "Tseung Kwan O"
+      ],
+      "branches": [
+        {
+          "id": "TKL_PO_LAM",
+          "from": "Tseung Kwan O",
+          "sequence": ["Hang Hau", "Po Lam"]
+        },
+        {
+          "id": "TKL_LOHAS",
+          "from": "Tseung Kwan O",
+          "sequence": ["LOHAS Park"]
+        }
       ]
     },
     {
@@ -127,34 +136,48 @@
       ]
     },
     {
-      "id": "TKL-Branch",
-      "name": "LOHAS Park Branch",
-      "color": "#6A1B9A",
-      "loop": false,
-      "stations": ["Tseung Kwan O", "LOHAS Park"]
-    },
-    {
       "id": "EAL",
       "name": "East Rail Line",
       "color": "#5BC2E7",
       "loop": false,
-      "stations": [
+      "trunk": [
         "Admiralty",
         "Exhibition Centre",
         "Hung Hom",
         "Mong Kok East",
         "Kowloon Tong",
         "Tai Wai",
-        "Sha Tin",
-        "Fo Tan",
-        "Racecourse",
-        "University",
-        "Tai Po Market",
-        "Tai Wo",
-        "Fanling",
-        "Sheung Shui",
-        "Lo Wu",
-        "Lok Ma Chau"
+        "Sha Tin"
+      ],
+      "branches": [
+        {
+          "id": "EAL_MAIN",
+          "from": "Sha Tin",
+          "sequence": [
+            "Fo Tan",
+            "Racecourse",
+            "University",
+            "Tai Po Market",
+            "Tai Wo",
+            "Fanling",
+            "Sheung Shui"
+          ],
+          "notes": "Fo Tan is the regular stop. Racecourse operates on race days only."
+        },
+        {
+          "id": "EAL_BORDER_SPLIT",
+          "from": "Sheung Shui",
+          "branches": [
+            {
+              "id": "EAL_LO_WU",
+              "sequence": ["Lo Wu"]
+            },
+            {
+              "id": "EAL_LOK_MA_CHAU",
+              "sequence": ["Lok Ma Chau"]
+            }
+          ]
+        }
       ]
     },
     {
@@ -185,84 +208,25 @@
       "name": "Airport Express",
       "color": "#00888A",
       "loop": false,
-      "stations": ["Hong Kong", "Kowloon", "Tsing Yi", "Airport", "AsiaWorld-Expo"]
+      "stations": [
+        "Hong Kong",
+        "Kowloon",
+        "Tsing Yi",
+        "Airport",
+        "AsiaWorld-Expo"
+      ]
     },
     {
       "id": "SIL",
       "name": "South Island Line",
       "color": "#B5BD00",
       "loop": false,
-      "stations": ["Admiralty", "Ocean Park", "Wong Chuk Hang", "Lei Tung", "South Horizons"]
-    },
-    {
-      "id": "EAL",
-      "name": "East Rail Line",
-      "color": "#5BC2E7",
-      "type": "branched",
-      "trunk": [
+      "stations": [
         "Admiralty",
-        "Exhibition Centre",
-        "Hung Hom",
-        "Mong Kok East",
-        "Kowloon Tong",
-        "Tai Wai",
-        "Sha Tin"
-      ],
-      "branches": [
-        {
-          "id": "EAL_MAIN",
-          "from": "Sha Tin",
-          "sequence": [
-            "Fo Tan",
-            "Racecourse (bypass)",
-            "University",
-            "Tai Po Market",
-            "Tai Wo",
-            "Fanling",
-            "Sheung Shui"
-          ],
-          "notes": "Fo Tan is the regular stop. Racecourse is normally bypassed."
-        },
-        {
-          "id": "EAL_RACE_DAY",
-          "from": "Sha Tin",
-          "sequence": ["Racecourse", "University"],
-          "operational": "race_days_only",
-          "notes": "Special race-day routing between Sha Tin and University."
-        },
-        {
-          "id": "EAL_BORDER_SPLIT",
-          "from": "Sheung Shui",
-          "branches": [
-            {
-              "id": "EAL_LO_WU",
-              "sequence": ["Lo Wu"]
-            },
-            {
-              "id": "EAL_LOK_MA_CHAU",
-              "sequence": ["Lok Ma Chau"]
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "TKL",
-      "name": "Tseung Kwan O Line",
-      "color": "#6A1B9A",
-      "type": "branched",
-      "trunk": ["North Point", "Quarry Bay", "Yau Tong", "Tiu Keng Leng", "Tseung Kwan O"],
-      "branches": [
-        {
-          "id": "TKL_PO_LAM",
-          "from": "Tseung Kwan O",
-          "sequence": ["Hang Hau", "Po Lam"]
-        },
-        {
-          "id": "TKL_LOHAS",
-          "from": "Tseung Kwan O",
-          "sequence": ["LOHAS Park"]
-        }
+        "Ocean Park",
+        "Wong Chuk Hang",
+        "Lei Tung",
+        "South Horizons"
       ]
     }
   ]

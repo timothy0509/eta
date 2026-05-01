@@ -5,6 +5,7 @@ export type MtrStation = {
   lines: string[]
   nameEn: string
   nameTc: string
+  nameSc?: string // Simplified Chinese (optional, falls back to Traditional Chinese)
 }
 
 // Station list for the MTR Next Train API.

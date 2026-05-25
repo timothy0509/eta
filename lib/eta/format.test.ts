@@ -48,6 +48,32 @@ describe('formatRelativeMinutesWithDrift', () => {
     // Bus was 1 min away 45s ago, so it should be arriving now
     expect(formatRelativeMinutesWithDrift(target, dataTimestamp, now)).toBe(0)
   })
+
+  it('returns negative minutes when ETA is already past', () => {
+    const now = new Date('2024-01-01T00:05:00.000Z')
+    const target = '2024-01-01T00:03:00.000Z'
+
+    expect(formatRelativeMinutesWithDrift(target, undefined, now)).toBe(-2)
+  })
+
+  it('ignores invalid data timestamps', () => {
+    const now = new Date('2024-01-01T00:00:30.000Z')
+    const target = '2024-01-01T00:03:00.000Z'
+
+    expect(formatRelativeMinutesWithDrift(target, 'invalid', now)).toBe(3)
+  })
+
+  it('normalizes negative zero to 0', () => {
+    const now = new Date('2024-01-01T00:00:15.000Z')
+    const target = '2024-01-01T00:00:00.000Z'
+    const dataTimestamp = '2024-01-01T00:00:00.000Z'
+
+    // diffMs = -15000, dataAgeMs = 15000, adjusted diffMs = -30000
+    // Math.round(-0.5) = 0, should not be -0
+    const result = formatRelativeMinutesWithDrift(target, dataTimestamp, now)
+    expect(Object.is(result, -0)).toBe(false)
+    expect(result).toBe(0)
+  })
 })
 
 describe('formatUiLanguageLabel', () => {

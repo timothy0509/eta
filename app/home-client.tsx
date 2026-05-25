@@ -1,11 +1,9 @@
 'use client'
 
 import * as React from 'react'
-import { Moon, Sun } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import dynamic from 'next/dynamic'
 
-import { AutoRefreshMenu } from '@/components/eta/auto-refresh'
 import { LanguageToggle } from '@/components/eta/language-toggle'
 import { ModeTabs } from '@/components/eta/mode-tabs'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
@@ -13,21 +11,21 @@ import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
 import type { LrtPaneState } from '@/components/eta/panes/lrt-pane'
 import type { MtrPaneState } from '@/components/eta/panes/mtr-pane'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
-import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Sheet, SheetBody, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
+import { PageHeader } from '@/components/home/page-header'
+import { SavedSheet } from '@/components/home/saved-sheet'
+import { useAutoRefreshCoordinator } from '@/components/home/use-auto-refresh-coordinator'
+import { useUrlStateSync } from '@/components/home/use-url-state-sync'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS } from '@/lib/data/mtr-stations'
-import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
 import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } from '@/lib/eta/types'
 import { isLanguageSupported } from '@/lib/eta/types'
-import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
 import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
+import { decodeUrlState } from '@/lib/eta/url-state'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
 
 // Dynamic imports for transport mode panes - loaded only when needed
@@ -142,12 +140,7 @@ export default function HomeClient() {
   })
 
   const canFavoriteRef = React.useRef(false)
-  const didHydrateFromUrlRef = React.useRef(false)
-  const lastEncodedRef = React.useRef<string>('')
-
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
+  const { onRegisterRefresh } = useAutoRefreshCoordinator(autoRefreshSeconds)
 
   const mtrStations: MtrStationSearchItem[] = React.useMemo(
     () =>
@@ -191,69 +184,20 @@ export default function HomeClient() {
     setLang('tc')
   }, [lang, mode, setLang])
 
-  React.useEffect(() => {
-    if (didHydrateFromUrlRef.current) return
-
-    const search = searchParams?.toString() ?? ''
-    const decoded = decodeUrlState(search)
-    if (decoded.state.mode) {
-      setMode(decoded.state.mode)
-    } else if (decoded.selectedItem) {
-      setMode(decoded.selectedItem.mode)
-    }
-    if (decoded.state.lang) setLang(decoded.state.lang)
-    if (decoded.state.routeFilterMode) setRouteFilterMode(decoded.state.routeFilterMode)
-    if (decoded.state.autoRefreshSeconds !== undefined) {
-      setAutoRefreshSeconds(decoded.state.autoRefreshSeconds)
-    }
-    didHydrateFromUrlRef.current = true
-    lastEncodedRef.current = search
-  }, [searchParams, setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode])
-
-  const refreshRef = React.useRef<(() => Promise<void>) | null>(null)
-  const inFlightRefreshRef = React.useRef(false)
-  const refreshTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const MAX_REFRESH_DURATION_MS = 30_000
-
-  const onRegisterRefresh = React.useCallback((refresh: () => Promise<void>) => {
-    refreshRef.current = refresh
-  }, [])
-
-  useAutoRefresh(autoRefreshSeconds * 1000, () => {
-    if (!refreshRef.current) return
-    if (inFlightRefreshRef.current) return
-
-    inFlightRefreshRef.current = true
-
-    refreshTimeoutRef.current = setTimeout(() => {
-      if (inFlightRefreshRef.current) {
-        console.warn('Auto-refresh timeout - forcing unlock')
-        inFlightRefreshRef.current = false
-      }
-    }, MAX_REFRESH_DURATION_MS)
-
-    refreshRef
-      .current()
-      .catch(() => {
-        // ignore auto-refresh errors
-      })
-      .finally(() => {
-        if (refreshTimeoutRef.current) {
-          clearTimeout(refreshTimeoutRef.current)
-          refreshTimeoutRef.current = null
-        }
-        inFlightRefreshRef.current = false
-      })
+  useUrlStateSync({
+    mode,
+    lang,
+    routeFilterMode,
+    autoRefreshSeconds,
+    kmbPaneState,
+    mtrPaneState,
+    lrtPaneState,
+    setMode,
+    setLang,
+    setRouteFilterMode,
+    setAutoRefreshSeconds,
+    setSelectedItem,
   })
-
-  React.useEffect(() => {
-    return () => {
-      if (refreshTimeoutRef.current) {
-        clearTimeout(refreshTimeoutRef.current)
-      }
-    }
-  }, [])
 
   const onSelectFromLists = React.useCallback(
     (item: FavoritesItem) => {
@@ -263,43 +207,6 @@ export default function HomeClient() {
     },
     [setMode, setSelectedItem, setSavedOpen]
   )
-
-  React.useEffect(() => {
-    if (!didHydrateFromUrlRef.current) return
-
-    const kmbQuery = kmbPaneState?.querySummary ?? null
-    const query = encodeUrlState({
-      mode,
-      lang,
-      routeFilterMode,
-      autoRefreshSeconds,
-      kmb: kmbQuery
-        ? {
-            query: kmbQuery,
-            routeFilter: kmbPaneState?.routeFilter ?? null,
-          }
-        : null,
-      mtr: { sta: mtrPaneState?.sta ?? null },
-      lrt: { stationId: lrtPaneState?.stationId ?? null },
-    })
-
-    if (query === lastEncodedRef.current) return
-    lastEncodedRef.current = query
-
-    const nextUrl = query ? `${pathname}?${query}` : pathname
-    router.replace(nextUrl, { scroll: false })
-  }, [
-    autoRefreshSeconds,
-    kmbPaneState?.querySummary,
-    kmbPaneState?.routeFilter,
-    lang,
-    lrtPaneState?.stationId,
-    mode,
-    mtrPaneState?.sta,
-    pathname,
-    routeFilterMode,
-    router,
-  ])
 
   const heading =
     mode === 'kmb'
@@ -336,9 +243,16 @@ export default function HomeClient() {
       kmbTitle: lang === 'en' ? 'Bus ETAs' : lang === 'sc' ? '巴士到站预报' : '巴士到站預報',
       mtrTitle: lang === 'en' ? 'MTR' : lang === 'sc' ? '港铁' : '港鐵',
       lrtTitle: lang === 'en' ? 'Light Rail' : '輕鐵',
+      saved: lang === 'en' ? 'Saved' : lang === 'sc' ? '已储存' : '已儲存',
+      toggleTheme: lang === 'en' ? 'Toggle theme' : lang === 'sc' ? '切换主题' : '切換主題',
     }),
     [lang]
   )
+
+  const onToggleTheme = React.useCallback(() => {
+    const actual = resolvedTheme ?? theme
+    setTheme(actual === 'dark' ? 'light' : 'dark')
+  }, [resolvedTheme, setTheme, theme])
 
   return (
     <div className="from-background via-background to-muted/30 relative min-h-dvh bg-gradient-to-b">
@@ -346,74 +260,33 @@ export default function HomeClient() {
 
       <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 sm:py-12">
         <div className="flex flex-col gap-2">
-          <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">TimoETA</h1>
-              <p className="text-muted-foreground mt-1 text-sm">{t.desc}</p>
-            </div>
+          <PageHeader
+            labels={{
+              description: t.desc,
+              saved: t.saved,
+              theme: t.theme,
+              toggleTheme: t.toggleTheme,
+            }}
+            lang={lang}
+            savedOpen={savedOpen}
+            onToggleSaved={() => setSavedOpen(!savedOpen)}
+            autoRefreshSeconds={autoRefreshSeconds}
+            onAutoRefreshChange={setAutoRefreshSeconds}
+            themeMounted={themeMounted}
+            resolvedTheme={resolvedTheme}
+            theme={theme}
+            onToggleTheme={onToggleTheme}
+          />
 
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl"
-                onClick={() => setSavedOpen(!savedOpen)}
-                aria-expanded={savedOpen}
-                aria-controls="saved-panel"
-              >
-                {lang === 'en'
-                  ? 'Saved'
-                  : lang === 'sc'
-                    ? '\u5df2\u50a8\u5b58'
-                    : '\u5df2\u5132\u5b58'}
-              </Button>
-              <AutoRefreshMenu
-                lang={lang}
-                valueSeconds={autoRefreshSeconds}
-                onChange={setAutoRefreshSeconds}
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl"
-                aria-label={
-                  lang === 'en' ? 'Toggle theme' : lang === 'sc' ? '切换主题' : '切換主題'
-                }
-                onClick={() => {
-                  const actual = resolvedTheme ?? theme
-                  setTheme(actual === 'dark' ? 'light' : 'dark')
-                }}
-              >
-                {themeMounted ? (
-                  (resolvedTheme ?? theme) === 'dark' ? (
-                    <Sun className="mr-2 h-4 w-4" />
-                  ) : (
-                    <Moon className="mr-2 h-4 w-4" />
-                  )
-                ) : (
-                  <span className="mr-2 inline-block h-4 w-4" aria-hidden />
-                )}
-                {t.theme}
-              </Button>
-            </div>
-          </div>
-
-          <Sheet open={savedOpen} onOpenChange={onSavedOpenChange}>
-            <SheetContent side={savedSide} id="saved-panel">
-              <SheetHeader>
-                <SheetTitle>
-                  {lang === 'en'
-                    ? 'Saved'
-                    : lang === 'sc'
-                      ? '\u5df2\u50a8\u5b58'
-                      : '\u5df2\u5132\u5b58'}
-                </SheetTitle>
-              </SheetHeader>
-              <SheetBody className={savedSide === 'bottom' ? 'px-4' : undefined}>
-                <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
-              </SheetBody>
-            </SheetContent>
-          </Sheet>
+          <SavedSheet
+            open={savedOpen}
+            side={savedSide}
+            title={t.saved}
+            onOpenChange={onSavedOpenChange}
+            bodyPadding={savedSide === 'bottom'}
+          >
+            <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
+          </SavedSheet>
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
             <div className="space-y-4">

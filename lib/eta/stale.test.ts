@@ -42,6 +42,12 @@ describe('isStaleByAge', () => {
     expect(isStaleByAge({ lastUpdatedAt, mode: 'lrt', now })).toBe(true)
   })
 
+  it('returns false when age is exactly at threshold', () => {
+    const now = 1000000
+    const lastUpdatedAt = now - STALE_THRESHOLDS_MS.kmb
+    expect(isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })).toBe(false)
+  })
+
   it('returns false for mtr mode at 60 seconds (below 90s threshold)', () => {
     const now = 1000000
     const lastUpdatedAt = now - 60000 // 60 seconds ago

@@ -158,11 +158,3 @@ export class MicroCache<T> {
     }
   }
 }
-
-// Singleton caches for each provider
-export const kmbStopEtaCache = new MicroCache<unknown>({ ttlMs: 15_000, maxSize: 500 })
-export const mtrScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 200 })
-export const lrtScheduleCache = new MicroCache<unknown>({ ttlMs: 12_000, maxSize: 100 })
-
-// ETA database cache (24h TTL for the full DB, set per-key)
-export const etaDbCache = new MicroCache<unknown>({ ttlMs: 24 * 60 * 60 * 1000, maxSize: 10 })

@@ -31,7 +31,10 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   experimental: {
-    // Limit worker count to reduce memory pressure during build
+    // Limit worker count to reduce memory pressure during build.
+    // Combined with --max-old-space-size=2048 in package.json (reduced from 5120),
+    // this keeps build memory under ~2GB. The app has no large static data files
+    // (hk-bus-eta is 81KB, local data files are 13KB total) and imports are tree-shaken.
     cpus: 4,
   },
   // Disable React Compiler to reduce memory usage during type checking

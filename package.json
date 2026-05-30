@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "NODE_OPTIONS='--max-old-space-size=5120' next build",
+    "build": "NODE_OPTIONS='--max-old-space-size=2048' next build",
     "start": "next start",
     "lint": "eslint",
     "lint-staged": "lint-staged",
@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "analyze": "ANALYZE=true NODE_OPTIONS='--max-old-space-size=5120' next build",
+    "analyze": "ANALYZE=true NODE_OPTIONS='--max-old-space-size=2048' next build",
     "prepare": "husky"
   },
   "dependencies": {

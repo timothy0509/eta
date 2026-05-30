@@ -29,6 +29,7 @@ import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
+import { useTranslations } from '@/lib/eta/i18n'
 
 // Dynamic imports for transport mode panes - loaded only when needed
 // This significantly reduces initial bundle size
@@ -302,44 +303,9 @@ export default function HomeClient() {
     router,
   ])
 
-  const heading =
-    mode === 'kmb'
-      ? lang === 'en'
-        ? 'Bus ETAs'
-        : lang === 'sc'
-          ? '巴士到站预报'
-          : '巴士到站預報'
-      : mode === 'mtr'
-        ? lang === 'en'
-          ? 'MTR Next Train'
-          : lang === 'sc'
-            ? '港铁下班车'
-            : '港鐵下班車'
-        : lang === 'en'
-          ? 'Light Rail'
-          : '輕鐵'
+  const { t } = useTranslations(lang)
 
-  const t = React.useMemo(
-    () => ({
-      desc:
-        lang === 'en'
-          ? 'Clean, fast ETAs for Hong Kong transit.'
-          : lang === 'sc'
-            ? '簡潔又快速的香港交通到站預報。'
-            : '簡潔又快速的香港交通到站預報。',
-      theme: lang === 'en' ? 'Theme' : lang === 'sc' ? '主题' : '主題',
-      searchPin:
-        lang === 'en'
-          ? 'Search and pin your go-to stops.'
-          : lang === 'sc'
-            ? '搜尋並釘選常用車站。'
-            : '搜尋並釘選常用車站。',
-      kmbTitle: lang === 'en' ? 'Bus ETAs' : lang === 'sc' ? '巴士到站预报' : '巴士到站預報',
-      mtrTitle: lang === 'en' ? 'MTR' : lang === 'sc' ? '港铁' : '港鐵',
-      lrtTitle: lang === 'en' ? 'Light Rail' : '輕鐵',
-    }),
-    [lang]
-  )
+  const heading = mode === 'kmb' ? t('kmb.title') : mode === 'mtr' ? t('mtr.title') : t('lrt.title')
 
 
   const kmbOnRefresh = React.useCallback(
@@ -363,7 +329,7 @@ export default function HomeClient() {
           <div className="ui-animate-in flex flex-wrap items-center justify-between gap-3">
             <div>
               <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">TimoETA</h1>
-              <p className="text-muted-foreground mt-1 text-sm">{t.desc}</p>
+              <p className="text-muted-foreground mt-1 text-sm">{t('common.desc')}</p>
             </div>
 
             <div className="flex items-center gap-2">
@@ -375,11 +341,7 @@ export default function HomeClient() {
                 aria-expanded={savedOpen}
                 aria-controls="saved-panel"
               >
-                {lang === 'en'
-                  ? 'Saved'
-                  : lang === 'sc'
-                    ? '\u5df2\u50a8\u5b58'
-                    : '\u5df2\u5132\u5b58'}
+                {t('common.saved')}
               </Button>
               <AutoRefreshMenu
                 lang={lang}
@@ -390,9 +352,7 @@ export default function HomeClient() {
                 variant="outline"
                 size="sm"
                 className="rounded-xl"
-                aria-label={
-                  lang === 'en' ? 'Toggle theme' : lang === 'sc' ? '切换主题' : '切換主題'
-                }
+                aria-label={t('common.toggleTheme')}
                 onClick={() => {
                   const actual = resolvedTheme ?? theme
                   setTheme(actual === 'dark' ? 'light' : 'dark')
@@ -407,7 +367,7 @@ export default function HomeClient() {
                 ) : (
                   <span className="mr-2 inline-block h-4 w-4" aria-hidden />
                 )}
-                {t.theme}
+                {t('common.theme')}
               </Button>
             </div>
           </div>
@@ -415,13 +375,7 @@ export default function HomeClient() {
           <Sheet open={savedOpen} onOpenChange={onSavedOpenChange}>
             <SheetContent side={savedSide} id="saved-panel">
               <SheetHeader>
-                <SheetTitle>
-                  {lang === 'en'
-                    ? 'Saved'
-                    : lang === 'sc'
-                      ? '\u5df2\u50a8\u5b58'
-                      : '\u5df2\u5132\u5b58'}
-                </SheetTitle>
+                <SheetTitle>{t('common.saved')}</SheetTitle>
               </SheetHeader>
               <SheetBody className={savedSide === 'bottom' ? 'px-4' : undefined}>
                 <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
@@ -438,7 +392,7 @@ export default function HomeClient() {
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <div className="text-sm font-medium">{heading}</div>
-                      <div className="text-muted-foreground text-xs">{t.searchPin}</div>
+                      <div className="text-muted-foreground text-xs">{t('common.searchPin')}</div>
                     </div>
                     <LanguageToggle mode={mode} value={lang} onChange={setLang} />
                   </div>
@@ -499,7 +453,7 @@ export default function HomeClient() {
               {mode === 'kmb' ? (
                 <KmbResults
                   lang={kmbPaneState?.lang ?? lang}
-                  title={kmbPaneState?.title ?? t.kmbTitle}
+                  title={kmbPaneState?.title ?? t('kmb.title')}
                   stopCode={kmbPaneState?.stopCode ?? null}
                   routesFilter={kmbPaneState?.routeFilter.routes ?? ''}
                   eta={kmbPaneState?.eta ?? []}
@@ -524,7 +478,7 @@ export default function HomeClient() {
 
               {mode === 'mtr' ? (
                 <MtrResults
-                  title={mtrPaneState?.title ?? t.mtrTitle}
+                  title={mtrPaneState?.title ?? t('mtr.title')}
                   lang={mtrPaneState?.lang ?? lang}
                   schedule={mtrPaneState?.schedule ?? null}
                   error={mtrPaneState?.error ?? null}
@@ -537,7 +491,7 @@ export default function HomeClient() {
 
               {mode === 'lrt' ? (
                 <LrtResults
-                  title={lrtPaneState?.title ?? t.lrtTitle}
+                  title={lrtPaneState?.title ?? t('lrt.title')}
                   lang={lrtPaneState?.lang ?? lang}
                   schedule={lrtPaneState?.schedule ?? null}
                   error={lrtPaneState?.error ?? null}

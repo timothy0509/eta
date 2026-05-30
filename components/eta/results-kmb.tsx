@@ -24,6 +24,7 @@ import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
+import { useTranslations } from '@/lib/eta/i18n'
 
 function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
   if (lang === 'sc') return fields.sc
@@ -87,13 +88,11 @@ function formatRouteVariantLabel(
 }
 
 function formatArrivingText(lang: UiLanguage) {
-  if (lang === 'en') return 'Now'
   if (lang === 'sc') return '即将到达'
   return '即將到達'
 }
 
 function formatNoScheduledText(lang: UiLanguage) {
-  if (lang === 'en') return 'No scheduled buses'
   if (lang === 'sc') return '暂时没有预定班次'
   return '暫時沒有預定班次'
 }
@@ -283,21 +282,7 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
     </Badge>
   )
 
-  const i18n = {
-    details: lang === 'en' ? 'Details' : lang === 'sc' ? '詳情' : '詳情',
-    routeDetails: lang === 'en' ? 'Route details' : lang === 'sc' ? '路線詳情' : '路線詳情',
-    routeAndStopDetails:
-      lang === 'en'
-        ? 'Route and stop details'
-        : lang === 'sc'
-          ? '路線及車站詳情'
-          : '路線及車站詳情',
-    stop: lang === 'en' ? 'Stop' : lang === 'sc' ? '車站' : '車站',
-    operator: lang === 'en' ? 'Operator' : lang === 'sc' ? '營辦商' : '營辦商',
-    route: lang === 'en' ? 'Route' : lang === 'sc' ? '路線' : '路線',
-    fare: lang === 'en' ? 'Fare' : lang === 'sc' ? '車費' : '車費',
-    unknown: lang === 'en' ? 'Unknown' : lang === 'sc' ? '未知' : '未知',
-  }
+  const { t } = useTranslations(lang)
 
   const InfoButton = (
     <Dialog>
@@ -308,7 +293,7 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
             'ui-lift bg-background/30 text-muted-foreground inline-flex h-8 w-8 items-center justify-center rounded-lg border',
             'hover:bg-background/40 hover:text-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
           )}
-          aria-label={i18n.routeDetails}
+          aria-label={t('common.routeDetails')}
         >
           <Info className="h-4 w-4" />
         </button>
@@ -318,15 +303,17 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
           <DialogTitle className="text-base">
             {route} {destination ? `→ ${destination}` : label ? `→ ${label}` : ''}
           </DialogTitle>
-          <DialogDescription className="sr-only">{i18n.routeAndStopDetails}</DialogDescription>
+          <DialogDescription className="sr-only">
+            {t('common.routeAndStopDetails')}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">{i18n.stop}</div>
+            <div className="text-muted-foreground text-xs">{t('common.stop')}</div>
             <div className="flex flex-wrap items-center gap-2">
               <div className="min-w-0 flex-1 truncate text-sm font-medium">
-                {stopChips.name ?? i18n.unknown}
+                {stopChips.name ?? t('common.unknown')}
               </div>
               {stopChips.platform ? (
                 <Badge variant="secondary" className="shrink-0 rounded-lg font-mono text-xs">
@@ -342,22 +329,22 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
           </div>
 
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">{i18n.operator}</div>
+            <div className="text-muted-foreground text-xs">{t('common.operator')}</div>
             <div className="text-sm">{formatOperatorLabel(first?.co ?? co, lang)}</div>
           </div>
 
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">{i18n.route}</div>
+            <div className="text-muted-foreground text-xs">{t('common.route')}</div>
             <div className="text-sm">
               {origin && destination
                 ? `${origin} → ${destination}`
-                : label || destination || i18n.unknown}
+                : label || destination || t('common.unknown')}
             </div>
           </div>
 
           {fare ? (
             <div className="space-y-1">
-              <div className="text-muted-foreground text-xs">{i18n.fare}</div>
+              <div className="text-muted-foreground text-xs">{t('common.fare')}</div>
               <div className="text-sm font-medium">HK$ {fare.hkd.toFixed(1)}</div>
             </div>
           ) : null}
@@ -593,6 +580,7 @@ export const KmbResults = React.memo(function KmbResults({
   registerStopRef,
   visibleStopIds,
 }: Props) {
+  const { t, tWithParams } = useTranslations(lang)
   const now = useTickingNow(15_000)
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang, now })
@@ -716,10 +704,7 @@ export const KmbResults = React.memo(function KmbResults({
       <CardHeader className="flex flex-row items-center justify-between gap-6">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <CardTitle className="truncate text-base">
-              {title ||
-                (lang === 'en' ? 'Bus ETAs' : lang === 'sc' ? '巴士到站预报' : '巴士到站預報')}
-            </CardTitle>
+            <CardTitle className="truncate text-base">{title || t('kmb.title')}</CardTitle>
             {stopCode ? (
               <Badge variant="outline" className="shrink-0 rounded-lg font-mono text-xs">
                 {stopCode}
@@ -729,33 +714,15 @@ export const KmbResults = React.memo(function KmbResults({
           <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
             <Clock className="h-3.5 w-3.5" />
             {routesFilter?.trim()
-              ? lang === 'en'
-                ? `Filtered: ${routesFilter}`
-                : lang === 'sc'
-                  ? `筛选: ${routesFilter}`
-                  : `篩選: ${routesFilter}`
+              ? `${t('kmb.filtered')} ${routesFilter}`
               : isKeyphraseMode
-                ? lang === 'en'
-                  ? `${loadedStopIds?.length ?? 0} stops loaded`
-                  : lang === 'sc'
-                    ? `已载入 ${loadedStopIds?.length ?? 0} 个车站`
-                    : `已載入 ${loadedStopIds?.length ?? 0} 個車站`
-                : lang === 'en'
-                  ? 'All routes at this stop'
-                  : lang === 'sc'
-                    ? '此站所有路线'
-                    : '此站所有路線'}
+                ? `${loadedStopIds?.length ?? 0} ${t('kmb.stopsLoaded')}`
+                : t('kmb.allRoutesAtStop')}
 
             {updatedAt ? (
               <>
                 <span aria-hidden>·</span>
-                <span>
-                  {lang === 'en'
-                    ? `Updated ${formatUiTime(updatedAt, lang)}`
-                    : lang === 'sc'
-                      ? `更新 ${formatUiTime(updatedAt, lang)}`
-                      : `更新 ${formatUiTime(updatedAt, lang)}`}
-                </span>
+                <span>{tWithParams('kmb.updated', { time: formatUiTime(updatedAt, lang) })}</span>
                 {relativeAgeLabel ? (
                   <>
                     <span aria-hidden>·</span>
@@ -767,7 +734,7 @@ export const KmbResults = React.memo(function KmbResults({
 
             {showStale ? (
               <Badge variant="destructive" className="rounded-lg">
-                {lang === 'en' ? 'Stale' : lang === 'sc' ? '未更新' : '未更新'}
+                {t('common.stale')}
               </Badge>
             ) : null}
           </div>
@@ -780,27 +747,19 @@ export const KmbResults = React.memo(function KmbResults({
           disabled={loading}
         >
           <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'ui-spin')} />
-          {lang === 'en' ? 'Refresh' : lang === 'sc' ? '重新整理' : '重新整理'}
+          {t('common.refresh')}
         </Button>
       </CardHeader>
       <CardContent className="space-y-5">
         {error ? (
           <div className="ui-animate-fade bg-destructive/10 text-destructive rounded-2xl border p-4 text-sm">
-            {lang === 'en'
-              ? `Update failed. Showing last results. (${error})`
-              : lang === 'sc'
-                ? `更新失败。显示上次结果。(${error})`
-                : `更新失敗。顯示上次結果。(${error})`}
+            {tWithParams('kmb.updateFailed', { error })}
           </div>
         ) : null}
         {!hasQuery ? (
           <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
             <Info className="h-4 w-4" />
-            {lang === 'en'
-              ? 'Select a stop to load ETAs.'
-              : lang === 'sc'
-                ? '选择车站以载入到站时间'
-                : '選擇車站以載入到站時間'}
+            {t('common.selectStop')}
           </div>
         ) : useStopSections ? (
           // Keyphrase mode: sectioned by stop with virtualization

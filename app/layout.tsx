@@ -4,6 +4,7 @@ import { DM_Sans, Noto_Sans_HK, Noto_Sans_SC, Rubik } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/toaster'
 import { LangSync } from '@/components/eta/lang-sync'
+import { PageViewTracker } from '@/components/eta/page-view-tracker'
 import './globals.css'
 
 const dmSans = DM_Sans({
@@ -112,6 +113,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <PageViewTracker />
           <LangSync />
           <a
             href="#main-content"

@@ -3,10 +3,11 @@
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
+import { reportError } from '@/lib/error-reporting'
 
 export default function Error({ error, reset }: { error: Error; reset: () => void }) {
   React.useEffect(() => {
-    console.error('[App] Route error', error)
+    reportError(error, { scope: 'route' })
   }, [error])
 
   return (

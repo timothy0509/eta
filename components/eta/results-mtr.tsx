@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react'
 import { ExternalLink, Info, RefreshCw, TrainFront } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -90,7 +91,7 @@ function formatPlatform(plat: unknown) {
   return raw
 }
 
-export function MtrResults({
+export const MtrResults = React.memo(function MtrResults({
   title,
   lang,
   schedule,
@@ -312,4 +313,4 @@ export function MtrResults({
       </CardContent>
     </Card>
   )
-}
+})

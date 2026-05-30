@@ -1,5 +1,6 @@
 'use client'
 
+import * as React from 'react'
 import { Info, RefreshCw, TramFront } from 'lucide-react'
 
 import { Badge } from '@/components/ui/badge'
@@ -36,7 +37,7 @@ type Props = {
   loading?: boolean
 }
 
-export function LrtResults({
+export const LrtResults = React.memo(function LrtResults({
   title,
   lang,
   schedule,
@@ -218,4 +219,4 @@ export function LrtResults({
       </CardContent>
     </Card>
   )
-}
+})

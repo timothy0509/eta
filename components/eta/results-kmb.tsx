@@ -176,8 +176,6 @@ function getStopChips(
     stopCode: parsed?.stopCode ?? null,
   }
 
-  if (stopId) stopChipsById.set(stopId, result)
-
   return result
 }
 
@@ -569,7 +567,7 @@ const StopSection = React.memo(function StopSection({
   )
 })
 
-export function KmbResults({
+export const KmbResults = React.memo(function KmbResults({
   lang,
   title,
   stopCode,
@@ -929,4 +927,4 @@ export function KmbResults({
       </CardContent>
     </Card>
   )
-}
+})

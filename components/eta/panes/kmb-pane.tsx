@@ -32,6 +32,11 @@ import { useInfiniteScroll, useVisibleItems } from '@/lib/eta/use-infinite-scrol
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { cn } from '@/lib/utils'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
+import {
+  KmbPaneProvider,
+  type KmbPaneUrlState,
+  type KmbPaneRenderState,
+} from '@/components/eta/panes/kmb-pane-context'
 
 // ============================================================================
 // ETA State Reducer - Batch updates to minimize renders
@@ -336,7 +341,7 @@ type Props = {
   selectedItem?: FavoritesItem | null
   onRegisterRefresh?: (refresh: () => Promise<void>) => void
   onStopsChange?: (stops: KmbStopSearchItem[]) => void
-  onStateChange?: (state: KmbPaneState) => void
+  onStateChange?: (state: KmbPaneUrlState) => void
 }
 
 type KmbQuery =
@@ -1454,204 +1459,238 @@ export function KmbPane({
     return precomputeRenderGroups(kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey)
   }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey])
 
-  const paneState = React.useMemo<KmbPaneState>(
+  // URL-synced state only - changes trigger parent re-render for URL updates
+  const urlState = React.useMemo<KmbPaneUrlState>(
     () => ({
-      lang,
-      routeFilter,
       querySummary,
-      routeInfos: kmbRouteInfos,
-      faresByVariantKey: kmbFaresByVariantKey,
-      eta: kmbEta,
-      etaByStopId: kmbEtaByStopId,
-      loadedStopIds,
-      loading: kmbEtaLoading,
-      error: kmbEtaError,
-      stale: kmbEtaStale,
-      staleByStopId: kmbEtaStaleByStopId,
-      lastUpdatedAt: kmbEtaLastUpdatedAt ?? undefined,
-      hasQuery: Boolean(kmbQuery),
-      multipleStops: kmbQuery?.mode === 'stops' || kmbQuery?.mode === 'contains',
-      isKeyphraseMode: isKeyphraseMode ?? false,
-      title: kmbResultsInfo.title,
-      stopCode: kmbResultsInfo.code,
-      stops: kmbStops,
-      refresh: (options) => refreshKmbEta(kmbQuery, options),
-      sentinelRef: infiniteScroll.sentinelRef,
-      hasMoreStops: infiniteScroll.hasMore,
-      precomputedGroups,
-      visibleStopIds,
-      registerStopRef,
+      routeFilter,
     }),
+    [querySummary, routeFilter]
+  )
+
+  // Render state - stored in context, doesn't trigger parent re-renders
+  const renderState = React.useMemo<KmbPaneRenderState | null>(
+    () =>
+      kmbQuery
+        ? {
+            lang,
+            title: kmbResultsInfo.title,
+            stopCode: kmbResultsInfo.code,
+            eta: kmbEta,
+            routeInfos: kmbRouteInfos,
+            faresByVariantKey: kmbFaresByVariantKey,
+            hasQuery: true,
+            loading: kmbEtaLoading,
+            error: kmbEtaError,
+            stale: kmbEtaStale,
+            staleByStopId: kmbEtaStaleByStopId,
+            lastUpdatedAt: kmbEtaLastUpdatedAt ?? undefined,
+            stops: kmbStops,
+            multipleStops: kmbQuery?.mode === 'stops' || kmbQuery?.mode === 'contains',
+            isKeyphraseMode: isKeyphraseMode ?? false,
+            etaByStopId: kmbEtaByStopId,
+            loadedStopIds,
+            sentinelRef: infiniteScroll.sentinelRef,
+            hasMoreStops: infiniteScroll.hasMore,
+            precomputedGroups,
+            visibleStopIds,
+            registerStopRef,
+            refresh: (options) => refreshKmbEta(kmbQuery, options),
+          }
+        : {
+            lang,
+            title: kmbResultsInfo.title,
+            stopCode: kmbResultsInfo.code,
+            eta: [],
+            routeInfos: kmbRouteInfos,
+            faresByVariantKey: kmbFaresByVariantKey,
+            hasQuery: false,
+            loading: kmbEtaLoading,
+            error: kmbEtaError,
+            stale: kmbEtaStale,
+            stops: kmbStops,
+            multipleStops: false,
+            isKeyphraseMode: false,
+            etaByStopId: {},
+            loadedStopIds: [],
+            sentinelRef: infiniteScroll.sentinelRef,
+            hasMoreStops: infiniteScroll.hasMore,
+            precomputedGroups,
+            visibleStopIds,
+            registerStopRef,
+            refresh: (options) => refreshKmbEta(kmbQuery, options),
+          },
     [
+      kmbQuery,
+      lang,
+      kmbResultsInfo.title,
+      kmbResultsInfo.code,
       kmbEta,
-      kmbEtaByStopId,
+      kmbRouteInfos,
       kmbFaresByVariantKey,
-      loadedStopIds,
       kmbEtaLoading,
       kmbEtaError,
-      kmbEtaLastUpdatedAt,
       kmbEtaStale,
       kmbEtaStaleByStopId,
-      kmbQuery,
-      kmbResultsInfo.code,
-      kmbResultsInfo.title,
-      kmbRouteInfos,
+      kmbEtaLastUpdatedAt,
       kmbStops,
-      lang,
-      querySummary,
-      refreshKmbEta,
-      routeFilter,
       isKeyphraseMode,
+      kmbEtaByStopId,
+      loadedStopIds,
       infiniteScroll.sentinelRef,
       infiniteScroll.hasMore,
       precomputedGroups,
       visibleStopIds,
       registerStopRef,
+      refreshKmbEta,
     ]
   )
 
+  // Only emit URL state changes to parent (not render state)
   React.useEffect(() => {
-    onStateChange?.(paneState)
-  }, [onStateChange, paneState])
+    onStateChange?.(urlState)
+  }, [onStateChange, urlState])
 
   return (
-    <div className="space-y-4">
-      <StopSearch
-        lang={lang}
-        stops={kmbStops}
-        value={kmbDraftStopSelection}
-        onSelectStop={(stop) => {
-          setKmbDraftStopSelection({ type: 'stop', stopId: stop.stopId })
-          onAddRecent({
-            id: `kmb:${stop.stopId}:__stop__`,
-            mode: 'kmb',
-            title: pickKmbStopTitle(stop, lang),
-            stopId: stop.stopId,
-          })
-        }}
-        onSelectStops={(stops) => {
-          const stopIds = stops.map((s) => s.stopId)
-          setKmbDraftStopSelection({ type: 'stops', stopIds })
-          if (stops.length > 0) {
-            const firstStop = stops[0]!
-            const fullName = pickKmbStopTitle(firstStop, lang)
-            const { name } = parseKmbStopNameCached(fullName)
-            const firstStopId = stopIds[0]!
+    <KmbPaneProvider urlState={urlState} renderState={renderState}>
+      <div className="space-y-4">
+        <StopSearch
+          lang={lang}
+          stops={kmbStops}
+          value={kmbDraftStopSelection}
+          onSelectStop={(stop) => {
+            setKmbDraftStopSelection({ type: 'stop', stopId: stop.stopId })
             onAddRecent({
-              id: `kmb:${stopIds.join(',')}:__stops__`,
+              id: `kmb:${stop.stopId}:__stop__`,
               mode: 'kmb',
-              title: name,
-              stopId: firstStopId,
+              title: pickKmbStopTitle(stop, lang),
+              stopId: stop.stopId,
             })
-          }
-        }}
-        onSelectContains={(query) => {
-          setKmbDraftStopSelection({ type: 'contains', query })
-        }}
-      />
+          }}
+          onSelectStops={(stops) => {
+            const stopIds = stops.map((s) => s.stopId)
+            setKmbDraftStopSelection({ type: 'stops', stopIds })
+            if (stops.length > 0) {
+              const firstStop = stops[0]!
+              const fullName = pickKmbStopTitle(firstStop, lang)
+              const { name } = parseKmbStopNameCached(fullName)
+              const firstStopId = stopIds[0]!
+              onAddRecent({
+                id: `kmb:${stopIds.join(',')}:__stops__`,
+                mode: 'kmb',
+                title: name,
+                stopId: firstStopId,
+              })
+            }
+          }}
+          onSelectContains={(query) => {
+            setKmbDraftStopSelection({ type: 'contains', query })
+          }}
+        />
 
-      {isMobile ? (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setFilterExpanded(!filterExpanded)}
-            className="bg-card/50 flex w-full items-center justify-between rounded-2xl border p-4 text-left"
-            aria-expanded={filterExpanded}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">
-                {lang === 'en' ? 'Route Filter' : '路線篩選'}
-              </span>
-              {activeFilterCount > 0 && (
-                <Badge variant="secondary" className="rounded-lg px-2 py-0.5 text-xs">
-                  {activeFilterCount}
-                </Badge>
+        {isMobile ? (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setFilterExpanded(!filterExpanded)}
+              className="bg-card/50 flex w-full items-center justify-between rounded-2xl border p-4 text-left"
+              aria-expanded={filterExpanded}
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">
+                  {lang === 'en' ? 'Route Filter' : '路線篩選'}
+                </span>
+                {activeFilterCount > 0 && (
+                  <Badge variant="secondary" className="rounded-lg px-2 py-0.5 text-xs">
+                    {activeFilterCount}
+                  </Badge>
+                )}
+              </div>
+              {filterExpanded ? (
+                <ChevronUp className="text-muted-foreground h-4 w-4" />
+              ) : (
+                <ChevronDown className="text-muted-foreground h-4 w-4" />
               )}
-            </div>
-            {filterExpanded ? (
-              <ChevronUp className="text-muted-foreground h-4 w-4" />
-            ) : (
-              <ChevronDown className="text-muted-foreground h-4 w-4" />
-            )}
-          </button>
+            </button>
 
-          <div
-            className={cn(
-              'grid transition-all duration-200 ease-in-out',
-              filterExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-            )}
-          >
-            <div className="overflow-hidden">
-              <RouteFilter
-                lang={lang}
-                mode={routeFilterMode}
-                onModeChange={onRouteFilterModeChange}
-                value={routeFilter}
-                options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
-                onChange={(next) => setRouteFilter(next)}
-              />
+            <div
+              className={cn(
+                'grid transition-all duration-200 ease-in-out',
+                filterExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+              )}
+            >
+              <div className="overflow-hidden">
+                <RouteFilter
+                  lang={lang}
+                  mode={routeFilterMode}
+                  onModeChange={onRouteFilterModeChange}
+                  value={routeFilter}
+                  options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
+                  onChange={(next) => setRouteFilter(next)}
+                />
+              </div>
             </div>
           </div>
-        </div>
-      ) : (
-        <RouteFilter
-          lang={lang}
-          mode={routeFilterMode}
-          onModeChange={onRouteFilterModeChange}
-          value={routeFilter}
-          options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
-          onChange={(next) => setRouteFilter(next)}
-        />
-      )}
+        ) : (
+          <RouteFilter
+            lang={lang}
+            mode={routeFilterMode}
+            onModeChange={onRouteFilterModeChange}
+            value={routeFilter}
+            options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
+            onChange={(next) => setRouteFilter(next)}
+          />
+        )}
 
-      {stopsError ? (
-        <div className="bg-background/40 text-destructive rounded-2xl border p-3 text-sm">
-          {stopsError}
-        </div>
-      ) : null}
+        {stopsError ? (
+          <div className="bg-background/40 text-destructive rounded-2xl border p-3 text-sm">
+            {stopsError}
+          </div>
+        ) : null}
 
-      {routeStopsError ? (
-        <div className="bg-background/40 text-destructive rounded-2xl border p-3 text-sm">
-          {routeStopsError}
-        </div>
-      ) : null}
+        {routeStopsError ? (
+          <div className="bg-background/40 text-destructive rounded-2xl border p-3 text-sm">
+            {routeStopsError}
+          </div>
+        ) : null}
 
-      <div className="flex items-center justify-between gap-2">
-        <Badge variant="secondary" className="rounded-xl">
-          {loadingStops || loadingRouteStops
-            ? lang === 'en'
-              ? 'Indexing data…'
-              : lang === 'sc'
-                ? '正在索引數據…'
-                : '正在索引數據…'
-            : `${kmbStops.length.toLocaleString()} ${
-                lang === 'en' ? 'stops' : '個車站'
-              } · ${kmbRouteStops.length.toLocaleString()} ${
-                lang === 'en' ? 'route-stops' : '個路線車站'
-              }`}
-        </Badge>
-        <Button
-          size="sm"
-          variant="outline"
-          className="rounded-xl"
-          onClick={() => void refreshKmbEta(kmbQuery, { toastOnError: true })}
-        >
-          <RefreshCw className={cn('mr-2 h-4 w-4', kmbEtaLoading && 'ui-spin')} />
-          {lang === 'en' ? 'Refresh' : '重新整理'}
-        </Button>
+        <div className="flex items-center justify-between gap-2">
+          <Badge variant="secondary" className="rounded-xl">
+            {loadingStops || loadingRouteStops
+              ? lang === 'en'
+                ? 'Indexing data…'
+                : lang === 'sc'
+                  ? '正在索引數據…'
+                  : '正在索引數據…'
+              : `${kmbStops.length.toLocaleString()} ${
+                  lang === 'en' ? 'stops' : '個車站'
+                } · ${kmbRouteStops.length.toLocaleString()} ${
+                  lang === 'en' ? 'route-stops' : '個路線車站'
+                }`}
+          </Badge>
+          <Button
+            size="sm"
+            variant="outline"
+            className="rounded-xl"
+            onClick={() => void refreshKmbEta(kmbQuery, { toastOnError: true })}
+          >
+            <RefreshCw className={cn('mr-2 h-4 w-4', kmbEtaLoading && 'ui-spin')} />
+            {lang === 'en' ? 'Refresh' : '重新整理'}
+          </Button>
+        </div>
+
+        <Separator />
+
+        <div className="flex items-center justify-between gap-2">
+          <Button
+            className={cn('rounded-xl', !canFavorite && 'opacity-60')}
+            disabled={!canFavorite}
+            onClick={onSave}
+          >
+            {lang === 'en' ? 'Save' : '收藏'}
+          </Button>
+        </div>
       </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between gap-2">
-        <Button
-          className={cn('rounded-xl', !canFavorite && 'opacity-60')}
-          disabled={!canFavorite}
-          onClick={onSave}
-        >
-          {lang === 'en' ? 'Save' : '收藏'}
-        </Button>
-      </div>
-    </div>
+    </KmbPaneProvider>
   )
 }

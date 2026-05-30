@@ -9,7 +9,8 @@ import { AutoRefreshMenu } from '@/components/eta/auto-refresh'
 import { LanguageToggle } from '@/components/eta/language-toggle'
 import { ModeTabs } from '@/components/eta/mode-tabs'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
-import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
+import type { KmbPaneUrlState } from '@/components/eta/panes/kmb-pane-context'
+import { KmbResultsWithContext } from '@/components/eta/results-kmb'
 import type { LrtPaneState } from '@/components/eta/panes/lrt-pane'
 import type { MtrPaneState } from '@/components/eta/panes/mtr-pane'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
@@ -57,7 +58,7 @@ const LrtPane = dynamic(
   }
 )
 
-const KmbResults = dynamic(
+const _KmbResults = dynamic(
   () => import('@/components/eta/results-kmb').then((mod) => ({ default: mod.KmbResults })),
   {
     loading: () => <ResultsSkeleton />,
@@ -129,7 +130,7 @@ export default function HomeClient() {
   const themeMounted = resolvedTheme !== undefined
 
   const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([])
-  const [kmbPaneState, setKmbPaneState] = React.useState<KmbPaneState | null>(null)
+  const [kmbPaneState, setKmbPaneState] = React.useState<KmbPaneUrlState | null>(null)
   const [mtrPaneState, setMtrPaneState] = React.useState<MtrPaneState | null>(null)
   const [lrtPaneState, setLrtPaneState] = React.useState<LrtPaneState | null>(null)
   const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(() => {
@@ -487,28 +488,10 @@ export default function HomeClient() {
 
             <div className="space-y-4">
               {mode === 'kmb' ? (
-                <KmbResults
-                  lang={kmbPaneState?.lang ?? lang}
-                  title={kmbPaneState?.title ?? t.kmbTitle}
-                  stopCode={kmbPaneState?.stopCode ?? null}
+                <KmbResultsWithContext
                   routesFilter={kmbPaneState?.routeFilter.routes ?? ''}
-                  eta={kmbPaneState?.eta ?? []}
-                  routeInfos={kmbPaneState?.routeInfos ?? {}}
-                  faresByVariantKey={kmbPaneState?.faresByVariantKey ?? {}}
-                  hasQuery={kmbPaneState?.hasQuery ?? false}
-                  error={kmbPaneState?.error ?? null}
-                  stale={kmbPaneState?.stale ?? false}
-                  lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
-                  onRefresh={() => void kmbPaneState?.refresh({ toastOnError: true })}
-                  loading={kmbPaneState?.loading}
-                  stops={kmbPaneState?.stops ?? undefined}
-                  multipleStops={kmbPaneState?.multipleStops}
-                  isKeyphraseMode={kmbPaneState?.isKeyphraseMode}
-                  etaByStopId={kmbPaneState?.etaByStopId}
-                  loadedStopIds={kmbPaneState?.loadedStopIds}
-                  sentinelRef={kmbPaneState?.sentinelRef}
-                  hasMoreStops={kmbPaneState?.hasMoreStops}
-                  precomputedGroups={kmbPaneState?.precomputedGroups}
+                  defaultTitle={t.kmbTitle}
+                  defaultLang={lang}
                 />
               ) : null}
 

@@ -4,6 +4,7 @@ import { Clock, Info, Loader2, RefreshCw } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/components/eta/panes/kmb-pane'
+import { useKmbPaneContext } from '@/components/eta/panes/kmb-pane-context'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -928,5 +929,67 @@ export function KmbResults({
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** Wrapper that reads from KmbPane context instead of props */
+export function KmbResultsWithContext({
+  routesFilter,
+  defaultTitle,
+  defaultLang,
+}: {
+  routesFilter: string
+  defaultTitle: string
+  defaultLang: UiLanguage
+}) {
+  const { renderState } = useKmbPaneContext()
+
+  if (!renderState) {
+    return (
+      <Card className="bg-card/60 rounded-3xl border shadow-sm">
+        <CardHeader>
+          <CardTitle className="text-base">{defaultTitle}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-muted-foreground flex items-center gap-2 text-sm">
+            <Info className="h-4 w-4" />
+            {defaultLang === 'en'
+              ? 'Select a stop to load ETAs.'
+              : defaultLang === 'sc'
+                ? '选择车站以载入到站时间'
+                : '選擇車站以載入到站時間'}
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  return (
+    <KmbResults
+      lang={renderState.lang as UiLanguage}
+      title={renderState.title}
+      stopCode={renderState.stopCode}
+      routesFilter={routesFilter}
+      eta={renderState.eta}
+      routeInfos={renderState.routeInfos}
+      faresByVariantKey={renderState.faresByVariantKey}
+      hasQuery={renderState.hasQuery}
+      error={renderState.error}
+      stale={renderState.stale}
+      staleByStopId={renderState.staleByStopId}
+      lastUpdatedAt={renderState.lastUpdatedAt}
+      onRefresh={() => void renderState.refresh({ toastOnError: true })}
+      loading={renderState.loading}
+      stops={renderState.stops}
+      multipleStops={renderState.multipleStops}
+      isKeyphraseMode={renderState.isKeyphraseMode}
+      etaByStopId={renderState.etaByStopId}
+      loadedStopIds={renderState.loadedStopIds}
+      sentinelRef={renderState.sentinelRef}
+      hasMoreStops={renderState.hasMoreStops}
+      precomputedGroups={renderState.precomputedGroups}
+      registerStopRef={renderState.registerStopRef}
+      visibleStopIds={renderState.visibleStopIds}
+    />
   )
 }

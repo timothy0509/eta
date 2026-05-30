@@ -22,6 +22,11 @@ const securityHeaders = [
     key: 'Permissions-Policy',
     value: 'geolocation=(), camera=(), microphone=()',
   },
+  {
+    key: 'Content-Security-Policy',
+    value:
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://rt.data.gov.hk https://data.etabus.gov.hk https://opendata.mtr.com.hk https://www.lrtetas.hk; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+  },
 ]
 
 const nextConfig: NextConfig = {

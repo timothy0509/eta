@@ -3,7 +3,8 @@
 import { Clock, Info, Loader2, RefreshCw } from 'lucide-react'
 import * as React from 'react'
 
-import type { EtaGroup, PrecomputedGroups } from '@/components/eta/panes/kmb-pane'
+import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
+import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -105,10 +106,6 @@ function formatEtaLabel(seq: number, lang: UiLanguage) {
     return `${seq}th`
   }
   return `第${seq}${lang === 'sc' ? '班' : '班'}`
-}
-
-function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
-  return items.some((entry) => entry.eta && !isNaN(Date.parse(entry.eta)))
 }
 
 function getGroupRemark(items: KmbEtaEntryWithLeg[], lang: UiLanguage): string | null {
@@ -648,55 +645,20 @@ export const KmbResults = React.memo(function KmbResults({
 
   // Fallback grouped computation for multipleStops mode only
   const grouped = React.useMemo(() => {
-    if (useStopSections) return [] // Not used in sectioned mode
-    if (precomputedFlat && !multipleStops) return [] // Use precomputed directly
+    if (useStopSections) return []
+    if (precomputedFlat && !multipleStops) return []
 
-    const byVariant = new Map<string, KmbEtaEntryWithLeg[]>()
-    for (const entry of eta) {
+    const buildKeyWithStop = (entry: KmbEtaEntryWithLeg) => {
       const co = String(entry.co ?? 'kmb')
       const route = (entry.route ?? '').toUpperCase()
       const dir = String(entry.dir ?? '')
       const serviceType = String(entry.service_type ?? '')
       const legSuffix = entry.leg ?? '_'
-      const baseKey = `${co}|${route}|${dir}|${serviceType}`
-      const key = `${baseKey}|${legSuffix}|${entry.stop ?? ''}`
-
-      const items = byVariant.get(key) ?? []
-      items.push(entry)
-      byVariant.set(key, items)
+      const stop = entry.stop ?? ''
+      return `${co}|${route}|${dir}|${serviceType}|${legSuffix}|${stop}`
     }
 
-    const groups = Array.from(byVariant.entries()).map(([key, items]) => {
-      const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq)
-      const parts = key.split('|')
-      const baseKey = parts.slice(0, 4).join('|')
-      const legPart = parts[4]
-      const isArrivingLeg = legPart === 'B'
-
-      return {
-        key,
-        baseKey,
-        items: sorted,
-        hasEta: hasValidEta(sorted),
-        hasFare: !isArrivingLeg,
-        isArrivingLeg,
-      }
-    })
-
-    const sortByRoute = (a: { key: string }, b: { key: string }) => {
-      const [, routeA] = a.key.split('|')
-      const [, routeB] = b.key.split('|')
-      return routeA.localeCompare(routeB, undefined, { numeric: true })
-    }
-
-    const hasFareLoaded = (g: { hasFare: boolean; baseKey: string }) =>
-      g.hasFare && faresByVariantKey && Boolean(faresByVariantKey[g.baseKey])
-
-    const withEtaAndFare = groups.filter((g) => g.hasEta && hasFareLoaded(g)).sort(sortByRoute)
-    const withEtaOnly = groups.filter((g) => g.hasEta && !hasFareLoaded(g)).sort(sortByRoute)
-    const withoutEtas = groups.filter((g) => !g.hasEta).sort(sortByRoute)
-
-    return [...withEtaAndFare, ...withEtaOnly, ...withoutEtas]
+    return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
   return (

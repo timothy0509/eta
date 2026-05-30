@@ -24,169 +24,22 @@ import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
-
-function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
-  if (lang === 'sc') return fields.sc
-  if (lang === 'en') return fields.en
-  return fields.tc
-}
-
-function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
-  const key = String(co ?? 'kmb').toLowerCase()
-  const map: Record<string, { en: string; tc: string; sc: string }> = {
-    kmb: { en: 'KMB', tc: '九巴', sc: '九巴' },
-    ctb: { en: 'CTB', tc: '城巴', sc: '城巴' },
-    nwfb: { en: 'NWFB', tc: '新巴', sc: '新巴' },
-    nlb: { en: 'NLB', tc: '嶼巴', sc: '屿巴' },
-    gmb: { en: 'GMB', tc: '小巴', sc: '小巴' },
-    lrtfeeder: { en: 'LRTF', tc: '港鐵巴士', sc: '轻铁接驳' },
-    sunferry: { en: 'SF', tc: '新渡輪', sc: '新渡轮' },
-    hkkf: { en: 'HKKF', tc: '港九小輪', sc: '港九小轮' },
-    fortuneferry: { en: 'FF', tc: '富裕小輪', sc: '富裕小轮' },
-  }
-  const label = map[key] ?? { en: key.toUpperCase(), tc: key, sc: key }
-  return pickLang(label, lang)
-}
-
-function formatRouteVariantLabel(
-  info: KmbRouteInfoLite | undefined,
-  etaFallback: KmbEtaEntryWithLeg | undefined,
-  lang: UiLanguage,
-  /** For circular routes, use origin instead of destination for the arriving leg */
-  isArrivingLeg?: boolean,
-  /** Fallback stop name to use for arriving leg when route info is not yet loaded */
-  stopNameFallback?: string
-) {
-  if (info) {
-    // For arriving leg, show origin (where the bus came from) instead of destination
-    if (isArrivingLeg) {
-      const origin = pickLang(info.origin, lang)
-      if (origin) return origin
-    }
-    const destination = pickLang(info.destination, lang)
-    if (destination) return destination
-  }
-
-  // Fallback when route info not yet loaded
-  if (isArrivingLeg && stopNameFallback) {
-    // Use stop name as fallback for origin (they should be similar)
-    return stopNameFallback
-  }
-
-  if (!etaFallback) return ''
-
-  const dest = pickLang(
-    {
-      en: etaFallback.dest_en ?? '',
-      tc: etaFallback.dest_tc ?? '',
-      sc: etaFallback.dest_sc ?? '',
-    },
-    lang
-  )
-  return dest
-}
-
-function formatArrivingText(lang: UiLanguage) {
-  if (lang === 'en') return 'Now'
-  if (lang === 'sc') return '即将到达'
-  return '即將到達'
-}
-
-function formatNoScheduledText(lang: UiLanguage) {
-  if (lang === 'en') return 'No scheduled buses'
-  if (lang === 'sc') return '暂时没有预定班次'
-  return '暫時沒有預定班次'
-}
-
-function formatEtaLabel(seq: number, lang: UiLanguage) {
-  if (lang === 'en') {
-    if (seq === 1) return '1st'
-    if (seq === 2) return '2nd'
-    if (seq === 3) return '3rd'
-    return `${seq}th`
-  }
-  return `第${seq}${lang === 'sc' ? '班' : '班'}`
-}
-
-function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
-  return items.some((entry) => entry.eta && !isNaN(Date.parse(entry.eta)))
-}
-
-function getGroupRemark(items: KmbEtaEntryWithLeg[], lang: UiLanguage): string | null {
-  for (const entry of items) {
-    const remark = pickLang(
-      {
-        en: entry.rmk_en ?? '',
-        tc: entry.rmk_tc ?? '',
-        sc: entry.rmk_sc ?? '',
-      },
-      lang
-    )
-    if (remark?.trim()) return remark.trim()
-  }
-  return null
-}
-
-function pickStopName(
-  stop: { nameEn: string; nameTc: string; nameSc: string } | undefined,
-  lang: UiLanguage
-): string {
-  if (!stop) return ''
-  if (lang === 'sc') return stop.nameSc
-  if (lang === 'en') return stop.nameEn
-  return stop.nameTc
-}
-
-type StopChips = {
-  stopId: string | null
-  fullName: string | null
-  name: string | null
-  platform: string | null
-  stopCode: string | null
-}
-
-function getStopChips(
-  items: KmbEtaEntryWithLeg[],
-  stopLookup: Map<string, StopInfo>,
-  stopChipsById: Map<string, StopChips>,
-  lang: UiLanguage
-): StopChips {
-  const stopId = items[0]?.stop ? String(items[0].stop).trim() : null
-
-  if (stopId) {
-    const cached = stopChipsById.get(stopId)
-    if (cached) return cached
-  }
-
-  // Primary: lookup by ETA entry stopId
-  const stopFromEta = stopId ? stopLookup.get(stopId) : undefined
-
-  // Fallback: if stop-eta endpoint omitted stop field, use the stop ID baked into this stop's request
-  const stopFromBuiltInId = !stopFromEta && stopId ? stopLookup.get(stopId) : undefined
-
-  const stop = stopFromEta ?? stopFromBuiltInId
-  const fullName = stop ? pickStopName(stop, lang) : null
-  const parsed = fullName ? parseKmbStopNameCached(fullName) : null
-
-  const result = {
-    stopId,
-    fullName,
-    name: parsed?.name ?? fullName ?? null,
-    platform: parsed?.platform ?? null,
-    stopCode: parsed?.stopCode ?? null,
-  }
-
-  if (stopId) stopChipsById.set(stopId, result)
-
-  return result
-}
-
-type StopInfo = {
-  stopId: string
-  nameEn: string
-  nameTc: string
-  nameSc: string
-}
+import {
+  pickLang,
+  formatOperatorLabel,
+  formatRouteVariantLabel,
+  formatArrivingText,
+  formatNoScheduledText,
+  formatEtaLabel,
+  getGroupRemark,
+  pickStopName,
+  hasValidEta,
+} from '@/components/eta/results-kmb-utils'
+import {
+  useStopChips,
+  type StopChips,
+  type StopInfo,
+} from '@/components/eta/results-kmb-use-stop-chips'
 
 type Props = {
   lang: UiLanguage
@@ -486,9 +339,8 @@ const StopSection = React.memo(function StopSection({
   lang,
   now,
   isFirst,
-  stopLookup,
   registerStopRef,
-  stopChipsById,
+  getStopChips,
 }: {
   stopId: string
   stopInfo?: StopInfo
@@ -498,9 +350,8 @@ const StopSection = React.memo(function StopSection({
   lang: UiLanguage
   now: Date
   isFirst?: boolean
-  stopLookup: Map<string, StopInfo>
   registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void
-  stopChipsById: Map<string, StopChips>
+  getStopChips: (items: KmbEtaEntryWithLeg[]) => StopChips
 }) {
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
   const parsed = parseKmbStopNameCached(stopName)
@@ -547,9 +398,7 @@ const StopSection = React.memo(function StopSection({
               faresByVariantKey={faresByVariantKey}
               lang={lang}
               now={now}
-              stopChips={
-                stopChipsById.get(stopId) ?? getStopChips(g.items, stopLookup, stopChipsById, lang)
-              }
+              stopChips={getStopChips(g.items)}
               staggerClass={
                 isFirst
                   ? idx === 0
@@ -604,28 +453,7 @@ export function KmbResults({
   )
   const showStale = Boolean(stale || isAgeStale || hasStaleStops)
 
-  // Create a lookup map for stops by ID
-  const stopLookup = React.useMemo(() => {
-    if (!stops) return new Map<string, StopInfo>()
-    return new Map(stops.map((s) => [s.stopId, s]))
-  }, [stops])
-
-  const stopChipsById = React.useMemo(() => {
-    if (!stops) return new Map<string, StopChips>()
-    const next = new Map<string, StopChips>()
-    for (const stop of stops) {
-      const fullName = pickStopName(stop, lang)
-      const parsed = parseKmbStopNameCached(fullName)
-      next.set(stop.stopId, {
-        stopId: stop.stopId,
-        fullName,
-        name: parsed.name ?? fullName,
-        platform: parsed.platform ?? null,
-        stopCode: parsed.stopCode ?? null,
-      })
-    }
-    return next
-  }, [stops, lang])
+  const { stopLookup, stopChipsById: _stopChipsById, getStopChips } = useStopChips(stops, lang)
 
   // For keyphrase mode, use sectioned rendering
   const useStopSections =
@@ -816,9 +644,8 @@ export function KmbResults({
                 lang={lang}
                 now={now}
                 isFirst={idx === 0}
-                stopLookup={stopLookup}
                 registerStopRef={registerStopRef}
-                stopChipsById={stopChipsById}
+                getStopChips={getStopChips}
               />
             ))}
 
@@ -860,11 +687,7 @@ export function KmbResults({
                     ? 'ui-stagger-3'
                     : ''
 
-            const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
-            const stopChips = stopId
-              ? (stopChipsById.get(stopId) ??
-                getStopChips(g.items, stopLookup, stopChipsById, lang))
-              : getStopChips(g.items, stopLookup, stopChipsById, lang)
+            const stopChips = getStopChips(g.items)
 
             return (
               <RouteVariantCard
@@ -901,11 +724,7 @@ export function KmbResults({
                     ? 'ui-stagger-3'
                     : ''
 
-            const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
-            const stopChips = stopId
-              ? (stopChipsById.get(stopId) ??
-                getStopChips(g.items, stopLookup, stopChipsById, lang))
-              : getStopChips(g.items, stopLookup, stopChipsById, lang)
+            const stopChips = getStopChips(g.items)
 
             return (
               <RouteVariantCard

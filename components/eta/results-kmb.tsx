@@ -453,7 +453,7 @@ export function KmbResults({
   )
   const showStale = Boolean(stale || isAgeStale || hasStaleStops)
 
-  const { stopLookup, stopChipsById: _stopChipsById, getStopChips } = useStopChips(stops, lang)
+  const { stopLookup, getStopChips } = useStopChips(stops, lang)
 
   // For keyphrase mode, use sectioned rendering
   const useStopSections =

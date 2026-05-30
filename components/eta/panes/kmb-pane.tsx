@@ -33,189 +33,17 @@ import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { cn } from '@/lib/utils'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 import { precomputeRenderGroups, type PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
-
-// ============================================================================
-// ETA State Reducer - Batch updates to minimize renders
-// ============================================================================
-
-type EtaState = {
-  byStopId: Record<string, KmbEtaEntryWithLeg[]>
-  loadedStopIds: string[]
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
-  loading: boolean
-  error: string | null
-  stale: boolean
-  staleByStopId: Record<string, { stale: boolean; ageMs: number | null }>
-  lastUpdatedAt: number | null
-}
-
-type EtaAction =
-  | { type: 'REFRESH_START' }
-  | {
-      type: 'REFRESH_SUCCESS'
-      payload: {
-        byStopId: Record<string, KmbEtaEntryWithLeg[]>
-        loadedStopIds: string[]
-        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
-        staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>
-      }
-    }
-  | { type: 'REFRESH_ERROR'; error: string }
-  | {
-      type: 'APPEND_STOPS'
-      payload: {
-        byStopId: Record<string, KmbEtaEntryWithLeg[]>
-        newStopIds: string[]
-        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
-        staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>
-      }
-    }
-  | {
-      type: 'FARES_SUCCESS'
-      payload: {
-        faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
-      }
-    }
-  | { type: 'RESET' }
-
-const initialEtaState: EtaState = {
-  byStopId: {},
-  loadedStopIds: [],
-  faresByVariantKey: {},
-  loading: false,
-  error: null,
-  stale: false,
-  staleByStopId: {},
-  lastUpdatedAt: null,
-}
-
-function etaReducer(state: EtaState, action: EtaAction): EtaState {
-  switch (action.type) {
-    case 'REFRESH_START':
-      return { ...state, loading: true, error: null }
-    case 'REFRESH_SUCCESS':
-      return {
-        ...state,
-        byStopId: action.payload.byStopId,
-        loadedStopIds: action.payload.loadedStopIds,
-        // Keep existing fares if payload doesn't include new ones (deferred loading)
-        faresByVariantKey: action.payload.faresByVariantKey ?? state.faresByVariantKey,
-        loading: false,
-        error: null,
-        stale: Boolean(
-          action.payload.staleByStopId &&
-          Object.values(action.payload.staleByStopId).some((entry) => entry.stale)
-        ),
-        staleByStopId: action.payload.staleByStopId ?? {},
-        lastUpdatedAt: Date.now(),
-      }
-    case 'REFRESH_ERROR':
-      return {
-        ...state,
-        loading: false,
-        error: action.error,
-        stale: true,
-        staleByStopId: {},
-      }
-    case 'APPEND_STOPS':
-      return {
-        ...state,
-        byStopId: { ...state.byStopId, ...action.payload.byStopId },
-        loadedStopIds: [...state.loadedStopIds, ...action.payload.newStopIds],
-        faresByVariantKey: {
-          ...state.faresByVariantKey,
-          ...(action.payload.faresByVariantKey ?? {}),
-        },
-        loading: false,
-        staleByStopId: { ...state.staleByStopId, ...(action.payload.staleByStopId ?? {}) },
-      }
-    case 'FARES_SUCCESS':
-      return {
-        ...state,
-        faresByVariantKey: { ...state.faresByVariantKey, ...action.payload.faresByVariantKey },
-      }
-    case 'RESET':
-      return initialEtaState
-    default:
-      return state
-  }
-}
-
-// ============================================================================
-// Stop Search Index - Precompute for O(1) contains lookups
-// ============================================================================
-
-type StopSearchIndex = {
-  /** Lowercased concatenation of all name fields for each stop */
-  normalizedNames: Map<string, string>
-  /** Version counter to detect when stops change */
-  version: number
-}
-
-function buildStopSearchIndex(stops: KmbStopSearchItem[]): StopSearchIndex {
-  const normalizedNames = new Map<string, string>()
-  for (const stop of stops) {
-    const normalized = `${stop.nameEn.toLowerCase()}|${stop.nameTc.toLowerCase()}|${stop.nameSc.toLowerCase()}`
-    normalizedNames.set(stop.stopId, normalized)
-  }
-  return { normalizedNames, version: stops.length }
-}
-
-function searchStopsByContains(
-  stops: KmbStopSearchItem[],
-  index: StopSearchIndex,
-  query: string
-): string[] {
-  const needle = query.trim().toLowerCase()
-  if (!needle) return []
-
-  const result: string[] = []
-  for (const stop of stops) {
-    const normalized = index.normalizedNames.get(stop.stopId)
-    if (normalized && normalized.includes(needle)) {
-      result.push(stop.stopId)
-    }
-  }
-  return result
-}
-
-// ============================================================================
-// Route-Stop Index - O(1) lookup of variant keys by stop ID
-// ============================================================================
-
-type RouteStopIndex = {
-  /** stopId -> Set of variant keys (co|route|bound|serviceType) */
-  byStopId: Map<string, Set<string>>
-  /** Version counter */
-  version: number
-}
-
-function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
-  const byStopId = new Map<string, Set<string>>()
-  for (const entry of routeStops) {
-    const key = `${entry.co}|${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`
-    let set = byStopId.get(entry.stopId)
-    if (!set) {
-      set = new Set()
-      byStopId.set(entry.stopId, set)
-    }
-    set.add(key)
-  }
-  return { byStopId, version: routeStops.length }
-}
-
-function getVariantKeysForStops(index: RouteStopIndex, stopIds: string[]): string[] {
-  const result = new Set<string>()
-  for (const stopId of stopIds) {
-    const keys = index.byStopId.get(stopId)
-    if (keys) {
-      for (const key of keys) {
-        result.add(key)
-      }
-    }
-  }
-  return Array.from(result)
-}
+import { initialEtaState, etaReducer } from '@/components/eta/panes/kmb-reducer'
+import {
+  buildRouteFilterString,
+  getVariantKeysForStops,
+} from '@/components/eta/panes/use-kmb-route-filter'
+import {
+  buildStopSearchIndex,
+  searchStopsByContains,
+  type StopSearchIndex,
+} from '@/components/eta/panes/kmb-stop-search'
+import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
 
 // ============================================================================
 // Types and Helpers
@@ -260,20 +88,27 @@ function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
   return stop.nameTc
 }
 
-function normalizeKmbRoutesInput(input: string) {
-  const requestedRoutes = input
-    ? input
-        .split(',')
-        .map((r) => r.trim())
-        .filter(Boolean)
-        .map((r) => r.toUpperCase())
-    : null
-
-  return requestedRoutes?.length ? requestedRoutes : null
-}
-
 /** Stops per page for infinite scroll */
 const STOPS_PER_PAGE = 10
+
+type RouteStopIndex = {
+  byStopId: Map<string, Set<string>>
+  version: number
+}
+
+function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
+  const byStopId = new Map<string, Set<string>>()
+  for (const entry of routeStops) {
+    const key = `${entry.co}|${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`
+    let set = byStopId.get(entry.stopId)
+    if (!set) {
+      set = new Set()
+      byStopId.set(entry.stopId, set)
+    }
+    set.add(key)
+  }
+  return { byStopId, version: routeStops.length }
+}
 
 export type KmbPaneState = {
   lang: UiLanguage
@@ -594,23 +429,11 @@ export function KmbPane({
   // Coordination ref to prevent overlapping refresh triggers from multiple effects
   const pendingRefreshTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Build route filter string based on current filter state
   const getRouteFilterString = React.useCallback(
     (query: KmbQuery) => {
-      const advancedEntries = routeFilterMode === 'advanced' ? (routeFilter.entries ?? []) : []
-      const requestedRoutes = normalizeKmbRoutesInput(query.route?.trim() ?? '')
-
-      if (advancedEntries.length) {
-        const routesFromAdvanced = new Set(
-          advancedEntries.map((e) => e.variantKey.split('|')[1]).filter(Boolean)
-        )
-        return Array.from(routesFromAdvanced).join(',')
-      } else if (requestedRoutes) {
-        return requestedRoutes.join(',')
-      }
-      return undefined
+      return buildRouteFilterString(routeFilter, routeFilterMode, query.route)
     },
-    [routeFilter.entries, routeFilterMode]
+    [routeFilter, routeFilterMode]
   )
 
   // Fetch ETAs for a specific set of stop IDs and merge into state
@@ -1238,103 +1061,17 @@ export function KmbPane({
     canFavoriteRef.current = Boolean(canFavorite)
   }, [canFavorite, canFavoriteRef])
 
-  const onSave = () => {
-    if (!canFavorite) return
-
-    const isAdvanced = routeFilterMode === 'advanced'
-    const routeInput = isAdvanced ? '' : (routeFilter.routes?.trim() ?? '')
-    const route = routeInput || undefined
-
-    const entriesForSave =
-      isAdvanced && routeFilter.entries?.length
-        ? routeFilter.entries.map((e) => ({ variantKey: e.variantKey }))
-        : undefined
-
-    const routeCount = isAdvanced ? (routeFilter.entries?.length ?? 0) : 0
-    const routeSuffix =
-      isAdvanced && routeCount > 0
-        ? ` · ${routeCount} ${lang === 'en' ? (routeCount === 1 ? 'route' : 'routes') : '條路線'}`
-        : route
-          ? ` · ${route}`
-          : ''
-
-    const stopId =
-      kmbQuery?.mode === 'stop'
-        ? kmbQuery.stopId
-        : kmbDraftStopSelection?.type === 'stop'
-          ? kmbDraftStopSelection.stopId
-          : null
-
-    const stopIds =
-      kmbQuery?.mode === 'stops'
-        ? kmbQuery.stopIds
-        : kmbDraftStopSelection?.type === 'stops'
-          ? kmbDraftStopSelection.stopIds
-          : null
-
-    const containsQuery =
-      kmbQuery?.mode === 'contains'
-        ? kmbQuery.query.trim()
-        : kmbDraftStopSelection?.type === 'contains'
-          ? kmbDraftStopSelection.query.trim()
-          : ''
-
-    let item: FavoritesItem | null = null
-
-    if (stopId) {
-      const stop = kmbStopsById.get(stopId)
-      const fullName = stop ? pickKmbStopTitle(stop, lang) : lang === 'en' ? 'Bus' : '巴士'
-      const { name } = parseKmbStopNameCached(fullName)
-      const title = `${name}${routeSuffix}`
-
-      const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? '__all__')
-      item = {
-        id: `kmb:${stopId}:${idPart}:1`,
-        mode: 'kmb',
-        title,
-        stopId,
-        routeFilterMode,
-        route,
-        serviceType: '1',
-        entries: entriesForSave,
-      }
-    } else if (stopIds && stopIds.length > 0) {
-      const firstStop = stopIds.map((stopId) => kmbStopsById.get(stopId)).find(Boolean)
-      const fullName = firstStop ? pickKmbStopTitle(firstStop, lang) : 'Selected Stops'
-      const { name } = parseKmbStopNameCached(fullName)
-      const title = `${name}${routeSuffix}`
-
-      const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? '__all__')
-      item = {
-        id: `kmb:stops:${stopIds.join(',')}:${idPart}`,
-        mode: 'kmb',
-        title,
-        stopIds,
-        routeFilterMode,
-        route,
-        entries: entriesForSave,
-      }
-    } else if (containsQuery.length >= 3) {
-      const title = `Contains: ${containsQuery}${routeSuffix}`
-
-      const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? '__all__')
-      item = {
-        id: `kmb:contains:${containsQuery}:${idPart}:1`,
-        mode: 'kmb',
-        title,
-        query: containsQuery,
-        routeFilterMode,
-        route,
-        serviceType: '1',
-        entries: entriesForSave,
-      }
-    }
-
-    if (!item) return
-
-    onAddFavorite(item)
-    onAddRecent(item)
-  }
+  const onSave = useKmbSave({
+    lang,
+    routeFilterMode,
+    routeFilter,
+    kmbQuery,
+    kmbDraftStopSelection,
+    kmbStopsById,
+    canFavorite: Boolean(canFavorite),
+    onAddFavorite,
+    onAddRecent,
+  })
 
   const isKeyphraseMode = kmbQuery?.mode === 'contains'
   const querySummary = React.useMemo<KmbPaneState['querySummary']>(() => {

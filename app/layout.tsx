@@ -4,6 +4,7 @@ import { DM_Sans, Noto_Sans_HK, Noto_Sans_SC, Rubik } from 'next/font/google'
 import { ThemeProvider } from '@/components/theme-provider'
 import { Toaster } from '@/components/toaster'
 import { LangSync } from '@/components/eta/lang-sync'
+import { env } from '@/lib/env'
 import './globals.css'
 
 const dmSans = DM_Sans({
@@ -36,7 +37,7 @@ const notoSansSC = Noto_Sans_SC({
 
 // Geist Mono is loaded via @fontsource in globals.css
 
-const siteUrl = new URL(process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eta.hkjc.uk')
+const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL)
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,

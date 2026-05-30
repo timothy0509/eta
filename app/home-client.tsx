@@ -340,6 +340,19 @@ export default function HomeClient() {
     [lang]
   )
 
+
+  const kmbOnRefresh = React.useCallback(
+    () => void kmbPaneState?.refresh({ toastOnError: true }),
+    [kmbPaneState]
+  )
+
+  const mtrOnRefresh = React.useCallback(() => {
+    mtrPaneState?.onRefresh?.()
+  }, [mtrPaneState])
+
+  const lrtOnRefresh = React.useCallback(() => {
+    lrtPaneState?.onRefresh?.()
+  }, [lrtPaneState])
   return (
     <div className="from-background via-background to-muted/30 relative min-h-dvh bg-gradient-to-b">
       <div className="pointer-events-none absolute inset-0 opacity-40 [background:radial-gradient(80%_40%_at_50%_0%,hsl(var(--primary)/0.18),transparent_70%)]" />
@@ -495,7 +508,7 @@ export default function HomeClient() {
                   error={kmbPaneState?.error ?? null}
                   stale={kmbPaneState?.stale ?? false}
                   lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
-                  onRefresh={() => void kmbPaneState?.refresh({ toastOnError: true })}
+                  onRefresh={kmbOnRefresh}
                   loading={kmbPaneState?.loading}
                   stops={kmbPaneState?.stops ?? undefined}
                   multipleStops={kmbPaneState?.multipleStops}
@@ -516,7 +529,7 @@ export default function HomeClient() {
                   error={mtrPaneState?.error ?? null}
                   stale={mtrPaneState?.stale ?? false}
                   lastUpdatedAt={mtrPaneState?.lastUpdatedAt ?? null}
-                  onRefresh={mtrPaneState?.onRefresh ?? (() => {})}
+                  onRefresh={mtrOnRefresh}
                   loading={mtrPaneState?.loading}
                 />
               ) : null}
@@ -529,7 +542,7 @@ export default function HomeClient() {
                   error={lrtPaneState?.error ?? null}
                   stale={lrtPaneState?.stale ?? false}
                   lastUpdatedAt={lrtPaneState?.lastUpdatedAt ?? null}
-                  onRefresh={lrtPaneState?.onRefresh ?? (() => {})}
+                  onRefresh={lrtOnRefresh}
                   loading={lrtPaneState?.loading}
                 />
               ) : null}

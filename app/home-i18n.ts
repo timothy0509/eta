@@ -1,5 +1,4 @@
-import type { UiLanguage } from '@/lib/eta/types'
-import type { TransportMode } from '@/lib/store'
+import type { UiLanguage, TransportMode } from '@/lib/eta/types'
 
 export function getHeading(mode: TransportMode, lang: UiLanguage) {
   return mode === 'kmb'

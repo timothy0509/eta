@@ -8,7 +8,61 @@ const MTR_BASE_URL = 'https://rt.data.gov.hk'
 const MTR_CONCURRENCY = 3
 const BACKOFF_DURATION_MS = 15_000
 const BACKOFF_STALE_MAX_MS = 20_000
-let backoffUntil = 0
+const BACKOFF_STORAGE_KEY = 'timoeta:mtr-backoff-until'
+const BACKOFF_CHANNEL_NAME = 'timoeta:mtr-backoff'
+
+function getBackoffUntil(): number {
+  if (typeof window === 'undefined') return 0
+  try {
+    const stored = sessionStorage.getItem(BACKOFF_STORAGE_KEY)
+    if (stored) {
+      const timestamp = Number(stored)
+      if (Date.now() < timestamp) return timestamp
+      sessionStorage.removeItem(BACKOFF_STORAGE_KEY)
+    }
+  } catch {
+    // sessionStorage may be unavailable in some environments
+  }
+  return 0
+}
+
+function setBackoffUntil(timestamp: number): void {
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.setItem(BACKOFF_STORAGE_KEY, String(timestamp))
+  } catch {
+    // sessionStorage may be unavailable in some environments
+  }
+}
+
+let backoffChannel: BroadcastChannel | null = null
+function getBackoffChannel(): BroadcastChannel | null {
+  if (typeof window === 'undefined') return null
+  if (!backoffChannel) {
+    try {
+      backoffChannel = new BroadcastChannel(BACKOFF_CHANNEL_NAME)
+      backoffChannel.onmessage = (event) => {
+        if (event.data?.type === 'backoff' && event.data?.timestamp) {
+          setBackoffUntil(event.data.timestamp)
+        }
+      }
+    } catch {
+      // BroadcastChannel may be unavailable
+    }
+  }
+  return backoffChannel
+}
+
+function broadcastBackoff(timestamp: number): void {
+  const channel = getBackoffChannel()
+  if (channel) {
+    try {
+      channel.postMessage({ type: 'backoff', timestamp })
+    } catch {
+      // ignore
+    }
+  }
+}
 
 export type MtrLang = 'EN' | 'TC'
 
@@ -73,7 +127,7 @@ export async function fetchMtrSchedules(
 
   const uniqueList = Array.from(uniqueQueries.values())
   const now = Date.now()
-  const inBackoff = now < backoffUntil
+  const inBackoff = now < getBackoffUntil()
 
   const byKey: Record<string, MtrScheduleResponse> = {}
   const errors: string[] = []
@@ -113,7 +167,9 @@ export async function fetchMtrSchedules(
     if (result.status === 'rejected') {
       const reason = result.reason as { status?: number } | undefined
       if (reason && typeof reason.status === 'number' && reason.status === 429) {
-        backoffUntil = Date.now() + BACKOFF_DURATION_MS
+        const newBackoffUntil = Date.now() + BACKOFF_DURATION_MS
+        setBackoffUntil(newBackoffUntil)
+        broadcastBackoff(newBackoffUntil)
         sawRateLimit = true
       }
       errors.push(key)

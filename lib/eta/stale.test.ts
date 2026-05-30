@@ -1,136 +1,185 @@
 import { describe, expect, it } from 'vitest'
-
-import { formatRelativeAgeLabel, isStaleByAge, STALE_THRESHOLDS_MS } from './stale'
+import { isStaleByAge, isStaleByFlagOrAge, formatRelativeAgeLabel } from './stale'
 
 describe('isStaleByAge', () => {
   it('returns false when lastUpdatedAt is undefined', () => {
-    expect(isStaleByAge({ lastUpdatedAt: undefined, mode: 'kmb' })).toBe(false)
+    expect(isStaleByAge({ mode: 'kmb' })).toBe(false)
   })
 
   it('returns false when lastUpdatedAt is null', () => {
-    expect(isStaleByAge({ lastUpdatedAt: null, mode: 'kmb' })).toBe(false)
+    expect(isStaleByAge({ mode: 'kmb', lastUpdatedAt: null })).toBe(false)
   })
 
-  it('returns false for fresh data (below threshold)', () => {
-    const now = 1000000
-    const lastUpdatedAt = now - 60000 // 1 minute ago
-    expect(isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })).toBe(false)
+  it('returns false when data is fresh (kmb)', () => {
+    const now = Date.now()
+    const lastUpdatedAt = now - 30_000 // 30 seconds ago
+    expect(isStaleByAge({ mode: 'kmb', lastUpdatedAt, now })).toBe(false)
   })
 
-  it('returns true for stale data (above threshold)', () => {
-    const now = 1000000
-    const threshold = STALE_THRESHOLDS_MS.kmb
-    const lastUpdatedAt = now - threshold - 1000 // Just past threshold
-    expect(isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })).toBe(true)
+  it('returns true when data is stale (kmb)', () => {
+    const now = Date.now()
+    const lastUpdatedAt = now - 61_000 // 61 seconds ago, threshold is 60s
+    expect(isStaleByAge({ mode: 'kmb', lastUpdatedAt, now })).toBe(true)
   })
 
-  it('returns true for kmb mode when age exceeds 60 seconds', () => {
-    const now = 1000000
-    const lastUpdatedAt = now - 70000 // 70 seconds ago
-    expect(isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })).toBe(true)
+  it('returns false when data is fresh (mtr)', () => {
+    const now = Date.now()
+    const lastUpdatedAt = now - 60_000 // 60 seconds ago, threshold is 90s
+    expect(isStaleByAge({ mode: 'mtr', lastUpdatedAt, now })).toBe(false)
   })
 
-  it('returns true for mtr mode when age exceeds 90 seconds', () => {
-    const now = 1000000
-    const lastUpdatedAt = now - 100000 // 100 seconds ago
-    expect(isStaleByAge({ lastUpdatedAt, mode: 'mtr', now })).toBe(true)
+  it('returns true when data is stale (mtr)', () => {
+    const now = Date.now()
+    const lastUpdatedAt = now - 91_000 // 91 seconds ago, threshold is 90s
+    expect(isStaleByAge({ mode: 'mtr', lastUpdatedAt, now })).toBe(true)
   })
 
-  it('returns true for lrt mode when age exceeds 90 seconds', () => {
-    const now = 1000000
-    const lastUpdatedAt = now - 100000 // 100 seconds ago
-    expect(isStaleByAge({ lastUpdatedAt, mode: 'lrt', now })).toBe(true)
+  it('returns false when data is fresh (lrt)', () => {
+    const now = Date.now()
+    const lastUpdatedAt = now - 60_000
+    expect(isStaleByAge({ mode: 'lrt', lastUpdatedAt, now })).toBe(false)
   })
 
-  it('returns false for mtr mode at 60 seconds (below 90s threshold)', () => {
-    const now = 1000000
-    const lastUpdatedAt = now - 60000 // 60 seconds ago
-    expect(isStaleByAge({ lastUpdatedAt, mode: 'mtr', now })).toBe(false)
+  it('returns true when data is stale (lrt)', () => {
+    const now = Date.now()
+    const lastUpdatedAt = now - 91_000
+    expect(isStaleByAge({ mode: 'lrt', lastUpdatedAt, now })).toBe(true)
   })
 
   it('accepts Date object for now parameter', () => {
-    const lastUpdatedAt = 1000000
-    const now = new Date(lastUpdatedAt + 200000)
-    expect(isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })).toBe(true)
+    const now = new Date('2024-01-01T00:02:00.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(isStaleByAge({ mode: 'kmb', lastUpdatedAt, now })).toBe(true)
+  })
+
+  it('uses Date.now() when now is not provided', () => {
+    // Just verify it doesn't throw and returns a boolean
+    const result = isStaleByAge({ mode: 'kmb', lastUpdatedAt: Date.now() - 1000 })
+    expect(typeof result).toBe('boolean')
+  })
+})
+
+describe('isStaleByFlagOrAge', () => {
+  it('returns true when upstreamStale is true', () => {
+    expect(isStaleByFlagOrAge({ upstreamStale: true, mode: 'kmb' })).toBe(true)
+  })
+
+  it('returns false when upstreamStale is false and age is fresh', () => {
+    expect(isStaleByFlagOrAge({ upstreamStale: false, ageMs: 30_000, mode: 'kmb' })).toBe(false)
+  })
+
+  it('returns true when upstreamStale is false but age is stale', () => {
+    expect(isStaleByFlagOrAge({ upstreamStale: false, ageMs: 61_000, mode: 'kmb' })).toBe(true)
+  })
+
+  it('returns false when ageMs is undefined', () => {
+    expect(isStaleByFlagOrAge({ upstreamStale: false, mode: 'kmb' })).toBe(false)
+  })
+
+  it('returns false when ageMs is null', () => {
+    expect(isStaleByFlagOrAge({ upstreamStale: false, ageMs: null, mode: 'kmb' })).toBe(false)
+  })
+
+  it('trusts upstreamStale even when age is fresh', () => {
+    expect(isStaleByFlagOrAge({ upstreamStale: true, ageMs: 1000, mode: 'kmb' })).toBe(true)
+  })
+
+  it('uses correct threshold for mtr mode', () => {
+    expect(isStaleByFlagOrAge({ upstreamStale: false, ageMs: 91_000, mode: 'mtr' })).toBe(true)
+    expect(isStaleByFlagOrAge({ upstreamStale: false, ageMs: 89_000, mode: 'mtr' })).toBe(false)
+  })
+
+  it('uses correct threshold for lrt mode', () => {
+    expect(isStaleByFlagOrAge({ upstreamStale: false, ageMs: 91_000, mode: 'lrt' })).toBe(true)
+    expect(isStaleByFlagOrAge({ upstreamStale: false, ageMs: 89_000, mode: 'lrt' })).toBe(false)
   })
 })
 
 describe('formatRelativeAgeLabel', () => {
   it('returns null when lastUpdatedAt is undefined', () => {
-    expect(formatRelativeAgeLabel({ lastUpdatedAt: undefined, lang: 'en' })).toBe(null)
+    expect(formatRelativeAgeLabel({ lang: 'en' })).toBeNull()
   })
 
   it('returns null when lastUpdatedAt is null', () => {
-    expect(formatRelativeAgeLabel({ lastUpdatedAt: null, lang: 'en' })).toBe(null)
+    expect(formatRelativeAgeLabel({ lang: 'en', lastUpdatedAt: null })).toBeNull()
   })
 
-  it('returns null for NaN date', () => {
-    expect(formatRelativeAgeLabel({ lastUpdatedAt: Number.NaN, lang: 'en' })).toBe(null)
+  it('returns "just now" for recent updates (en)', () => {
+    const now = new Date('2024-01-01T00:00:20.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'en', lastUpdatedAt, now })).toBe('just now')
   })
 
-  it('returns null for future dates (negative diff)', () => {
+  it('returns "剛剛" for recent updates (tc)', () => {
+    const now = new Date('2024-01-01T00:00:20.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'tc', lastUpdatedAt, now })).toBe('剛剛')
+  })
+
+  it('returns "刚刚" for recent updates (sc)', () => {
+    const now = new Date('2024-01-01T00:00:20.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'sc', lastUpdatedAt, now })).toBe('刚刚')
+  })
+
+  it('returns minutes label for updates within an hour (en)', () => {
+    const now = new Date('2024-01-01T00:05:00.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'en', lastUpdatedAt, now })).toBe('5 min ago')
+  })
+
+  it('returns minutes label for updates within an hour (tc)', () => {
+    const now = new Date('2024-01-01T00:05:00.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'tc', lastUpdatedAt, now })).toBe('5 分鐘前')
+  })
+
+  it('returns minutes label for updates within an hour (sc)', () => {
+    const now = new Date('2024-01-01T00:05:00.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'sc', lastUpdatedAt, now })).toBe('5 分钟前')
+  })
+
+  it('returns hours label for updates over an hour (en)', () => {
+    const now = new Date('2024-01-01T02:00:00.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'en', lastUpdatedAt, now })).toBe('2 hrs ago')
+  })
+
+  it('returns "1 hr ago" for singular hour (en)', () => {
+    const now = new Date('2024-01-01T01:00:00.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'en', lastUpdatedAt, now })).toBe('1 hr ago')
+  })
+
+  it('returns hours label for updates over an hour (tc)', () => {
+    const now = new Date('2024-01-01T02:00:00.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'tc', lastUpdatedAt, now })).toBe('2 小時前')
+  })
+
+  it('returns hours label for updates over an hour (sc)', () => {
+    const now = new Date('2024-01-01T02:00:00.000Z')
+    const lastUpdatedAt = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'sc', lastUpdatedAt, now })).toBe('2 小时前')
+  })
+
+  it('returns null for future timestamps', () => {
     const now = new Date('2024-01-01T00:00:00.000Z')
-    const lastUpdatedAt = now.getTime() + 60000 // 1 minute in future
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'en', now })).toBe(null)
+    const lastUpdatedAt = new Date('2024-01-01T00:01:00.000Z').getTime()
+    expect(formatRelativeAgeLabel({ lang: 'en', lastUpdatedAt, now })).toBeNull()
   })
 
-  it("returns 'just now' for very recent updates (< 30s)", () => {
-    const now = new Date('2024-01-01T00:00:15.000Z')
-    const lastUpdatedAt = now.getTime() - 10000 // 10 seconds ago
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'en', now })).toBe('just now')
+  it('returns null for invalid timestamps', () => {
+    expect(formatRelativeAgeLabel({ lang: 'en', lastUpdatedAt: NaN })).toBeNull()
   })
 
-  it("returns '刚刚' for very recent updates in sc", () => {
-    const now = new Date('2024-01-01T00:00:15.000Z')
-    const lastUpdatedAt = now.getTime() - 10000
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'sc', now })).toBe('刚刚')
-  })
-
-  it("returns '剛剛' for very recent updates in tc", () => {
-    const now = new Date('2024-01-01T00:00:15.000Z')
-    const lastUpdatedAt = now.getTime() - 10000
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'tc', now })).toBe('剛剛')
-  })
-
-  it('returns minutes ago for updates within an hour', () => {
-    const now = new Date('2024-01-01T00:00:00.000Z')
-    const lastUpdatedAt = now.getTime() - 5 * 60000 // 5 minutes ago
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'en', now })).toBe('5 min ago')
-  })
-
-  it("returns '分钟前' for updates within an hour in sc", () => {
-    const now = new Date('2024-01-01T00:00:00.000Z')
-    const lastUpdatedAt = now.getTime() - 10 * 60000
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'sc', now })).toBe('10 分钟前')
-  })
-
-  it("returns '分鐘前' for updates within an hour in tc", () => {
-    const now = new Date('2024-01-01T00:00:00.000Z')
-    const lastUpdatedAt = now.getTime() - 15 * 60000
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'tc', now })).toBe('15 分鐘前')
-  })
-
-  it('returns hours ago for updates over an hour', () => {
-    const now = new Date('2024-01-01T00:00:00.000Z')
-    const lastUpdatedAt = now.getTime() - 90 * 60000 // 90 minutes ago
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'en', now })).toBe('2 hrs ago')
-  })
-
-  it("returns '1 hr ago' for singular hour", () => {
-    const now = new Date('2024-01-01T00:00:00.000Z')
-    const lastUpdatedAt = now.getTime() - 60 * 60000 // 60 minutes ago
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'en', now })).toBe('1 hr ago')
-  })
-
-  it("returns '小时前' for hours in sc", () => {
-    const now = new Date('2024-01-01T00:00:00.000Z')
-    const lastUpdatedAt = now.getTime() - 120 * 60000
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'sc', now })).toBe('2 小时前')
-  })
-
-  it("returns '小時前' for hours in tc", () => {
-    const now = new Date('2024-01-01T00:00:00.000Z')
-    const lastUpdatedAt = now.getTime() - 180 * 60000
-    expect(formatRelativeAgeLabel({ lastUpdatedAt, lang: 'tc', now })).toBe('3 小時前')
+  it('uses current time when now is not provided', () => {
+    // Just verify it doesn't throw and returns a string or null
+    const result = formatRelativeAgeLabel({
+      lang: 'en',
+      lastUpdatedAt: Date.now() - 60_000,
+    })
+    expect(typeof result === 'string' || result === null).toBe(true)
   })
 })

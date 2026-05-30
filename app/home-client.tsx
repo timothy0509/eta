@@ -26,6 +26,7 @@ import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } fr
 import { isLanguageSupported } from '@/lib/eta/types'
 import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
 import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
+import { trackEvent } from '@/lib/analytics'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
@@ -235,6 +236,9 @@ export default function HomeClient() {
 
     refreshRef
       .current()
+      .then(() => {
+        trackEvent('eta_refresh', { mode })
+      })
       .catch(() => {
         // ignore auto-refresh errors
       })

@@ -3,6 +3,7 @@
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
+import { reportError } from '@/lib/error-reporting'
 
 type Props = {
   children: React.ReactNode
@@ -19,7 +20,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('[ErrorBoundary]', error, errorInfo)
+    reportError(error, { componentStack: errorInfo.componentStack })
   }
 
   render() {

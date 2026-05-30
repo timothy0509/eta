@@ -3,10 +3,11 @@
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
+import { reportError } from '@/lib/error-reporting'
 
 export default function GlobalError({ error, reset }: { error: Error; reset: () => void }) {
   React.useEffect(() => {
-    console.error('[App] Global error', error)
+    reportError(error, { scope: 'global' })
   }, [error])
 
   return (

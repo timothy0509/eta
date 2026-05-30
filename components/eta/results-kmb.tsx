@@ -634,6 +634,32 @@ export function KmbResults({
   // For flat mode, use precomputed groups directly (computed once in pane)
   const precomputedFlat = precomputedGroups?.flat
 
+  const visibleSortedStopIds = React.useMemo(() => {
+    if (!loadedStopIds) return []
+    const allIds = loadedStopIds
+    const visibleIndices = new Set<number>()
+
+    if (visibleStopIds && visibleStopIds.size > 0) {
+      for (let i = 0; i < allIds.length; i++) {
+        if (visibleStopIds.has(allIds[i]!)) {
+          for (let j = Math.max(0, i - 3); j <= Math.min(allIds.length - 1, i + 3); j++) {
+            visibleIndices.add(j)
+          }
+        }
+      }
+    }
+
+    if (visibleIndices.size === 0) {
+      for (let i = 0; i < Math.min(allIds.length, 10); i++) {
+        visibleIndices.add(i)
+      }
+    }
+
+    return Array.from(visibleIndices)
+      .sort((a, b) => a - b)
+      .map((idx) => allIds[idx]!)
+  }, [loadedStopIds, visibleStopIds])
+
   // Fallback grouped computation for multipleStops mode only
   const grouped = React.useMemo(() => {
     if (useStopSections) return [] // Not used in sectioned mode
@@ -781,31 +807,7 @@ export function KmbResults({
         ) : useStopSections ? (
           // Keyphrase mode: sectioned by stop with virtualization
           <>
-            {(() => {
-              const allIds = loadedStopIds!
-              const visibleIndices = new Set<number>()
-
-              if (visibleStopIds && visibleStopIds.size > 0) {
-                for (let i = 0; i < allIds.length; i++) {
-                  if (visibleStopIds.has(allIds[i]!)) {
-                    for (let j = Math.max(0, i - 3); j <= Math.min(allIds.length - 1, i + 3); j++) {
-                      visibleIndices.add(j)
-                    }
-                  }
-                }
-              }
-
-              // Always render at least the first page
-              if (visibleIndices.size === 0) {
-                for (let i = 0; i < Math.min(allIds.length, 10); i++) {
-                  visibleIndices.add(i)
-                }
-              }
-
-              return Array.from(visibleIndices)
-                .sort((a, b) => a - b)
-                .map((idx) => allIds[idx]!)
-            })().map((stopId, idx, _arr) => (
+            {visibleSortedStopIds.map((stopId, idx) => (
               <StopSection
                 key={stopId}
                 stopId={stopId}

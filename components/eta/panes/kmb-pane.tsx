@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronUp, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react'
 import * as React from 'react'
 
 import {
@@ -1618,17 +1618,18 @@ export function KmbPane({
 
       <div className="flex items-center justify-between gap-2">
         <Badge variant="secondary" className="rounded-xl">
-          {loadingStops || loadingRouteStops
-            ? lang === 'en'
-              ? 'Indexing data…'
-              : lang === 'sc'
-                ? '正在索引數據…'
-                : '正在索引數據…'
-            : `${kmbStops.length.toLocaleString()} ${
-                lang === 'en' ? 'stops' : '個車站'
-              } · ${kmbRouteStops.length.toLocaleString()} ${
-                lang === 'en' ? 'route-stops' : '個路線車站'
-              }`}
+          {loadingStops || loadingRouteStops ? (
+            <span className="flex items-center gap-1.5">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              {lang === 'en'
+                ? 'Loading transit database…'
+                : lang === 'sc'
+                  ? '正在载入交通數據庫…'
+                  : '正在載入交通數據庫…'}
+            </span>
+          ) : (
+            `${kmbStops.length.toLocaleString()} ${lang === 'en' ? 'stops' : '個車站'} · ${kmbRouteStops.length.toLocaleString()} ${lang === 'en' ? 'route-stops' : '個路線車站'}`
+          )}
         </Badge>
         <Button
           size="sm"

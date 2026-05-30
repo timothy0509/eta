@@ -84,6 +84,7 @@ const FavoritesAndRecents = dynamic(
   () => import('@/components/eta/favorites').then((mod) => ({ default: mod.FavoritesAndRecents })),
   {
     ssr: false,
+    loading: () => <PaneSkeleton />,
   }
 )
 

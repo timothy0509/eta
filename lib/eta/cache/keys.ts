@@ -1,5 +1,6 @@
 export const ETA_DB_CACHE_KEY = 'hk-bus-eta:db'
 export const ETA_DB_MD5_KEY = 'hk-bus-eta:md5'
+export const ETA_DB_INDEX_KEY = 'hk-bus-eta:db-index'
 
 export function kmbStopEtaKey(stopId: string): string {
   return `stop-eta:${String(stopId ?? '').trim()}`

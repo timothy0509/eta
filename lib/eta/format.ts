@@ -1,8 +1,9 @@
 import type { UiLanguage } from '@/lib/eta/types'
 
-export function formatRelativeMinutes(targetIso: string, now = new Date()) {
+export function formatRelativeMinutes(targetIso: string, now: number | Date = new Date()) {
   const target = new Date(targetIso)
-  const diffMs = target.getTime() - now.getTime()
+  const nowMs = now instanceof Date ? now.getTime() : now
+  const diffMs = target.getTime() - nowMs
   const diffMin = Math.round(diffMs / 60000)
   return diffMin
 }
@@ -18,14 +19,15 @@ export function formatRelativeMinutes(targetIso: string, now = new Date()) {
 export function formatRelativeMinutesWithDrift(
   targetIso: string,
   dataTimestampIso: string | undefined,
-  now = new Date()
+  now: number | Date = new Date()
 ): number {
   const target = new Date(targetIso)
-  let diffMs = target.getTime() - now.getTime()
+  const nowMs = now instanceof Date ? now.getTime() : now
+  let diffMs = target.getTime() - nowMs
 
   if (dataTimestampIso) {
     const dataTimestamp = new Date(dataTimestampIso)
-    const dataAgeMs = now.getTime() - dataTimestamp.getTime()
+    const dataAgeMs = nowMs - dataTimestamp.getTime()
     if (!Number.isNaN(dataAgeMs) && dataAgeMs > 0) {
       diffMs -= dataAgeMs
     }

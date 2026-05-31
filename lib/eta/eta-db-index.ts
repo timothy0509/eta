@@ -232,3 +232,43 @@ export async function buildEtaDbIndexes(
     routeVariantIndex,
   }
 }
+
+export type SerializedEtaDbIndexes = {
+  kmbRouteListEntries: RouteListEntry[]
+  kmbStops: KmbStopSearchItem[]
+  kmbRouteStops: KmbRouteStopLite[]
+  mtrRoutes: RouteListEntry[]
+  lrtRoutes: RouteListEntry[]
+  stationToRouteIndex: [string, BusRouteCandidate[]][]
+  routeStopSeqIndex: [string, number][]
+  stopRoutesIndex: [string, StopRouteEntry[]][]
+  routeVariantIndex: [string, RouteListEntry][]
+}
+
+export function serializeEtaDbIndexes(indexes: EtaDbIndexes): SerializedEtaDbIndexes {
+  return {
+    kmbRouteListEntries: indexes.kmbRouteListEntries,
+    kmbStops: indexes.kmbStops,
+    kmbRouteStops: indexes.kmbRouteStops,
+    mtrRoutes: indexes.mtrRoutes,
+    lrtRoutes: indexes.lrtRoutes,
+    stationToRouteIndex: Array.from(indexes.stationToRouteIndex.entries()),
+    routeStopSeqIndex: Array.from(indexes.routeStopSeqIndex.entries()),
+    stopRoutesIndex: Array.from(indexes.stopRoutesIndex.entries()),
+    routeVariantIndex: Array.from(indexes.routeVariantIndex.entries()),
+  }
+}
+
+export function deserializeEtaDbIndexes(serialized: SerializedEtaDbIndexes): EtaDbIndexes {
+  return {
+    kmbRouteListEntries: serialized.kmbRouteListEntries,
+    kmbStops: serialized.kmbStops,
+    kmbRouteStops: serialized.kmbRouteStops,
+    mtrRoutes: serialized.mtrRoutes,
+    lrtRoutes: serialized.lrtRoutes,
+    stationToRouteIndex: new Map(serialized.stationToRouteIndex),
+    routeStopSeqIndex: new Map(serialized.routeStopSeqIndex),
+    stopRoutesIndex: new Map(serialized.stopRoutesIndex),
+    routeVariantIndex: new Map(serialized.routeVariantIndex),
+  }
+}

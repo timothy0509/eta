@@ -246,7 +246,7 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
   routeInfos: Record<string, KmbRouteInfoLite>
   faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
   lang: UiLanguage
-  now: Date
+  now: number
   staggerClass?: string
   stopChips: StopChips
 }) {
@@ -478,7 +478,7 @@ const StopSection = React.memo(function StopSection({
   routeInfos: Record<string, KmbRouteInfoLite>
   faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
   lang: UiLanguage
-  now: Date
+  now: number
   isFirst?: boolean
   stopLookup: Map<string, StopInfo>
   registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void

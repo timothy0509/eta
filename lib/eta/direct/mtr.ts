@@ -7,7 +7,6 @@ import { getCachedValue } from '@/lib/eta/direct/shared'
 const MTR_BASE_URL = 'https://rt.data.gov.hk'
 const MTR_CONCURRENCY = 3
 const BACKOFF_DURATION_MS = 15_000
-const BACKOFF_STALE_MAX_MS = 20_000
 const BACKOFF_STORAGE_KEY = 'timoeta:mtr-backoff-until'
 const BACKOFF_CHANNEL_NAME = 'timoeta:mtr-backoff'
 
@@ -143,8 +142,7 @@ export async function fetchMtrSchedules(
       key: cacheKey,
       policyKey: 'mtrSchedule',
       policy: CACHE_POLICIES.mtrSchedule,
-      allowStale: inBackoff,
-      staleMaxMs: BACKOFF_STALE_MAX_MS,
+      allowStale: true,
       fetcher: async () => {
         if (inBackoff) {
           throw new Error('Rate limited - in backoff')

@@ -2,7 +2,43 @@
 
 import type { TransportMode, UiLanguage } from '@/lib/eta/types'
 import { create } from 'zustand'
-import { persist } from 'zustand/middleware'
+import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
+
+function createDebouncedLocalStorage(delayMs = 300): StateStorage {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  let pendingKey: string | null = null
+  let pendingValue: string | null = null
+
+  const flush = () => {
+    if (pendingKey !== null && pendingValue !== null) {
+      localStorage.setItem(pendingKey, pendingValue)
+      pendingKey = null
+      pendingValue = null
+    }
+    timer = null
+  }
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', flush)
+  }
+
+  return {
+    getItem: (name) => localStorage.getItem(name),
+    setItem: (name, value) => {
+      pendingKey = name
+      pendingValue = value
+      if (timer !== null) clearTimeout(timer)
+      timer = setTimeout(flush, delayMs)
+    },
+    removeItem: (name) => {
+      if (timer !== null) clearTimeout(timer)
+      timer = null
+      pendingKey = null
+      pendingValue = null
+      localStorage.removeItem(name)
+    },
+  }
+}
 
 export type RouteFilterMode = 'simple' | 'advanced'
 
@@ -239,6 +275,7 @@ export const useAppStore = create<AppState>()(
     {
       name: 'hk-eta',
       version: 2,
+      storage: createJSONStorage(() => createDebouncedLocalStorage(300)),
       migrate: (persistedState) => {
         const state = persistedState as Partial<AppState> | undefined
         const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))

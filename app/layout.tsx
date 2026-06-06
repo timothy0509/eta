@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 import { DM_Sans, Noto_Sans_HK, Noto_Sans_SC, Rubik } from 'next/font/google'
 
+import { DynamicToaster } from '@/components/dynamic-toaster'
 import { ThemeProvider } from '@/components/theme-provider'
-import { Toaster } from '@/components/toaster'
 import { LangSync } from '@/components/eta/lang-sync'
 import { env } from '@/lib/env'
 import './globals.css'
@@ -24,14 +24,14 @@ const rubik = Rubik({
 const notoSansHK = Noto_Sans_HK({
   variable: '--font-noto-sans-hk',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '700'],
   display: 'swap',
 })
 
 const notoSansSC = Noto_Sans_SC({
   variable: '--font-noto-sans-sc',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '700'],
   display: 'swap',
 })
 
@@ -136,7 +136,7 @@ export default function RootLayout({
           <main id="main-content" tabIndex={-1}>
             {children}
           </main>
-          <Toaster />
+          <DynamicToaster />
         </ThemeProvider>
       </body>
     </html>

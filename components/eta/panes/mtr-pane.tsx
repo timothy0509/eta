@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import type { MtrStationSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useMtrSchedule } from '@/lib/eta/use-mtr-schedule'
 import type { FavoritesItem } from '@/lib/store'
+import { usePaneStore } from '@/lib/eta/pane-store'
 
 export type MtrPaneState = {
   title: string
@@ -28,7 +29,6 @@ type Props = {
   canFavoriteRef: React.MutableRefObject<boolean>
   onRegisterRefresh: (refresh: () => Promise<void>) => void
   selectedItem?: FavoritesItem | null
-  onStateChange?: (state: MtrPaneState) => void
 }
 
 export function MtrPane({
@@ -39,7 +39,6 @@ export function MtrPane({
   canFavoriteRef,
   onRegisterRefresh,
   selectedItem,
-  onStateChange,
 }: Props) {
   const { sta, setSta, schedule, loading, refresh, title, error, stale, lastUpdatedAt } =
     useMtrSchedule({
@@ -94,8 +93,8 @@ export function MtrPane({
   }, [onRegisterRefresh, refresh])
 
   React.useEffect(() => {
-    onStateChange?.(paneState)
-  }, [onStateChange, paneState])
+    usePaneStore.setState({ mtr: paneState })
+  }, [paneState])
 
   return (
     <div className="space-y-4">

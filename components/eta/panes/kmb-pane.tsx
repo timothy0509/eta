@@ -44,6 +44,7 @@ import {
   type StopSearchIndex,
 } from '@/components/eta/panes/kmb-stop-search'
 import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
+import { usePaneStore } from '@/lib/eta/pane-store'
 
 // ============================================================================
 // Types and Helpers
@@ -59,7 +60,6 @@ type Props = {
   selectedItem?: FavoritesItem | null
   onRegisterRefresh?: (refresh: () => Promise<void>) => void
   onStopsChange?: (stops: KmbStopSearchItem[]) => void
-  onStateChange?: (state: KmbPaneState) => void
 }
 
 type KmbQuery =
@@ -160,7 +160,6 @@ export function KmbPane({
   selectedItem,
   onRegisterRefresh,
   onStopsChange,
-  onStateChange,
 }: Props) {
   const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([])
   const [loadingStops, setLoadingStops] = React.useState(false)
@@ -1143,8 +1142,8 @@ export function KmbPane({
   )
 
   React.useEffect(() => {
-    onStateChange?.(paneState)
-  }, [onStateChange, paneState])
+    usePaneStore.setState({ kmb: paneState })
+  }, [paneState])
 
   return (
     <div className="space-y-4">

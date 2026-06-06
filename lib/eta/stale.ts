@@ -44,23 +44,28 @@ export function isStaleByFlagOrAge(params: {
 export function formatRelativeAgeLabel(params: {
   lastUpdatedAt?: number | null
   lang: UiLanguage
-  now?: Date
+  now?: number | Date
 }) {
   const lastUpdatedAt = params.lastUpdatedAt
   if (!lastUpdatedAt) return null
 
-  const now = params.now ?? new Date()
+  const nowMs =
+    params.now instanceof Date
+      ? params.now.getTime()
+      : typeof params.now === 'number'
+        ? params.now
+        : Date.now()
   const updatedAt = new Date(lastUpdatedAt)
   const updatedAtTime = updatedAt.getTime()
   if (Number.isNaN(updatedAtTime)) return null
 
-  const diffMs = now.getTime() - updatedAtTime
+  const diffMs = nowMs - updatedAtTime
   if (diffMs < 0) return null
   if (diffMs < 30_000) {
     return params.lang === 'en' ? 'just now' : params.lang === 'sc' ? '刚刚' : '剛剛'
   }
 
-  const minutes = Math.abs(formatRelativeMinutes(updatedAt.toISOString(), now))
+  const minutes = Math.abs(formatRelativeMinutes(updatedAt.toISOString(), nowMs))
   if (minutes < 60) {
     if (params.lang === 'en') return `${minutes} min ago`
     return `${minutes} ${params.lang === 'sc' ? '分钟前' : '分鐘前'}`

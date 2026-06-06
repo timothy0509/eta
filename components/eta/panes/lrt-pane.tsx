@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import type { LrtStationSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useLrtSchedule } from '@/lib/eta/use-lrt-schedule'
 import type { FavoritesItem } from '@/lib/store'
+import { usePaneStore } from '@/lib/eta/pane-store'
 
 export type LrtPaneState = {
   title: string
@@ -28,7 +29,6 @@ type Props = {
   canFavoriteRef: React.MutableRefObject<boolean>
   onRegisterRefresh: (refresh: () => Promise<void>) => void
   selectedItem?: FavoritesItem | null
-  onStateChange?: (state: LrtPaneState) => void
 }
 
 export function LrtPane({
@@ -39,7 +39,6 @@ export function LrtPane({
   canFavoriteRef,
   onRegisterRefresh,
   selectedItem,
-  onStateChange,
 }: Props) {
   const {
     stationId,
@@ -76,8 +75,8 @@ export function LrtPane({
   )
 
   React.useEffect(() => {
-    onStateChange?.(paneState)
-  }, [onStateChange, paneState])
+    usePaneStore.setState({ lrt: paneState })
+  }, [paneState])
 
   React.useEffect(() => {
     if (!selectedItem || selectedItem.mode !== 'lrt') return

@@ -9,9 +9,6 @@ import { AutoRefreshMenu } from '@/components/eta/auto-refresh'
 import { LanguageToggle } from '@/components/eta/language-toggle'
 import { ModeTabs } from '@/components/eta/mode-tabs'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
-import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
-import type { LrtPaneState } from '@/components/eta/panes/lrt-pane'
-import type { MtrPaneState } from '@/components/eta/panes/mtr-pane'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -26,6 +23,8 @@ import type { KmbStopSearchItem, LrtStationSearchItem, MtrStationSearchItem } fr
 import { isLanguageSupported } from '@/lib/eta/types'
 import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
 import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
+import { prefetchEtaDb } from '@/lib/eta/prefetch'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
@@ -130,9 +129,9 @@ export default function HomeClient() {
   const themeMounted = resolvedTheme !== undefined
 
   const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([])
-  const [kmbPaneState, setKmbPaneState] = React.useState<KmbPaneState | null>(null)
-  const [mtrPaneState, setMtrPaneState] = React.useState<MtrPaneState | null>(null)
-  const [lrtPaneState, setLrtPaneState] = React.useState<LrtPaneState | null>(null)
+  const kmbPaneState = usePaneStore((s) => s.kmb)
+  const mtrPaneState = usePaneStore((s) => s.mtr)
+  const lrtPaneState = usePaneStore((s) => s.lrt)
   const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(() => {
     if (typeof window === 'undefined') return null
     try {
@@ -178,6 +177,11 @@ export default function HomeClient() {
     clearKmbStopNameCache()
   }, [lang])
 
+  // Prefetch ETA database during idle time
+  React.useEffect(() => {
+    prefetchEtaDb()
+  }, [])
+
   const onSavedOpenChange = React.useCallback(
     (nextOpen: boolean) => {
       if (nextOpen) {
@@ -222,32 +226,35 @@ export default function HomeClient() {
     refreshRef.current = refresh
   }, [])
 
-  useAutoRefresh(autoRefreshSeconds * 1000, () => {
-    if (!refreshRef.current) return
-    if (inFlightRefreshRef.current) return
+  useAutoRefresh(
+    autoRefreshSeconds * 1000,
+    React.useCallback(() => {
+      if (!refreshRef.current) return
+      if (inFlightRefreshRef.current) return
 
-    inFlightRefreshRef.current = true
+      inFlightRefreshRef.current = true
 
-    refreshTimeoutRef.current = setTimeout(() => {
-      if (inFlightRefreshRef.current) {
-        console.warn('Auto-refresh timeout - forcing unlock')
-        inFlightRefreshRef.current = false
-      }
-    }, MAX_REFRESH_DURATION_MS)
-
-    refreshRef
-      .current()
-      .catch(() => {
-        // ignore auto-refresh errors
-      })
-      .finally(() => {
-        if (refreshTimeoutRef.current) {
-          clearTimeout(refreshTimeoutRef.current)
-          refreshTimeoutRef.current = null
+      refreshTimeoutRef.current = setTimeout(() => {
+        if (inFlightRefreshRef.current) {
+          console.warn('Auto-refresh timeout - forcing unlock')
+          inFlightRefreshRef.current = false
         }
-        inFlightRefreshRef.current = false
-      })
-  })
+      }, MAX_REFRESH_DURATION_MS)
+
+      refreshRef
+        .current()
+        .catch(() => {
+          // ignore auto-refresh errors
+        })
+        .finally(() => {
+          if (refreshTimeoutRef.current) {
+            clearTimeout(refreshTimeoutRef.current)
+            refreshTimeoutRef.current = null
+          }
+          inFlightRefreshRef.current = false
+        })
+    }, [])
+  )
 
   React.useEffect(() => {
     return () => {
@@ -306,7 +313,6 @@ export default function HomeClient() {
   const { t } = useTranslations(lang)
 
   const heading = mode === 'kmb' ? t('kmb.title') : mode === 'mtr' ? t('mtr.title') : t('lrt.title')
-
 
   const kmbOnRefresh = React.useCallback(
     () => void kmbPaneState?.refresh({ toastOnError: true }),
@@ -399,7 +405,7 @@ export default function HomeClient() {
 
                   <Separator />
 
-                  {mode === 'kmb' ? (
+                  <div hidden={mode !== 'kmb'}>
                     <ErrorBoundary>
                       <KmbPane
                         lang={lang}
@@ -411,12 +417,11 @@ export default function HomeClient() {
                         selectedItem={selectedItem}
                         onRegisterRefresh={onRegisterRefresh}
                         onStopsChange={setKmbStops}
-                        onStateChange={setKmbPaneState}
                       />
                     </ErrorBoundary>
-                  ) : null}
+                  </div>
 
-                  {mode === 'mtr' ? (
+                  <div hidden={mode !== 'mtr'}>
                     <ErrorBoundary>
                       <MtrPane
                         lang={lang}
@@ -426,12 +431,11 @@ export default function HomeClient() {
                         canFavoriteRef={canFavoriteRef}
                         onRegisterRefresh={onRegisterRefresh}
                         selectedItem={selectedItem}
-                        onStateChange={setMtrPaneState}
                       />
                     </ErrorBoundary>
-                  ) : null}
+                  </div>
 
-                  {mode === 'lrt' ? (
+                  <div hidden={mode !== 'lrt'}>
                     <ErrorBoundary>
                       <LrtPane
                         lang={lang}
@@ -441,16 +445,15 @@ export default function HomeClient() {
                         canFavoriteRef={canFavoriteRef}
                         onRegisterRefresh={onRegisterRefresh}
                         selectedItem={selectedItem}
-                        onStateChange={setLrtPaneState}
                       />
                     </ErrorBoundary>
-                  ) : null}
+                  </div>
                 </CardContent>
               </Card>
             </div>
 
             <div className="space-y-4">
-              {mode === 'kmb' ? (
+              <div hidden={mode !== 'kmb'}>
                 <KmbResults
                   lang={kmbPaneState?.lang ?? lang}
                   title={kmbPaneState?.title ?? t('kmb.title')}
@@ -474,9 +477,9 @@ export default function HomeClient() {
                   hasMoreStops={kmbPaneState?.hasMoreStops}
                   precomputedGroups={kmbPaneState?.precomputedGroups}
                 />
-              ) : null}
+              </div>
 
-              {mode === 'mtr' ? (
+              <div hidden={mode !== 'mtr'}>
                 <MtrResults
                   title={mtrPaneState?.title ?? t('mtr.title')}
                   lang={mtrPaneState?.lang ?? lang}
@@ -487,9 +490,9 @@ export default function HomeClient() {
                   onRefresh={mtrOnRefresh}
                   loading={mtrPaneState?.loading}
                 />
-              ) : null}
+              </div>
 
-              {mode === 'lrt' ? (
+              <div hidden={mode !== 'lrt'}>
                 <LrtResults
                   title={lrtPaneState?.title ?? t('lrt.title')}
                   lang={lrtPaneState?.lang ?? lang}
@@ -500,7 +503,7 @@ export default function HomeClient() {
                   onRefresh={lrtOnRefresh}
                   loading={lrtPaneState?.loading}
                 />
-              ) : null}
+              </div>
             </div>
           </div>
         </div>

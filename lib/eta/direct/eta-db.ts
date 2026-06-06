@@ -1,9 +1,9 @@
 import { fetchEtas } from 'hk-bus-eta'
 import type { Company, Eta, EtaDb, RouteListEntry } from 'hk-bus-eta'
 
-import { idbGet } from '@/lib/eta/cache/idb'
-import { ETA_DB_CACHE_KEY, ETA_DB_MD5_KEY } from '@/lib/eta/cache/keys'
-import { CACHE_POLICIES, isFresh } from '@/lib/eta/cache/policy'
+import { idbGet, idbSet } from '@/lib/eta/cache/idb'
+import { ETA_DB_CACHE_KEY, ETA_DB_INDEX_KEY, ETA_DB_MD5_KEY } from '@/lib/eta/cache/keys'
+import { CACHE_POLICIES, createMetaForPolicy, isFresh } from '@/lib/eta/cache/policy'
 import { MicroCache } from '@/lib/eta/cache/micro-cache'
 import {
   getEtaDbSnapshot,
@@ -14,10 +14,13 @@ import {
   normalizeBound,
   normalizeStopId,
   routeVariantKey,
+  serializeEtaDbIndexes,
+  deserializeEtaDbIndexes,
   type EtaDbIndexes,
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
   type KmbStopSearchItem,
+  type SerializedEtaDbIndexes,
 } from '@/lib/eta/eta-db-index'
 import type { UiLanguage } from '@/lib/eta/types'
 
@@ -125,8 +128,22 @@ export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
 
   inFlightIndexes = (async () => {
     try {
+      // Try loading pre-built indexes from IDB
+      const stored = await idbGet<SerializedEtaDbIndexes>(ETA_DB_INDEX_KEY)
+      if (stored?.value && isFresh(stored)) {
+        const indexes = deserializeEtaDbIndexes(stored.value)
+        cachedIndexes = { md5, value: indexes }
+        return indexes
+      }
+
+      // Rebuild from scratch
       const value = await buildEtaDbIndexes(db, { busCompanies: BUS_COMPANIES })
       cachedIndexes = { md5, value }
+
+      // Persist to IDB (fire-and-forget)
+      const meta = createMetaForPolicy(ETA_DB_POLICY)
+      idbSet(ETA_DB_INDEX_KEY, { value: serializeEtaDbIndexes(value), ...meta }).catch(() => {})
+
       return value
     } finally {
       inFlightIndexes = null

@@ -36,10 +36,24 @@ const nextConfig: NextConfig = {
     // this keeps build memory under ~2GB. The app has no large static data files
     // (hk-bus-eta is 81KB, local data files are 13KB total) and imports are tree-shaken.
     cpus: 4,
+    optimizePackageImports: [
+      'lucide-react',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-dropdown-menu',
+      '@radix-ui/react-label',
+      '@radix-ui/react-popover',
+      '@radix-ui/react-separator',
+      '@radix-ui/react-slot',
+      '@radix-ui/react-switch',
+      '@radix-ui/react-tabs',
+      '@radix-ui/react-toggle',
+      '@radix-ui/react-toggle-group',
+      '@radix-ui/react-tooltip',
+      'cmdk',
+      'sonner',
+    ],
   },
-  // Disable React Compiler to reduce memory usage during type checking
-  // React Compiler does heavy type inference which can cause OOM on smaller heaps
-  reactCompiler: false,
+  reactCompiler: true,
 
   // Optimize images
   images: {

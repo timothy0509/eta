@@ -34,10 +34,6 @@ const common: Record<string, TranslationEntry> = {
   details: { en: 'Details', tc: '詳情', sc: '详情' },
   now: { en: 'Now', tc: '即將到達', sc: '即将到达' },
   arriving: { en: 'Arriving', tc: '即將到達', sc: '即将到达' },
-}
-
-const kmb: Record<string, TranslationEntry> = {
-  title: { en: 'Bus ETAs', tc: '巴士到站預報', sc: '巴士到站预报' },
   desc: {
     en: 'Clean, fast ETAs for Hong Kong transit.',
     tc: '簡潔又快速的香港交通到站預報。',
@@ -48,6 +44,10 @@ const kmb: Record<string, TranslationEntry> = {
     tc: '搜尋並釘選常用車站。',
     sc: '搜索并钉选常用车站。',
   },
+}
+
+const kmb: Record<string, TranslationEntry> = {
+  title: { en: 'Bus ETAs', tc: '巴士到站預報', sc: '巴士到站预报' },
   allRoutesAtStop: { en: 'All routes at this stop', tc: '此站所有路線', sc: '此站所有路线' },
   filtered: { en: 'Filtered:', tc: '篩選:', sc: '筛选:' },
   stopsLoaded: { en: 'stops loaded', tc: '個車站', sc: '个车站' },

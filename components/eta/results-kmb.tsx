@@ -89,11 +89,13 @@ function formatRouteVariantLabel(
 }
 
 function formatArrivingText(lang: UiLanguage) {
+  if (lang === 'en') return 'Now'
   if (lang === 'sc') return '即将到达'
   return '即將到達'
 }
 
 function formatNoScheduledText(lang: UiLanguage) {
+  if (lang === 'en') return 'No scheduled buses'
   if (lang === 'sc') return '暂时没有预定班次'
   return '暫時沒有預定班次'
 }

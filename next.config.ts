@@ -20,12 +20,12 @@ const securityHeaders = [
   },
   {
     key: 'Permissions-Policy',
-    value: 'geolocation=(), camera=(), microphone=()',
+    value: 'geolocation=(self), camera=(), microphone=()',
   },
   {
     key: 'Content-Security-Policy',
     value:
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://rt.data.gov.hk https://data.etabus.gov.hk https://data.etagmb.gov.hk https://data.hkbus.app https://hkbus.github.io https://opendata.mtr.com.hk https://www.lrtetas.hk; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://maps.googleapis.com https://*.google.com https://*.gstatic.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: https://*.googleapis.com https://*.gstatic.com; font-src 'self' data:; connect-src 'self' https://rt.data.gov.hk https://data.etabus.gov.hk https://data.etagmb.gov.hk https://data.hkbus.app https://hkbus.github.io https://opendata.mtr.com.hk https://www.lrtetas.hk https://*.googleapis.com; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   },
 ]
 

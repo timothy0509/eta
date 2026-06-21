@@ -62,6 +62,12 @@ type Props = {
   onStopsChange?: (stops: KmbStopSearchItem[]) => void
 }
 
+function isKmbRouteFavorite(
+  item: FavoritesItem
+): item is Extract<FavoritesItem, { mode: 'kmb'; type: 'route' }> {
+  return item.mode === 'kmb' && 'type' in item && item.type === 'route'
+}
+
 type KmbQuery =
   | {
       mode: 'stop'
@@ -812,6 +818,7 @@ export function KmbPane({
   const lastSelectedIdRef = React.useRef<string | null>(null)
   React.useEffect(() => {
     if (!selectedItem || selectedItem.mode !== 'kmb') return
+    if (isKmbRouteFavorite(selectedItem)) return
     if (selectedItem.id === lastSelectedIdRef.current) return
     lastSelectedIdRef.current = selectedItem.id
 
@@ -910,6 +917,7 @@ export function KmbPane({
   React.useEffect(() => {
     if (!selectedItem) return
     if (selectedItem.mode !== 'kmb') return
+    if (isKmbRouteFavorite(selectedItem)) return
     if (selectedItem.id !== lastSelectedIdRef.current) return
 
     let nextQuery: KmbQuery | null = null

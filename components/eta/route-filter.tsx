@@ -1,24 +1,9 @@
 'use client'
 
-import { Check, ChevronsUpDown, Plus, Trash2 } from 'lucide-react'
+import { X } from 'lucide-react'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
-import { Button } from '@/components/ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Marquee } from '@/components/ui/marquee'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import type { RouteFilterMode } from '@/lib/store'
@@ -60,238 +45,132 @@ function getCompanyFromVariantKey(key: string) {
 type Props = {
   lang: UiLanguage
   mode: RouteFilterMode
-  onModeChange: (mode: RouteFilterMode) => void
+  onModeChange?: (mode: RouteFilterMode) => void
   value: RouteFilterState
   onChange: (value: RouteFilterState) => void
   options?: RouteFilterOption[]
 }
 
-function normalizeAdvancedEntries(entries: RouteFilterEntry[] | undefined) {
-  const list = entries ?? []
-  const seen = new Set<string>()
-  const next: RouteFilterEntry[] = []
-  for (const entry of list) {
-    if (!entry.variantKey) continue
-    const parts = entry.variantKey.split('|')
-    const normalizedKey = parts.length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey
-    if (seen.has(normalizedKey)) continue
-    seen.add(normalizedKey)
-    next.push({ ...entry, variantKey: normalizedKey })
-  }
-  return next
+function createId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return Math.random().toString(36).slice(2, 10)
 }
 
 function sortOptions(options: RouteFilterOption[]) {
   return [...options].sort((a, b) => a.route.localeCompare(b.route, undefined, { numeric: true }))
 }
 
-function findOption(options: RouteFilterOption[] | undefined, key: string) {
-  return options?.find((opt) => opt.key === key)
-}
-
-export function RouteFilter({ lang, mode, onModeChange, value, onChange, options }: Props) {
+export function RouteFilter({ lang, mode, value, onChange, options }: Props) {
   const opts = React.useMemo(() => sortOptions(options ?? []), [options])
-  const entries = React.useMemo(() => normalizeAdvancedEntries(value.entries), [value.entries])
 
   const t = {
     routes: lang === 'en' ? 'Routes' : '路線',
-    routesDesc:
+    allRoutes:
+      lang === 'en' ? 'All routes at this stop' : lang === 'sc' ? '此站所有路线' : '此站所有路線',
+    noOptions:
       lang === 'en'
-        ? 'Optional. Leave blank to show all routes at the stop.'
+        ? 'Pick a stop to see available routes.'
         : lang === 'sc'
-          ? '可选。留空以显示车站的所有路线。'
-          : '可選。留空以顯示車站的所有路線。',
-    advanced: lang === 'en' ? 'Advanced' : lang === 'sc' ? '高级' : '進階',
-    routeNumbers:
-      lang === 'en'
-        ? 'Route numbers (comma-separated)'
-        : lang === 'sc'
-          ? '路线编号（逗号分隔）'
-          : '路線編號（逗號分隔）',
-    eg: 'e.g. 40, 68X',
-    add: lang === 'en' ? 'Add' : '新增',
-    pickStop:
-      lang === 'en' ? 'Pick a stop first.' : lang === 'sc' ? '请先选择车站。' : '請先選擇車站。',
-    noFilter:
-      lang === 'en'
-        ? 'No filter added. All routes at the stop will be shown.'
-        : lang === 'sc'
-          ? '未添加篩選，將顯示車站的所有路線。'
-          : '未添加篩選，將顯示車站的所有路線。',
-    selectRoute: lang === 'en' ? 'Select route…' : lang === 'sc' ? '选择路线…' : '選擇路線…',
-    searchRoute: lang === 'en' ? 'Search route…' : lang === 'sc' ? '搜索路线…' : '搜尋路線…',
-    noResults: lang === 'en' ? 'No results.' : '無結果。',
+          ? '请选择车站以查看可用路线。'
+          : '請選擇車站以查看可用路線。',
   }
 
+  const selectedKeys = React.useMemo(() => {
+    if (mode === 'advanced') {
+      return new Set((value.entries ?? []).map((e) => e.variantKey))
+    }
+    const routes = (value.routes ?? '')
+      .split(',')
+      .map((r) => r.trim().toUpperCase())
+      .filter(Boolean)
+    return new Set(routes)
+  }, [mode, value.entries, value.routes])
+
+  const toggleOption = React.useCallback(
+    (opt: RouteFilterOption) => {
+      if (mode === 'advanced') {
+        const entries = value.entries ?? []
+        const exists = entries.some((e) => e.variantKey === opt.key)
+        const next = exists
+          ? entries.filter((e) => e.variantKey !== opt.key)
+          : [...entries, { id: createId(), variantKey: opt.key }]
+        onChange({ ...value, entries: next, routes: '' })
+      } else {
+        const routes = (value.routes ?? '')
+          .split(',')
+          .map((r) => r.trim().toUpperCase())
+          .filter(Boolean)
+        const exists = routes.includes(opt.route.toUpperCase())
+        const next = exists
+          ? routes.filter((r) => r !== opt.route.toUpperCase())
+          : [...routes, opt.route.toUpperCase()]
+        onChange({ ...value, routes: next.join(','), entries: [] })
+      }
+    },
+    [mode, onChange, value]
+  )
+
+  const clearAll = React.useCallback(() => {
+    onChange({ routes: '', entries: [] })
+  }, [onChange])
+
+  const activeCount = countActiveFilters(value)
+
   return (
-    <div className="bg-card/50 rounded-2xl border p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">{t.routes}</div>
-          <div className="text-muted-foreground text-xs">{t.routesDesc}</div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Switch
-            checked={mode === 'advanced'}
-            onCheckedChange={(checked) => onModeChange(checked ? 'advanced' : 'simple')}
-            id="routeMode"
-          />
-          <Label htmlFor="routeMode" className="text-sm">
-            {t.advanced}
-          </Label>
-        </div>
-      </div>
-
-      <Separator className="my-3" />
-
-      <div className="grid grid-cols-1 gap-3">
+    <div className="bg-surface-container-low rounded-2xl p-4">
+      <div className="mb-3 flex items-center justify-between gap-4">
         <div>
-          <Label className="text-muted-foreground text-xs">{t.routeNumbers}</Label>
-          <Input
-            value={value.routes ?? ''}
-            onChange={(e) => onChange({ ...value, routes: e.target.value })}
-            placeholder={t.eg}
-            className="mt-1 rounded-xl"
-            disabled={mode === 'advanced'}
-          />
-        </div>
-
-        {mode === 'advanced' ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-muted-foreground text-xs">{t.routes}</Label>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 shrink-0 rounded-xl"
-                onClick={() => {
-                  if (!opts.length) return
-                  const firstKey = opts[0]?.key
-                  if (!firstKey) return
-
-                  const next: RouteFilterEntry[] = [
-                    ...entries,
-                    {
-                      id: crypto.randomUUID(),
-                      variantKey: firstKey,
-                    },
-                  ]
-                  onChange({ ...value, entries: next, routes: '' })
-                }}
-                disabled={!opts.length}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t.add}
-              </Button>
-            </div>
-
-            {!opts.length ? (
-              <div className="bg-background/40 text-muted-foreground rounded-xl border p-3 text-xs">
-                {t.pickStop}
-              </div>
-            ) : entries.length === 0 ? (
-              <div className="bg-background/40 text-muted-foreground rounded-xl border p-3 text-xs">
-                {t.noFilter}
-              </div>
-            ) : null}
-
-            {entries.map((entry) => {
-              const selected = findOption(opts, entry.variantKey)
-
-              return (
-                <div key={entry.id} className="flex min-w-0 items-center gap-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          'h-9 min-w-0 flex-1 justify-between rounded-xl',
-                          !selected && 'text-muted-foreground'
-                        )}
-                      >
-                        {selected ? (
-                          <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <RouteBadge
-                              route={selected.route}
-                              company={getCompanyFromVariantKey(selected.key)}
-                              size="md"
-                            />
-                            <Marquee className="text-muted-foreground min-w-0 flex-1 text-left">
-                              {selected.label}
-                            </Marquee>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">{t.selectRoute}</span>
-                        )}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
-                      <Command shouldFilter>
-                        <CommandInput placeholder={t.searchRoute} />
-                        <CommandList>
-                          <CommandEmpty>{t.noResults}</CommandEmpty>
-                          <CommandGroup>
-                            {opts.map((opt) => {
-                              const picked = opt.key === entry.variantKey
-                              return (
-                                <CommandItem
-                                  key={opt.key}
-                                  value={`${opt.route} ${opt.label}`}
-                                  onSelect={() => {
-                                    const next = entries.map((row) =>
-                                      row.id === entry.id ? { ...row, variantKey: opt.key } : row
-                                    )
-                                    onChange({
-                                      ...value,
-                                      entries: normalizeAdvancedEntries(next),
-                                      routes: '',
-                                    })
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      'mr-2 h-4 w-4 shrink-0',
-                                      picked ? 'opacity-100' : 'opacity-0'
-                                    )}
-                                  />
-                                  <RouteBadge
-                                    route={opt.route}
-                                    company={getCompanyFromVariantKey(opt.key)}
-                                    size="sm"
-                                  />
-                                  <span className="text-muted-foreground ml-2 min-w-0 truncate">
-                                    {opt.label}
-                                  </span>
-                                </CommandItem>
-                              )
-                            })}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    className="shrink-0 rounded-xl"
-                    onClick={() => {
-                      const next = entries.filter((row) => row.id !== entry.id)
-                      onChange({ ...value, entries: next })
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
-              )
-            })}
+          <div className="m3-title-md">{t.routes}</div>
+          <div className="text-on-surface-variant m3-body-md">
+            {activeCount === 0 ? t.allRoutes : `${activeCount} ${t.routes}`}
           </div>
-        ) : null}
+        </div>
+        {activeCount > 0 && (
+          <button
+            type="button"
+            onClick={clearAll}
+            className="text-on-surface-variant hover:text-on-surface m3-label-lg flex items-center gap-1 rounded-full px-2 py-1 transition-colors"
+          >
+            <X className="h-4 w-4" />
+            {lang === 'en' ? 'Clear' : '清除'}
+          </button>
+        )}
       </div>
+
+      {!opts.length ? (
+        <div className="text-on-surface-variant m3-body-md bg-surface-container rounded-xl p-3 text-center">
+          {t.noOptions}
+        </div>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          {opts.map((opt) => {
+            const active =
+              mode === 'advanced'
+                ? selectedKeys.has(opt.key)
+                : selectedKeys.has(opt.route.toUpperCase())
+            return (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => toggleOption(opt)}
+                className={cn(
+                  'm3-label-lg flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors',
+                  active
+                    ? 'bg-primary-container text-on-primary-container'
+                    : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                )}
+              >
+                <RouteBadge
+                  route={opt.route}
+                  company={getCompanyFromVariantKey(opt.key)}
+                  size="sm"
+                />
+                <span className="max-w-[12ch] truncate">{opt.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

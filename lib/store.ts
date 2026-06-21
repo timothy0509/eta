@@ -1,6 +1,6 @@
 'use client'
 
-import type { TransportMode, UiLanguage } from '@/lib/eta/types'
+import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { create } from 'zustand'
 import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
 
@@ -85,6 +85,19 @@ export type FavoritesItem = FavoritesMeta &
         routeFilterMode?: RouteFilterMode
         entries?: { variantKey: string }[]
       }
+    // KMB: saved route
+    | {
+        id: string
+        mode: 'kmb'
+        type: 'route'
+        title: string
+        route: string
+        co?: string
+        bound: string
+        serviceType: string
+        origin?: { en: string; tc: string; sc: string }
+        destination?: { en: string; tc: string; sc: string }
+      }
     | {
         id: string
         mode: 'mtr'
@@ -114,6 +127,7 @@ export type FavoritesGroup = {
 
 type AppState = {
   mode: TransportMode
+  subView: SubView
   lang: UiLanguage
   routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
@@ -123,6 +137,7 @@ type AppState = {
   recents: RecentItem[]
 
   setMode: (mode: TransportMode) => void
+  setSubView: (subView: SubView) => void
   setLang: (lang: UiLanguage) => void
   setRouteFilterMode: (mode: RouteFilterMode) => void
   setAutoRefreshSeconds: (seconds: number) => void
@@ -158,6 +173,7 @@ export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
       mode: 'kmb',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -167,6 +183,7 @@ export const useAppStore = create<AppState>()(
       recents: [],
 
       setMode: (mode) => set({ mode }),
+      setSubView: (subView) => set({ subView }),
       setLang: (lang) => set({ lang }),
       setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
       setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
@@ -274,7 +291,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 2,
+      version: 3,
       storage: createJSONStorage(() => createDebouncedLocalStorage(300)),
       migrate: (persistedState) => {
         const state = persistedState as Partial<AppState> | undefined
@@ -282,6 +299,7 @@ export const useAppStore = create<AppState>()(
 
         return {
           mode: state?.mode ?? 'kmb',
+          subView: state?.subView ?? 'stops',
           lang: state?.lang ?? 'tc',
           routeFilterMode: state?.routeFilterMode ?? 'simple',
           autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
@@ -292,6 +310,7 @@ export const useAppStore = create<AppState>()(
       },
       partialize: (state) => ({
         mode: state.mode,
+        subView: state.subView,
         lang: state.lang,
         routeFilterMode: state.routeFilterMode,
         autoRefreshSeconds: state.autoRefreshSeconds,

@@ -11,8 +11,11 @@ import {
   PinOff,
   Trash2,
 } from 'lucide-react'
+import { motion } from 'framer-motion'
 import * as React from 'react'
 import { useShallow } from 'zustand/shallow'
+
+import { RouteBadge } from '@/components/eta/route-badge'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -30,6 +33,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
 import { getLineColor } from '@/lib/eta/line-colors'
+import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
@@ -102,6 +106,24 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
 
   // KMB mode - regenerate title based on current language
   if (item.mode === 'kmb') {
+    // Saved KMB route
+    if ('type' in item && item.type === 'route') {
+      const destination = item.destination
+        ? lang === 'en'
+          ? item.destination.en
+          : lang === 'sc'
+            ? item.destination.sc
+            : item.destination.tc
+        : item.title
+
+      return (
+        <span className="flex items-center gap-2">
+          <RouteBadge route={item.route} company={item.co} size="sm" />
+          <span className="truncate">{destination}</span>
+        </span>
+      )
+    }
+
     // For "contains" queries, keep the static title
     if ('query' in item) {
       return <span className="truncate">{item.title}</span>
@@ -222,31 +244,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
     return new Map(kmbStops.map((stop, index) => [stop.stopId, index]))
   }, [kmbStops])
 
-  const t = {
-    saved: lang === 'en' ? 'Saved' : lang === 'sc' ? '已儲存' : '已儲存',
-    favorites: lang === 'en' ? 'Favorites' : '收藏',
-    recent: lang === 'en' ? 'Recent' : '最近',
-    noFavorites: lang === 'en' ? 'No favorites yet.' : lang === 'sc' ? '暫無收藏。' : '暫無收藏。',
-    tip:
-      lang === 'en'
-        ? 'Tip: results can auto-refresh while you wait.'
-        : lang === 'sc'
-          ? '提示：結果可在等待時自動刷新。'
-          : '提示：結果可在等待時自動刷新。',
-    clear: lang === 'en' ? 'Clear' : '清除',
-    noRecent:
-      lang === 'en' ? 'No recent searches.' : lang === 'sc' ? '暫無搜尋記錄。' : '暫無搜尋記錄。',
-    pinned: lang === 'en' ? 'Pinned' : lang === 'sc' ? '已釘選' : '已釘選',
-    unpinned: lang === 'en' ? 'Unpinned' : lang === 'sc' ? '取消釘選' : '取消釘選',
-    moveUp: lang === 'en' ? 'Move up' : lang === 'sc' ? '上移' : '上移',
-    moveDown: lang === 'en' ? 'Move down' : lang === 'sc' ? '下移' : '下移',
-    group: lang === 'en' ? 'Group' : lang === 'sc' ? '分組' : '分組',
-    groups: lang === 'en' ? 'Groups' : lang === 'sc' ? '分組' : '分組',
-    addGroup: lang === 'en' ? 'Add group' : lang === 'sc' ? '新增分組' : '新增分組',
-    rename: lang === 'en' ? 'Rename' : lang === 'sc' ? '重新命名' : '重新命名',
-    delete: lang === 'en' ? 'Delete' : lang === 'sc' ? '刪除' : '刪除',
-    none: lang === 'en' ? 'None' : lang === 'sc' ? '無' : '無',
-  }
+  const { t } = useTranslations(lang)
 
   const groupNameById = React.useMemo(() => {
     return new Map(favoritesGroups.map((group) => [group.id, group.name]))
@@ -287,16 +285,16 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   }
 
   return (
-    <Card className="rounded-3xl">
+    <Card className="bg-surface-container-low rounded-3xl">
       <Tabs defaultValue="favorites" className="gap-0">
         <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-base">{t.saved}</CardTitle>
+          <CardTitle className="m3-title-md">{t('favorites.saved')}</CardTitle>
           <TabsList withIndicator>
             <TabsTrigger value="favorites" unstyledActive className="gap-2">
-              <Heart className="h-4 w-4" /> {t.favorites}
+              <Heart className="h-4 w-4" /> {t('favorites.favorites')}
             </TabsTrigger>
             <TabsTrigger value="recent" unstyledActive className="gap-2">
-              <History className="h-4 w-4" /> {t.recent}
+              <History className="h-4 w-4" /> {t('favorites.recent')}
             </TabsTrigger>
           </TabsList>
         </CardHeader>
@@ -304,14 +302,16 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
         <CardContent className="p-0">
           <TabsContent value="favorites" className="mt-0 p-6 pt-0">
             <div className="space-y-4">
-              <div className="bg-background/40 space-y-2 rounded-2xl border p-3">
-                <div className="text-muted-foreground text-xs font-medium">{t.groups}</div>
+              <div className="bg-surface-container-low space-y-2 rounded-2xl border p-3">
+                <div className="text-muted-foreground m3-body-md font-medium">
+                  {t('favorites.groups')}
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Input
                     value={newGroupName}
                     onChange={(event) => setNewGroupName(event.target.value)}
                     onKeyDown={handleGroupInputKeyDown}
-                    placeholder={t.addGroup}
+                    placeholder={t('favorites.addGroup')}
                     className="h-8 w-44 rounded-xl text-sm"
                   />
                   <Button
@@ -322,7 +322,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                     disabled={!newGroupName.trim()}
                   >
                     <FolderPlus className="h-4 w-4" />
-                    <span className="ml-1.5 text-xs">{t.addGroup}</span>
+                    <span className="ml-1.5 text-xs">{t('favorites.addGroup')}</span>
                   </Button>
                 </div>
                 {favoritesGroups.length > 0 && (
@@ -347,7 +347,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                               onClick={saveEditGroup}
                               disabled={!editingGroupName.trim()}
                             >
-                              {t.rename}
+                              {t('favorites.rename')}
                             </Button>
                             <Button
                               variant="ghost"
@@ -355,7 +355,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                               className="rounded-xl"
                               onClick={cancelEditGroup}
                             >
-                              {t.clear}
+                              {t('favorites.clear')}
                             </Button>
                           </div>
                         ) : (
@@ -368,7 +368,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                                 variant="ghost"
                                 size="icon"
                                 className="h-8 w-8 rounded-xl"
-                                aria-label={t.rename}
+                                aria-label={t('favorites.rename')}
                                 onClick={() => startEditGroup(group)}
                               >
                                 <Pencil className="h-4 w-4" />
@@ -377,7 +377,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                                 variant="ghost"
                                 size="icon"
                                 className="text-destructive h-8 w-8 rounded-xl"
-                                aria-label={t.delete}
+                                aria-label={t('favorites.delete')}
                                 onClick={() => deleteFavoriteGroup(group.id)}
                               >
                                 <Trash2 className="h-4 w-4" />
@@ -391,15 +391,18 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                 )}
               </div>
               {favorites.length === 0 ? (
-                <div className="text-muted-foreground text-sm">{t.noFavorites}</div>
+                <div className="text-muted-foreground m3-body-md">{t('favorites.noFavorites')}</div>
               ) : (
                 favorites.map((f, index) => (
-                  <div
+                  <motion.div
                     key={f.id}
-                    className="ui-animate-in-fast ui-lift bg-background/40 flex items-center justify-between gap-2 rounded-2xl border px-3 py-2"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+                    className="ui-lift bg-surface-container-low flex items-center justify-between gap-2 rounded-2xl border px-3 py-2"
                   >
                     <button className="min-w-0 flex-1 text-left" onClick={() => onSelect(f)}>
-                      <div className="text-sm font-medium">
+                      <div className="m3-body-md font-medium">
                         <FavoriteItemDisplay
                           item={f}
                           lang={lang}
@@ -409,10 +412,10 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                           lrtStationsById={lrtStationsById}
                         />
                       </div>
-                      <div className="text-muted-foreground truncate text-xs">
+                      <div className="text-muted-foreground m3-body-md truncate">
                         <span>{f.mode.toUpperCase()}</span>
                         <span className="mx-1">·</span>
-                        <span>{groupNameById.get(f.groupId ?? '') ?? t.none}</span>
+                        <span>{groupNameById.get(f.groupId ?? '') ?? t('favorites.none')}</span>
                       </div>
                     </button>
                     <div className="flex items-center gap-1">
@@ -420,7 +423,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 rounded-xl"
-                        aria-label={f.pinned ? t.unpinned : t.pinned}
+                        aria-label={f.pinned ? t('favorites.unpinned') : t('favorites.pinned')}
                         onClick={() => toggleFavoritePin(f.id)}
                       >
                         {f.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
@@ -429,7 +432,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 rounded-xl"
-                        aria-label={t.moveUp}
+                        aria-label={t('favorites.moveUp')}
                         onClick={() => moveFavorite(f.id, 'up')}
                         disabled={
                           index === 0 || Boolean(f.pinned) !== Boolean(favorites[index - 1]?.pinned)
@@ -441,7 +444,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 rounded-xl"
-                        aria-label={t.moveDown}
+                        aria-label={t('favorites.moveDown')}
                         onClick={() => moveFavorite(f.id, 'down')}
                         disabled={
                           index === favorites.length - 1 ||
@@ -456,23 +459,23 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                             size="icon"
                             variant="ghost"
                             className="h-8 w-8 rounded-xl"
-                            aria-label={t.group}
+                            aria-label={t('favorites.group')}
                           >
                             <span
                               className={cn(
-                                'text-xs font-medium',
+                                'm3-body-md font-medium',
                                 f.groupId ? 'text-foreground' : 'text-muted-foreground'
                               )}
                             >
-                              {t.group}
+                              {t('favorites.group')}
                             </span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="min-w-[10rem]">
-                          <DropdownMenuLabel>{t.group}</DropdownMenuLabel>
+                          <DropdownMenuLabel>{t('favorites.group')}</DropdownMenuLabel>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => assignFavoriteGroup(f.id, null)}>
-                            {t.none}
+                            {t('favorites.none')}
                           </DropdownMenuItem>
                           {favoritesGroups.map((group) => (
                             <DropdownMenuItem
@@ -488,19 +491,13 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                         size="icon"
                         variant="ghost"
                         className="h-8 w-8 rounded-xl"
-                        aria-label={
-                          lang === 'en'
-                            ? 'Remove favorite'
-                            : lang === 'sc'
-                              ? '移除收藏'
-                              : '移除收藏'
-                        }
+                        aria-label={t('favorites.remove')}
                         onClick={() => removeFavorite(f.id)}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
-                  </div>
+                  </motion.div>
                 ))
               )}
             </div>
@@ -509,7 +506,7 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
           <TabsContent value="recent" className="mt-0 p-6 pt-0">
             <div className="space-y-2">
               <div className="flex items-center justify-between gap-2">
-                <div className="text-muted-foreground text-xs">{t.tip}</div>
+                <div className="text-muted-foreground m3-body-md">{t('favorites.tip')}</div>
                 <Button
                   variant="ghost"
                   size="sm"
@@ -517,20 +514,23 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                   className="rounded-xl"
                   disabled={!recents.length}
                 >
-                  {t.clear}
+                  {t('favorites.clear')}
                 </Button>
               </div>
 
               {recents.length === 0 ? (
-                <div className="text-muted-foreground text-sm">{t.noRecent}</div>
+                <div className="text-muted-foreground m3-body-md">{t('favorites.noRecent')}</div>
               ) : (
                 recents.map((r) => (
-                  <button
+                  <motion.button
                     key={`${r.id}-${r.at}`}
-                    className="ui-animate-in-fast ui-lift bg-background/40 hover:bg-background/60 w-full rounded-2xl border px-3 py-2 text-left"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+                    className="ui-lift bg-surface-container-low hover:bg-surface-container w-full rounded-2xl border px-3 py-2 text-left"
                     onClick={() => onSelect(r)}
                   >
-                    <div className="text-sm font-medium">
+                    <div className="m3-body-md font-medium">
                       <FavoriteItemDisplay
                         item={r}
                         lang={lang}
@@ -540,11 +540,11 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
                         lrtStationsById={lrtStationsById}
                       />
                     </div>
-                    <div className="text-muted-foreground mt-0.5 flex items-center justify-between gap-2 text-xs">
+                    <div className="text-muted-foreground m3-body-md mt-0.5 flex items-center justify-between gap-2">
                       <span>{r.mode.toUpperCase()}</span>
                       <span>{dateFormatter.format(new Date(r.at))}</span>
                     </div>
-                  </button>
+                  </motion.button>
                 ))
               )}
             </div>

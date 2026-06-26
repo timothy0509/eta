@@ -30,7 +30,6 @@ function formatStationName(station: MtrStationSearchItem, lang: UiLanguage) {
 }
 
 function formatStationSecondary(station: MtrStationSearchItem, lang: UiLanguage) {
-  // Secondary label shows the "other" language; for English UI, always use Chinese (TC).
   if (lang === 'en') return station.nameTc
   return station.nameEn
 }
@@ -95,23 +94,25 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
           aria-controls={open ? listId : undefined}
           aria-haspopup="listbox"
           className={cn(
-            'bg-card/70 w-full justify-start rounded-2xl border text-left shadow-sm',
-            'hover:bg-card',
-            !selectedStation && 'text-muted-foreground'
+            'bg-surface-container-high/70 text-on-surface w-full justify-start rounded-full border-0 py-5 text-left shadow-sm',
+            'hover:bg-surface-container-high',
+            !selectedStation && 'text-on-surface-variant'
           )}
         >
-          <Search className="mr-2 h-4 w-4" />
-          {selectedStation
-            ? formatStationName(selectedStation, lang)
-            : lang === 'en'
-              ? 'Search station name…'
-              : lang === 'sc'
-                ? '搜索车站…'
-                : '搜尋車站…'}
+          <Search className="text-on-surface-variant mr-2 h-4 w-4" />
+          <span className="m3-body-md truncate">
+            {selectedStation
+              ? formatStationName(selectedStation, lang)
+              : lang === 'en'
+                ? 'Search station name…'
+                : lang === 'sc'
+                  ? '搜索车站…'
+                  : '搜尋車站…'}
+          </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
-        <Command shouldFilter={false}>
+        <Command shouldFilter={false} className="bg-surface-container-low rounded-2xl">
           <CommandInput
             placeholder={
               lang === 'en'
@@ -125,10 +126,16 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
             }
             value={query}
             onValueChange={setQuery}
+            className="m3-body-md border-b-0"
           />
-          <CommandList id={listId}>
-            <CommandEmpty>{lang === 'en' ? 'No results.' : '無結果。'}</CommandEmpty>
-            <CommandGroup heading={lang === 'en' ? 'Stations' : lang === 'sc' ? '车站' : '車站'}>
+          <CommandList id={listId} className="max-h-[400px] py-2">
+            <CommandEmpty className="text-on-surface-variant m3-body-md py-8 text-center">
+              {lang === 'en' ? 'No results.' : '無結果。'}
+            </CommandEmpty>
+            <CommandGroup
+              heading={lang === 'en' ? 'Stations' : lang === 'sc' ? '车站' : '車站'}
+              className="text-on-surface-variant m3-label-md px-3 pt-0 pb-2"
+            >
               {displayResults.map((station: MtrStationSearchItem) => (
                 <CommandItem
                   key={station.labelId}
@@ -137,14 +144,16 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
                     onSelect(station)
                     setOpen(false)
                   }}
-                  className="flex items-start gap-3"
+                  className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
                 >
-                  <div className="bg-background/50 mt-0.5 rounded-lg border p-2">
-                    <TrainFront className="text-muted-foreground h-4 w-4" />
+                  <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+                    <TrainFront className="h-4 w-4" />
                   </div>
-                  <div className="min-w-0">
-                    <div className="truncate font-medium">{formatStationName(station, lang)}</div>
-                    <div className="text-muted-foreground truncate text-xs">
+                  <div className="min-w-0 flex-1">
+                    <div className="text-on-surface truncate font-medium">
+                      {formatStationName(station, lang)}
+                    </div>
+                    <div className="text-on-surface-variant m3-label-md truncate">
                       {formatStationSecondary(station, lang)}
                       {` · ${lang === 'en' ? 'Lines' : lang === 'sc' ? '线路' : '路線'}: ${station.lines.join('/')}`}
                       {showStationCode

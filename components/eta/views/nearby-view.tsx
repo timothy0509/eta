@@ -165,9 +165,9 @@ export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMo
     return (
       <MtrNearbyView
         lang={lang}
-        location={location}
-        locating={locating}
-        locationError={locationError}
+        location={null}
+        locating={false}
+        locationError={null}
         onRefresh={refresh}
         t={t}
       />
@@ -177,9 +177,9 @@ export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMo
   return (
     <LrtNearbyView
       lang={lang}
-      location={location}
-      locating={locating}
-      locationError={locationError}
+      location={null}
+      locating={false}
+      locationError={null}
       onRefresh={refresh}
       t={t}
     />
@@ -313,7 +313,7 @@ function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }
   )
 }
 
-function MtrNearbyView({ lang, locating, locationError, onRefresh, t }: SharedViewProps) {
+function MtrNearbyView({ lang, t }: SharedViewProps) {
   const lines = useMtrStationsByLine()
 
   const stationName = React.useCallback(
@@ -324,34 +324,12 @@ function MtrNearbyView({ lang, locating, locationError, onRefresh, t }: SharedVi
   return (
     <div className="space-y-4">
       <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
-        <div className="m3-title-md mb-3 flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2">
-            <Navigation className="h-5 w-5" />
-            {t('common.nearby')}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full"
-            onClick={onRefresh}
-            disabled={locating}
-          >
-            <RefreshCw className={cn('mr-1.5 h-4 w-4', locating && 'animate-spin')} />
-            {t('common.refreshLocation')}
-          </Button>
+        <div className="m3-title-md mb-3 flex items-center gap-2">
+          <Navigation className="h-5 w-5" />
+          {t('common.nearby')}
         </div>
 
-        {locating && (
-          <div className="text-on-surface-variant m3-body-md py-2">{t('common.locating')}</div>
-        )}
-        {locationError && (
-          <div className="text-error m3-body-md flex items-center gap-2 py-2">
-            <MapPin className="h-4 w-4" />
-            {locationError}
-          </div>
-        )}
-
-        <div className="bg-secondary-container text-on-secondary-container m3-body-md mb-4 rounded-2xl p-3">
+        <div className="bg-surface-container text-on-surface-variant m3-body-md mb-4 rounded-2xl p-3">
           {t('common.mtrNoCoords')}
         </div>
 
@@ -386,7 +364,7 @@ function MtrNearbyView({ lang, locating, locationError, onRefresh, t }: SharedVi
   )
 }
 
-function LrtNearbyView({ lang, locating, locationError, onRefresh, t }: SharedViewProps) {
+function LrtNearbyView({ lang, t }: SharedViewProps) {
   const { routes, loading, error } = useLrtRouteStations()
   const routeGroups = useLrtStationsByRoute(routes)
 
@@ -398,34 +376,12 @@ function LrtNearbyView({ lang, locating, locationError, onRefresh, t }: SharedVi
   return (
     <div className="space-y-4">
       <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
-        <div className="m3-title-md mb-3 flex items-center justify-between gap-3">
-          <span className="flex items-center gap-2">
-            <Navigation className="h-5 w-5" />
-            {t('common.nearby')}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            className="rounded-full"
-            onClick={onRefresh}
-            disabled={locating}
-          >
-            <RefreshCw className={cn('mr-1.5 h-4 w-4', locating && 'animate-spin')} />
-            {t('common.refreshLocation')}
-          </Button>
+        <div className="m3-title-md mb-3 flex items-center gap-2">
+          <Navigation className="h-5 w-5" />
+          {t('common.nearby')}
         </div>
 
-        {locating && (
-          <div className="text-on-surface-variant m3-body-md py-2">{t('common.locating')}</div>
-        )}
-        {locationError && (
-          <div className="text-error m3-body-md flex items-center gap-2 py-2">
-            <MapPin className="h-4 w-4" />
-            {locationError}
-          </div>
-        )}
-
-        <div className="bg-secondary-container text-on-secondary-container m3-body-md mb-4 rounded-2xl p-3">
+        <div className="bg-surface-container text-on-surface-variant m3-body-md mb-4 rounded-2xl p-3">
           {t('common.lrtNoCoords')}
         </div>
 

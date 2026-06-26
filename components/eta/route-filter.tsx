@@ -42,6 +42,15 @@ function getCompanyFromVariantKey(key: string) {
   return co || 'kmb'
 }
 
+function hasDuplicateRoutes(options: RouteFilterOption[]): boolean {
+  const routeCounts = new Map<string, number>()
+  for (const opt of options) {
+    const route = opt.route.toUpperCase()
+    routeCounts.set(route, (routeCounts.get(route) ?? 0) + 1)
+  }
+  return Array.from(routeCounts.values()).some((count) => count > 1)
+}
+
 type Props = {
   lang: UiLanguage
   mode: RouteFilterMode
@@ -62,6 +71,7 @@ function sortOptions(options: RouteFilterOption[]) {
 
 export function RouteFilter({ lang, mode, value, onChange, options }: Props) {
   const opts = React.useMemo(() => sortOptions(options ?? []), [options])
+  const showOperatorCode = React.useMemo(() => hasDuplicateRoutes(opts), [opts])
 
   const t = {
     routes: lang === 'en' ? 'Routes' : '路線',
@@ -81,33 +91,21 @@ export function RouteFilter({ lang, mode, value, onChange, options }: Props) {
     }
     const routes = (value.routes ?? '')
       .split(',')
-      .map((r) => r.trim().toUpperCase())
+      .map((r) => r.trim())
       .filter(Boolean)
     return new Set(routes)
   }, [mode, value.entries, value.routes])
 
   const toggleOption = React.useCallback(
     (opt: RouteFilterOption) => {
-      if (mode === 'advanced') {
-        const entries = value.entries ?? []
-        const exists = entries.some((e) => e.variantKey === opt.key)
-        const next = exists
-          ? entries.filter((e) => e.variantKey !== opt.key)
-          : [...entries, { id: createId(), variantKey: opt.key }]
-        onChange({ ...value, entries: next, routes: '' })
-      } else {
-        const routes = (value.routes ?? '')
-          .split(',')
-          .map((r) => r.trim().toUpperCase())
-          .filter(Boolean)
-        const exists = routes.includes(opt.route.toUpperCase())
-        const next = exists
-          ? routes.filter((r) => r !== opt.route.toUpperCase())
-          : [...routes, opt.route.toUpperCase()]
-        onChange({ ...value, routes: next.join(','), entries: [] })
-      }
+      const entries = value.entries ?? []
+      const exists = entries.some((e) => e.variantKey === opt.key)
+      const next = exists
+        ? entries.filter((e) => e.variantKey !== opt.key)
+        : [...entries, { id: createId(), variantKey: opt.key }]
+      onChange({ ...value, entries: next, routes: '' })
     },
-    [mode, onChange, value]
+    [onChange, value]
   )
 
   const clearAll = React.useCallback(() => {
@@ -144,10 +142,8 @@ export function RouteFilter({ lang, mode, value, onChange, options }: Props) {
       ) : (
         <div className="flex flex-wrap gap-2">
           {opts.map((opt) => {
-            const active =
-              mode === 'advanced'
-                ? selectedKeys.has(opt.key)
-                : selectedKeys.has(opt.route.toUpperCase())
+            const active = selectedKeys.has(opt.key)
+            const company = getCompanyFromVariantKey(opt.key)
             return (
               <button
                 key={opt.key}
@@ -160,11 +156,10 @@ export function RouteFilter({ lang, mode, value, onChange, options }: Props) {
                     : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
                 )}
               >
-                <RouteBadge
-                  route={opt.route}
-                  company={getCompanyFromVariantKey(opt.key)}
-                  size="sm"
-                />
+                <RouteBadge route={opt.route} company={company} size="sm" />
+                {showOperatorCode && (
+                  <span className="text-on-surface-variant m3-label-sm uppercase">{company}</span>
+                )}
                 <span className="max-w-[12ch] truncate">{opt.label}</span>
               </button>
             )

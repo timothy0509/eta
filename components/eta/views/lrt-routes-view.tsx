@@ -3,6 +3,7 @@
 import { ChevronLeft, MapPin, TramFront } from 'lucide-react'
 import * as React from 'react'
 
+import { Button } from '@/components/ui/button'
 import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
 import { listLrtRoutes } from '@/lib/eta/direct/eta-db'
@@ -34,7 +35,13 @@ function sortRoutes(a: RouteListEntry, b: RouteListEntry): number {
   )
 }
 
-export function LrtRoutesView({ lang }: { lang: UiLanguage }) {
+export function LrtRoutesView({
+  lang,
+  onViewEtas,
+}: {
+  lang: UiLanguage
+  onViewEtas?: (stationId: string) => void
+}) {
   const { t } = useTranslations(lang)
   const [routes, setRoutes] = React.useState<RouteListEntry[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -175,10 +182,22 @@ export function LrtRoutesView({ lang }: { lang: UiLanguage }) {
                     <div className="bg-surface border-outline z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border">
                       <MapPin className="text-on-surface-variant h-4 w-4" />
                     </div>
-                    <div className="m3-body-md text-on-surface">
+                    <div className="m3-body-md text-on-surface min-w-0 flex-1">
                       {getLrtStationName(stationId, lang)}
                     </div>
-                    <div className="text-on-surface-variant m3-label-md ml-auto">{stationId}</div>
+                    <div className="text-on-surface-variant m3-label-md hidden sm:block">
+                      {stationId}
+                    </div>
+                    {onViewEtas && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => onViewEtas(stationId)}
+                      >
+                        {t('common.viewEtas')}
+                      </Button>
+                    )}
                   </div>
                 </StaggerItem>
               ))}

@@ -85,6 +85,7 @@ const common: Record<string, TranslationEntry> = {
   allMtrLines: { en: 'All MTR lines', tc: '所有港鐵路線', sc: '所有港铁路线' },
   allLrtRoutes: { en: 'All Light Rail routes', tc: '所有輕鐵路線', sc: '所有轻铁路线' },
   loading: { en: 'Loading…', tc: '載入中…', sc: '载入中…' },
+  viewEtas: { en: 'View ETAs', tc: '查看到站時間', sc: '查看到站时间' },
 }
 
 const kmb: Record<string, TranslationEntry> = {

@@ -3,6 +3,7 @@
 import { ChevronLeft, MapPin, TrainFront } from 'lucide-react'
 import * as React from 'react'
 
+import { Button } from '@/components/ui/button'
 import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import {
   MTR_STATIONS,
@@ -31,7 +32,13 @@ function sortLines(a: string, b: string): number {
   return a.localeCompare(b)
 }
 
-export function MtrRoutesView({ lang }: { lang: UiLanguage }) {
+export function MtrRoutesView({
+  lang,
+  onViewEtas,
+}: {
+  lang: UiLanguage
+  onViewEtas?: (sta: string) => void
+}) {
   const { t } = useTranslations(lang)
   const [selectedLine, setSelectedLine] = React.useState<string | null>(null)
 
@@ -122,10 +129,22 @@ export function MtrRoutesView({ lang }: { lang: UiLanguage }) {
                     <div className="bg-surface text-on-surface-variant flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
                       <MapPin className="h-4 w-4" />
                     </div>
-                    <div className="m3-body-md text-on-surface">
+                    <div className="m3-body-md text-on-surface min-w-0 flex-1">
                       {formatMtrStationName(station, toMtrLang(lang))}
                     </div>
-                    <div className="text-on-surface-variant m3-label-md ml-auto">{station.sta}</div>
+                    <div className="text-on-surface-variant m3-label-md hidden sm:block">
+                      {station.sta}
+                    </div>
+                    {onViewEtas && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full"
+                        onClick={() => onViewEtas(station.sta)}
+                      >
+                        {t('common.viewEtas')}
+                      </Button>
+                    )}
                   </div>
                 </StaggerItem>
               ))}

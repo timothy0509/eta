@@ -411,7 +411,6 @@ export function KmbPane({
   }, [availableStopIdsForFilter, kmbRouteInfos, routeStopIndex])
 
   React.useEffect(() => {
-    if (routeFilterMode !== 'advanced') return
     if (!(routeFilter.entries ?? []).length) return
 
     const nextEntries = (routeFilter.entries ?? []).filter((entry) =>
@@ -426,7 +425,7 @@ export function KmbPane({
       dispatchEta({ type: 'RESET' })
     }, 0)
     return () => clearTimeout(id)
-  }, [kmbAvailableRouteVariants, routeFilter.entries, routeFilterMode])
+  }, [kmbAvailableRouteVariants, routeFilter.entries])
 
   // AbortController for cancelling in-flight requests
   const abortControllerRef = React.useRef<AbortController | null>(null)
@@ -877,26 +876,22 @@ export function KmbPane({
 
     if (isSame) return
 
-    const routeInput = routeFilterMode === 'simple' ? (routeFilter.routes?.trim() ?? '') : ''
     const nextQuery: KmbQuery =
       kmbDraftStopSelection.type === 'stop'
         ? {
             mode: 'stop',
             stopId: kmbDraftStopSelection.stopId,
-            route: routeInput || undefined,
             serviceType: '1',
           }
         : kmbDraftStopSelection.type === 'stops'
           ? {
               mode: 'stops',
               stopIds: kmbDraftStopSelection.stopIds,
-              route: routeInput || undefined,
               serviceType: '1',
             }
           : {
               mode: 'contains',
               query: kmbDraftStopSelection.query,
-              route: routeInput || undefined,
               serviceType: '1',
             }
 
@@ -906,13 +901,7 @@ export function KmbPane({
 
     setKmbQuery(nextQuery)
     void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
-  }, [
-    kmbDraftStopSelection,
-    kmbRouteStops.length,
-    routeFilter.routes,
-    routeFilterMode,
-    infiniteScroll,
-  ])
+  }, [kmbDraftStopSelection, kmbRouteStops.length, routeFilter.entries, infiniteScroll])
 
   React.useEffect(() => {
     if (!selectedItem) return
@@ -956,7 +945,6 @@ export function KmbPane({
 
   const prevEntriesRef = React.useRef<typeof routeFilter.entries>([])
   React.useEffect(() => {
-    if (routeFilterMode !== 'advanced') return
     if (!kmbDraftStopSelection) return
     if (!kmbRouteStops.length) return
 
@@ -978,49 +966,6 @@ export function KmbPane({
     setKmbQuery(nextQuery)
     void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
   }, [routeFilterMode, routeFilter.entries, kmbDraftStopSelection, kmbRouteStops.length])
-
-  const [debouncedRoutes, setDebouncedRoutes] = React.useState(routeFilter.routes ?? '')
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedRoutes(routeFilter.routes ?? '')
-    }, 1000)
-    return () => clearTimeout(timer)
-  }, [routeFilter.routes])
-
-  React.useEffect(() => {
-    if (routeFilterMode !== 'simple') return
-    if (!kmbDraftStopSelection) return
-    if (!kmbRouteStops.length) return
-
-    const routeInput = debouncedRoutes.trim()
-    const nextQuery: KmbQuery =
-      kmbDraftStopSelection.type === 'stop'
-        ? {
-            mode: 'stop',
-            stopId: kmbDraftStopSelection.stopId,
-            route: routeInput || undefined,
-            serviceType: '1',
-          }
-        : kmbDraftStopSelection.type === 'stops'
-          ? {
-              mode: 'stops',
-              stopIds: kmbDraftStopSelection.stopIds,
-              route: routeInput || undefined,
-              serviceType: '1',
-            }
-          : {
-              mode: 'contains',
-              query: kmbDraftStopSelection.query,
-              route: routeInput || undefined,
-              serviceType: '1',
-            }
-
-    const id = setTimeout(() => {
-      setKmbQuery(nextQuery)
-      void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
-    }, 0)
-    return () => clearTimeout(id)
-  }, [routeFilterMode, debouncedRoutes, kmbDraftStopSelection, kmbRouteStops.length])
 
   const kmbResultsInfo = React.useMemo(() => {
     if (!kmbQuery) {

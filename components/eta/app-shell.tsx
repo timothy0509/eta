@@ -5,19 +5,14 @@ import {
   ChevronLeft,
   Heart,
   MapPin,
-  Moon,
   Route,
   Settings,
-  Sun,
   TrainFront,
   TramFront,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
-import { useTheme } from 'next-themes'
 import * as React from 'react'
 
-import { LanguageToggle } from '@/components/eta/language-toggle'
-import { Button } from '@/components/ui/button'
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { useTranslations } from '@/lib/eta/i18n'
 import { cn } from '@/lib/utils'
@@ -71,12 +66,9 @@ type TopAppBarProps = {
   lang: UiLanguage
   mode: TransportMode
   onModeChange: (mode: TransportMode) => void
-  onLangChange: (lang: UiLanguage) => void
 }
 
-export function TopAppBar({ lang, mode, onModeChange, onLangChange }: TopAppBarProps) {
-  const { theme, setTheme, resolvedTheme } = useTheme()
-  const themeMounted = resolvedTheme !== undefined
+export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
   const { t } = useTranslations(lang)
 
   return (
@@ -122,30 +114,6 @@ export function TopAppBar({ lang, mode, onModeChange, onLangChange }: TopAppBarP
             })}
           </div>
         </nav>
-
-        <div className="flex items-center gap-2">
-          <LanguageToggle mode={mode} value={lang} onChange={onLangChange} />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="rounded-full"
-            aria-label={t('common.toggleTheme')}
-            onClick={() => {
-              const actual = resolvedTheme ?? theme
-              setTheme(actual === 'dark' ? 'light' : 'dark')
-            }}
-          >
-            {themeMounted ? (
-              (resolvedTheme ?? theme) === 'dark' ? (
-                <Sun className="h-5 w-5" />
-              ) : (
-                <Moon className="h-5 w-5" />
-              )
-            ) : (
-              <span className="inline-block h-5 w-5" aria-hidden />
-            )}
-          </Button>
-        </div>
       </div>
     </header>
   )

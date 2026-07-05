@@ -42,6 +42,44 @@ type RouteVariant = {
   destination: { en: string; tc: string; sc: string }
 }
 
+type RouteSelection = {
+  co: string
+  route: string
+}
+
+function normalizeCo(co: string | undefined): string {
+  return String(co ?? 'kmb').toLowerCase()
+}
+
+function routeSelectionKey(sel: RouteSelection): string {
+  return `${normalizeCo(sel.co)}|${sel.route}`
+}
+
+function variantBaseKey(entry: {
+  co?: string
+  route?: string
+  bound?: string
+  dir?: string
+  serviceType?: string
+  service_type?: string | number
+}): string {
+  return `${normalizeCo(entry.co)}|${String(entry.route ?? '').toUpperCase()}|${entry.bound ?? entry.dir ?? ''}|${String(entry.serviceType ?? entry.service_type ?? '')}`
+}
+
+function hasDuplicateRouteNumbers(entries: RouteSelection[]): boolean {
+  const routeCounts = new Map<string, number>()
+  for (const entry of entries) {
+    const route = entry.route.toUpperCase()
+    routeCounts.set(route, (routeCounts.get(route) ?? 0) + 1)
+  }
+  return Array.from(routeCounts.values()).some((count) => count > 1)
+}
+
+function hasDuplicateOperators(variants: RouteVariant[]): boolean {
+  const cos = new Set(variants.map((v) => normalizeCo(v.co)))
+  return cos.size > 1
+}
+
 function useKmbRouteList() {
   const [routes, setRoutes] = React.useState<KmbRouteInfoLite[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -118,30 +156,48 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
   const stopsById = React.useMemo(() => new Map(allStops.map((s) => [s.stopId, s])), [allStops])
 
   const [query, setQuery] = React.useState('')
-  const [selectedRoute, setSelectedRoute] = React.useState<string | null>(null)
+  const [selectedRouteKey, setSelectedRouteKey] = React.useState<RouteSelection | null>(null)
   const [selectedVariant, setSelectedVariant] = React.useState<RouteVariant | null>(null)
   const [variantStops, setVariantStops] = React.useState<KmbRouteStopLite[]>([])
   const [etas, setEtas] = React.useState<Record<string, KmbEtaEntryWithLeg[]>>({})
 
   const addFavorite = useAppStore((s) => s.addFavorite)
 
-  const routeNumbers = React.useMemo(() => {
-    const set = new Set<string>()
-    for (const r of routes) set.add(r.route)
-    return Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+  const routeEntries = React.useMemo(() => {
+    const map = new Map<string, RouteSelection>()
+    for (const r of routes) {
+      const co = normalizeCo(String(r.co ?? 'kmb'))
+      const key = `${co}|${r.route}`
+      if (!map.has(key)) map.set(key, { co, route: r.route })
+    }
+    return Array.from(map.values()).sort((a, b) =>
+      a.route.localeCompare(b.route, undefined, { numeric: true })
+    )
   }, [routes])
+
+  const showOperatorInSearch = React.useMemo(
+    () => hasDuplicateRouteNumbers(routeEntries),
+    [routeEntries]
+  )
 
   const filteredRoutes = React.useMemo(() => {
     const needle = query.trim().toUpperCase()
-    if (!needle) return routeNumbers.slice(0, 30)
-    return routeNumbers.filter((r) => r.toUpperCase().includes(needle)).slice(0, 30)
-  }, [query, routeNumbers])
+    const matches = needle
+      ? routeEntries.filter((e) => e.route.toUpperCase().includes(needle))
+      : routeEntries
+    return matches.slice(0, 30)
+  }, [query, routeEntries])
 
   const variantsForRoute = React.useMemo(() => {
-    if (!selectedRoute) return []
+    if (!selectedRouteKey) return []
     const map = new Map<string, RouteVariant>()
     for (const r of routes) {
-      if (r.route !== selectedRoute) continue
+      if (
+        r.route !== selectedRouteKey.route ||
+        normalizeCo(String(r.co ?? 'kmb')) !== selectedRouteKey.co
+      ) {
+        continue
+      }
       const key = `${r.co}|${r.route}|${r.bound}|${r.serviceType}`
       if (map.has(key)) continue
       map.set(key, {
@@ -157,26 +213,34 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
     return Array.from(map.values()).sort(
       (a, b) => a.bound.localeCompare(b.bound) || a.serviceType.localeCompare(b.serviceType)
     )
-  }, [routes, selectedRoute])
+  }, [routes, selectedRouteKey])
+
+  const showOperatorInVariants = React.useMemo(
+    () => hasDuplicateOperators(variantsForRoute),
+    [variantsForRoute]
+  )
 
   const currentVariant = React.useMemo(() => {
-    if (!selectedRoute) return null
+    if (!selectedRouteKey) return null
     if (selectedVariant && variantsForRoute.some((v) => v.key === selectedVariant.key)) {
       return selectedVariant
     }
     return variantsForRoute[0] ?? null
-  }, [selectedRoute, selectedVariant, variantsForRoute])
+  }, [selectedRouteKey, selectedVariant, variantsForRoute])
 
   React.useEffect(() => {
     if (!currentVariant) return
     let cancelled = false
     const load = async () => {
+      const co = normalizeCo(currentVariant.co)
+      const variantKey = variantBaseKey(currentVariant)
       const allRouteStops = await fetchKmbRouteStops()
       if (cancelled) return
       const filtered = allRouteStops
         .filter(
           (rs) =>
             rs.route === currentVariant.route &&
+            normalizeCo(rs.co) === co &&
             rs.bound === currentVariant.bound &&
             rs.serviceType === currentVariant.serviceType
         )
@@ -189,7 +253,14 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
         routeFilter: currentVariant.route,
         includeFares: false,
       })
-      if (!cancelled) setEtas(res.byStopId)
+      if (cancelled) return
+      const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
+      for (const [stopId, entries] of Object.entries(res.byStopId)) {
+        filteredEtas[stopId] = (entries ?? []).filter(
+          (eta) => variantBaseKey(eta) === variantKey
+        )
+      }
+      setEtas(filteredEtas)
     }
     void load().catch(() => {})
     return () => {
@@ -264,16 +335,21 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
           </div>
         )}
 
-        {!selectedRoute ? (
+        {!selectedRouteKey ? (
           <StaggerContainer className="mt-3 flex flex-wrap gap-2" stagger={0.02}>
-            {filteredRoutes.map((route) => (
-              <StaggerItem key={route}>
+            {filteredRoutes.map((entry) => (
+              <StaggerItem key={routeSelectionKey(entry)}>
                 <button
                   type="button"
-                  onClick={() => setSelectedRoute(route)}
-                  className="bg-surface-container-high hover:bg-surface-container hover:elevation-1 m3-label-lg rounded-full px-4 py-2 transition-colors"
+                  onClick={() => setSelectedRouteKey(entry)}
+                  className="bg-surface-container-high hover:bg-surface-container hover:elevation-1 m3-label-lg flex items-center gap-1.5 rounded-full px-4 py-2 transition-colors"
                 >
-                  {route}
+                  <RouteBadge route={entry.route} company={entry.co} size="sm" />
+                  {showOperatorInSearch && (
+                    <span className="text-on-surface-variant m3-label-sm uppercase">
+                      {entry.co}
+                    </span>
+                  )}
                 </button>
               </StaggerItem>
             ))}
@@ -284,14 +360,18 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedRoute(null)
+                  setSelectedRouteKey(null)
                   setSelectedVariant(null)
                 }}
                 className="text-primary m3-label-lg"
               >
                 ← {t('common.back') ?? 'Back'}
               </button>
-              <RouteBadge route={selectedRoute} size="lg" />
+              <RouteBadge
+                route={selectedRouteKey.route}
+                company={selectedRouteKey.co}
+                size="lg"
+              />
             </div>
 
             {variantsForRoute.length > 1 && (
@@ -308,6 +388,9 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
                         : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
                     )}
                   >
+                    {showOperatorInVariants && (
+                      <span className="mr-1 uppercase">{normalizeCo(v.co)}</span>
+                    )}
                     {v.bound === 'I'
                       ? lang === 'en'
                         ? 'Inbound'

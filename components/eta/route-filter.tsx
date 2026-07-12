@@ -219,7 +219,7 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                   title={tooltip}
                   onClick={() => handleRouteClick(route, variants)}
                   className={cn(
-                    'rounded-full p-0.5 transition-colors',
+                    'inline-flex rounded-lg p-0.5 transition-colors',
                     active && 'bg-primary-container',
                     focused && !active && 'bg-surface-container ring-primary/40 ring-2',
                     !active && !focused && 'hover:bg-surface-container-high'

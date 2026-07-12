@@ -19,6 +19,7 @@ import {
 } from '@/lib/eta/direct/eta-db'
 import { getLrtSchedule } from '@/lib/eta/direct/lrt'
 import { fetchMtrSchedules as fetchMtrSchedulesDirect } from '@/lib/eta/direct/mtr'
+import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
 
 type DedupeKey = string
@@ -304,8 +305,9 @@ export async function fetchLrtSchedule(
   params: { stationId: string },
   options?: { signal?: AbortSignal }
 ): Promise<LrtScheduleResponse> {
-  const key = `lrt:schedule:${params.stationId}`
-  return await fetchJsonDedupe(key, async () => getLrtSchedule({ stationId: params.stationId }), {
+  const stationId = lrtStopIdToStationId(params.stationId) ?? params.stationId
+  const key = `lrt:schedule:${stationId}`
+  return await fetchJsonDedupe(key, async () => getLrtSchedule({ stationId }), {
     signal: options?.signal,
   })
 }
@@ -327,10 +329,15 @@ export async function fetchLrtEtasForStop(
   },
   options?: { signal?: AbortSignal }
 ): Promise<Eta[]> {
-  const key = `lrt:etas:${params.route}|${params.bound}|${params.serviceType}|${params.stationId}|${params.language}`
-  return await fetchJsonDedupe(key, async () => fetchLrtEtasForStopDirect(params), {
-    signal: options?.signal,
-  })
+  const stationId = lrtStopIdToStationId(params.stationId) ?? params.stationId
+  const key = `lrt:etas:${params.route}|${params.bound}|${params.serviceType}|${stationId}|${params.language}`
+  return await fetchJsonDedupe(
+    key,
+    async () => fetchLrtEtasForStopDirect({ ...params, stationId }),
+    {
+      signal: options?.signal,
+    }
+  )
 }
 
 export async function fetchMtrRouteSchedules(

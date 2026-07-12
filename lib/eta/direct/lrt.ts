@@ -2,6 +2,7 @@ import { lrtScheduleKey } from '@/lib/eta/cache/keys'
 import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import { fetchLrtEtasForStop, listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { getCachedValue } from '@/lib/eta/direct/shared'
+import { lrtStopIdToStationId, lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 
 export type LrtScheduleResponse = {
   system_time?: string
@@ -93,13 +94,18 @@ function mapEtaToRouteEntry(params: {
 
 async function loadLrtSchedule(stationId: string): Promise<LrtScheduleResponse> {
   const routes = await listLrtRoutes()
-  const stationIdPadded = String(stationId).padStart(3, '0')
-  const stopId = `LR${stationIdPadded}`
+  const stopId = stationIdToLrtStopId(stationId)
+  if (!stopId) {
+    return {
+      system_time: formatHkDateTime(new Date()),
+      platform_list: [],
+    }
+  }
   const destByRoute = new Map(routes.map((entry) => [entry.route.toUpperCase(), entry.dest]))
 
   const variants = routes.filter((entry) => {
     const stops = entry.stops.lightRail ?? []
-    return stops.some((id) => id.toUpperCase() === stopId.toUpperCase())
+    return stops.some((id) => lrtStopIdsEqual(id, stopId))
   })
 
   if (variants.length === 0) {
@@ -114,9 +120,8 @@ async function loadLrtSchedule(stationId: string): Promise<LrtScheduleResponse> 
   const results = await Promise.allSettled(
     variants.map(async (entry) => {
       const bound = entry.bound.lightRail ?? ''
-      const stop =
-        entry.stops.lightRail?.find((id) => id.toUpperCase() === stopId.toUpperCase()) ?? stopId
-      const stationIdForEta = stop.startsWith('LR') ? stop.slice(2) : stationId
+      const stop = entry.stops.lightRail?.find((id) => lrtStopIdsEqual(id, stopId)) ?? stopId
+      const stationIdForEta = lrtStopIdToStationId(stop) ?? stationId
       const etas = await fetchLrtEtasForStop({
         route: entry.route,
         bound,

@@ -14,6 +14,7 @@ import { fetchLrtEtasForStop } from '@/lib/eta/client'
 import { listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
+import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
 import { pickSoonestIsoEta } from '@/lib/eta/pick-soonest-eta'
 import { promisePool } from '@/lib/eta/promise-pool'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -21,10 +22,6 @@ import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 import type { Eta, RouteListEntry } from 'hk-bus-eta'
-
-function parseLrtStopId(stopId: string): string {
-  return stopId.replace(/^LR/i, '').replace(/^0+/, '') || '0'
-}
 
 function getLrtStationName(stationId: string, lang: UiLanguage): string {
   const station = LRT_STATIONS.find((s) => s.stationId === stationId)
@@ -83,7 +80,9 @@ export function LrtRoutesView({ lang }: { lang: UiLanguage }) {
 
   const stationIds = React.useMemo(() => {
     if (!selectedRoute) return []
-    return (selectedRoute.stops.lightRail ?? []).map(parseLrtStopId)
+    return (selectedRoute.stops.lightRail ?? [])
+      .map((stopId) => lrtStopIdToStationId(stopId))
+      .filter((id): id is string => id !== null)
   }, [selectedRoute])
 
   React.useEffect(() => {
@@ -117,12 +116,10 @@ export function LrtRoutesView({ lang }: { lang: UiLanguage }) {
       setStopEtas(next)
     }
 
-    void load().catch(() => {
-      if (!cancelled) setStopEtas({})
-    })
+    void load()
 
     const interval = window.setInterval(() => {
-      void load().catch(() => {})
+      void load()
     }, 30_000)
 
     return () => {

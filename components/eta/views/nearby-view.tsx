@@ -15,6 +15,7 @@ import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { listLrtRoutes } from '@/lib/eta/direct/eta-db'
+import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
 import type { TransportMode, UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import type { RouteListEntry } from 'hk-bus-eta'
@@ -90,15 +91,6 @@ function useLrtRouteStations() {
   }, [])
 
   return { routes, loading, error }
-}
-
-function lrtStopIdToStationId(stopId: string): string | null {
-  const normalized = stopId.trim().toUpperCase()
-  if (!normalized.startsWith('LR')) return null
-  const numeric = normalized.slice(2)
-  const parsed = parseInt(numeric, 10)
-  if (Number.isNaN(parsed)) return null
-  return String(parsed)
 }
 
 function findLrtStationByStopId(stopId: string): LrtStation | undefined {

@@ -106,8 +106,11 @@ export function LrtStationSearch({ lang, stations, selectedStationId, onSelect }
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
-        <Command shouldFilter={false} className="bg-surface-container-low rounded-2xl">
+      <PopoverContent
+        className="bg-surface-container-low w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0"
+        align="start"
+      >
+        <Command shouldFilter={false} className="rounded-none bg-transparent">
           <CommandInput
             placeholder={
               lang === 'en'

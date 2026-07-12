@@ -450,7 +450,7 @@ export default function HomeClient() {
   }
 
   return (
-    <div className="bg-surface min-h-dvh pb-20 md:pb-0">
+    <div className="bg-surface min-h-dvh pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
       <LangSync />
       <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
 

@@ -171,8 +171,8 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
   const { t } = useTranslations(lang)
 
   return (
-    <nav className="bg-surface-container-low pb-safe fixed right-0 bottom-0 left-0 z-50 rounded-t-3xl px-2 pt-2 shadow-[0_-2px_12px_rgba(0,0,0,0.06)] md:hidden">
-      <div className="mx-auto flex max-w-md items-center justify-around">
+    <nav className="bg-surface-container-low elevation-2 fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-2.5rem),26rem)] -translate-x-1/2 rounded-full px-2 py-1.5 md:hidden">
+      <div className="flex w-full items-center">
         {SUB_VIEWS.map((sv) => {
           const Icon = sv.icon
           const active = subView === sv.id
@@ -182,7 +182,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
               type="button"
               onClick={() => onSubViewChange(sv.id)}
               className={cn(
-                'relative flex flex-1 flex-col items-center gap-0.5 rounded-2xl py-2 text-[11px] font-medium transition-colors',
+                'relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-full px-2 py-2 text-[11px] font-medium transition-colors',
                 active
                   ? 'text-on-secondary-container'
                   : 'text-on-surface-variant hover:text-on-surface'
@@ -191,7 +191,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
               {active && (
                 <motion.div
                   layoutId="bottom-nav-pill"
-                  className="bg-secondary-container absolute inset-x-1 inset-y-0 -z-10 rounded-2xl"
+                  className="bg-secondary-container absolute inset-0 -z-10 rounded-full"
                   transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 />
               )}

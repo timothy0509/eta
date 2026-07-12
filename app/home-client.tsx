@@ -173,20 +173,24 @@ export default function HomeClient() {
     lastEncodedRef.current = search
   }, [searchParams, setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode, setSubView])
 
-  const refreshRef = React.useRef<(() => Promise<void>) | null>(null)
+  const refreshRef = React.useRef<Partial<Record<TransportMode, () => Promise<void>>>>({})
   const inFlightRefreshRef = React.useRef(false)
   const refreshTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
   const MAX_REFRESH_DURATION_MS = 30_000
 
-  const onRegisterRefresh = React.useCallback((refresh: () => Promise<void>) => {
-    refreshRef.current = refresh
-  }, [])
+  const onRegisterRefresh = React.useCallback(
+    (transportMode: TransportMode, refresh: () => Promise<void>) => {
+      refreshRef.current[transportMode] = refresh
+    },
+    []
+  )
 
   useAutoRefresh(
     autoRefreshSeconds * 1000,
     React.useCallback(() => {
       if (subView !== 'stops') return
-      if (!refreshRef.current) return
+      const refresh = refreshRef.current[mode]
+      if (!refresh) return
       if (inFlightRefreshRef.current) return
 
       inFlightRefreshRef.current = true
@@ -197,8 +201,7 @@ export default function HomeClient() {
         }
       }, MAX_REFRESH_DURATION_MS)
 
-      refreshRef
-        .current()
+      refresh()
         .catch(() => {})
         .finally(() => {
           if (refreshTimeoutRef.current) {
@@ -207,7 +210,7 @@ export default function HomeClient() {
           }
           inFlightRefreshRef.current = false
         })
-    }, [subView])
+    }, [mode, subView])
   )
 
   React.useEffect(() => {
@@ -305,7 +308,7 @@ export default function HomeClient() {
             onAddFavorite={addFavorite}
             canFavoriteRef={canFavoriteRef}
             selectedItem={selectedItem}
-            onRegisterRefresh={onRegisterRefresh}
+            onRegisterRefresh={(refresh) => onRegisterRefresh('kmb', refresh)}
             onStopsChange={setKmbStops}
           />
         </div>
@@ -316,7 +319,7 @@ export default function HomeClient() {
             onAddRecent={addRecent}
             onAddFavorite={addFavorite}
             canFavoriteRef={canFavoriteRef}
-            onRegisterRefresh={onRegisterRefresh}
+            onRegisterRefresh={(refresh) => onRegisterRefresh('mtr', refresh)}
             selectedItem={selectedItem}
           />
         </div>
@@ -327,7 +330,7 @@ export default function HomeClient() {
             onAddRecent={addRecent}
             onAddFavorite={addFavorite}
             canFavoriteRef={canFavoriteRef}
-            onRegisterRefresh={onRegisterRefresh}
+            onRegisterRefresh={(refresh) => onRegisterRefresh('lrt', refresh)}
             selectedItem={selectedItem}
           />
         </div>
@@ -376,6 +379,7 @@ export default function HomeClient() {
             title={lrtPaneState?.title ?? ''}
             lang={lrtPaneState?.lang ?? lang}
             schedule={lrtPaneState?.schedule ?? null}
+            hasStation={Boolean(lrtPaneState?.stationId)}
             error={lrtPaneState?.error ?? null}
             stale={lrtPaneState?.stale ?? false}
             lastUpdatedAt={lrtPaneState?.lastUpdatedAt ?? null}

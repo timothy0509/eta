@@ -1,5 +1,6 @@
 'use client'
 
+import { Heart } from 'lucide-react'
 import * as React from 'react'
 
 import { MtrStationSearch } from '@/components/eta/station-search'
@@ -116,8 +117,9 @@ export function MtrPane({
         }}
       />
 
-      <div className="flex items-center gap-2">
-        <Button className="rounded-xl" onClick={() => void onSave()} disabled={!sta}>
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <Button size="sm" className="rounded-full" onClick={() => void onSave()} disabled={!sta}>
+          <Heart className="mr-1.5 h-4 w-4" />
           {lang === 'en' ? 'Save' : '收藏'}
         </Button>
       </div>

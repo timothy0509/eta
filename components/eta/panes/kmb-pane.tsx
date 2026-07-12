@@ -1,18 +1,15 @@
 'use client'
 
-import { ChevronDown, ChevronUp, Loader2, RefreshCw } from 'lucide-react'
+import { Heart, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import {
-  countActiveFilters,
   RouteFilter,
   type RouteFilterOption,
   type RouteFilterState,
 } from '@/components/eta/route-filter'
 import { StopSearch, type StopSearchSelection } from '@/components/eta/stop-search'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
 import {
   fetchKmbFares,
   fetchKmbRouteInfo,
@@ -29,8 +26,6 @@ import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
 import { useInfiniteScroll, useVisibleItems } from '@/lib/eta/use-infinite-scroll'
-import { useMediaQuery } from '@/lib/hooks/use-media-query'
-import { cn } from '@/lib/utils'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 import { precomputeRenderGroups, type PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { initialEtaState, etaReducer } from '@/components/eta/panes/kmb-reducer'
@@ -190,11 +185,6 @@ export function KmbPane({
     routes: '',
     entries: [],
   })
-
-  const isMobile = !useMediaQuery('(min-width: 1024px)')
-  const [filterExpanded, setFilterExpanded] = React.useState(false)
-
-  const activeFilterCount = React.useMemo(() => countActiveFilters(routeFilter), [routeFilter])
 
   // ========== OPTIMIZATION: Use reducer for batched ETA state updates ==========
   const [etaState, dispatchEta] = React.useReducer(etaReducer, initialEtaState)
@@ -471,22 +461,20 @@ export function KmbPane({
         )
       }
 
-      // Apply advanced filter client-side if needed (using refs for stable access)
-      const currentFilterMode = routeFilterModeRef.current
-      const currentFilterEntries = routeFilterEntriesRef.current
-      const advancedEntries = currentFilterMode === 'advanced' ? (currentFilterEntries ?? []) : []
-      const advancedKeys = advancedEntries.length
-        ? new Set(advancedEntries.map((e) => e.variantKey).filter(Boolean))
+      // Apply variant filter client-side when direction-specific entries are selected
+      const currentFilterEntries = routeFilterEntriesRef.current ?? []
+      const variantFilterKeys = currentFilterEntries.length
+        ? new Set(currentFilterEntries.map((e) => e.variantKey).filter(Boolean))
         : null
 
       const filteredByStopId: Record<string, KmbEtaEntryWithLeg[]> = {}
       for (const stopId of stopIds) {
         let etas = result.byStopId[stopId] ?? []
-        if (advancedKeys) {
+        if (variantFilterKeys) {
           etas = etas.filter((eta) => {
-            // Use base key (without leg) for advanced filter matching
+            // Use base key (without leg) for variant filter matching
             const key = `${String(eta.co ?? 'kmb')}|${(eta.route ?? '').toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
-            return advancedKeys.has(key)
+            return variantFilterKeys.has(key)
           })
         }
         filteredByStopId[stopId] = etas
@@ -1134,108 +1122,33 @@ export function KmbPane({
         }}
       />
 
-      {isMobile ? (
-        <div className="space-y-2">
-          <button
-            type="button"
-            onClick={() => setFilterExpanded(!filterExpanded)}
-            className="bg-card/50 flex w-full items-center justify-between rounded-2xl border p-4 text-left"
-            aria-expanded={filterExpanded}
-          >
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-medium">
-                {lang === 'en' ? 'Route Filter' : '路線篩選'}
-              </span>
-              {activeFilterCount > 0 && (
-                <Badge variant="secondary" className="rounded-lg px-2 py-0.5 text-xs">
-                  {activeFilterCount}
-                </Badge>
-              )}
-            </div>
-            {filterExpanded ? (
-              <ChevronUp className="text-muted-foreground h-4 w-4" />
-            ) : (
-              <ChevronDown className="text-muted-foreground h-4 w-4" />
-            )}
-          </button>
+      <RouteFilter
+        lang={lang}
+        mode={routeFilterMode}
+        onModeChange={onRouteFilterModeChange}
+        value={routeFilter}
+        options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
+        onChange={(next) => setRouteFilter(next)}
+      />
 
-          <div
-            className={cn(
-              'grid transition-all duration-200 ease-in-out',
-              filterExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-            )}
-          >
-            <div className="overflow-hidden">
-              <RouteFilter
-                lang={lang}
-                mode={routeFilterMode}
-                onModeChange={onRouteFilterModeChange}
-                value={routeFilter}
-                options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
-                onChange={(next) => setRouteFilter(next)}
-              />
-            </div>
-          </div>
-        </div>
-      ) : (
-        <RouteFilter
-          lang={lang}
-          mode={routeFilterMode}
-          onModeChange={onRouteFilterModeChange}
-          value={routeFilter}
-          options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
-          onChange={(next) => setRouteFilter(next)}
-        />
-      )}
+      {stopsError ? <p className="text-error m3-body-md">{stopsError}</p> : null}
+      {routeStopsError ? <p className="text-error m3-body-md">{routeStopsError}</p> : null}
 
-      {stopsError ? (
-        <div className="bg-background/40 text-destructive rounded-2xl border p-3 text-sm">
-          {stopsError}
-        </div>
-      ) : null}
-
-      {routeStopsError ? (
-        <div className="bg-background/40 text-destructive rounded-2xl border p-3 text-sm">
-          {routeStopsError}
-        </div>
-      ) : null}
-
-      <div className="flex items-center justify-between gap-2">
-        <Badge variant="secondary" className="rounded-xl">
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <Button size="sm" className="rounded-full" disabled={!canFavorite} onClick={onSave}>
+          <Heart className="mr-1.5 h-4 w-4" />
+          {lang === 'en' ? 'Save' : '收藏'}
+        </Button>
+        <span className="text-on-surface-variant m3-label-md text-right">
           {loadingStops || loadingRouteStops ? (
-            <span className="flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5">
               <Loader2 className="h-3 w-3 animate-spin" />
-              {lang === 'en'
-                ? 'Loading transit database…'
-                : lang === 'sc'
-                  ? '正在载入交通數據庫…'
-                  : '正在載入交通數據庫…'}
+              {lang === 'en' ? 'Loading…' : lang === 'sc' ? '载入中…' : '載入中…'}
             </span>
           ) : (
             `${kmbStops.length.toLocaleString()} ${lang === 'en' ? 'stops' : '個車站'} · ${kmbRouteStops.length.toLocaleString()} ${lang === 'en' ? 'route-stops' : '個路線車站'}`
           )}
-        </Badge>
-        <Button
-          size="sm"
-          variant="outline"
-          className="rounded-xl"
-          onClick={() => void refreshKmbEta(kmbQuery, { toastOnError: true })}
-        >
-          <RefreshCw className={cn('mr-2 h-4 w-4', kmbEtaLoading && 'ui-spin')} />
-          {lang === 'en' ? 'Refresh' : '重新整理'}
-        </Button>
-      </div>
-
-      <Separator />
-
-      <div className="flex items-center justify-between gap-2">
-        <Button
-          className={cn('rounded-xl', !canFavorite && 'opacity-60')}
-          disabled={!canFavorite}
-          onClick={onSave}
-        >
-          {lang === 'en' ? 'Save' : '收藏'}
-        </Button>
+        </span>
       </div>
     </div>
   )

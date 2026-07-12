@@ -24,10 +24,11 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
   const abortControllerRef = React.useRef<AbortController | null>(null)
 
   const refresh = React.useCallback(
-    async (options?: { toastOnError?: boolean }) => {
-      if (!stationId) return
+    async (options?: { toastOnError?: boolean; stationId?: string }) => {
+      const activeStationId = options?.stationId ?? stationId
+      if (!activeStationId) return
 
-      const station = stationsById.get(stationId)
+      const station = stationsById.get(activeStationId)
       if (!station) return
 
       // Cancel any in-flight request
@@ -41,7 +42,10 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
       try {
         setError(null)
 
-        const schedule = await fetchLrtSchedule({ stationId }, { signal: controller.signal })
+        const schedule = await fetchLrtSchedule(
+          { stationId: activeStationId },
+          { signal: controller.signal }
+        )
 
         if (controller.signal.aborted) return
 
@@ -59,7 +63,7 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
           toast.error(message)
         }
       } finally {
-        if (!controller.signal.aborted) {
+        if (abortControllerRef.current === controller) {
           setLoading(false)
         }
       }

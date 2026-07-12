@@ -42,13 +42,36 @@ function getCompanyFromVariantKey(key: string) {
   return co || 'kmb'
 }
 
-function hasDuplicateRoutes(options: RouteFilterOption[]): boolean {
-  const routeCounts = new Map<string, number>()
-  for (const opt of options) {
+function getDirectionFromVariantKey(key: string) {
+  const parts = key.split('|')
+  return parts[2] ?? ''
+}
+
+function sortOptions(options: RouteFilterOption[]) {
+  return [...options].sort((a, b) => a.route.localeCompare(b.route, undefined, { numeric: true }))
+}
+
+function groupOptionsByRoute(opts: RouteFilterOption[]): Map<string, RouteFilterOption[]> {
+  const grouped = new Map<string, RouteFilterOption[]>()
+  for (const opt of opts) {
     const route = opt.route.toUpperCase()
-    routeCounts.set(route, (routeCounts.get(route) ?? 0) + 1)
+    const list = grouped.get(route)
+    if (list) list.push(opt)
+    else grouped.set(route, [opt])
   }
-  return Array.from(routeCounts.values()).some((count) => count > 1)
+  return grouped
+}
+
+function isRouteActive(
+  route: string,
+  variants: RouteFilterOption[],
+  selectedKeys: Set<string>,
+  mode: RouteFilterMode
+) {
+  if (mode === 'advanced') {
+    return variants.some((v) => selectedKeys.has(v.key))
+  }
+  return selectedKeys.has(route) || variants.some((v) => selectedKeys.has(v.key))
 }
 
 type Props = {
@@ -65,36 +88,63 @@ function createId() {
   return Math.random().toString(36).slice(2, 10)
 }
 
-function sortOptions(options: RouteFilterOption[]) {
-  return [...options].sort((a, b) => a.route.localeCompare(b.route, undefined, { numeric: true }))
-}
-
-export function RouteFilter({ lang, mode, value, onChange, options }: Props) {
+export function RouteFilter({ lang, mode, onModeChange, value, onChange, options }: Props) {
   const opts = React.useMemo(() => sortOptions(options ?? []), [options])
-  const showOperatorCode = React.useMemo(() => hasDuplicateRoutes(opts), [opts])
+  const groupedByRoute = React.useMemo(() => groupOptionsByRoute(opts), [opts])
+  const routeNumbers = React.useMemo(
+    () =>
+      Array.from(groupedByRoute.keys()).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true })
+      ),
+    [groupedByRoute]
+  )
+
+  const optsFingerprint = React.useMemo(() => opts.map((o) => o.key).join('\0'), [opts])
+
+  const [focusState, setFocusState] = React.useState<{
+    generation: string
+    route: string | null
+  }>({ generation: optsFingerprint, route: null })
+
+  const focusedRouteRaw = focusState.generation === optsFingerprint ? focusState.route : null
+  const focusedRoute =
+    focusedRouteRaw && groupedByRoute.has(focusedRouteRaw) ? focusedRouteRaw : null
+
+  const setFocusedRoute = React.useCallback(
+    (route: string | null | ((prev: string | null) => string | null)) => {
+      setFocusState((prev) => {
+        const currentRoute = prev.generation === optsFingerprint ? prev.route : null
+        const nextRoute = typeof route === 'function' ? route(currentRoute) : route
+        return { generation: optsFingerprint, route: nextRoute }
+      })
+    },
+    [optsFingerprint]
+  )
 
   const t = {
     routes: lang === 'en' ? 'Routes' : '路線',
-    allRoutes:
-      lang === 'en' ? 'All routes at this stop' : lang === 'sc' ? '此站所有路线' : '此站所有路線',
     noOptions:
       lang === 'en'
         ? 'Pick a stop to see available routes.'
         : lang === 'sc'
           ? '请选择车站以查看可用路线。'
           : '請選擇車站以查看可用路線。',
+    clear: lang === 'en' ? 'Clear' : '清除',
+    inbound: lang === 'en' ? 'Inbound' : '往',
+    outbound: lang === 'en' ? 'Outbound' : '往',
   }
 
   const selectedKeys = React.useMemo(() => {
-    if (mode === 'advanced') {
-      return new Set((value.entries ?? []).map((e) => e.variantKey))
+    const entryKeys = (value.entries ?? []).map((e) => e.variantKey).filter(Boolean)
+    if (entryKeys.length > 0) {
+      return new Set(entryKeys)
     }
     const routes = (value.routes ?? '')
       .split(',')
       .map((r) => r.trim())
       .filter(Boolean)
     return new Set(routes)
-  }, [mode, value.entries, value.routes])
+  }, [value.entries, value.routes])
 
   const toggleOption = React.useCallback(
     (opt: RouteFilterOption) => {
@@ -103,68 +153,112 @@ export function RouteFilter({ lang, mode, value, onChange, options }: Props) {
       const next = exists
         ? entries.filter((e) => e.variantKey !== opt.key)
         : [...entries, { id: createId(), variantKey: opt.key }]
+      if (!exists && mode !== 'advanced') {
+        onModeChange?.('advanced')
+      }
       onChange({ ...value, entries: next, routes: '' })
     },
-    [onChange, value]
+    [mode, onChange, onModeChange, value]
   )
 
   const clearAll = React.useCallback(() => {
+    setFocusedRoute(null)
     onChange({ routes: '', entries: [] })
-  }, [onChange])
+  }, [onChange, setFocusedRoute])
+
+  const handleRouteClick = React.useCallback(
+    (route: string, variants: RouteFilterOption[]) => {
+      if (variants.length === 1) {
+        toggleOption(variants[0]!)
+        return
+      }
+      setFocusedRoute((prev) => (prev === route ? null : route))
+    },
+    [setFocusedRoute, toggleOption]
+  )
 
   const activeCount = countActiveFilters(value)
+  const focusedVariants = focusedRoute ? groupedByRoute.get(focusedRoute) : undefined
+  const showVariantRow = Boolean(focusedVariants && focusedVariants.length > 1)
+  const useScrollCap = routeNumbers.length > 16
 
   return (
-    <div className="bg-surface-container-low rounded-2xl p-4">
-      <div className="mb-3 flex items-center justify-between gap-4">
-        <div>
-          <div className="m3-title-md">{t.routes}</div>
-          <div className="text-on-surface-variant m3-body-md">
-            {activeCount === 0 ? t.allRoutes : `${activeCount} ${t.routes}`}
-          </div>
-        </div>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="m3-label-lg text-on-surface-variant">{t.routes}</span>
         {activeCount > 0 && (
           <button
             type="button"
             onClick={clearAll}
-            className="text-on-surface-variant hover:text-on-surface m3-label-lg flex items-center gap-1 rounded-full px-2 py-1 transition-colors"
+            className="text-on-surface-variant hover:text-on-surface m3-label-md flex items-center gap-1 rounded-full px-2 py-0.5 transition-colors"
           >
-            <X className="h-4 w-4" />
-            {lang === 'en' ? 'Clear' : '清除'}
+            <X className="h-3.5 w-3.5" />
+            {t.clear}
           </button>
         )}
       </div>
 
       {!opts.length ? (
-        <div className="text-on-surface-variant m3-body-md bg-surface-container rounded-xl p-3 text-center">
-          {t.noOptions}
-        </div>
+        <p className="text-on-surface-variant m3-body-md py-1">{t.noOptions}</p>
       ) : (
-        <div className="flex flex-wrap gap-2">
-          {opts.map((opt) => {
-            const active = selectedKeys.has(opt.key)
-            const company = getCompanyFromVariantKey(opt.key)
-            return (
-              <button
-                key={opt.key}
-                type="button"
-                onClick={() => toggleOption(opt)}
-                className={cn(
-                  'm3-label-lg flex items-center gap-1.5 rounded-full px-3 py-1.5 transition-colors',
-                  active
-                    ? 'bg-primary-container text-on-primary-container'
-                    : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-                )}
-              >
-                <RouteBadge route={opt.route} company={company} size="sm" />
-                {showOperatorCode && (
-                  <span className="text-on-surface-variant m3-label-sm uppercase">{company}</span>
-                )}
-                <span className="max-w-[12ch] truncate">{opt.label}</span>
-              </button>
-            )
-          })}
-        </div>
+        <>
+          <div
+            className={cn('flex flex-wrap gap-2', useScrollCap && 'max-h-32 overflow-y-auto pr-1')}
+          >
+            {routeNumbers.map((route) => {
+              const variants = groupedByRoute.get(route) ?? []
+              const company = getCompanyFromVariantKey(variants[0]?.key ?? '')
+              const active = isRouteActive(route, variants, selectedKeys, mode)
+              const focused = focusedRoute === route
+              const tooltip = variants.map((v) => v.label).join(' · ')
+
+              return (
+                <button
+                  key={route}
+                  type="button"
+                  title={tooltip}
+                  onClick={() => handleRouteClick(route, variants)}
+                  className={cn(
+                    'rounded-full p-0.5 transition-colors',
+                    active && 'bg-primary-container',
+                    focused && !active && 'bg-surface-container ring-primary/40 ring-2',
+                    !active && !focused && 'hover:bg-surface-container-high'
+                  )}
+                >
+                  <RouteBadge route={route} company={company} size="sm" />
+                </button>
+              )
+            })}
+          </div>
+
+          {showVariantRow && focusedVariants ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {focusedVariants.map((opt) => {
+                const active = selectedKeys.has(opt.key)
+                const direction = getDirectionFromVariantKey(opt.key)
+                const directionHint =
+                  direction === 'I' ? t.inbound : direction === 'O' ? t.outbound : null
+
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => toggleOption(opt)}
+                    className={cn(
+                      'm3-label-md rounded-full px-3 py-1.5 transition-colors',
+                      active
+                        ? 'bg-primary-container text-on-primary-container'
+                        : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                    )}
+                  >
+                    {directionHint ? <span className="opacity-80">{directionHint} </span> : null}
+                    {opt.label}
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+        </>
       )}
     </div>
   )

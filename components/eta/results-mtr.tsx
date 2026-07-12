@@ -3,9 +3,8 @@
 import * as React from 'react'
 import { ExternalLink, Info, RefreshCw, TrainFront } from 'lucide-react'
 
+import { LivePulse } from '@/components/m3/motion'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Marquee } from '@/components/ui/marquee'
 import { findMtrStationBySta } from '@/lib/data/mtr-stations'
 import { getLineColor } from '@/lib/eta/line-colors'
@@ -78,11 +77,18 @@ function formatDestWithRacecourse(dest: unknown, lang: UiLanguage, showViaRaceco
 
 function formatMinutes(ttnt: unknown, lang: UiLanguage) {
   const raw = String(ttnt ?? '').trim()
-  if (!raw) return '—'
+  if (!raw) return { text: '—', arriving: false }
   const minutes = Number(raw)
-  if (Number.isNaN(minutes)) return raw
-  if (minutes <= 0) return lang === 'en' ? 'Arriving' : '即將到達'
-  return lang === 'en' ? `${minutes} min` : lang === 'sc' ? `${minutes} 分` : `${minutes} 分`
+  if (Number.isNaN(minutes)) return { text: raw, arriving: false }
+  if (minutes <= 0)
+    return {
+      text: lang === 'en' ? 'Arriving' : '即將到達',
+      arriving: true,
+    }
+  return {
+    text: lang === 'en' ? `${minutes} min` : `${minutes} 分`,
+    arriving: false,
+  }
 }
 
 function formatPlatform(plat: unknown) {
@@ -123,12 +129,12 @@ export const MtrResults = React.memo(function MtrResults({
   }
 
   return (
-    <Card className="bg-card/60 rounded-3xl border shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-6">
-        <div>
-          <CardTitle className="text-base">{title}</CardTitle>
-          <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
-            <TrainFront className="h-3.5 w-3.5" />
+    <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm sm:p-5">
+      <div className="mb-5 flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-on-surface m3-headline-sm truncate">{title}</h2>
+          <p className="text-on-surface-variant m3-label-md mt-0.5 flex flex-wrap items-center gap-1.5">
+            <TrainFront className="h-3.5 w-3.5 shrink-0" />
             {t.nextTrain}
             {updatedAt ? (
               <>
@@ -136,9 +142,7 @@ export const MtrResults = React.memo(function MtrResults({
                 <span>
                   {lang === 'en'
                     ? `Updated ${formatUiTime(updatedAt, lang)}`
-                    : lang === 'sc'
-                      ? `更新 ${formatUiTime(updatedAt, lang)}`
-                      : `更新 ${formatUiTime(updatedAt, lang)}`}
+                    : `更新 ${formatUiTime(updatedAt, lang)}`}
                 </span>
                 {relativeAgeLabel ? (
                   <>
@@ -149,56 +153,51 @@ export const MtrResults = React.memo(function MtrResults({
               </>
             ) : null}
             {showStale ? (
-              <Badge variant="destructive" className="rounded-lg">
-                {lang === 'en' ? 'Stale' : lang === 'sc' ? '未更新' : '未更新'}
-              </Badge>
+              <>
+                <span aria-hidden>·</span>
+                <span className="text-error">{lang === 'en' ? 'Stale' : '未更新'}</span>
+              </>
             ) : null}
-          </div>
+          </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="rounded-xl"
+        <button
+          type="button"
+          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 shrink-0 rounded-full p-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
           onClick={onRefresh}
           disabled={loading}
+          aria-label={t.refresh}
         >
-          <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'ui-spin')} />
-          {t.refresh}
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-4">
+          <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
+        </button>
+      </div>
+
+      <div className="space-y-4">
         {error ? (
-          <div className="ui-animate-fade bg-destructive/10 text-destructive rounded-2xl border p-4 text-sm">
+          <p className="text-error m3-body-md">
             {lang === 'en'
               ? `Update failed. Showing last results. (${error})`
-              : lang === 'sc'
-                ? `更新失败。显示上次结果。(${error})`
-                : `更新失敗。顯示上次結果。(${error})`}
-          </div>
+              : `更新失敗。顯示上次結果。(${error})`}
+          </p>
         ) : null}
         {!schedule ? (
-          <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+          <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
             <Info className="h-4 w-4" />
             {t.selectStation}
           </div>
         ) : schedule.status === 0 ? (
-          <div className="ui-animate-in bg-background/50 rounded-2xl border p-4">
-            <div className="text-sm font-medium">{t.serviceMessage}</div>
-            <div className="text-muted-foreground mt-1 text-sm">
+          <div className="bg-surface-container rounded-2xl p-4">
+            <div className="text-on-surface m3-title-md">{t.serviceMessage}</div>
+            <div className="text-on-surface-variant m3-body-md mt-1">
               {schedule.message ?? t.noSchedule}
             </div>
             {schedule.url ? (
               <a
-                className="ui-lift bg-card/50 hover:bg-card mt-3 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm"
+                className="text-primary m3-label-lg mt-3 inline-flex items-center gap-2"
                 href={schedule.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label={
-                  lang === 'en'
-                    ? 'View details (opens in new tab)'
-                    : lang === 'sc'
-                      ? '查看详情（在新标签页打开）'
-                      : '查看詳情（在新分頁開啟）'
+                  lang === 'en' ? 'View details (opens in new tab)' : '查看詳情（在新分頁開啟）'
                 }
               >
                 {t.viewDetails} <ExternalLink className="h-4 w-4" />
@@ -210,6 +209,7 @@ export const MtrResults = React.memo(function MtrResults({
             const [line, sta] = key.split('-')
             const station = sta ? findMtrStationBySta(sta) : undefined
             const stationName = station ? (lang === 'en' ? station.nameEn : station.nameTc) : sta
+            const lineColor = line ? getLineColor(line) : undefined
 
             const staggerClass =
               idx === 0
@@ -224,15 +224,22 @@ export const MtrResults = React.memo(function MtrResults({
               <div
                 key={key}
                 className={cn(
-                  'ui-animate-in ui-lift bg-background/40 rounded-2xl border p-4',
+                  'border-outline-variant relative border-b pb-4 last:border-0',
                   staggerClass
                 )}
               >
-                <div className="flex min-w-0 items-center gap-2">
+                {lineColor ? (
+                  <span
+                    className="absolute top-0 bottom-4 left-0 w-[3px] rounded-full"
+                    style={{ backgroundColor: lineColor }}
+                    aria-hidden
+                  />
+                ) : null}
+                <div className="flex min-w-0 items-center gap-2 pl-3">
                   {line ? (
                     <Badge
                       className={cn(
-                        'rounded-xl ring-1 ring-black/10',
+                        'rounded-lg ring-1 ring-black/10',
                         getReadableForeground(getLineColor(line))
                       )}
                       style={{ backgroundColor: getLineColor(line) }}
@@ -240,24 +247,25 @@ export const MtrResults = React.memo(function MtrResults({
                       {line}
                     </Badge>
                   ) : null}
-                  <div className="min-w-0 truncate text-sm font-medium">{stationName ?? key}</div>
+                  <div className="text-on-surface m3-title-md min-w-0 truncate">
+                    {stationName ?? key}
+                  </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                <div className="mt-3 grid grid-cols-1 gap-4 pl-3 lg:grid-cols-2">
                   {(['UP', 'DOWN'] as const).map((dir) => {
                     const trains = payload[dir] ?? []
                     return (
-                      <div key={dir} className="bg-card/30 rounded-2xl border p-3">
-                        <div className="text-muted-foreground text-xs font-medium">
+                      <div key={dir}>
+                        <div className="text-on-surface-variant m3-label-md mb-2 font-medium">
                           {dir === 'UP' ? t.up : t.down}
                         </div>
-
-                        <div className="mt-2 space-y-2">
+                        <div className="space-y-1">
                           {trains.length === 0 ? (
-                            <div className="text-muted-foreground text-sm">—</div>
+                            <div className="text-on-surface-variant m3-body-md">—</div>
                           ) : (
-                            trains.slice(0, 4).map((t, idx) => {
-                              const route = String((t as { route?: unknown }).route ?? '')
+                            trains.slice(0, 4).map((train, trainIdx) => {
+                              const route = String((train as { route?: unknown }).route ?? '')
                               const showViaRacecourse = shouldShowViaRacecourse({
                                 line,
                                 currentSta: sta,
@@ -265,37 +273,37 @@ export const MtrResults = React.memo(function MtrResults({
                                 route: route || undefined,
                               })
                               const destText = formatDestWithRacecourse(
-                                t.dest,
+                                train.dest,
                                 lang,
                                 showViaRacecourse
                               )
-                              const platform = formatPlatform(t.plat)
+                              const platform = formatPlatform(train.plat)
+                              const eta = formatMinutes(train.ttnt, lang)
 
                               return (
                                 <div
-                                  key={`${dir}-${idx}`}
-                                  className="ui-lift bg-background/30 flex items-center justify-between gap-3 rounded-xl border px-3 py-2"
+                                  key={`${dir}-${trainIdx}`}
+                                  className="flex items-center justify-between gap-3 py-1.5"
                                 >
-                                  <Marquee className="min-w-0 flex-1 text-sm font-medium">
+                                  <Marquee className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
                                     {destText}
                                   </Marquee>
                                   <div className="flex shrink-0 items-center gap-2">
                                     {platform ? (
-                                      <Badge
-                                        className={cn(
-                                          'rounded-lg px-2 py-0.5 text-xs ring-1 ring-black/10',
-                                          getReadableForeground(getLineColor(line))
-                                        )}
-                                        style={{
-                                          backgroundColor: getLineColor(line),
-                                        }}
-                                      >
-                                        {platform}
-                                      </Badge>
+                                      <span className="text-on-surface-variant m3-label-md font-mono">
+                                        P{platform}
+                                      </span>
                                     ) : null}
-                                    <Badge className="font-tabular rounded-xl" variant="outline">
-                                      {formatMinutes(t.ttnt, lang)}
-                                    </Badge>
+                                    {eta.arriving ? (
+                                      <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
+                                        <LivePulse />
+                                        {eta.text}
+                                      </span>
+                                    ) : (
+                                      <span className="text-on-surface font-tabular m3-body-md font-semibold">
+                                        {eta.text}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               )
@@ -310,7 +318,7 @@ export const MtrResults = React.memo(function MtrResults({
             )
           })
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 })

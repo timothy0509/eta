@@ -6,9 +6,7 @@ import * as React from 'react'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { RouteBadge } from '@/components/eta/route-badge'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { LivePulse, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import {
   Dialog,
   DialogContent,
@@ -21,6 +19,7 @@ import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatRelativeMinutesWithDrift, formatUiTime } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -221,8 +220,8 @@ type Props = {
   visibleStopIds?: Set<string>
 }
 
-/** Render a single route variant card */
-const RouteVariantCard = React.memo(function RouteVariantCard({
+/** Render a single route departure row */
+const RouteDepartureRow = React.memo(function RouteDepartureRow({
   variantKey,
   baseKey,
   items,
@@ -268,38 +267,40 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
 
   const origin = routeInfo?.origin ? pickLang(routeInfo.origin, lang) : null
   const destination = routeInfo?.destination ? pickLang(routeInfo.destination, lang) : null
-
-  const stopChipBadge = (label: string) => (
-    <Badge variant="outline" className="shrink-0 rounded-lg font-mono text-xs">
-      {label}
-    </Badge>
-  )
-
-  const operatorBadge = (
-    <Badge variant="secondary" className="shrink-0 rounded-lg text-xs">
-      {formatOperatorLabel(first?.co ?? co, lang)}
-    </Badge>
-  )
+  const badgeStyle = getRouteBadgeStyle(route, co)
 
   const { t } = useTranslations(lang)
+
+  const metaChips = (
+    <div className="hidden items-center gap-1.5 sm:flex">
+      {stopChips.platform ? (
+        <span className="text-on-surface-variant m3-label-md font-mono">{stopChips.platform}</span>
+      ) : null}
+      {fare ? (
+        <span className="text-on-surface-variant m3-label-md font-mono">
+          HK$ {fare.hkd.toFixed(1)}
+        </span>
+      ) : null}
+      {stopChips.stopCode ? (
+        <span className="text-on-surface-variant m3-label-md font-mono">{stopChips.stopCode}</span>
+      ) : null}
+    </div>
+  )
 
   const InfoButton = (
     <Dialog>
       <DialogTrigger asChild>
         <button
           type="button"
-          className={cn(
-            'ui-lift bg-background/30 text-muted-foreground inline-flex h-8 w-8 items-center justify-center rounded-lg border',
-            'hover:bg-background/40 hover:text-foreground focus-visible:ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none'
-          )}
+          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
           aria-label={t('common.routeDetails')}
         >
           <Info className="h-4 w-4" />
         </button>
       </DialogTrigger>
-      <DialogContent className="rounded-2xl">
+      <DialogContent className="bg-surface-container-low rounded-3xl border-0">
         <DialogHeader>
-          <DialogTitle className="text-base">
+          <DialogTitle className="m3-title-md text-on-surface">
             {route} {destination ? `→ ${destination}` : label ? `→ ${label}` : ''}
           </DialogTitle>
           <DialogDescription className="sr-only">
@@ -309,32 +310,34 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
 
         <div className="space-y-4">
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">{t('common.stop')}</div>
+            <div className="text-on-surface-variant m3-label-md">{t('common.stop')}</div>
             <div className="flex flex-wrap items-center gap-2">
-              <div className="min-w-0 flex-1 truncate text-sm font-medium">
+              <div className="text-on-surface m3-body-md min-w-0 flex-1 truncate font-medium">
                 {stopChips.name ?? t('common.unknown')}
               </div>
               {stopChips.platform ? (
-                <Badge variant="secondary" className="shrink-0 rounded-lg font-mono text-xs">
+                <span className="text-on-surface-variant m3-label-md font-mono">
                   {stopChips.platform}
-                </Badge>
+                </span>
               ) : null}
               {stopChips.stopCode ? (
-                <Badge variant="secondary" className="shrink-0 rounded-lg font-mono text-xs">
+                <span className="text-on-surface-variant m3-label-md font-mono">
                   {stopChips.stopCode}
-                </Badge>
+                </span>
               ) : null}
             </div>
           </div>
 
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">{t('common.operator')}</div>
-            <div className="text-sm">{formatOperatorLabel(first?.co ?? co, lang)}</div>
+            <div className="text-on-surface-variant m3-label-md">{t('common.operator')}</div>
+            <div className="text-on-surface m3-body-md">
+              {formatOperatorLabel(first?.co ?? co, lang)}
+            </div>
           </div>
 
           <div className="space-y-1">
-            <div className="text-muted-foreground text-xs">{t('common.route')}</div>
-            <div className="text-sm">
+            <div className="text-on-surface-variant m3-label-md">{t('common.route')}</div>
+            <div className="text-on-surface m3-body-md">
               {origin && destination
                 ? `${origin} → ${destination}`
                 : label || destination || t('common.unknown')}
@@ -343,8 +346,10 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
 
           {fare ? (
             <div className="space-y-1">
-              <div className="text-muted-foreground text-xs">{t('common.fare')}</div>
-              <div className="text-sm font-medium">HK$ {fare.hkd.toFixed(1)}</div>
+              <div className="text-on-surface-variant m3-label-md">{t('common.fare')}</div>
+              <div className="text-on-surface m3-body-md font-medium">
+                HK$ {fare.hkd.toFixed(1)}
+              </div>
             </div>
           ) : null}
         </div>
@@ -352,70 +357,66 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
     </Dialog>
   )
 
+  const rowShell = (children: React.ReactNode, muted?: boolean) => (
+    <div
+      className={cn(
+        'bg-surface-container relative overflow-hidden rounded-2xl py-3 pr-3 pl-0',
+        muted && 'opacity-70',
+        staggerClass
+      )}
+    >
+      <span
+        className="absolute inset-y-2 left-0 w-[3px] rounded-full"
+        style={{ backgroundColor: badgeStyle.bgColor }}
+        aria-hidden
+      />
+      <div className="space-y-2.5 pl-4">{children}</div>
+    </div>
+  )
+
+  const routeHeader = (
+    <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <RouteBadge route={route} company={co} size="lg" />
+        <span className="text-on-surface-variant m3-label-md shrink-0">
+          {formatOperatorLabel(first?.co ?? co, lang)}
+        </span>
+        <Marquee className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
+          {label || 'Route'}
+        </Marquee>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        {metaChips}
+        {InfoButton}
+      </div>
+    </div>
+  )
+
+  const formatMinutesDisplay = (minutes: number | null) => {
+    if (minutes === null || Number.isNaN(minutes)) return '—'
+    if (minutes <= 0) return formatArrivingText(lang)
+    return lang === 'en' ? `${minutes} min` : `${minutes} 分`
+  }
+
   // Routes without valid ETAs get a simplified display
   if (!hasEta) {
     const remark = getGroupRemark(items, lang)
-    return (
-      <div
-        className={cn(
-          'ui-animate-in ui-lift bg-background/40 rounded-2xl border p-4 opacity-70',
-          staggerClass
-        )}
-      >
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
-            <RouteBadge route={route} company={co} size="lg" />
-            {operatorBadge}
-            <span className="shrink-0 text-sm font-medium">→ </span>
-            <Marquee className="min-w-0 flex-1 text-sm font-medium">{label || 'Route'}</Marquee>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <div className="hidden items-center gap-2 sm:flex">
-              {stopChips.platform ? stopChipBadge(stopChips.platform) : null}
-              {fare ? (
-                <Badge variant="secondary" className="shrink-0 rounded-lg font-mono text-xs">
-                  HK$ {fare.hkd.toFixed(1)}
-                </Badge>
-              ) : null}
-              {stopChips.stopCode ? stopChipBadge(stopChips.stopCode) : null}
-            </div>
-            {InfoButton}
-          </div>
-        </div>
-        <div className="text-muted-foreground mt-3 flex items-center gap-2 text-sm">
+    return rowShell(
+      <>
+        {routeHeader}
+        <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
           <Info className="h-4 w-4 shrink-0" />
           {remark || formatNoScheduledText(lang)}
         </div>
-      </div>
+      </>,
+      true
     )
   }
 
-  return (
-    <div
-      className={cn('ui-animate-in ui-lift bg-background/40 rounded-2xl border p-4', staggerClass)}
-    >
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <RouteBadge route={route} company={co} size="lg" />
-          {operatorBadge}
-          <span className="shrink-0 text-sm font-medium">→ </span>
-          <Marquee className="min-w-0 flex-1 text-sm font-medium">{label || 'Route'}</Marquee>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="hidden items-center gap-2 sm:flex">
-            {stopChips.platform ? stopChipBadge(stopChips.platform) : null}
-            {fare ? (
-              <Badge variant="secondary" className="shrink-0 rounded-lg font-mono text-xs">
-                HK$ {fare.hkd.toFixed(1)}
-              </Badge>
-            ) : null}
-            {stopChips.stopCode ? stopChipBadge(stopChips.stopCode) : null}
-          </div>
-          {InfoButton}
-        </div>
-      </div>
-
-      <div className="mt-3 flex gap-2 overflow-x-auto pb-1 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
+  return rowShell(
+    <>
+      {routeHeader}
+      <div className="flex scrollbar-none gap-2 overflow-x-auto pb-0.5">
         {items.slice(0, 3).map((entry, entryIdx) => {
           const minutes = entry.eta
             ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
@@ -428,35 +429,48 @@ const RouteVariantCard = React.memo(function RouteVariantCard({
             },
             lang
           )
+          const isFirst = entry.eta_seq === 1
+          const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
+
+          if (isFirst) {
+            return (
+              <div
+                key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
+                className="bg-primary-container text-on-primary-container min-w-[108px] shrink-0 rounded-xl px-3 py-2"
+              >
+                <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
+                <div className="font-tabular mt-0.5 flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
+                  {isArriving ? <LivePulse /> : null}
+                  {formatMinutesDisplay(minutes)}
+                </div>
+                {remark ? (
+                  <div className="m3-label-md mt-1 line-clamp-2 opacity-80">{remark}</div>
+                ) : null}
+              </div>
+            )
+          }
+
           return (
             <div
               key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-              className={cn(
-                'ui-lift bg-card/40 min-w-[150px] shrink-0 rounded-2xl border p-3 sm:min-w-0',
-                entry.eta_seq === 1 && 'bg-card/60'
-              )}
+              className="bg-surface-container-high min-w-[72px] shrink-0 rounded-lg px-2.5 py-1.5"
             >
-              <div className="text-muted-foreground text-xs">
+              <div className="text-on-surface-variant m3-label-md">
                 {formatEtaLabel(entry.eta_seq, lang)}
               </div>
-              <div className="font-tabular mt-1 text-2xl font-semibold tracking-tight">
-                {minutes === null || Number.isNaN(minutes)
-                  ? '—'
-                  : minutes <= 0
-                    ? formatArrivingText(lang)
-                    : lang === 'en'
-                      ? `${minutes} min`
-                      : `${minutes} 分`}
+              <div className="text-on-surface font-tabular text-lg font-semibold tracking-tight">
+                {formatMinutesDisplay(minutes)}
               </div>
-
               {remark ? (
-                <div className="text-muted-foreground mt-1 line-clamp-2 text-xs">{remark}</div>
+                <div className="text-on-surface-variant m3-label-md mt-0.5 line-clamp-2">
+                  {remark}
+                </div>
               ) : null}
             </div>
           )
         })}
       </div>
-    </div>
+    </>
   )
 })
 
@@ -492,34 +506,25 @@ const StopSection = React.memo(function StopSection({
   const stopRef = registerStopRef ? registerStopRef(stopId) : undefined
 
   return (
-    <div ref={stopRef} className={cn('space-y-3', !isFirst && 'mt-6 border-t pt-6')}>
-      {/* Stop header (sticky within results card) */}
-      <div
-        className={cn(
-          'bg-card/70 supports-[backdrop-filter]:bg-card/50 sticky top-0 z-10 -mx-6 -mt-5 border-b px-6 py-2.5 backdrop-blur',
-          !isFirst && 'pt-4'
-        )}
-      >
-        <div className="flex items-center gap-2">
-          <h3 className="text-foreground min-w-0 truncate text-sm font-semibold">{parsed.name}</h3>
-          {stopCodeBadge ? (
-            <Badge variant="secondary" className="shrink-0 rounded-lg font-mono text-xs">
-              {stopCodeBadge}
-            </Badge>
-          ) : null}
-        </div>
+    <div ref={stopRef} className={cn(!isFirst && 'border-outline-variant mt-5 border-t pt-5')}>
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="text-on-surface m3-title-md min-w-0 truncate">{parsed.name}</h3>
+        {stopCodeBadge ? (
+          <span className="text-on-surface-variant m3-label-md shrink-0 font-mono">
+            {stopCodeBadge}
+          </span>
+        ) : null}
       </div>
 
-      {/* Route cards for this stop */}
       {groups.length === 0 ? (
-        <div className="bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+        <div className="text-on-surface-variant m3-body-md flex items-center gap-2 py-2">
           <Info className="h-4 w-4" />
           {formatNoScheduledText(lang)}
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2">
           {groups.map((g, idx) => (
-            <RouteVariantCard
+            <RouteDepartureRow
               key={g.key}
               variantKey={g.key}
               baseKey={g.baseKey}
@@ -664,25 +669,24 @@ export const KmbResults = React.memo(function KmbResults({
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
   return (
-    <Card className="bg-card/60 rounded-3xl border shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-6">
+    <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm sm:p-5">
+      <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <CardTitle className="truncate text-base">{title || t('kmb.title')}</CardTitle>
+          <div className="flex min-w-0 items-center gap-2">
+            <h2 className="text-on-surface m3-headline-sm truncate">{title || t('kmb.title')}</h2>
             {stopCode ? (
-              <Badge variant="outline" className="shrink-0 rounded-lg font-mono text-xs">
+              <span className="text-on-surface-variant m3-label-md shrink-0 font-mono">
                 {stopCode}
-              </Badge>
+              </span>
             ) : null}
           </div>
-          <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-2 text-xs">
-            <Clock className="h-3.5 w-3.5" />
+          <p className="text-on-surface-variant m3-label-md mt-0.5 flex flex-wrap items-center gap-1.5">
+            <Clock className="h-3.5 w-3.5 shrink-0" />
             {routesFilter?.trim()
               ? `${t('kmb.filtered')} ${routesFilter}`
               : isKeyphraseMode
                 ? `${loadedStopIds?.length ?? 0} ${t('kmb.stopsLoaded')}`
                 : t('kmb.allRoutesAtStop')}
-
             {updatedAt ? (
               <>
                 <span aria-hidden>·</span>
@@ -695,33 +699,31 @@ export const KmbResults = React.memo(function KmbResults({
                 ) : null}
               </>
             ) : null}
-
             {showStale ? (
-              <Badge variant="destructive" className="rounded-lg">
-                {t('common.stale')}
-              </Badge>
+              <>
+                <span aria-hidden>·</span>
+                <span className="text-error">{t('common.stale')}</span>
+              </>
             ) : null}
-          </div>
+          </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="shrink-0 rounded-xl"
+        <button
+          type="button"
+          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 shrink-0 rounded-full p-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
           onClick={onRefresh}
           disabled={loading}
+          aria-label={t('common.refresh')}
         >
-          <RefreshCw className={cn('mr-2 h-4 w-4', loading && 'ui-spin')} />
-          {t('common.refresh')}
-        </Button>
-      </CardHeader>
-      <CardContent className="space-y-5">
+          <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
+        </button>
+      </div>
+
+      <div className="space-y-2">
         {error ? (
-          <div className="ui-animate-fade bg-destructive/10 text-destructive rounded-2xl border p-4 text-sm">
-            {tWithParams('kmb.updateFailed', { error })}
-          </div>
+          <p className="text-error m3-body-md">{tWithParams('kmb.updateFailed', { error })}</p>
         ) : null}
         {!hasQuery ? (
-          <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+          <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
             <Info className="h-4 w-4" />
             {t('common.selectStop')}
           </div>
@@ -749,7 +751,7 @@ export const KmbResults = React.memo(function KmbResults({
             {hasMoreStops ? (
               <div ref={sentinelRef} className="flex items-center justify-center py-4">
                 {loading ? (
-                  <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                  <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     {lang === 'en'
                       ? 'Loading more stops...'
@@ -762,7 +764,7 @@ export const KmbResults = React.memo(function KmbResults({
                 )}
               </div>
             ) : loadedStopIds!.length > 0 ? (
-              <div className="text-muted-foreground py-2 text-center text-xs">
+              <div className="text-on-surface-variant m3-label-md py-2 text-center">
                 {lang === 'en'
                   ? `All ${loadedStopIds!.length} stops loaded`
                   : lang === 'sc'
@@ -772,84 +774,86 @@ export const KmbResults = React.memo(function KmbResults({
             ) : null}
           </>
         ) : precomputedFlat && !multipleStops ? (
-          // Flat mode: use precomputed groups directly (no recomputation)
-          precomputedFlat.map((g, idx) => {
-            const staggerClass =
-              idx === 0
-                ? 'ui-stagger-1'
-                : idx === 1
-                  ? 'ui-stagger-2'
-                  : idx === 2
-                    ? 'ui-stagger-3'
-                    : ''
+          <StaggerContainer className="space-y-2" stagger={0.02}>
+            {precomputedFlat.map((g, idx) => {
+              const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
+              const stopChips = stopId
+                ? (stopChipsById.get(stopId) ??
+                  getStopChips(g.items, stopLookup, stopChipsById, lang))
+                : getStopChips(g.items, stopLookup, stopChipsById, lang)
+              const staggerClass =
+                idx === 0
+                  ? 'ui-stagger-1'
+                  : idx === 1
+                    ? 'ui-stagger-2'
+                    : idx === 2
+                      ? 'ui-stagger-3'
+                      : ''
 
-            const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
-            const stopChips = stopId
-              ? (stopChipsById.get(stopId) ??
-                getStopChips(g.items, stopLookup, stopChipsById, lang))
-              : getStopChips(g.items, stopLookup, stopChipsById, lang)
-
-            return (
-              <RouteVariantCard
-                key={g.key}
-                variantKey={g.key}
-                baseKey={g.baseKey}
-                items={g.items}
-                hasEta={g.hasEta}
-                hasFare={g.hasFare}
-                isArrivingLeg={g.isArrivingLeg}
-                routeInfos={routeInfos}
-                faresByVariantKey={faresByVariantKey}
-                lang={lang}
-                now={now}
-                staggerClass={staggerClass}
-                stopChips={stopChips}
-              />
-            )
-          })
+              return (
+                <StaggerItem key={g.key}>
+                  <RouteDepartureRow
+                    variantKey={g.key}
+                    baseKey={g.baseKey}
+                    items={g.items}
+                    hasEta={g.hasEta}
+                    hasFare={g.hasFare}
+                    isArrivingLeg={g.isArrivingLeg}
+                    routeInfos={routeInfos}
+                    faresByVariantKey={faresByVariantKey}
+                    lang={lang}
+                    now={now}
+                    staggerClass={staggerClass}
+                    stopChips={stopChips}
+                  />
+                </StaggerItem>
+              )
+            })}
+          </StaggerContainer>
         ) : grouped.length === 0 ? (
-          <div className="ui-animate-fade bg-background/40 text-muted-foreground flex items-center gap-2 rounded-2xl border p-4 text-sm">
+          <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
             <Info className="h-4 w-4" />
             {formatNoScheduledText(lang)}
           </div>
         ) : (
-          // Fallback flat list mode (multipleStops)
-          grouped.map((g, idx) => {
-            const staggerClass =
-              idx === 0
-                ? 'ui-stagger-1'
-                : idx === 1
-                  ? 'ui-stagger-2'
-                  : idx === 2
-                    ? 'ui-stagger-3'
-                    : ''
+          <StaggerContainer className="space-y-2" stagger={0.02}>
+            {grouped.map((g, idx) => {
+              const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
+              const stopChips = stopId
+                ? (stopChipsById.get(stopId) ??
+                  getStopChips(g.items, stopLookup, stopChipsById, lang))
+                : getStopChips(g.items, stopLookup, stopChipsById, lang)
+              const staggerClass =
+                idx === 0
+                  ? 'ui-stagger-1'
+                  : idx === 1
+                    ? 'ui-stagger-2'
+                    : idx === 2
+                      ? 'ui-stagger-3'
+                      : ''
 
-            const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
-            const stopChips = stopId
-              ? (stopChipsById.get(stopId) ??
-                getStopChips(g.items, stopLookup, stopChipsById, lang))
-              : getStopChips(g.items, stopLookup, stopChipsById, lang)
-
-            return (
-              <RouteVariantCard
-                key={g.key}
-                variantKey={g.key}
-                baseKey={g.baseKey}
-                items={g.items}
-                hasEta={g.hasEta}
-                hasFare={g.hasFare}
-                isArrivingLeg={g.isArrivingLeg}
-                routeInfos={routeInfos}
-                faresByVariantKey={faresByVariantKey}
-                lang={lang}
-                now={now}
-                staggerClass={staggerClass}
-                stopChips={stopChips}
-              />
-            )
-          })
+              return (
+                <StaggerItem key={g.key}>
+                  <RouteDepartureRow
+                    variantKey={g.key}
+                    baseKey={g.baseKey}
+                    items={g.items}
+                    hasEta={g.hasEta}
+                    hasFare={g.hasFare}
+                    isArrivingLeg={g.isArrivingLeg}
+                    routeInfos={routeInfos}
+                    faresByVariantKey={faresByVariantKey}
+                    lang={lang}
+                    now={now}
+                    staggerClass={staggerClass}
+                    stopChips={stopChips}
+                  />
+                </StaggerItem>
+              )
+            })}
+          </StaggerContainer>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 })

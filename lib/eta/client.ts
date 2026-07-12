@@ -1,4 +1,4 @@
-import type { Company } from 'hk-bus-eta'
+import type { Company, Eta, RouteListEntry } from 'hk-bus-eta'
 
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
@@ -13,8 +13,13 @@ import {
   getKmbRouteStops,
   getKmbStops,
 } from '@/lib/eta/direct/kmb'
+import {
+  fetchLrtEtasForStop as fetchLrtEtasForStopDirect,
+  listMtrRoutes as listMtrRoutesDirect,
+} from '@/lib/eta/direct/eta-db'
 import { getLrtSchedule } from '@/lib/eta/direct/lrt'
 import { fetchMtrSchedules as fetchMtrSchedulesDirect } from '@/lib/eta/direct/mtr'
+import type { UiLanguage } from '@/lib/eta/types'
 
 type DedupeKey = string
 
@@ -303,4 +308,39 @@ export async function fetchLrtSchedule(
   return await fetchJsonDedupe(key, async () => getLrtSchedule({ stationId: params.stationId }), {
     signal: options?.signal,
   })
+}
+
+export async function listMtrRoutes(options?: { signal?: AbortSignal }): Promise<RouteListEntry[]> {
+  const key = 'mtr:routes'
+  return await fetchJsonDedupe(key, async () => listMtrRoutesDirect(), {
+    signal: options?.signal,
+  })
+}
+
+export async function fetchLrtEtasForStop(
+  params: {
+    route: string
+    bound: string
+    serviceType: string
+    stationId: string
+    language: UiLanguage
+  },
+  options?: { signal?: AbortSignal }
+): Promise<Eta[]> {
+  const key = `lrt:etas:${params.route}|${params.bound}|${params.serviceType}|${params.stationId}|${params.language}`
+  return await fetchJsonDedupe(key, async () => fetchLrtEtasForStopDirect(params), {
+    signal: options?.signal,
+  })
+}
+
+export async function fetchMtrRouteSchedules(
+  params: { line: string; stas: string[]; lang: 'EN' | 'TC' },
+  options?: { signal?: AbortSignal }
+): Promise<MtrSchedulesResponse> {
+  const queries = params.stas.map((sta) => ({
+    line: params.line,
+    sta,
+    lang: params.lang,
+  }))
+  return await fetchMtrSchedules(queries, options)
 }

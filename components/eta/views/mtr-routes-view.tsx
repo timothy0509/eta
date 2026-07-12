@@ -3,19 +3,23 @@
 import { ChevronLeft, MapPin, TrainFront } from 'lucide-react'
 import * as React from 'react'
 
-import { Button } from '@/components/ui/button'
-import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import {
-  MTR_STATIONS,
-  findMtrStationsByLine,
-  formatMtrStationName,
-  type MtrLang,
-} from '@/lib/data/mtr-stations'
+  RouteStopRow,
+  RouteStopTimeline,
+  SoonestEtaPill,
+} from '@/components/eta/route-stop-timeline'
+import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import { findMtrStationBySta, formatMtrStationName, type MtrLang } from '@/lib/data/mtr-stations'
+import { fetchMtrRouteSchedules, listMtrRoutes } from '@/lib/eta/client'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
+import { pickSoonestMtrTrain } from '@/lib/eta/pick-soonest-eta'
+import type { MtrScheduleResponse } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
+import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
+import type { RouteListEntry } from 'hk-bus-eta'
 
 const LINE_ORDER = ['AEL', 'TCL', 'TML', 'TKL', 'EAL', 'SIL', 'TWL', 'ISL', 'KTL', 'DRL']
 
@@ -32,30 +36,115 @@ function sortLines(a: string, b: string): number {
   return a.localeCompare(b)
 }
 
-export function MtrRoutesView({
-  lang,
-  onViewEtas,
-}: {
-  lang: UiLanguage
-  onViewEtas?: (sta: string) => void
-}) {
+function getRouteDestination(dest: { en: string; zh: string }, lang: UiLanguage): string {
+  return lang === 'en' ? dest.en : dest.zh
+}
+
+function variantKey(entry: RouteListEntry): string {
+  return `${entry.route}|${entry.serviceType}|${entry.bound.mtr ?? ''}`
+}
+
+export function MtrRoutesView({ lang }: { lang: UiLanguage }) {
   const { t } = useTranslations(lang)
+  useTickingNow(15_000)
   const [selectedLine, setSelectedLine] = React.useState<string | null>(null)
+  const [mtrRoutes, setMtrRoutes] = React.useState<RouteListEntry[]>([])
+  const [routesLoading, setRoutesLoading] = React.useState(true)
+  const [selectedVariant, setSelectedVariant] = React.useState<RouteListEntry | null>(null)
+  const [schedulesBySta, setSchedulesBySta] = React.useState<Record<string, MtrScheduleResponse>>(
+    {}
+  )
+
+  React.useEffect(() => {
+    let cancelled = false
+    listMtrRoutes()
+      .then((data) => {
+        if (!cancelled) setMtrRoutes(data)
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setRoutesLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const lines = React.useMemo(() => {
     const set = new Set<string>()
-    for (const station of MTR_STATIONS) {
-      for (const line of station.lines) {
-        set.add(line)
-      }
+    for (const route of mtrRoutes) {
+      set.add(route.route)
     }
     return Array.from(set).sort(sortLines)
-  }, [])
+  }, [mtrRoutes])
 
-  const stations = React.useMemo(() => {
+  const variantsForLine = React.useMemo(() => {
     if (!selectedLine) return []
-    return findMtrStationsByLine(selectedLine)
-  }, [selectedLine])
+    return mtrRoutes
+      .filter((route) => route.route === selectedLine)
+      .sort(
+        (a, b) =>
+          getRouteDestination(a.dest, lang).localeCompare(getRouteDestination(b.dest, lang)) ||
+          a.serviceType.localeCompare(b.serviceType)
+      )
+  }, [mtrRoutes, selectedLine, lang])
+
+  const currentVariant = React.useMemo(() => {
+    if (!selectedLine) return null
+    if (
+      selectedVariant &&
+      variantsForLine.some((v) => variantKey(v) === variantKey(selectedVariant))
+    ) {
+      return selectedVariant
+    }
+    return variantsForLine[0] ?? null
+  }, [selectedLine, selectedVariant, variantsForLine])
+
+  const stationStas = React.useMemo(() => {
+    if (!currentVariant) return []
+    return (currentVariant.stops.mtr ?? []).map((sta) => sta.toUpperCase())
+  }, [currentVariant])
+
+  React.useEffect(() => {
+    if (!selectedLine || stationStas.length === 0) return
+
+    let cancelled = false
+    const line = selectedLine
+    const mtrLang = toMtrLang(lang)
+
+    const load = async () => {
+      const result = await fetchMtrRouteSchedules({
+        line,
+        stas: stationStas,
+        lang: mtrLang,
+      })
+
+      if (cancelled) return
+
+      const next: Record<string, MtrScheduleResponse> = {}
+      for (const sta of stationStas) {
+        const scheduleKey = `${line}-${sta}-${mtrLang}`
+        const schedule = result.byKey[scheduleKey]
+        if (schedule) next[sta] = schedule
+      }
+      setSchedulesBySta(next)
+    }
+
+    void load().catch(() => {
+      if (!cancelled) setSchedulesBySta({})
+    })
+
+    const interval = window.setInterval(() => {
+      void load().catch(() => {})
+    }, 30_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [selectedLine, stationStas, lang])
+
+  const lineColor = selectedLine ? getLineColor(selectedLine) : '#64748b'
 
   return (
     <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
@@ -65,37 +154,54 @@ export function MtrRoutesView({
       </div>
 
       {!selectedLine ? (
-        <StaggerContainer className="grid grid-cols-2 gap-3 sm:grid-cols-3" stagger={0.03}>
-          {lines.map((line) => {
-            const color = getLineColor(line)
-            const fg = getReadableForeground(color)
-            return (
-              <StaggerItem key={line}>
-                <MotionCard
-                  hoverScale={1.02}
-                  tapScale={0.98}
-                  className={cn('rounded-2xl p-4 shadow-sm transition-shadow hover:shadow-md', fg)}
-                  style={{ backgroundColor: color }}
-                  onClick={() => setSelectedLine(line)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') setSelectedLine(line)
-                  }}
-                >
-                  <div className="m3-title-lg">{line}</div>
-                  <div className="m3-label-lg opacity-90">{t('common.route')}</div>
-                </MotionCard>
-              </StaggerItem>
-            )
-          })}
-        </StaggerContainer>
+        routesLoading ? (
+          <div className="text-on-surface-variant m3-body-md py-8 text-center">
+            {t('common.refresh')}…
+          </div>
+        ) : (
+          <StaggerContainer className="grid grid-cols-2 gap-3 sm:grid-cols-3" stagger={0.03}>
+            {lines.map((line) => {
+              const color = getLineColor(line)
+              const fg = getReadableForeground(color)
+              return (
+                <StaggerItem key={line}>
+                  <MotionCard
+                    hoverScale={1.02}
+                    tapScale={0.98}
+                    className={cn(
+                      'rounded-2xl p-4 shadow-sm transition-shadow hover:shadow-md',
+                      fg
+                    )}
+                    style={{ backgroundColor: color }}
+                    onClick={() => {
+                      setSchedulesBySta({})
+                      setSelectedVariant(null)
+                      setSelectedLine(line)
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') setSelectedLine(line)
+                    }}
+                  >
+                    <div className="m3-title-lg">{line}</div>
+                    <div className="m3-label-lg opacity-90">{t('common.route')}</div>
+                  </MotionCard>
+                </StaggerItem>
+              )
+            })}
+          </StaggerContainer>
+        )
       ) : (
         <FadeIn className="space-y-4">
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setSelectedLine(null)}
+              onClick={() => {
+                setSchedulesBySta({})
+                setSelectedLine(null)
+                setSelectedVariant(null)
+              }}
               className="bg-secondary-container text-on-secondary-container m3-label-lg inline-flex items-center gap-1 rounded-full px-4 py-2 transition-colors hover:opacity-90"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -104,51 +210,75 @@ export function MtrRoutesView({
             <span
               className="m3-title-md rounded-full px-4 py-2"
               style={{
-                backgroundColor: getLineColor(selectedLine),
-                color:
-                  getReadableForeground(getLineColor(selectedLine)) === 'text-white'
-                    ? '#fff'
-                    : '#000',
+                backgroundColor: lineColor,
+                color: getReadableForeground(lineColor) === 'text-white' ? '#fff' : '#000',
               }}
             >
               {selectedLine}
             </span>
           </div>
 
+          {variantsForLine.length > 1 && (
+            <div className="flex flex-wrap gap-2">
+              {variantsForLine.map((variant) => (
+                <button
+                  key={variantKey(variant)}
+                  type="button"
+                  onClick={() => {
+                    setSchedulesBySta({})
+                    setSelectedVariant(variant)
+                  }}
+                  className={cn(
+                    'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                    currentVariant && variantKey(currentVariant) === variantKey(variant)
+                      ? 'bg-primary-container text-on-primary-container'
+                      : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                  )}
+                >
+                  {getRouteDestination(variant.dest, lang)}
+                  {variant.serviceType !== '1' ? ` · ${variant.serviceType}` : ''}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {currentVariant && variantsForLine.length === 1 && (
+            <div className="text-on-surface-variant m3-body-md">
+              {getRouteDestination(currentVariant.dest, lang)}
+            </div>
+          )}
+
           <div className="bg-surface-container rounded-2xl p-4">
             <div className="m3-title-md text-on-surface mb-3 flex items-center gap-2">
               <MapPin className="h-5 w-5" />
               {t('mtr.stations')}
-              <span className="text-on-surface-variant m3-body-md ml-auto">{stations.length}</span>
+              <span className="text-on-surface-variant m3-body-md ml-auto">
+                {stationStas.length}
+              </span>
             </div>
 
-            <StaggerContainer className="space-y-2" stagger={0.02}>
-              {stations.map((station) => (
-                <StaggerItem key={station.sta}>
-                  <div className="bg-surface-container-low hover:bg-surface-container-high flex items-center gap-3 rounded-xl px-4 py-3 transition-colors">
-                    <div className="bg-surface text-on-surface-variant flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
-                      <MapPin className="h-4 w-4" />
-                    </div>
-                    <div className="m3-body-md text-on-surface min-w-0 flex-1">
-                      {formatMtrStationName(station, toMtrLang(lang))}
-                    </div>
-                    <div className="text-on-surface-variant m3-label-md hidden sm:block">
-                      {station.sta}
-                    </div>
-                    {onViewEtas && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() => onViewEtas(station.sta)}
-                      >
-                        {t('common.viewEtas')}
-                      </Button>
-                    )}
-                  </div>
-                </StaggerItem>
-              ))}
-            </StaggerContainer>
+            <RouteStopTimeline lineColor={lineColor}>
+              {stationStas.map((sta, idx) => {
+                const station = findMtrStationBySta(sta)
+                const downstreamStas = new Set(stationStas.slice(idx + 1))
+                const schedule = schedulesBySta[sta]
+                const soonest = pickSoonestMtrTrain(schedule, selectedLine, sta, downstreamStas)
+                return (
+                  <RouteStopRow
+                    key={sta}
+                    name={station ? formatMtrStationName(station, toMtrLang(lang)) : sta}
+                    subtitle={<span className="hidden sm:inline">{sta}</span>}
+                    eta={
+                      <SoonestEtaPill
+                        minutes={soonest.minutes}
+                        arriving={soonest.arriving}
+                        lang={lang}
+                      />
+                    }
+                  />
+                )
+              })}
+            </RouteStopTimeline>
           </div>
 
           <div className="bg-surface-container rounded-2xl p-4">

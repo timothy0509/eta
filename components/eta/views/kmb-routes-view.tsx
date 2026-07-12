@@ -1,13 +1,18 @@
 'use client'
 
-import { AlertCircle, Clock, Heart, MapPin, Search } from 'lucide-react'
+import { AlertCircle, Clock, Heart, Search } from 'lucide-react'
 import * as React from 'react'
 
 import { TransitMap } from '@/components/eta/transit-map'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { LivePulse, StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import {
+  RouteStopRow,
+  RouteStopTimeline,
+  SoonestEtaPill,
+} from '@/components/eta/route-stop-timeline'
+import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import {
   fetchKmbRouteInfo,
   fetchKmbRouteStops,
@@ -19,6 +24,7 @@ import {
 } from '@/lib/eta/client'
 import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
@@ -256,9 +262,7 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
       if (cancelled) return
       const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
       for (const [stopId, entries] of Object.entries(res.byStopId)) {
-        filteredEtas[stopId] = (entries ?? []).filter(
-          (eta) => variantBaseKey(eta) === variantKey
-        )
+        filteredEtas[stopId] = (entries ?? []).filter((eta) => variantBaseKey(eta) === variantKey)
       }
       setEtas(filteredEtas)
     }
@@ -367,11 +371,7 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
               >
                 ← {t('common.back') ?? 'Back'}
               </button>
-              <RouteBadge
-                route={selectedRouteKey.route}
-                company={selectedRouteKey.co}
-                size="lg"
-              />
+              <RouteBadge route={selectedRouteKey.route} company={selectedRouteKey.co} size="lg" />
             </div>
 
             {variantsForRoute.length > 1 && (
@@ -431,9 +431,14 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
             {variantStops.length === 0 ? (
               <div className="text-on-surface-variant py-8 text-center">{t('common.loading')}</div>
             ) : (
-              <StaggerContainer className="relative space-y-0 pl-2" stagger={0.02}>
-                <div className="bg-outline-variant absolute top-2 bottom-2 left-[19px] w-px" />
-                {variantStops.map((rs, _idx) => {
+              <RouteStopTimeline
+                lineColor={
+                  currentVariant
+                    ? getRouteBadgeStyle(currentVariant.route, currentVariant.co).bgColor
+                    : '#64748b'
+                }
+              >
+                {variantStops.map((rs) => {
                   const stop = stopsById.get(rs.stopId)
                   const stopEtas = etas[rs.stopId] ?? []
                   const firstEta = stopEtas[0]
@@ -445,36 +450,25 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
                     : rs.stopId
                   const parsed = parseKmbStopNameCached(fullName)
                   return (
-                    <StaggerItem key={rs.stopId}>
-                      <div className="relative flex items-center gap-4 py-2">
-                        <div className="bg-surface border-outline z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border">
-                          <MapPin className="text-on-surface-variant h-4 w-4" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="m3-body-md truncate font-medium">{parsed.name}</div>
-                          <div className="text-on-surface-variant m3-label-md">
-                            {parsed.stopCode}
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {firstEta ? (
-                            <div className="bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1">
-                              <LivePulse />
-                              <span className="m3-title-md">
-                                {minutes !== null && minutes <= 0
-                                  ? t('common.now')
-                                  : `${minutes} ${lang === 'en' ? 'min' : '分'}`}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-on-surface-variant m3-label-md">—</span>
-                          )}
-                        </div>
-                      </div>
-                    </StaggerItem>
+                    <RouteStopRow
+                      key={rs.stopId}
+                      name={<span className="font-medium">{parsed.name}</span>}
+                      subtitle={parsed.stopCode}
+                      eta={
+                        firstEta ? (
+                          <SoonestEtaPill
+                            minutes={minutes}
+                            arriving={minutes !== null && minutes <= 0}
+                            lang={lang}
+                          />
+                        ) : (
+                          <SoonestEtaPill minutes={null} lang={lang} />
+                        )
+                      }
+                    />
                   )
                 })}
-              </StaggerContainer>
+              </RouteStopTimeline>
             )}
           </div>
 

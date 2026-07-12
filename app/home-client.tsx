@@ -393,39 +393,8 @@ export default function HomeClient() {
 
   const renderRoutes = () => {
     if (mode === 'kmb') return <KmbRoutesView lang={lang} />
-    if (mode === 'mtr') {
-      return (
-        <MtrRoutesView
-          lang={lang}
-          onViewEtas={(sta) => {
-            const station = MTR_STATIONS.find((s) => s.sta === sta)
-            setSelectedItem({
-              id: `mtr:${sta}:__station__`,
-              mode: 'mtr',
-              sta,
-              line: station?.lines[0] ?? '',
-              title: station?.nameEn ?? sta,
-            })
-            setSubView('stops')
-          }}
-        />
-      )
-    }
-    return (
-      <LrtRoutesView
-        lang={lang}
-        onViewEtas={(stationId) => {
-          const station = LRT_STATIONS.find((s) => s.stationId === stationId)
-          setSelectedItem({
-            id: `lrt:${stationId}:__station__`,
-            mode: 'lrt',
-            stationId,
-            title: station?.nameEn ?? stationId,
-          })
-          setSubView('stops')
-        }}
-      />
-    )
+    if (mode === 'mtr') return <MtrRoutesView lang={lang} />
+    return <LrtRoutesView lang={lang} />
   }
 
   const renderContent = () => {

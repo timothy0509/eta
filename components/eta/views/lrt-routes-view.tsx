@@ -3,16 +3,24 @@
 import { ChevronLeft, MapPin, TramFront } from 'lucide-react'
 import * as React from 'react'
 
-import { Button } from '@/components/ui/button'
+import {
+  RouteStopRow,
+  RouteStopTimeline,
+  SoonestEtaPill,
+} from '@/components/eta/route-stop-timeline'
 import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
+import { fetchLrtEtasForStop } from '@/lib/eta/client'
 import { listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
+import { pickSoonestIsoEta } from '@/lib/eta/pick-soonest-eta'
+import { promisePool } from '@/lib/eta/promise-pool'
 import type { UiLanguage } from '@/lib/eta/types'
+import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
-import type { RouteListEntry } from 'hk-bus-eta'
+import type { Eta, RouteListEntry } from 'hk-bus-eta'
 
 function parseLrtStopId(stopId: string): string {
   return stopId.replace(/^LR/i, '').replace(/^0+/, '') || '0'
@@ -35,18 +43,21 @@ function sortRoutes(a: RouteListEntry, b: RouteListEntry): number {
   )
 }
 
-export function LrtRoutesView({
-  lang,
-  onViewEtas,
-}: {
-  lang: UiLanguage
-  onViewEtas?: (stationId: string) => void
-}) {
+function mapEtaForPick(eta: Eta): { eta?: string; data_timestamp?: string } {
+  return {
+    eta: eta.eta,
+    data_timestamp: (eta as { data_timestamp?: string }).data_timestamp,
+  }
+}
+
+export function LrtRoutesView({ lang }: { lang: UiLanguage }) {
   const { t } = useTranslations(lang)
+  const now = useTickingNow(15_000)
   const [routes, setRoutes] = React.useState<RouteListEntry[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [selectedRoute, setSelectedRoute] = React.useState<RouteListEntry | null>(null)
+  const [stopEtas, setStopEtas] = React.useState<Record<string, Eta[]>>({})
 
   React.useEffect(() => {
     let cancelled = false
@@ -74,6 +85,53 @@ export function LrtRoutesView({
     if (!selectedRoute) return []
     return (selectedRoute.stops.lightRail ?? []).map(parseLrtStopId)
   }, [selectedRoute])
+
+  React.useEffect(() => {
+    if (!selectedRoute || stationIds.length === 0) return
+
+    let cancelled = false
+    const bound = selectedRoute.bound.lightRail ?? ''
+    const route = selectedRoute.route
+    const serviceType = selectedRoute.serviceType
+
+    const load = async () => {
+      const results = await promisePool(stationIds, 4, async (stationId) => {
+        const etas = await fetchLrtEtasForStop({
+          route,
+          bound,
+          serviceType,
+          stationId,
+          language: lang,
+        })
+        return { stationId, etas }
+      })
+
+      if (cancelled) return
+
+      const next: Record<string, Eta[]> = {}
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          next[result.value.stationId] = result.value.etas
+        }
+      }
+      setStopEtas(next)
+    }
+
+    void load().catch(() => {
+      if (!cancelled) setStopEtas({})
+    })
+
+    const interval = window.setInterval(() => {
+      void load().catch(() => {})
+    }, 30_000)
+
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [selectedRoute, stationIds, lang])
+
+  const lineColor = selectedRoute ? getLineColor(selectedRoute.route) : '#64748b'
 
   return (
     <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
@@ -105,7 +163,10 @@ export function LrtRoutesView({
                       hoverScale={1.01}
                       tapScale={0.99}
                       className="bg-surface-container hover:bg-surface-container-high rounded-2xl transition-colors"
-                      onClick={() => setSelectedRoute(route)}
+                      onClick={() => {
+                        setStopEtas({})
+                        setSelectedRoute(route)
+                      }}
                       role="button"
                       tabIndex={0}
                       onKeyDown={(e) => {
@@ -142,7 +203,10 @@ export function LrtRoutesView({
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setSelectedRoute(null)}
+              onClick={() => {
+                setStopEtas({})
+                setSelectedRoute(null)
+              }}
               className="bg-secondary-container text-on-secondary-container m3-label-lg inline-flex items-center gap-1 rounded-full px-4 py-2 transition-colors hover:opacity-90"
             >
               <ChevronLeft className="h-4 w-4" />
@@ -151,11 +215,8 @@ export function LrtRoutesView({
             <span
               className="m3-title-md rounded-full px-4 py-2"
               style={{
-                backgroundColor: getLineColor(selectedRoute.route),
-                color:
-                  getReadableForeground(getLineColor(selectedRoute.route)) === 'text-white'
-                    ? '#fff'
-                    : '#000',
+                backgroundColor: lineColor,
+                color: getReadableForeground(lineColor) === 'text-white' ? '#fff' : '#000',
               }}
             >
               {selectedRoute.route}
@@ -174,34 +235,26 @@ export function LrtRoutesView({
               </span>
             </div>
 
-            <StaggerContainer className="relative space-y-0 pl-2" stagger={0.02}>
-              <div className="bg-outline-variant absolute top-2 bottom-2 left-[19px] w-px" />
-              {stationIds.map((stationId, idx) => (
-                <StaggerItem key={`${stationId}-${idx}`}>
-                  <div className="relative flex items-center gap-4 py-2">
-                    <div className="bg-surface border-outline z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border">
-                      <MapPin className="text-on-surface-variant h-4 w-4" />
-                    </div>
-                    <div className="m3-body-md text-on-surface min-w-0 flex-1">
-                      {getLrtStationName(stationId, lang)}
-                    </div>
-                    <div className="text-on-surface-variant m3-label-md hidden sm:block">
-                      {stationId}
-                    </div>
-                    {onViewEtas && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="rounded-full"
-                        onClick={() => onViewEtas(stationId)}
-                      >
-                        {t('common.viewEtas')}
-                      </Button>
-                    )}
-                  </div>
-                </StaggerItem>
-              ))}
-            </StaggerContainer>
+            <RouteStopTimeline lineColor={lineColor}>
+              {stationIds.map((stationId, idx) => {
+                const etas = stopEtas[stationId] ?? []
+                const soonest = pickSoonestIsoEta(etas.map(mapEtaForPick), now)
+                return (
+                  <RouteStopRow
+                    key={`${stationId}-${idx}`}
+                    name={getLrtStationName(stationId, lang)}
+                    subtitle={<span className="hidden sm:inline">{stationId}</span>}
+                    eta={
+                      <SoonestEtaPill
+                        minutes={soonest.minutes}
+                        arriving={soonest.arriving}
+                        lang={lang}
+                      />
+                    }
+                  />
+                )
+              })}
+            </RouteStopTimeline>
           </div>
 
           <div className="bg-surface-container rounded-2xl p-4">

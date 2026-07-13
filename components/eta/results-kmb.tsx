@@ -276,7 +276,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const { t } = useTranslations(lang)
 
-  const expandable = Boolean(onToggleExpand) && items.length > 1
+  const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && Boolean(expanded)
 
   const metaChips = (
@@ -416,7 +416,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   )
 
   const etaPanel = (
-    <div className="grid grid-cols-3 gap-1.5 pb-0.5 sm:gap-2">
+    <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
       {items.map((entry, entryIdx) => {
         const minutes = entry.eta
           ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
@@ -436,7 +436,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           return (
             <div
               key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-              className="bg-primary-container text-on-primary-container min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+              className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
             >
               <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
               <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
@@ -451,7 +451,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         return (
           <div
             key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-            className="bg-surface-container-high min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
+            className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
           >
             <div className="text-on-surface-variant m3-label-md">
               {formatEtaLabel(entry.eta_seq, lang)}

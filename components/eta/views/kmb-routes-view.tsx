@@ -86,6 +86,36 @@ function hasDuplicateOperators(variants: RouteVariant[]): boolean {
   return cos.size > 1
 }
 
+function getStopGroupForClick(
+  clickedStopId: string,
+  variantStops: KmbRouteStopLite[],
+  stopsById: Map<string, KmbStopSearchItem>,
+  lang: UiLanguage
+): { stopIds: string[]; title: string } | null {
+  const clickedStop = stopsById.get(clickedStopId)
+  if (!clickedStop) return null
+
+  const clickedName = pickLang(
+    { en: clickedStop.nameEn, tc: clickedStop.nameTc, sc: clickedStop.nameSc },
+    lang
+  )
+  const clickedParsed = parseKmbStopNameCached(clickedName)
+  const baseName = clickedParsed.name
+
+  const sameBase = variantStops
+    .map((rs) => ({ rs, stop: stopsById.get(rs.stopId) }))
+    .filter(({ stop }) => {
+      if (!stop) return false
+      const name = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+      const parsed = parseKmbStopNameCached(name)
+      return parsed.name === baseName
+    })
+    .map(({ rs }) => rs.stopId)
+
+  if (!sameBase.length) return null
+  return { stopIds: sameBase, title: baseName }
+}
+
 function useKmbRouteList() {
   const [routes, setRoutes] = React.useState<KmbRouteInfoLite[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -155,15 +185,26 @@ function useKmbStops() {
   return stops
 }
 
-export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
+export function KmbRoutesView({
+  lang,
+  initialSelection,
+  onSelectStopGroup,
+}: {
+  lang: UiLanguage
+  initialSelection?: { co: string; route: string; bound?: string; serviceType?: string }
+  onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
+}) {
   const { t } = useTranslations(lang)
   const { routes, loading, error } = useKmbRouteList()
   const allStops = useKmbStops()
   const stopsById = React.useMemo(() => new Map(allStops.map((s) => [s.stopId, s])), [allStops])
 
   const [query, setQuery] = React.useState('')
-  const [selectedRouteKey, setSelectedRouteKey] = React.useState<RouteSelection | null>(null)
-  const [selectedVariant, setSelectedVariant] = React.useState<RouteVariant | null>(null)
+  const [manualSelection, setManualSelection] = React.useState<{
+    sourceKey: string
+    routeKey: RouteSelection | null
+    variant: RouteVariant | null
+  }>({ sourceKey: '', routeKey: null, variant: null })
   const [variantStops, setVariantStops] = React.useState<KmbRouteStopLite[]>([])
   const [etas, setEtas] = React.useState<Record<string, KmbEtaEntryWithLeg[]>>({})
 
@@ -180,6 +221,69 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
       a.route.localeCompare(b.route, undefined, { numeric: true })
     )
   }, [routes])
+
+  const initialKey = React.useMemo(
+    () =>
+      initialSelection
+        ? `${normalizeCo(initialSelection.co)}|${initialSelection.route}|${initialSelection.bound ?? ''}|${initialSelection.serviceType ?? ''}`
+        : '',
+    [initialSelection]
+  )
+
+  const autoRouteKey = React.useMemo(() => {
+    if (!initialSelection || routes.length === 0) return null
+    const co = normalizeCo(initialSelection.co)
+    const route = initialSelection.route
+    return routeEntries.find((e) => normalizeCo(e.co) === co && e.route === route) ?? null
+  }, [initialSelection, routes, routeEntries])
+
+  const autoVariant = React.useMemo(() => {
+    if (!initialSelection || !autoRouteKey || routes.length === 0) return null
+    const co = normalizeCo(initialSelection.co)
+    const route = initialSelection.route
+    const matchingVariants = routes.filter(
+      (r) => r.route === route && normalizeCo(String(r.co ?? 'kmb')) === co
+    )
+    if (!matchingVariants.length) return null
+    const matchedVariant =
+      initialSelection.bound !== undefined
+        ? matchingVariants.find(
+            (v) =>
+              v.bound === initialSelection.bound &&
+              (initialSelection.serviceType ? v.serviceType === initialSelection.serviceType : true)
+          )
+        : undefined
+    const target = matchedVariant ?? matchingVariants[0]
+    if (!target) return null
+    return {
+      key: `${target.co}|${target.route}|${target.bound}|${target.serviceType}`,
+      co: String(target.co ?? 'kmb'),
+      route: target.route,
+      bound: target.bound,
+      serviceType: target.serviceType,
+      origin: target.origin,
+      destination: target.destination,
+    }
+  }, [autoRouteKey, initialSelection, routes])
+
+  const selectedRouteKey =
+    manualSelection.sourceKey === initialKey ? manualSelection.routeKey : autoRouteKey
+  const selectedVariant =
+    manualSelection.sourceKey === initialKey ? manualSelection.variant : autoVariant
+
+  const setSelectedRouteKey = React.useCallback(
+    (routeKey: RouteSelection | null) => {
+      setManualSelection((prev) => ({ ...prev, sourceKey: initialKey, routeKey, variant: null }))
+    },
+    [initialKey]
+  )
+
+  const setSelectedVariant = React.useCallback(
+    (variant: RouteVariant | null) => {
+      setManualSelection((prev) => ({ ...prev, sourceKey: initialKey, variant }))
+    },
+    [initialKey]
+  )
 
   const showOperatorInSearch = React.useMemo(
     () => hasDuplicateRouteNumbers(routeEntries),
@@ -449,6 +553,7 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
                     ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
                     : rs.stopId
                   const parsed = parseKmbStopNameCached(fullName)
+                  const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
                   return (
                     <RouteStopRow
                       key={rs.stopId}
@@ -464,6 +569,16 @@ export function KmbRoutesView({ lang }: { lang: UiLanguage }) {
                         ) : (
                           <SoonestEtaPill minutes={null} lang={lang} />
                         )
+                      }
+                      onClick={
+                        onSelectStopGroup && group
+                          ? () =>
+                              onSelectStopGroup({
+                                stopIds: group.stopIds,
+                                title: group.title,
+                                route: currentVariant.route,
+                              })
+                          : undefined
                       }
                     />
                   )

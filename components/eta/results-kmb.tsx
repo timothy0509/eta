@@ -33,6 +33,19 @@ function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLangua
   return fields.tc
 }
 
+function MetaChip({ children, widthClass }: { children?: React.ReactNode; widthClass: string }) {
+  return (
+    <span
+      className={cn(
+        'text-on-surface-variant m3-label-md truncate text-right font-mono',
+        widthClass
+      )}
+    >
+      {children}
+    </span>
+  )
+}
+
 function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
   const key = String(co ?? 'kmb').toLowerCase()
   const map: Record<string, { en: string; tc: string; sc: string }> = {
@@ -281,17 +294,9 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const metaChips = (
     <div className="hidden items-center gap-1.5 sm:flex">
-      {stopChips.platform ? (
-        <span className="text-on-surface-variant m3-label-md font-mono">{stopChips.platform}</span>
-      ) : null}
-      {fare ? (
-        <span className="text-on-surface-variant m3-label-md font-mono">
-          HK$ {fare.hkd.toFixed(1)}
-        </span>
-      ) : null}
-      {stopChips.stopCode ? (
-        <span className="text-on-surface-variant m3-label-md font-mono">{stopChips.stopCode}</span>
-      ) : null}
+      <MetaChip widthClass="w-8 sm:w-10">{stopChips.platform}</MetaChip>
+      <MetaChip widthClass="w-16 sm:w-20">{fare ? `HK$ ${fare.hkd.toFixed(1)}` : null}</MetaChip>
+      <MetaChip widthClass="w-14 sm:w-16">{stopChips.stopCode}</MetaChip>
     </div>
   )
 

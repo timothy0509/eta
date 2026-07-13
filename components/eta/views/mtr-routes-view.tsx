@@ -44,7 +44,13 @@ function variantKey(entry: RouteListEntry): string {
   return `${entry.route}|${entry.serviceType}|${entry.bound.mtr ?? ''}`
 }
 
-export function MtrRoutesView({ lang }: { lang: UiLanguage }) {
+export function MtrRoutesView({
+  lang,
+  onSelectStation,
+}: {
+  lang: UiLanguage
+  onSelectStation?: (sta: string, line: string, name: string) => void
+}) {
   const { t } = useTranslations(lang)
   useTickingNow(15_000)
   const [selectedLine, setSelectedLine] = React.useState<string | null>(null)
@@ -263,10 +269,11 @@ export function MtrRoutesView({ lang }: { lang: UiLanguage }) {
                 const downstreamStas = new Set(stationStas.slice(idx + 1))
                 const schedule = schedulesBySta[sta]
                 const soonest = pickSoonestMtrTrain(schedule, selectedLine, sta, downstreamStas)
+                const name = station ? formatMtrStationName(station, toMtrLang(lang)) : sta
                 return (
                   <RouteStopRow
                     key={sta}
-                    name={station ? formatMtrStationName(station, toMtrLang(lang)) : sta}
+                    name={name}
                     subtitle={<span className="hidden sm:inline">{sta}</span>}
                     eta={
                       <SoonestEtaPill
@@ -275,6 +282,7 @@ export function MtrRoutesView({ lang }: { lang: UiLanguage }) {
                         lang={lang}
                       />
                     }
+                    onClick={() => onSelectStation?.(sta, selectedLine, name)}
                   />
                 )
               })}

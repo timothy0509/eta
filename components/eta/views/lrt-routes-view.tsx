@@ -47,7 +47,13 @@ function mapEtaForPick(eta: Eta): { eta?: string; data_timestamp?: string } {
   }
 }
 
-export function LrtRoutesView({ lang }: { lang: UiLanguage }) {
+export function LrtRoutesView({
+  lang,
+  onSelectStation,
+}: {
+  lang: UiLanguage
+  onSelectStation?: (stationId: string, name: string) => void
+}) {
   const { t } = useTranslations(lang)
   const now = useTickingNow(15_000)
   const [routes, setRoutes] = React.useState<RouteListEntry[]>([])
@@ -236,10 +242,11 @@ export function LrtRoutesView({ lang }: { lang: UiLanguage }) {
               {stationIds.map((stationId, idx) => {
                 const etas = stopEtas[stationId] ?? []
                 const soonest = pickSoonestIsoEta(etas.map(mapEtaForPick), now)
+                const name = getLrtStationName(stationId, lang)
                 return (
                   <RouteStopRow
                     key={`${stationId}-${idx}`}
-                    name={getLrtStationName(stationId, lang)}
+                    name={name}
                     subtitle={<span className="hidden sm:inline">{stationId}</span>}
                     eta={
                       <SoonestEtaPill
@@ -248,6 +255,7 @@ export function LrtRoutesView({ lang }: { lang: UiLanguage }) {
                         lang={lang}
                       />
                     }
+                    onClick={() => onSelectStation?.(stationId, name)}
                   />
                 )
               })}

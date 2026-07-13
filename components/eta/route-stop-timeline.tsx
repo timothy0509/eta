@@ -70,14 +70,36 @@ export function RouteStopRow({
   name,
   subtitle,
   eta,
+  onClick,
 }: {
   name: React.ReactNode
   subtitle?: React.ReactNode
   eta?: React.ReactNode
+  onClick?: () => void
 }) {
+  const clickable = Boolean(onClick)
   return (
     <StaggerItem>
-      <div className="relative flex items-center gap-4 py-2">
+      <div
+        className={cn(
+          'relative flex items-center gap-4 py-2',
+          clickable &&
+            'hover:bg-surface-container-high/50 cursor-pointer rounded-2xl transition-colors'
+        )}
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onClick={onClick}
+        onKeyDown={
+          clickable
+            ? (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  onClick?.()
+                }
+              }
+            : undefined
+        }
+      >
         <div className="bg-surface border-outline z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border">
           <MapPin className="text-on-surface-variant h-4 w-4" />
         </div>

@@ -247,6 +247,74 @@ export default function HomeClient() {
     [setMode, setSubView]
   )
 
+  const kmbRouteInitialSelection = React.useMemo(() => {
+    if (selectedItem?.mode === 'kmb' && 'type' in selectedItem && selectedItem.type === 'route') {
+      return {
+        co: selectedItem.co ?? 'kmb',
+        route: selectedItem.route,
+        bound: selectedItem.bound,
+        serviceType: selectedItem.serviceType,
+      }
+    }
+    return undefined
+  }, [selectedItem])
+
+  const onSelectStopGroupFromRoute = React.useCallback(
+    ({ stopIds, title, route }: { stopIds: string[]; title: string; route: string }) => {
+      const item: FavoritesItem = {
+        id: `kmb:stops:${stopIds.join(',')}:${route}`,
+        mode: 'kmb',
+        title,
+        stopIds,
+        route,
+        routeFilterMode: 'simple',
+      }
+      setSelectedItem(item)
+      setMode('kmb')
+      setSubView('stops')
+    },
+    [setMode, setSubView]
+  )
+
+  const onSelectMtrStationFromRoute = React.useCallback(
+    (sta: string, line: string, name: string) => {
+      const station = mtrStations.find((s) => s.sta === sta)
+      const title = station
+        ? `${lang === 'en' ? station.nameEn : station.nameTc} · ${station.lines.join('/')}/${station.sta}`
+        : `${name} · ${line}/${sta}`
+      const item: FavoritesItem = {
+        id: `mtr:${sta}`,
+        mode: 'mtr',
+        title,
+        line: station?.lines[0] ?? line,
+        sta,
+      }
+      setSelectedItem(item)
+      setMode('mtr')
+      setSubView('stops')
+    },
+    [lang, mtrStations, setMode, setSubView]
+  )
+
+  const onSelectLrtStationFromRoute = React.useCallback(
+    (stationId: string, name: string) => {
+      const station = lrtStations.find((s) => s.stationId === stationId)
+      const title = station
+        ? `${lang === 'en' ? station.nameEn : station.nameZh} · ${station.stationId}`
+        : `${name} · ${stationId}`
+      const item: FavoritesItem = {
+        id: `lrt:${stationId}`,
+        mode: 'lrt',
+        title,
+        stationId,
+      }
+      setSelectedItem(item)
+      setMode('lrt')
+      setSubView('stops')
+    },
+    [lang, lrtStations, setMode, setSubView]
+  )
+
   React.useEffect(() => {
     if (!didHydrateFromUrlRef.current) return
 
@@ -395,7 +463,7 @@ export default function HomeClient() {
   const renderStops = () => {
     return (
       <FadeIn className="mx-auto max-w-7xl overflow-hidden lg:grid lg:grid-cols-[280px_1fr] lg:gap-8">
-        <div className="lg:border-outline/10 border-b bg-transparent p-4 sm:p-5 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-0 lg:pr-6">
+        <div className="lg:border-outline/10 border-b-0 bg-transparent p-4 pb-3 sm:p-5 sm:pb-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto lg:border-r lg:p-0 lg:pr-6">
           {controls}
         </div>
 
@@ -410,9 +478,17 @@ export default function HomeClient() {
   }
 
   const renderRoutes = () => {
-    if (mode === 'kmb') return <KmbRoutesView lang={lang} />
-    if (mode === 'mtr') return <MtrRoutesView lang={lang} />
-    return <LrtRoutesView lang={lang} />
+    if (mode === 'kmb')
+      return (
+        <KmbRoutesView
+          lang={lang}
+          initialSelection={kmbRouteInitialSelection}
+          onSelectStopGroup={onSelectStopGroupFromRoute}
+        />
+      )
+    if (mode === 'mtr')
+      return <MtrRoutesView lang={lang} onSelectStation={onSelectMtrStationFromRoute} />
+    return <LrtRoutesView lang={lang} onSelectStation={onSelectLrtStationFromRoute} />
   }
 
   const renderContent = () => {

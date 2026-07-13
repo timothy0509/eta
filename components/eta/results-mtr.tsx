@@ -15,7 +15,6 @@ import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
-import type { DisplayMode } from '@/lib/store'
 
 type Props = {
   title: string
@@ -26,7 +25,6 @@ type Props = {
   lastUpdatedAt?: number | null
   onRefresh: () => void
   loading?: boolean
-  displayMode?: DisplayMode
 }
 
 type MtrDirection = 'UP' | 'DOWN'
@@ -109,7 +107,6 @@ export const MtrResults = React.memo(function MtrResults({
   lastUpdatedAt,
   onRefresh,
   loading,
-  displayMode: _displayMode,
 }: Props) {
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang })

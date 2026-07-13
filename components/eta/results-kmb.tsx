@@ -26,7 +26,6 @@ import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
-import type { DisplayMode } from '@/lib/store'
 
 function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
   if (lang === 'sc') return fields.sc
@@ -200,7 +199,6 @@ type Props = {
   error?: string | null
   onRefresh: () => void
   loading?: boolean
-  displayMode?: DisplayMode
   /** For showing stop codes next to routes when multiple stops are selected */
   stops?: StopInfo[]
   /** Whether multiple stops are selected (grouped stops mode) */
@@ -646,7 +644,6 @@ export const KmbResults = React.memo(function KmbResults({
   precomputedGroups,
   registerStopRef,
   visibleStopIds,
-  displayMode: _displayMode,
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
   const now = useTickingNow(15_000)

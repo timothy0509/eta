@@ -68,7 +68,6 @@ const useAppStoreState = () =>
       lang: s.lang,
       routeFilterMode: s.routeFilterMode,
       autoRefreshSeconds: s.autoRefreshSeconds,
-      displayMode: s.displayMode,
     }))
   )
 
@@ -86,8 +85,7 @@ const useAppStoreActions = () =>
   )
 
 export default function HomeClient() {
-  const { mode, subView, lang, routeFilterMode, autoRefreshSeconds, displayMode } =
-    useAppStoreState()
+  const { mode, subView, lang, routeFilterMode, autoRefreshSeconds } = useAppStoreState()
   const {
     setMode,
     setSubView,
@@ -343,7 +341,6 @@ export default function HomeClient() {
     <>
       <div hidden={mode !== 'kmb'}>
         <KmbResults
-          displayMode={displayMode}
           lang={kmbPaneState?.lang ?? lang}
           title={kmbPaneState?.title ?? ''}
           stopCode={kmbPaneState?.stopCode ?? null}
@@ -369,7 +366,6 @@ export default function HomeClient() {
       </div>
       <div hidden={mode !== 'mtr'}>
         <MtrResults
-          displayMode={displayMode}
           title={mtrPaneState?.title ?? ''}
           lang={mtrPaneState?.lang ?? lang}
           schedule={mtrPaneState?.schedule ?? null}
@@ -382,7 +378,6 @@ export default function HomeClient() {
       </div>
       <div hidden={mode !== 'lrt'}>
         <LrtResults
-          displayMode={displayMode}
           title={lrtPaneState?.title ?? ''}
           lang={lrtPaneState?.lang ?? lang}
           schedule={lrtPaneState?.schedule ?? null}
@@ -398,34 +393,14 @@ export default function HomeClient() {
   )
 
   const renderStops = () => {
-    const isPlatform = displayMode === 'platform-display'
     return (
-      <FadeIn
-        className={cn(
-          'mx-auto overflow-hidden lg:grid lg:gap-8',
-          isPlatform
-            ? 'dark max-w-7xl lg:grid-cols-[240px_1fr]'
-            : 'max-w-7xl lg:grid-cols-[280px_1fr]'
-        )}
-      >
-        <div
-          className={cn(
-            'lg:border-outline/10 border-b p-4 sm:p-5 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-0 lg:pr-6',
-            isPlatform ? 'bg-surface' : 'bg-transparent'
-          )}
-        >
+      <FadeIn className="mx-auto max-w-7xl overflow-hidden lg:grid lg:grid-cols-[280px_1fr] lg:gap-8">
+        <div className="lg:border-outline/10 border-b bg-transparent p-4 sm:p-5 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-0 lg:pr-6">
           {controls}
         </div>
 
         <FadeIn className="relative" delay={0.05}>
-          <div
-            className={cn(
-              'relative overflow-hidden rounded-3xl border p-4 sm:p-5',
-              isPlatform
-                ? 'border-outline/10 bg-surface shadow-none'
-                : 'bg-surface-container-lowest shadow-sm'
-            )}
-          >
+          <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border p-4 shadow-sm sm:p-5">
             <span className="bg-primary absolute top-0 right-0 left-0 h-1" aria-hidden />
             {results}
           </div>

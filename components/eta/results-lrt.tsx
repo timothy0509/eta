@@ -13,7 +13,6 @@ import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
-import type { DisplayMode } from '@/lib/store'
 
 function formatTrainLength(length: number, lang: UiLanguage) {
   if (lang === 'en') return `${length}-car`
@@ -48,7 +47,6 @@ type Props = {
   lastUpdatedAt?: number | null
   onRefresh: () => void
   loading?: boolean
-  displayMode?: DisplayMode
 }
 
 export const LrtResults = React.memo(function LrtResults({
@@ -61,7 +59,6 @@ export const LrtResults = React.memo(function LrtResults({
   lastUpdatedAt,
   onRefresh,
   loading,
-  displayMode: _displayMode,
 }: Props) {
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang })

@@ -41,7 +41,6 @@ function createDebouncedLocalStorage(delayMs = 300): StateStorage {
 }
 
 export type RouteFilterMode = 'simple' | 'advanced'
-export type DisplayMode = 'departure-board' | 'platform-display'
 
 type FavoritesMeta = {
   pinned?: boolean
@@ -133,7 +132,6 @@ type AppState = {
   lang: UiLanguage
   routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
-  displayMode: DisplayMode
 
   favorites: FavoritesItem[]
   favoritesGroups: FavoritesGroup[]
@@ -144,7 +142,6 @@ type AppState = {
   setLang: (lang: UiLanguage) => void
   setRouteFilterMode: (mode: RouteFilterMode) => void
   setAutoRefreshSeconds: (seconds: number) => void
-  setDisplayMode: (mode: DisplayMode) => void
   addFavorite: (item: FavoritesItem) => void
   removeFavorite: (id: string) => void
   toggleFavoritePin: (id: string) => void
@@ -181,7 +178,6 @@ export const useAppStore = create<AppState>()(
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
-      displayMode: 'departure-board',
 
       favorites: [],
       favoritesGroups: [],
@@ -192,7 +188,6 @@ export const useAppStore = create<AppState>()(
       setLang: (lang) => set({ lang }),
       setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
       setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
-      setDisplayMode: (displayMode) => set({ displayMode }),
 
       addFavorite: (item) =>
         set((state) => {
@@ -309,7 +304,6 @@ export const useAppStore = create<AppState>()(
           lang: state?.lang ?? 'tc',
           routeFilterMode: state?.routeFilterMode ?? 'simple',
           autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
-          displayMode: state?.displayMode ?? 'departure-board',
           favorites,
           favoritesGroups: state?.favoritesGroups ?? [],
           recents: state?.recents ?? [],
@@ -321,7 +315,6 @@ export const useAppStore = create<AppState>()(
         lang: state.lang,
         routeFilterMode: state.routeFilterMode,
         autoRefreshSeconds: state.autoRefreshSeconds,
-        displayMode: state.displayMode,
         favorites: state.favorites,
         favoritesGroups: state.favoritesGroups,
         recents: state.recents,

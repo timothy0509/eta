@@ -423,7 +423,7 @@ export default function HomeClient() {
       <LangSync />
       <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
 
-      <div className="mx-auto flex max-w-7xl">
+      <div className="mx-auto flex max-w-7xl md:pl-20">
         <SideRail lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
 
         <main className="flex-1 p-4 sm:p-6">

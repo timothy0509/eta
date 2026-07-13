@@ -129,7 +129,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
   const { t } = useTranslations(lang)
 
   return (
-    <nav className="bg-surface-container-low hidden w-20 flex-col items-center gap-2 rounded-r-3xl py-4 shadow-sm md:flex">
+    <nav className="bg-surface-container-low elevation-2 fixed top-1/2 left-[max(0.75rem,env(safe-area-inset-left,0px))] z-50 hidden -translate-y-1/2 flex-col items-center gap-1 rounded-full px-2 py-2 md:flex">
       {SUB_VIEWS.map((sv) => {
         const Icon = sv.icon
         const active = subView === sv.id
@@ -139,7 +139,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
             type="button"
             onClick={() => onSubViewChange(sv.id)}
             className={cn(
-              'relative flex w-14 flex-col items-center gap-1 rounded-2xl py-3 text-xs font-medium transition-colors',
+              'relative flex w-full flex-col items-center gap-0.5 rounded-full px-2 py-2.5 text-[11px] font-medium transition-colors',
               active
                 ? 'text-on-secondary-container'
                 : 'text-on-surface-variant hover:text-on-surface'
@@ -148,7 +148,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
             {active && (
               <motion.div
                 layoutId="side-rail-pill"
-                className="bg-secondary-container absolute inset-0 -z-10 rounded-2xl"
+                className="bg-secondary-container absolute inset-0 -z-10 rounded-full"
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               />
             )}

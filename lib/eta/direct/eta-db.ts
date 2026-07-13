@@ -22,6 +22,7 @@ import {
   type KmbStopSearchItem,
   type SerializedEtaDbIndexes,
 } from '@/lib/eta/eta-db-index'
+import { lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
 
 type EtaDbCacheValue = SnapshotValue
@@ -339,7 +340,8 @@ export async function fetchLrtEtasForStop(params: {
   const route = params.route.toUpperCase()
   const bound = normalizeBound(params.bound)
   const serviceType = String(params.serviceType ?? '')
-  const stopId = `LR${String(params.stationId).padStart(3, '0')}`
+  const stopId = stationIdToLrtStopId(params.stationId)
+  if (!stopId) return []
 
   const entry = lrtRoutes.find((item) => {
     if (item.route.toUpperCase() !== route) return false
@@ -349,7 +351,7 @@ export async function fetchLrtEtasForStop(params: {
 
   if (!entry) return []
   const stops = entry.stops.lightRail ?? []
-  const seq = stops.findIndex((id) => normalizeStopId(id) === stopId)
+  const seq = stops.findIndex((id) => lrtStopIdsEqual(id, stopId))
   if (seq < 0) return []
 
   return await fetchEtas({

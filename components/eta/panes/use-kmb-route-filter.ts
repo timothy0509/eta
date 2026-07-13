@@ -10,14 +10,14 @@ export function buildRouteFilterString(
   routeFilterMode: RouteFilterMode,
   queryRoute?: string
 ): string | undefined {
-  const advancedEntries = routeFilterMode === 'advanced' ? (routeFilter.entries ?? []) : []
+  const entries = routeFilter.entries ?? []
   const requestedRoutes = normalizeKmbRoutesInput(queryRoute?.trim() ?? '')
 
-  if (advancedEntries.length) {
-    const routesFromAdvanced = new Set(
-      advancedEntries.map((e) => e.variantKey.split('|')[1]).filter(Boolean)
+  if (entries.length) {
+    const routesFromEntries = new Set(
+      entries.map((e) => e.variantKey.split('|')[1]).filter(Boolean)
     )
-    return Array.from(routesFromAdvanced).join(',')
+    return Array.from(routesFromEntries).join(',')
   } else if (requestedRoutes) {
     return requestedRoutes.join(',')
   }

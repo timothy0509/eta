@@ -1,5 +1,6 @@
 'use client'
 
+import { Heart } from 'lucide-react'
 import * as React from 'react'
 
 import { LrtStationSearch } from '@/components/eta/lrt-stop-search'
@@ -118,12 +119,18 @@ export function LrtPane({
             title: `${lang === 'en' ? station.nameEn : station.nameZh} · ${station.stationId}`,
             stationId: station.stationId,
           })
-          void refresh({ toastOnError: false })
+          void refresh({ toastOnError: false, stationId: station.stationId })
         }}
       />
 
-      <div className="flex items-center gap-2">
-        <Button className="rounded-xl" onClick={() => void onSave()} disabled={!stationId}>
+      <div className="flex items-center justify-between gap-3 pt-1">
+        <Button
+          size="sm"
+          className="rounded-full"
+          onClick={() => void onSave()}
+          disabled={!stationId}
+        >
+          <Heart className="mr-1.5 h-4 w-4" />
           {lang === 'en' ? 'Save' : '收藏'}
         </Button>
       </div>

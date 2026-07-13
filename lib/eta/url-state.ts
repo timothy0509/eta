@@ -1,5 +1,7 @@
-import type { TransportMode, UiLanguage } from '@/lib/eta/types'
+import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
+
+const SUB_VIEWS = new Set<SubView>(['routes', 'stops', 'nearby', 'saved', 'settings'])
 
 export type KmbQuerySummary =
   | {
@@ -17,6 +19,7 @@ export type KmbQuerySummary =
 
 export type UrlEncodeInput = {
   mode: TransportMode
+  subView: SubView
   lang: UiLanguage
   routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
@@ -38,6 +41,7 @@ export type UrlEncodeInput = {
 export type UrlDecodeResult = {
   state: {
     mode?: TransportMode
+    subView?: SubView
     lang?: UiLanguage
     routeFilterMode?: RouteFilterMode
     autoRefreshSeconds?: number
@@ -47,6 +51,7 @@ export type UrlDecodeResult = {
 
 const DEFAULTS = {
   mode: 'kmb' as TransportMode,
+  subView: 'stops' as SubView,
   lang: 'tc' as UiLanguage,
   routeFilterMode: 'simple' as RouteFilterMode,
   autoRefreshSeconds: 15,
@@ -56,6 +61,11 @@ const AUTO_REFRESH_OPTIONS = new Set([0, 10, 15, 30, 60])
 
 function parseTransportMode(value: string | null): TransportMode | null {
   if (value === 'kmb' || value === 'mtr' || value === 'lrt') return value
+  return null
+}
+
+function parseSubView(value: string | null): SubView | null {
+  if (value && SUB_VIEWS.has(value as SubView)) return value as SubView
   return null
 }
 
@@ -155,6 +165,7 @@ export function decodeUrlState(search: string): UrlDecodeResult {
   const params = new URLSearchParams(search.startsWith('?') ? search.slice(1) : search)
 
   const explicitMode = parseTransportMode(params.get('m'))
+  const subView = parseSubView(params.get('v'))
   const lang = parseUiLanguage(params.get('l'))
   const routeFilterModeParam = parseRouteFilterMode(params.get('rfm'))
   const autoRefreshSeconds = parseAutoRefreshSeconds(params.get('ar'))
@@ -185,6 +196,7 @@ export function decodeUrlState(search: string): UrlDecodeResult {
 
   const state: UrlDecodeResult['state'] = {}
   if (inferredMode) state.mode = inferredMode
+  if (subView) state.subView = subView
   if (lang) state.lang = lang
   if (autoRefreshSeconds !== null) state.autoRefreshSeconds = autoRefreshSeconds
 
@@ -225,6 +237,7 @@ export function encodeUrlState(input: UrlEncodeInput): string {
   const params = new URLSearchParams()
 
   if (input.mode !== DEFAULTS.mode) params.set('m', input.mode)
+  if (input.subView !== DEFAULTS.subView) params.set('v', input.subView)
   if (input.lang !== DEFAULTS.lang) params.set('l', input.lang)
   if (input.routeFilterMode !== DEFAULTS.routeFilterMode) {
     params.set('rfm', input.routeFilterMode)

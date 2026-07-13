@@ -1,24 +1,9 @@
 'use client'
 
-import { Check, ChevronsUpDown, Plus, Trash2 } from 'lucide-react'
+import { X } from 'lucide-react'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
-import { Button } from '@/components/ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Marquee } from '@/components/ui/marquee'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Separator } from '@/components/ui/separator'
-import { Switch } from '@/components/ui/switch'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import type { RouteFilterMode } from '@/lib/store'
@@ -57,241 +42,227 @@ function getCompanyFromVariantKey(key: string) {
   return co || 'kmb'
 }
 
-type Props = {
-  lang: UiLanguage
-  mode: RouteFilterMode
-  onModeChange: (mode: RouteFilterMode) => void
-  value: RouteFilterState
-  onChange: (value: RouteFilterState) => void
-  options?: RouteFilterOption[]
-}
-
-function normalizeAdvancedEntries(entries: RouteFilterEntry[] | undefined) {
-  const list = entries ?? []
-  const seen = new Set<string>()
-  const next: RouteFilterEntry[] = []
-  for (const entry of list) {
-    if (!entry.variantKey) continue
-    const parts = entry.variantKey.split('|')
-    const normalizedKey = parts.length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey
-    if (seen.has(normalizedKey)) continue
-    seen.add(normalizedKey)
-    next.push({ ...entry, variantKey: normalizedKey })
-  }
-  return next
+function getDirectionFromVariantKey(key: string) {
+  const parts = key.split('|')
+  return parts[2] ?? ''
 }
 
 function sortOptions(options: RouteFilterOption[]) {
   return [...options].sort((a, b) => a.route.localeCompare(b.route, undefined, { numeric: true }))
 }
 
-function findOption(options: RouteFilterOption[] | undefined, key: string) {
-  return options?.find((opt) => opt.key === key)
+function groupOptionsByRoute(opts: RouteFilterOption[]): Map<string, RouteFilterOption[]> {
+  const grouped = new Map<string, RouteFilterOption[]>()
+  for (const opt of opts) {
+    const route = opt.route.toUpperCase()
+    const list = grouped.get(route)
+    if (list) list.push(opt)
+    else grouped.set(route, [opt])
+  }
+  return grouped
+}
+
+function isRouteActive(
+  route: string,
+  variants: RouteFilterOption[],
+  selectedKeys: Set<string>,
+  mode: RouteFilterMode
+) {
+  if (mode === 'advanced') {
+    return variants.some((v) => selectedKeys.has(v.key))
+  }
+  return selectedKeys.has(route) || variants.some((v) => selectedKeys.has(v.key))
+}
+
+type Props = {
+  lang: UiLanguage
+  mode: RouteFilterMode
+  onModeChange?: (mode: RouteFilterMode) => void
+  value: RouteFilterState
+  onChange: (value: RouteFilterState) => void
+  options?: RouteFilterOption[]
+}
+
+function createId() {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID()
+  return Math.random().toString(36).slice(2, 10)
 }
 
 export function RouteFilter({ lang, mode, onModeChange, value, onChange, options }: Props) {
   const opts = React.useMemo(() => sortOptions(options ?? []), [options])
-  const entries = React.useMemo(() => normalizeAdvancedEntries(value.entries), [value.entries])
+  const groupedByRoute = React.useMemo(() => groupOptionsByRoute(opts), [opts])
+  const routeNumbers = React.useMemo(
+    () =>
+      Array.from(groupedByRoute.keys()).sort((a, b) =>
+        a.localeCompare(b, undefined, { numeric: true })
+      ),
+    [groupedByRoute]
+  )
+
+  const optsFingerprint = React.useMemo(() => opts.map((o) => o.key).join('\0'), [opts])
+
+  const [focusState, setFocusState] = React.useState<{
+    generation: string
+    route: string | null
+  }>({ generation: optsFingerprint, route: null })
+
+  const focusedRouteRaw = focusState.generation === optsFingerprint ? focusState.route : null
+  const focusedRoute =
+    focusedRouteRaw && groupedByRoute.has(focusedRouteRaw) ? focusedRouteRaw : null
+
+  const setFocusedRoute = React.useCallback(
+    (route: string | null | ((prev: string | null) => string | null)) => {
+      setFocusState((prev) => {
+        const currentRoute = prev.generation === optsFingerprint ? prev.route : null
+        const nextRoute = typeof route === 'function' ? route(currentRoute) : route
+        return { generation: optsFingerprint, route: nextRoute }
+      })
+    },
+    [optsFingerprint]
+  )
 
   const t = {
     routes: lang === 'en' ? 'Routes' : '路線',
-    routesDesc:
+    noOptions:
       lang === 'en'
-        ? 'Optional. Leave blank to show all routes at the stop.'
+        ? 'Pick a stop to see available routes.'
         : lang === 'sc'
-          ? '可选。留空以显示车站的所有路线。'
-          : '可選。留空以顯示車站的所有路線。',
-    advanced: lang === 'en' ? 'Advanced' : lang === 'sc' ? '高级' : '進階',
-    routeNumbers:
-      lang === 'en'
-        ? 'Route numbers (comma-separated)'
-        : lang === 'sc'
-          ? '路线编号（逗号分隔）'
-          : '路線編號（逗號分隔）',
-    eg: 'e.g. 40, 68X',
-    add: lang === 'en' ? 'Add' : '新增',
-    pickStop:
-      lang === 'en' ? 'Pick a stop first.' : lang === 'sc' ? '请先选择车站。' : '請先選擇車站。',
-    noFilter:
-      lang === 'en'
-        ? 'No filter added. All routes at the stop will be shown.'
-        : lang === 'sc'
-          ? '未添加篩選，將顯示車站的所有路線。'
-          : '未添加篩選，將顯示車站的所有路線。',
-    selectRoute: lang === 'en' ? 'Select route…' : lang === 'sc' ? '选择路线…' : '選擇路線…',
-    searchRoute: lang === 'en' ? 'Search route…' : lang === 'sc' ? '搜索路线…' : '搜尋路線…',
-    noResults: lang === 'en' ? 'No results.' : '無結果。',
+          ? '请选择车站以查看可用路线。'
+          : '請選擇車站以查看可用路線。',
+    clear: lang === 'en' ? 'Clear' : '清除',
+    inbound: lang === 'en' ? 'Inbound' : '往',
+    outbound: lang === 'en' ? 'Outbound' : '往',
   }
 
+  const selectedKeys = React.useMemo(() => {
+    const entryKeys = (value.entries ?? []).map((e) => e.variantKey).filter(Boolean)
+    if (entryKeys.length > 0) {
+      return new Set(entryKeys)
+    }
+    const routes = (value.routes ?? '')
+      .split(',')
+      .map((r) => r.trim())
+      .filter(Boolean)
+    return new Set(routes)
+  }, [value.entries, value.routes])
+
+  const toggleOption = React.useCallback(
+    (opt: RouteFilterOption) => {
+      const entries = value.entries ?? []
+      const exists = entries.some((e) => e.variantKey === opt.key)
+      const next = exists
+        ? entries.filter((e) => e.variantKey !== opt.key)
+        : [...entries, { id: createId(), variantKey: opt.key }]
+      if (!exists && mode !== 'advanced') {
+        onModeChange?.('advanced')
+      }
+      onChange({ ...value, entries: next, routes: '' })
+    },
+    [mode, onChange, onModeChange, value]
+  )
+
+  const clearAll = React.useCallback(() => {
+    setFocusedRoute(null)
+    onChange({ routes: '', entries: [] })
+  }, [onChange, setFocusedRoute])
+
+  const handleRouteClick = React.useCallback(
+    (route: string, variants: RouteFilterOption[]) => {
+      if (variants.length === 1) {
+        toggleOption(variants[0]!)
+        return
+      }
+      setFocusedRoute((prev) => (prev === route ? null : route))
+    },
+    [setFocusedRoute, toggleOption]
+  )
+
+  const activeCount = countActiveFilters(value)
+  const focusedVariants = focusedRoute ? groupedByRoute.get(focusedRoute) : undefined
+  const showVariantRow = Boolean(focusedVariants && focusedVariants.length > 1)
+  const useScrollCap = routeNumbers.length > 16
+
   return (
-    <div className="bg-card/50 rounded-2xl border p-4">
-      <div className="flex items-center justify-between gap-4">
-        <div className="min-w-0">
-          <div className="text-sm font-medium">{t.routes}</div>
-          <div className="text-muted-foreground text-xs">{t.routesDesc}</div>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <Switch
-            checked={mode === 'advanced'}
-            onCheckedChange={(checked) => onModeChange(checked ? 'advanced' : 'simple')}
-            id="routeMode"
-          />
-          <Label htmlFor="routeMode" className="text-sm">
-            {t.advanced}
-          </Label>
-        </div>
+    <div className="space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="m3-label-lg text-on-surface-variant">{t.routes}</span>
+        {activeCount > 0 && (
+          <button
+            type="button"
+            onClick={clearAll}
+            className="text-on-surface-variant hover:text-on-surface m3-label-md flex items-center gap-1 rounded-full px-2 py-0.5 transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+            {t.clear}
+          </button>
+        )}
       </div>
 
-      <Separator className="my-3" />
-
-      <div className="grid grid-cols-1 gap-3">
-        <div>
-          <Label className="text-muted-foreground text-xs">{t.routeNumbers}</Label>
-          <Input
-            value={value.routes ?? ''}
-            onChange={(e) => onChange({ ...value, routes: e.target.value })}
-            placeholder={t.eg}
-            className="mt-1 rounded-xl"
-            disabled={mode === 'advanced'}
-          />
-        </div>
-
-        {mode === 'advanced' ? (
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <Label className="text-muted-foreground text-xs">{t.routes}</Label>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                className="h-8 shrink-0 rounded-xl"
-                onClick={() => {
-                  if (!opts.length) return
-                  const firstKey = opts[0]?.key
-                  if (!firstKey) return
-
-                  const next: RouteFilterEntry[] = [
-                    ...entries,
-                    {
-                      id: crypto.randomUUID(),
-                      variantKey: firstKey,
-                    },
-                  ]
-                  onChange({ ...value, entries: next, routes: '' })
-                }}
-                disabled={!opts.length}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                {t.add}
-              </Button>
-            </div>
-
-            {!opts.length ? (
-              <div className="bg-background/40 text-muted-foreground rounded-xl border p-3 text-xs">
-                {t.pickStop}
-              </div>
-            ) : entries.length === 0 ? (
-              <div className="bg-background/40 text-muted-foreground rounded-xl border p-3 text-xs">
-                {t.noFilter}
-              </div>
-            ) : null}
-
-            {entries.map((entry) => {
-              const selected = findOption(opts, entry.variantKey)
+      {!opts.length ? (
+        <p className="text-on-surface-variant m3-body-md py-1">{t.noOptions}</p>
+      ) : (
+        <>
+          <div
+            className={cn('flex flex-wrap gap-2', useScrollCap && 'max-h-32 overflow-y-auto pr-1')}
+          >
+            {routeNumbers.map((route) => {
+              const variants = groupedByRoute.get(route) ?? []
+              const company = getCompanyFromVariantKey(variants[0]?.key ?? '')
+              const active = isRouteActive(route, variants, selectedKeys, mode)
+              const focused = focusedRoute === route
+              const tooltip = variants.map((v) => v.label).join(' · ')
 
               return (
-                <div key={entry.id} className="flex min-w-0 items-center gap-2">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className={cn(
-                          'h-9 min-w-0 flex-1 justify-between rounded-xl',
-                          !selected && 'text-muted-foreground'
-                        )}
-                      >
-                        {selected ? (
-                          <div className="flex min-w-0 flex-1 items-center gap-2">
-                            <RouteBadge
-                              route={selected.route}
-                              company={getCompanyFromVariantKey(selected.key)}
-                              size="md"
-                            />
-                            <Marquee className="text-muted-foreground min-w-0 flex-1 text-left">
-                              {selected.label}
-                            </Marquee>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">{t.selectRoute}</span>
-                        )}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
-                      <Command shouldFilter>
-                        <CommandInput placeholder={t.searchRoute} />
-                        <CommandList>
-                          <CommandEmpty>{t.noResults}</CommandEmpty>
-                          <CommandGroup>
-                            {opts.map((opt) => {
-                              const picked = opt.key === entry.variantKey
-                              return (
-                                <CommandItem
-                                  key={opt.key}
-                                  value={`${opt.route} ${opt.label}`}
-                                  onSelect={() => {
-                                    const next = entries.map((row) =>
-                                      row.id === entry.id ? { ...row, variantKey: opt.key } : row
-                                    )
-                                    onChange({
-                                      ...value,
-                                      entries: normalizeAdvancedEntries(next),
-                                      routes: '',
-                                    })
-                                  }}
-                                >
-                                  <Check
-                                    className={cn(
-                                      'mr-2 h-4 w-4 shrink-0',
-                                      picked ? 'opacity-100' : 'opacity-0'
-                                    )}
-                                  />
-                                  <RouteBadge
-                                    route={opt.route}
-                                    company={getCompanyFromVariantKey(opt.key)}
-                                    size="sm"
-                                  />
-                                  <span className="text-muted-foreground ml-2 min-w-0 truncate">
-                                    {opt.label}
-                                  </span>
-                                </CommandItem>
-                              )
-                            })}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    className="shrink-0 rounded-xl"
-                    onClick={() => {
-                      const next = entries.filter((row) => row.id !== entry.id)
-                      onChange({ ...value, entries: next })
-                    }}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                <button
+                  key={route}
+                  type="button"
+                  title={tooltip}
+                  onClick={() => handleRouteClick(route, variants)}
+                  className={cn(
+                    'inline-flex rounded-lg p-0.5 transition-colors',
+                    active && 'bg-primary-container',
+                    focused && !active && 'bg-surface-container ring-primary/40 ring-2',
+                    !active && !focused && 'hover:bg-surface-container-high'
+                  )}
+                >
+                  <RouteBadge route={route} company={company} size="sm" />
+                </button>
               )
             })}
           </div>
-        ) : null}
-      </div>
+
+          {showVariantRow && focusedVariants ? (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {focusedVariants.map((opt) => {
+                const active = selectedKeys.has(opt.key)
+                const direction = getDirectionFromVariantKey(opt.key)
+                const directionHint =
+                  direction === 'I' ? t.inbound : direction === 'O' ? t.outbound : null
+
+                return (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    onClick={() => toggleOption(opt)}
+                    className={cn(
+                      'm3-label-md max-w-full overflow-hidden rounded-full px-3 py-1.5 transition-colors',
+                      active
+                        ? 'bg-primary-container text-on-primary-container'
+                        : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                    )}
+                    title={opt.label}
+                  >
+                    <span className="block truncate">
+                      {directionHint ? <span className="opacity-80">{directionHint} </span> : null}
+                      {opt.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          ) : null}
+        </>
+      )}
     </div>
   )
 }

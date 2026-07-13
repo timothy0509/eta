@@ -421,20 +421,23 @@ export function StopSearch({
           aria-controls={open ? listId : undefined}
           aria-haspopup="listbox"
           className={cn(
-            'bg-card/70 w-full min-w-0 justify-start rounded-2xl border text-left shadow-sm',
-            'hover:bg-card',
-            !selectedLabel && 'text-muted-foreground'
+            'bg-surface-container-high/70 text-on-surface w-full min-w-0 justify-start rounded-full border-0 py-5 text-left shadow-sm',
+            'hover:bg-surface-container-high',
+            !selectedLabel && 'text-on-surface-variant'
           )}
         >
-          <Search className="mr-2 h-4 w-4 shrink-0" />
-          <span className="truncate">
+          <Search className="text-on-surface-variant mr-2 h-4 w-4 shrink-0" />
+          <span className="m3-body-md truncate">
             {selectedLabel ||
               (lang === 'en' ? 'Search stop name...' : lang === 'sc' ? '搜尋車站…' : '搜尋車站…')}
           </span>
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[min(560px,calc(100vw-2rem))] p-0" align="start">
-        <Command shouldFilter={false}>
+      <PopoverContent
+        className="bg-surface-container-low w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0"
+        align="start"
+      >
+        <Command shouldFilter={false} className="rounded-none bg-transparent">
           <CommandInput
             placeholder={
               lang === 'en'
@@ -448,10 +451,19 @@ export function StopSearch({
             }
             value={query}
             onValueChange={setQuery}
+            className="m3-body-md border-b-0"
           />
-          <CommandList id={listId} className={cn(isSearching && 'opacity-60 transition-opacity')}>
-            <CommandEmpty>{lang === 'en' ? 'No results.' : '無結果。'}</CommandEmpty>
-            <CommandGroup heading={lang === 'en' ? 'Stops' : lang === 'sc' ? '车站' : '車站'}>
+          <CommandList
+            id={listId}
+            className={cn('max-h-[400px] py-2', isSearching && 'opacity-60 transition-opacity')}
+          >
+            <CommandEmpty className="text-on-surface-variant m3-body-md py-8 text-center">
+              {lang === 'en' ? 'No results.' : '無結果。'}
+            </CommandEmpty>
+            <CommandGroup
+              heading={lang === 'en' ? 'Stops' : lang === 'sc' ? '车站' : '車站'}
+              className="text-on-surface-variant m3-label-md px-3 pt-0 pb-2"
+            >
               {canSearchContains ? (
                 <CommandItem
                   key={`contains:${trimmedQuery}`}
@@ -460,17 +472,17 @@ export function StopSearch({
                     onSelectContains(trimmedQuery)
                     setOpen(false)
                   }}
-                  className="flex items-start gap-3"
+                  className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
                 >
-                  <div className="bg-background/50 mt-0.5 rounded-lg border p-2">
-                    <Search className="text-muted-foreground h-4 w-4" />
+                  <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+                    <Search className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate font-medium">
+                    <div className="text-on-surface truncate font-medium">
                       {(lang === 'en' ? 'Contains: ' : lang === 'sc' ? '包含：' : '包含：') +
                         trimmedQuery}
                     </div>
-                    <div className="text-muted-foreground truncate text-xs">
+                    <div className="text-on-surface-variant m3-label-md truncate">
                       {lang === 'en'
                         ? 'Search all stops whose name contains this text'
                         : lang === 'sc'
@@ -480,7 +492,7 @@ export function StopSearch({
                   </div>
                 </CommandItem>
               ) : trimmedQuery.length ? (
-                <div className="text-muted-foreground px-2 py-1 text-xs">
+                <div className="text-on-surface-variant m3-label-md px-3 py-1">
                   {lang === 'en'
                     ? 'Type 3+ characters for "contains" search.'
                     : lang === 'sc'
@@ -494,21 +506,21 @@ export function StopSearch({
                   key={group.id}
                   value={group.id}
                   onSelect={() => handleSelectGroup(group)}
-                  className="flex items-start gap-3"
+                  className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
                 >
-                  <div className="bg-background/50 mt-0.5 rounded-lg border p-2">
-                    <MapPin className="text-muted-foreground h-4 w-4" />
+                  <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+                    <MapPin className="h-4 w-4" />
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate font-medium">
+                    <div className="text-on-surface truncate font-medium">
                       {group.displayName}{' '}
                       {group.displayCodes ? (
-                        <span className="text-muted-foreground font-normal">
+                        <span className="text-on-surface-variant font-normal">
                           {group.displayCodes}
                         </span>
                       ) : null}
                     </div>
-                    <div className="text-muted-foreground truncate text-xs">
+                    <div className="text-on-surface-variant m3-label-md truncate">
                       {group.displaySecondary}
                     </div>
                   </div>

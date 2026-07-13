@@ -6,6 +6,7 @@ describe('encodeUrlState', () => {
   it('returns empty string for default state', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -16,6 +17,7 @@ describe('encodeUrlState', () => {
   it('encodes non-default mode', () => {
     const input: UrlEncodeInput = {
       mode: 'mtr',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -26,6 +28,7 @@ describe('encodeUrlState', () => {
   it('encodes non-default language', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
+      subView: 'stops',
       lang: 'en',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -36,6 +39,7 @@ describe('encodeUrlState', () => {
   it('encodes KMB stop query', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -51,6 +55,7 @@ describe('encodeUrlState', () => {
   it('encodes KMB stops query', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -66,6 +71,7 @@ describe('encodeUrlState', () => {
   it('encodes KMB contains query', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -81,6 +87,7 @@ describe('encodeUrlState', () => {
   it('encodes MTR station', () => {
     const input: UrlEncodeInput = {
       mode: 'mtr',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -92,6 +99,7 @@ describe('encodeUrlState', () => {
   it('encodes LRT station', () => {
     const input: UrlEncodeInput = {
       mode: 'lrt',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
@@ -103,6 +111,7 @@ describe('encodeUrlState', () => {
   it('encodes auto refresh seconds when non-default', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 30,
@@ -113,6 +122,7 @@ describe('encodeUrlState', () => {
   it('encodes route filter mode when advanced', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'advanced',
       autoRefreshSeconds: 15,
@@ -198,6 +208,22 @@ describe('decodeUrlState', () => {
     expect(result.state.routeFilterMode).toBe('advanced')
   })
 
+  it('decodes sub view parameter', () => {
+    const result = decodeUrlState('v=nearby')
+    expect(result.state.subView).toBe('nearby')
+  })
+
+  it('encodes non-default sub view', () => {
+    const input: UrlEncodeInput = {
+      mode: 'kmb',
+      subView: 'routes',
+      lang: 'tc',
+      routeFilterMode: 'simple',
+      autoRefreshSeconds: 15,
+    }
+    expect(encodeUrlState(input)).toContain('v=routes')
+  })
+
   it('infers mode from MTR station when mode param missing', () => {
     const result = decodeUrlState('ms=CEN')
     expect(result.state.mode).toBe('mtr')
@@ -227,6 +253,7 @@ describe('decodeUrlState', () => {
   it('round-trips KMB stop state', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
+      subView: 'stops',
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,

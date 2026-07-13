@@ -13,6 +13,7 @@ type AppState = {
   removeFavorite: (id: string) => void
   toggleFavoritePin: (id: string) => void
   moveFavorite: (id: string, direction: 'up' | 'down') => void
+  reorderFavorites: (newOrder: FavoritesItem[]) => void
   addFavoriteGroup: (name: string) => void
   renameFavoriteGroup: (id: string, name: string) => void
   deleteFavoriteGroup: (id: string) => void
@@ -91,6 +92,13 @@ const createTestStore = () =>
         const [moved] = favorites.splice(index, 1)
         favorites.splice(targetIndex, 0, moved)
         return { favorites }
+      }),
+
+    reorderFavorites: (newOrder) =>
+      set(() => {
+        const pinned = newOrder.filter((f) => f.pinned)
+        const unpinned = newOrder.filter((f) => !f.pinned)
+        return { favorites: [...pinned, ...unpinned] }
       }),
 
     addFavoriteGroup: (name) =>
@@ -346,6 +354,77 @@ describe('store favorites', () => {
       const favorites = store.getState().favorites
       expect(favorites).toHaveLength(1)
       expect(favorites[0].id).toBe('fav-1')
+    })
+  })
+
+  describe('reorderFavorites', () => {
+    it('reorders favorites and keeps pinned items at the top', () => {
+      const item1: FavoritesItem = {
+        id: 'fav-1',
+        mode: 'mtr',
+        title: 'Central',
+        line: 'TWL',
+        sta: 'CEN',
+        pinned: false,
+      }
+      const item2: FavoritesItem = {
+        id: 'fav-2',
+        mode: 'mtr',
+        title: 'Admiralty',
+        line: 'TWL',
+        sta: 'ADM',
+        pinned: true,
+      }
+      const item3: FavoritesItem = {
+        id: 'fav-3',
+        mode: 'mtr',
+        title: 'Tsim Sha Tsui',
+        line: 'TWL',
+        sta: 'TST',
+        pinned: false,
+      }
+
+      store.getState().addFavorite(item1)
+      store.getState().addFavorite(item2)
+      store.getState().addFavorite(item3)
+
+      // Reorder to [item3, item2, item1] - pinned item2 should still be first
+      store.getState().reorderFavorites([item3, item2, item1])
+
+      const favorites = store.getState().favorites
+      expect(favorites[0].id).toBe('fav-2')
+      expect(favorites[0].pinned).toBe(true)
+      expect(favorites[1].id).toBe('fav-3')
+      expect(favorites[2].id).toBe('fav-1')
+    })
+
+    it('preserves the order of provided items within each pin section', () => {
+      const item1: FavoritesItem = {
+        id: 'fav-1',
+        mode: 'mtr',
+        title: 'Central',
+        line: 'TWL',
+        sta: 'CEN',
+        pinned: true,
+      }
+      const item2: FavoritesItem = {
+        id: 'fav-2',
+        mode: 'mtr',
+        title: 'Admiralty',
+        line: 'TWL',
+        sta: 'ADM',
+        pinned: true,
+      }
+
+      store.getState().addFavorite(item1)
+      store.getState().addFavorite(item2)
+
+      // Reverse pinned order
+      store.getState().reorderFavorites([item2, item1])
+
+      const favorites = store.getState().favorites
+      expect(favorites[0].id).toBe('fav-2')
+      expect(favorites[1].id).toBe('fav-1')
     })
   })
 

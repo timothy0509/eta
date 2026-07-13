@@ -2,6 +2,8 @@ export type TransportMode = 'kmb' | 'mtr' | 'lrt'
 
 export type UiLanguage = 'en' | 'tc' | 'sc'
 
+export type SubView = 'routes' | 'stops' | 'nearby' | 'saved' | 'settings'
+
 export function isLanguageSupported(mode: TransportMode, lang: UiLanguage) {
   if (lang === 'sc') {
     return mode === 'kmb'

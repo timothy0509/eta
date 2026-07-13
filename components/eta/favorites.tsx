@@ -1,18 +1,27 @@
 'use client'
 
 import {
-  ArrowDown,
-  ArrowUp,
+  Bus,
+  ChevronRight,
   FolderPlus,
+  GripVertical,
   Heart,
   History,
-  Pencil,
+  MoreVertical,
   Pin,
   PinOff,
+  Pencil,
+  Search,
+  TrainFront,
+  TramFront,
   Trash2,
+  X,
 } from 'lucide-react'
+import { motion, Reorder, useDragControls } from 'framer-motion'
 import * as React from 'react'
 import { useShallow } from 'zustand/shallow'
+
+import { RouteBadge } from '@/components/eta/route-badge'
 
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -20,21 +29,22 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
-import { Separator } from '@/components/ui/separator'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
 import { getLineColor } from '@/lib/eta/line-colors'
+import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
-import { type FavoritesGroup, type FavoritesItem, useAppStore } from '@/lib/store'
+import { type FavoritesGroup, type FavoritesItem, type RecentItem, useAppStore } from '@/lib/store'
 
 type Props = {
   lang: UiLanguage
@@ -48,24 +58,27 @@ function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
   return stop.nameTc
 }
 
+type DisplayMaps = {
+  kmbStopsById: Map<string, KmbStopSearchItem>
+  kmbStopIndexById: Map<string, number>
+  mtrStationsBySta: Map<string, MtrStation>
+  lrtStationsById: Map<string, LrtStation>
+}
+
 /**
  * Generate display content for a favorite item based on current language.
  */
 const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
   item,
   lang,
-  kmbStopsById,
-  kmbStopIndexById,
-  mtrStationsBySta,
-  lrtStationsById,
+  maps,
 }: {
   item: FavoritesItem
   lang: UiLanguage
-  kmbStopsById: Map<string, KmbStopSearchItem>
-  kmbStopIndexById: Map<string, number>
-  mtrStationsBySta: Map<string, MtrStation>
-  lrtStationsById: Map<string, LrtStation>
+  maps: DisplayMaps
 }) {
+  const { kmbStopsById, kmbStopIndexById, mtrStationsBySta, lrtStationsById } = maps
+
   if (item.mode === 'mtr') {
     const station = mtrStationsBySta.get(item.sta)
     if (!station) return <span>{item.title}</span>
@@ -102,6 +115,24 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
 
   // KMB mode - regenerate title based on current language
   if (item.mode === 'kmb') {
+    // Saved KMB route
+    if ('type' in item && item.type === 'route') {
+      const destination = item.destination
+        ? lang === 'en'
+          ? item.destination.en
+          : lang === 'sc'
+            ? item.destination.sc
+            : item.destination.tc
+        : item.title
+
+      return (
+        <span className="flex items-center gap-2">
+          <RouteBadge route={item.route} company={item.co} size="sm" />
+          <span className="truncate">{destination}</span>
+        </span>
+      )
+    }
+
     // For "contains" queries, keep the static title
     if ('query' in item) {
       return <span className="truncate">{item.title}</span>
@@ -173,6 +204,393 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
   return <span className="truncate">{item.title}</span>
 })
 
+function ModeIcon({ mode, className }: { mode: FavoritesItem['mode']; className?: string }) {
+  if (mode === 'kmb') return <Bus className={className} aria-hidden="true" />
+  if (mode === 'mtr') return <TrainFront className={className} aria-hidden="true" />
+  return <TramFront className={className} aria-hidden="true" />
+}
+
+function StaggerContainer({
+  children,
+  className,
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  return (
+    <motion.div
+      initial="hidden"
+      animate="visible"
+      variants={{
+        visible: {
+          transition: {
+            staggerChildren: 0.04,
+          },
+        },
+      }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function StaggerItem({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <motion.div
+      variants={{
+        hidden: { opacity: 0, y: 8 },
+        visible: { opacity: 1, y: 0 },
+      }}
+      transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  )
+}
+
+function FavoriteActions({
+  item,
+  favoritesGroups,
+  t,
+  onTogglePin,
+  onAssignGroup,
+  onDelete,
+}: {
+  item: FavoritesItem
+  favoritesGroups: FavoritesGroup[]
+  t: (key: string) => string
+  onTogglePin: (id: string) => void
+  onAssignGroup: (favoriteId: string, groupId: string | null) => void
+  onDelete: (id: string) => void
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-on-surface-variant hover:text-on-surface h-8 w-8 rounded-full"
+          aria-label={t('favorites.group')}
+        >
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="min-w-[10rem]">
+        <DropdownMenuItem onClick={() => onTogglePin(item.id)}>
+          {item.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
+          {item.pinned ? t('favorites.unpin') : t('favorites.pin')}
+        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <FolderPlus className="h-4 w-4" />
+            {t('favorites.assignToGroup')}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem onClick={() => onAssignGroup(item.id, null)}>
+              {t('favorites.unassigned')}
+            </DropdownMenuItem>
+            {favoritesGroups.map((group) => (
+              <DropdownMenuItem key={group.id} onClick={() => onAssignGroup(item.id, group.id)}>
+                {group.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onClick={() => onDelete(item.id)}>
+          <Trash2 className="h-4 w-4" />
+          {t('favorites.delete')}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+type FavoriteRowProps = {
+  item: FavoritesItem
+  lang: UiLanguage
+  maps: DisplayMaps
+  groupName: string
+  favoritesGroups: FavoritesGroup[]
+  t: (key: string) => string
+  onSelect: (item: FavoritesItem) => void
+  onTogglePin: (id: string) => void
+  onAssignGroup: (favoriteId: string, groupId: string | null) => void
+  onDelete: (id: string) => void
+  draggable?: boolean
+}
+
+function FavoriteRow({
+  item,
+  lang,
+  maps,
+  groupName,
+  favoritesGroups,
+  t,
+  onSelect,
+  onTogglePin,
+  onAssignGroup,
+  onDelete,
+  draggable = false,
+}: FavoriteRowProps) {
+  const dragControls = useDragControls()
+
+  const content = (
+    <div className="flex items-center gap-3">
+      {draggable && (
+        <div
+          className="text-on-surface-variant hover:text-on-surface cursor-grab rounded-full p-1 active:cursor-grabbing"
+          aria-label={t('favorites.drag')}
+          onPointerDown={(event) => dragControls.start(event)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+            }
+          }}
+        >
+          <GripVertical className="h-4 w-4" />
+        </div>
+      )}
+      <div className="bg-surface-container-high flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+        <ModeIcon mode={item.mode} className="text-on-surface-variant h-4 w-4" />
+      </div>
+      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onSelect(item)}>
+        <div className="m3-body-md text-on-surface truncate font-medium">
+          <FavoriteItemDisplay item={item} lang={lang} maps={maps} />
+        </div>
+        <div className="text-on-surface-variant m3-body-md truncate">
+          {item.pinned ? `${t('favorites.pinned')} · ` : ''}
+          {groupName}
+        </div>
+      </button>
+      <FavoriteActions
+        item={item}
+        favoritesGroups={favoritesGroups}
+        t={t}
+        onTogglePin={onTogglePin}
+        onAssignGroup={onAssignGroup}
+        onDelete={onDelete}
+      />
+    </div>
+  )
+
+  if (draggable) {
+    return (
+      <Reorder.Item
+        value={item}
+        dragListener={false}
+        dragControls={dragControls}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+        whileDrag={{ scale: 1.02, boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
+        className="bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5"
+      >
+        {content}
+      </Reorder.Item>
+    )
+  }
+
+  return (
+    <StaggerItem className="bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5">
+      {content}
+    </StaggerItem>
+  )
+}
+
+type RecentRowProps = {
+  item: RecentItem
+  lang: UiLanguage
+  maps: DisplayMaps
+  dateFormatter: Intl.DateTimeFormat
+  onSelect: (item: FavoritesItem) => void
+}
+
+function RecentRow({ item, lang, maps, dateFormatter, onSelect }: RecentRowProps) {
+  return (
+    <StaggerItem>
+      <motion.button
+        type="button"
+        whileHover={{ scale: 1.005 }}
+        whileTap={{ scale: 0.995 }}
+        className="bg-surface-container-low hover:bg-surface-container border-outline-variant/50 flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors"
+        onClick={() => onSelect(item)}
+      >
+        <div className="bg-surface-container-high flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+          <ModeIcon mode={item.mode} className="text-on-surface-variant h-4 w-4" />
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="m3-body-md text-on-surface truncate font-medium">
+            <FavoriteItemDisplay item={item} lang={lang} maps={maps} />
+          </div>
+          <div className="text-on-surface-variant m3-body-md mt-0.5 flex items-center justify-between gap-2">
+            <span>{item.mode.toUpperCase()}</span>
+            <span>{dateFormatter.format(new Date(item.at))}</span>
+          </div>
+        </div>
+      </motion.button>
+    </StaggerItem>
+  )
+}
+
+function GroupsEditor({
+  favoritesGroups,
+  t,
+  onAdd,
+  onRename,
+  onDelete,
+}: {
+  favoritesGroups: FavoritesGroup[]
+  t: (key: string) => string
+  onAdd: (name: string) => void
+  onRename: (id: string, name: string) => void
+  onDelete: (id: string) => void
+}) {
+  const [open, setOpen] = React.useState(false)
+  const [newGroupName, setNewGroupName] = React.useState('')
+  const [editingGroupId, setEditingGroupId] = React.useState<string | null>(null)
+  const [editingGroupName, setEditingGroupName] = React.useState('')
+
+  const handleAdd = () => {
+    const trimmed = newGroupName.trim()
+    if (!trimmed) return
+    onAdd(trimmed)
+    setNewGroupName('')
+  }
+
+  const startEdit = (group: FavoritesGroup) => {
+    setEditingGroupId(group.id)
+    setEditingGroupName(group.name)
+  }
+
+  const cancelEdit = () => {
+    setEditingGroupId(null)
+    setEditingGroupName('')
+  }
+
+  const saveEdit = () => {
+    if (!editingGroupId || !editingGroupName.trim()) return
+    onRename(editingGroupId, editingGroupName)
+    cancelEdit()
+  }
+
+  return (
+    <div className="bg-surface-container border-outline-variant/50 rounded-2xl border p-3">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="flex w-full items-center justify-between gap-2 rounded-xl p-1 text-left"
+      >
+        <span className="m3-title-md">{t('favorites.groups')}</span>
+        <ChevronRight
+          className={cn(
+            'text-on-surface-variant h-4 w-4 transition-transform duration-200',
+            open && 'rotate-90'
+          )}
+        />
+      </button>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+          className="space-y-3 overflow-hidden pt-3"
+        >
+          <div className="flex flex-wrap items-center gap-2">
+            <Input
+              value={newGroupName}
+              onChange={(event) => setNewGroupName(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key !== 'Enter') return
+                event.preventDefault()
+                handleAdd()
+              }}
+              placeholder={t('favorites.addGroup')}
+              className="h-9 flex-1 rounded-xl text-sm"
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              className="rounded-xl"
+              onClick={handleAdd}
+              disabled={!newGroupName.trim()}
+            >
+              <FolderPlus className="h-4 w-4" />
+              <span className="ml-1.5">{t('favorites.addGroup')}</span>
+            </Button>
+          </div>
+          {favoritesGroups.length > 0 && (
+            <div className="space-y-1">
+              {favoritesGroups.map((group) => (
+                <div
+                  key={group.id}
+                  className="flex items-center justify-between gap-2 rounded-xl px-2 py-1.5 text-sm"
+                >
+                  {editingGroupId === group.id ? (
+                    <div className="flex w-full items-center gap-2">
+                      <Input
+                        value={editingGroupName}
+                        onChange={(event) => setEditingGroupName(event.target.value)}
+                        onKeyDown={(event) => {
+                          if (event.key !== 'Enter') return
+                          event.preventDefault()
+                          saveEdit()
+                        }}
+                        className="h-8 flex-1 rounded-xl text-sm"
+                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="rounded-xl"
+                        onClick={saveEdit}
+                        disabled={!editingGroupName.trim()}
+                      >
+                        {t('favorites.rename')}
+                      </Button>
+                      <Button variant="ghost" size="sm" className="rounded-xl" onClick={cancelEdit}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <span className="m3-body-md truncate font-medium">{group.name}</span>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-8 w-8 rounded-xl"
+                          aria-label={t('favorites.rename')}
+                          onClick={() => startEdit(group)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="text-destructive h-8 w-8 rounded-xl"
+                          aria-label={t('favorites.delete')}
+                          onClick={() => onDelete(group.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </motion.div>
+      )}
+    </div>
+  )
+}
+
 export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   const { favorites, favoritesGroups, recents } = useAppStore(
     useShallow((s) => ({
@@ -183,15 +601,17 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
   )
   const removeFavorite = useAppStore((s) => s.removeFavorite)
   const toggleFavoritePin = useAppStore((s) => s.toggleFavoritePin)
-  const moveFavorite = useAppStore((s) => s.moveFavorite)
+  const reorderFavorites = useAppStore((s) => s.reorderFavorites)
   const addFavoriteGroup = useAppStore((s) => s.addFavoriteGroup)
   const renameFavoriteGroup = useAppStore((s) => s.renameFavoriteGroup)
   const deleteFavoriteGroup = useAppStore((s) => s.deleteFavoriteGroup)
   const assignFavoriteGroup = useAppStore((s) => s.assignFavoriteGroup)
   const clearRecents = useAppStore((s) => s.clearRecents)
-  const [newGroupName, setNewGroupName] = React.useState('')
-  const [editingGroupId, setEditingGroupId] = React.useState<string | null>(null)
-  const [editingGroupName, setEditingGroupName] = React.useState('')
+
+  const [activeTab, setActiveTab] = React.useState<'favorites' | 'recent'>('favorites')
+  const [searchQuery, setSearchQuery] = React.useState('')
+  const [selectedGroup, setSelectedGroup] = React.useState<string>('all')
+
   const dateFormatter = React.useMemo(
     () =>
       new Intl.DateTimeFormat(
@@ -204,355 +624,325 @@ export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
     [lang]
   )
 
-  const mtrStationsBySta = React.useMemo(() => {
-    return new Map(MTR_STATIONS.map((station) => [station.sta, station]))
-  }, [])
-
-  const lrtStationsById = React.useMemo(() => {
-    return new Map(LRT_STATIONS.map((station) => [station.stationId, station]))
-  }, [])
-
-  const kmbStopsById = React.useMemo(() => {
-    if (!kmbStops) return new Map<string, KmbStopSearchItem>()
-    return new Map(kmbStops.map((stop) => [stop.stopId, stop]))
+  const maps = React.useMemo<DisplayMaps>(() => {
+    const mtrStationsBySta = new Map(MTR_STATIONS.map((station) => [station.sta, station]))
+    const lrtStationsById = new Map(LRT_STATIONS.map((station) => [station.stationId, station]))
+    const kmbStopsById = !kmbStops
+      ? new Map<string, KmbStopSearchItem>()
+      : new Map(kmbStops.map((stop) => [stop.stopId, stop]))
+    const kmbStopIndexById = !kmbStops
+      ? new Map<string, number>()
+      : new Map(kmbStops.map((stop, index) => [stop.stopId, index]))
+    return { kmbStopsById, kmbStopIndexById, mtrStationsBySta, lrtStationsById }
   }, [kmbStops])
 
-  const kmbStopIndexById = React.useMemo(() => {
-    if (!kmbStops) return new Map<string, number>()
-    return new Map(kmbStops.map((stop, index) => [stop.stopId, index]))
-  }, [kmbStops])
-
-  const t = {
-    saved: lang === 'en' ? 'Saved' : lang === 'sc' ? '已儲存' : '已儲存',
-    favorites: lang === 'en' ? 'Favorites' : '收藏',
-    recent: lang === 'en' ? 'Recent' : '最近',
-    noFavorites: lang === 'en' ? 'No favorites yet.' : lang === 'sc' ? '暫無收藏。' : '暫無收藏。',
-    tip:
-      lang === 'en'
-        ? 'Tip: results can auto-refresh while you wait.'
-        : lang === 'sc'
-          ? '提示：結果可在等待時自動刷新。'
-          : '提示：結果可在等待時自動刷新。',
-    clear: lang === 'en' ? 'Clear' : '清除',
-    noRecent:
-      lang === 'en' ? 'No recent searches.' : lang === 'sc' ? '暫無搜尋記錄。' : '暫無搜尋記錄。',
-    pinned: lang === 'en' ? 'Pinned' : lang === 'sc' ? '已釘選' : '已釘選',
-    unpinned: lang === 'en' ? 'Unpinned' : lang === 'sc' ? '取消釘選' : '取消釘選',
-    moveUp: lang === 'en' ? 'Move up' : lang === 'sc' ? '上移' : '上移',
-    moveDown: lang === 'en' ? 'Move down' : lang === 'sc' ? '下移' : '下移',
-    group: lang === 'en' ? 'Group' : lang === 'sc' ? '分組' : '分組',
-    groups: lang === 'en' ? 'Groups' : lang === 'sc' ? '分組' : '分組',
-    addGroup: lang === 'en' ? 'Add group' : lang === 'sc' ? '新增分組' : '新增分組',
-    rename: lang === 'en' ? 'Rename' : lang === 'sc' ? '重新命名' : '重新命名',
-    delete: lang === 'en' ? 'Delete' : lang === 'sc' ? '刪除' : '刪除',
-    none: lang === 'en' ? 'None' : lang === 'sc' ? '無' : '無',
-  }
+  const { t } = useTranslations(lang)
 
   const groupNameById = React.useMemo(() => {
     return new Map(favoritesGroups.map((group) => [group.id, group.name]))
   }, [favoritesGroups])
 
-  const handleAddGroup = () => {
-    if (!newGroupName.trim()) return
-    addFavoriteGroup(newGroupName)
-    setNewGroupName('')
+  const normalizedSearch = searchQuery.trim().toLowerCase()
+  const isFiltering = normalizedSearch.length > 0 || selectedGroup !== 'all'
+
+  const filteredFavorites = React.useMemo(() => {
+    return favorites.filter((f) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        f.title.toLowerCase().includes(normalizedSearch) ||
+        f.mode.toLowerCase().includes(normalizedSearch) ||
+        (groupNameById
+          .get(f.groupId ?? '')
+          ?.toLowerCase()
+          .includes(normalizedSearch) ??
+          false)
+      const matchesGroup =
+        selectedGroup === 'all' ||
+        (selectedGroup === 'unassigned' ? !f.groupId : f.groupId === selectedGroup)
+      return matchesSearch && matchesGroup
+    })
+  }, [favorites, normalizedSearch, selectedGroup, groupNameById])
+
+  const pinnedItems = React.useMemo(() => favorites.filter((f) => f.pinned), [favorites])
+  const unpinnedItems = React.useMemo(() => favorites.filter((f) => !f.pinned), [favorites])
+
+  const handleReorderPinned = (next: FavoritesItem[]) => {
+    reorderFavorites([...next, ...unpinnedItems])
   }
 
-  const startEditGroup = (group: FavoritesGroup) => {
-    setEditingGroupId(group.id)
-    setEditingGroupName(group.name)
+  const handleReorderUnpinned = (next: FavoritesItem[]) => {
+    reorderFavorites([...pinnedItems, ...next])
   }
 
-  const cancelEditGroup = () => {
-    setEditingGroupId(null)
-    setEditingGroupName('')
-  }
+  const groupedRecents = React.useMemo(() => {
+    const now = new Date()
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+    const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000)
+    const startOfWeek = new Date(startOfToday.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-  const saveEditGroup = () => {
-    if (!editingGroupId || !editingGroupName.trim()) return
-    renameFavoriteGroup(editingGroupId, editingGroupName)
-    cancelEditGroup()
-  }
+    const groups: { label: string; items: RecentItem[] }[] = []
+    const today: RecentItem[] = []
+    const yesterday: RecentItem[] = []
+    const thisWeek: RecentItem[] = []
+    const earlier: RecentItem[] = []
 
-  const handleGroupInputKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter') return
-    event.preventDefault()
-    handleAddGroup()
-  }
+    for (const r of recents) {
+      const date = new Date(r.at)
+      if (date >= startOfToday) today.push(r)
+      else if (date >= startOfYesterday) yesterday.push(r)
+      else if (date >= startOfWeek) thisWeek.push(r)
+      else earlier.push(r)
+    }
 
-  const handleGroupEditKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
-    if (event.key !== 'Enter') return
-    event.preventDefault()
-    saveEditGroup()
-  }
+    if (today.length) groups.push({ label: t('favorites.today'), items: today })
+    if (yesterday.length) groups.push({ label: t('favorites.yesterday'), items: yesterday })
+    if (thisWeek.length) groups.push({ label: t('favorites.thisWeek'), items: thisWeek })
+    if (earlier.length) groups.push({ label: t('favorites.earlier'), items: earlier })
+
+    return groups
+  }, [recents, t])
+
+  const groupFilterOptions = React.useMemo(
+    () => [
+      { id: 'all', label: t('favorites.all') },
+      ...favoritesGroups.map((group) => ({ id: group.id, label: group.name })),
+      { id: 'unassigned', label: t('favorites.unassigned') },
+    ],
+    [favoritesGroups, t]
+  )
 
   return (
-    <Card className="rounded-3xl">
-      <Tabs defaultValue="favorites" className="gap-0">
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
-          <CardTitle className="text-base">{t.saved}</CardTitle>
-          <TabsList withIndicator>
-            <TabsTrigger value="favorites" unstyledActive className="gap-2">
-              <Heart className="h-4 w-4" /> {t.favorites}
-            </TabsTrigger>
-            <TabsTrigger value="recent" unstyledActive className="gap-2">
-              <History className="h-4 w-4" /> {t.recent}
-            </TabsTrigger>
-          </TabsList>
-        </CardHeader>
+    <Card className="bg-surface-container-low rounded-3xl">
+      <CardHeader className="flex flex-row items-center justify-between gap-3">
+        <CardTitle className="m3-title-md">{t('favorites.saved')}</CardTitle>
+        <div className="bg-surface-container-high inline-flex items-center rounded-full p-1">
+          <button
+            type="button"
+            onClick={() => setActiveTab('favorites')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+              activeTab === 'favorites'
+                ? 'bg-primary-container text-on-primary-container'
+                : 'text-on-surface-variant hover:text-on-surface'
+            )}
+          >
+            <Heart className="h-4 w-4" />
+            {t('favorites.favorites')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('recent')}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+              activeTab === 'recent'
+                ? 'bg-primary-container text-on-primary-container'
+                : 'text-on-surface-variant hover:text-on-surface'
+            )}
+          >
+            <History className="h-4 w-4" />
+            {t('favorites.recent')}
+          </button>
+        </div>
+      </CardHeader>
 
-        <CardContent className="p-0">
-          <TabsContent value="favorites" className="mt-0 p-6 pt-0">
-            <div className="space-y-4">
-              <div className="bg-background/40 space-y-2 rounded-2xl border p-3">
-                <div className="text-muted-foreground text-xs font-medium">{t.groups}</div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <Input
-                    value={newGroupName}
-                    onChange={(event) => setNewGroupName(event.target.value)}
-                    onKeyDown={handleGroupInputKeyDown}
-                    placeholder={t.addGroup}
-                    className="h-8 w-44 rounded-xl text-sm"
-                  />
+      <CardContent className="p-0">
+        {activeTab === 'favorites' ? (
+          <div className="space-y-4 p-6 pt-0">
+            <div className="relative">
+              <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <Input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder={t('favorites.searchPlaceholder')}
+                className="h-10 rounded-full pl-9 text-sm"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="text-on-surface-variant hover:text-on-surface absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1"
+                  aria-label={t('favorites.clear')}
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {favoritesGroups.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {groupFilterOptions.map((option) => (
                   <Button
-                    variant="ghost"
+                    key={option.id}
+                    variant={selectedGroup === option.id ? 'default' : 'outline'}
                     size="sm"
-                    className="rounded-xl"
-                    onClick={handleAddGroup}
-                    disabled={!newGroupName.trim()}
+                    className="rounded-full text-xs"
+                    onClick={() => setSelectedGroup(option.id)}
                   >
-                    <FolderPlus className="h-4 w-4" />
-                    <span className="ml-1.5 text-xs">{t.addGroup}</span>
+                    {option.label}
                   </Button>
+                ))}
+              </div>
+            )}
+
+            <GroupsEditor
+              favoritesGroups={favoritesGroups}
+              t={t}
+              onAdd={addFavoriteGroup}
+              onRename={renameFavoriteGroup}
+              onDelete={deleteFavoriteGroup}
+            />
+
+            {favorites.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                <Heart className="text-on-surface-variant h-10 w-10 opacity-40" />
+                <div className="m3-body-lg text-on-surface font-medium">
+                  {t('favorites.noFavorites')}
                 </div>
-                {favoritesGroups.length > 0 && (
-                  <div className="space-y-1">
-                    {favoritesGroups.map((group) => (
-                      <div
-                        key={group.id}
-                        className="flex items-center justify-between gap-2 text-sm"
-                      >
-                        {editingGroupId === group.id ? (
-                          <div className="flex w-full items-center gap-2">
-                            <Input
-                              value={editingGroupName}
-                              onChange={(event) => setEditingGroupName(event.target.value)}
-                              onKeyDown={handleGroupEditKeyDown}
-                              className="h-8 flex-1 rounded-xl text-sm"
-                            />
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="rounded-xl"
-                              onClick={saveEditGroup}
-                              disabled={!editingGroupName.trim()}
-                            >
-                              {t.rename}
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="rounded-xl"
-                              onClick={cancelEditGroup}
-                            >
-                              {t.clear}
-                            </Button>
-                          </div>
-                        ) : (
-                          <>
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium">{group.name}</span>
-                            </div>
-                            <div className="flex items-center gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-8 w-8 rounded-xl"
-                                aria-label={t.rename}
-                                onClick={() => startEditGroup(group)}
-                              >
-                                <Pencil className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="text-destructive h-8 w-8 rounded-xl"
-                                aria-label={t.delete}
-                                onClick={() => deleteFavoriteGroup(group.id)}
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    ))}
+                <div className="text-on-surface-variant m3-body-md max-w-[16rem]">
+                  {t('favorites.noFavoritesHint')}
+                </div>
+              </div>
+            ) : filteredFavorites.length === 0 ? (
+              <div className="text-on-surface-variant m3-body-md py-8 text-center">
+                {t('errors.noResults')}
+              </div>
+            ) : isFiltering ? (
+              <StaggerContainer className="space-y-2">
+                {filteredFavorites.map((f) => (
+                  <FavoriteRow
+                    key={f.id}
+                    item={f}
+                    lang={lang}
+                    maps={maps}
+                    groupName={groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')}
+                    favoritesGroups={favoritesGroups}
+                    t={t}
+                    onSelect={onSelect}
+                    onTogglePin={toggleFavoritePin}
+                    onAssignGroup={assignFavoriteGroup}
+                    onDelete={removeFavorite}
+                  />
+                ))}
+              </StaggerContainer>
+            ) : (
+              <div className="space-y-4">
+                {pinnedItems.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-on-surface-variant m3-label-md px-1">
+                      {t('favorites.pinned')}
+                    </div>
+                    <Reorder.Group
+                      axis="y"
+                      values={pinnedItems}
+                      onReorder={handleReorderPinned}
+                      className="space-y-2"
+                    >
+                      {pinnedItems.map((f) => (
+                        <FavoriteRow
+                          key={f.id}
+                          item={f}
+                          lang={lang}
+                          maps={maps}
+                          groupName={
+                            groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
+                          }
+                          favoritesGroups={favoritesGroups}
+                          t={t}
+                          onSelect={onSelect}
+                          onTogglePin={toggleFavoritePin}
+                          onAssignGroup={assignFavoriteGroup}
+                          onDelete={removeFavorite}
+                          draggable
+                        />
+                      ))}
+                    </Reorder.Group>
+                  </div>
+                )}
+
+                {unpinnedItems.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-on-surface-variant m3-label-md px-1">
+                      {t('favorites.unpinned')}
+                    </div>
+                    <Reorder.Group
+                      axis="y"
+                      values={unpinnedItems}
+                      onReorder={handleReorderUnpinned}
+                      className="space-y-2"
+                    >
+                      {unpinnedItems.map((f) => (
+                        <FavoriteRow
+                          key={f.id}
+                          item={f}
+                          lang={lang}
+                          maps={maps}
+                          groupName={
+                            groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
+                          }
+                          favoritesGroups={favoritesGroups}
+                          t={t}
+                          onSelect={onSelect}
+                          onTogglePin={toggleFavoritePin}
+                          onAssignGroup={assignFavoriteGroup}
+                          onDelete={removeFavorite}
+                          draggable
+                        />
+                      ))}
+                    </Reorder.Group>
                   </div>
                 )}
               </div>
-              {favorites.length === 0 ? (
-                <div className="text-muted-foreground text-sm">{t.noFavorites}</div>
-              ) : (
-                favorites.map((f, index) => (
-                  <div
-                    key={f.id}
-                    className="ui-animate-in-fast ui-lift bg-background/40 flex items-center justify-between gap-2 rounded-2xl border px-3 py-2"
-                  >
-                    <button className="min-w-0 flex-1 text-left" onClick={() => onSelect(f)}>
-                      <div className="text-sm font-medium">
-                        <FavoriteItemDisplay
-                          item={f}
-                          lang={lang}
-                          kmbStopsById={kmbStopsById}
-                          kmbStopIndexById={kmbStopIndexById}
-                          mtrStationsBySta={mtrStationsBySta}
-                          lrtStationsById={lrtStationsById}
-                        />
-                      </div>
-                      <div className="text-muted-foreground truncate text-xs">
-                        <span>{f.mode.toUpperCase()}</span>
-                        <span className="mx-1">·</span>
-                        <span>{groupNameById.get(f.groupId ?? '') ?? t.none}</span>
-                      </div>
-                    </button>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 rounded-xl"
-                        aria-label={f.pinned ? t.unpinned : t.pinned}
-                        onClick={() => toggleFavoritePin(f.id)}
-                      >
-                        {f.pinned ? <PinOff className="h-4 w-4" /> : <Pin className="h-4 w-4" />}
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 rounded-xl"
-                        aria-label={t.moveUp}
-                        onClick={() => moveFavorite(f.id, 'up')}
-                        disabled={
-                          index === 0 || Boolean(f.pinned) !== Boolean(favorites[index - 1]?.pinned)
-                        }
-                      >
-                        <ArrowUp className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 rounded-xl"
-                        aria-label={t.moveDown}
-                        onClick={() => moveFavorite(f.id, 'down')}
-                        disabled={
-                          index === favorites.length - 1 ||
-                          Boolean(f.pinned) !== Boolean(favorites[index + 1]?.pinned)
-                        }
-                      >
-                        <ArrowDown className="h-4 w-4" />
-                      </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 rounded-xl"
-                            aria-label={t.group}
-                          >
-                            <span
-                              className={cn(
-                                'text-xs font-medium',
-                                f.groupId ? 'text-foreground' : 'text-muted-foreground'
-                              )}
-                            >
-                              {t.group}
-                            </span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-[10rem]">
-                          <DropdownMenuLabel>{t.group}</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => assignFavoriteGroup(f.id, null)}>
-                            {t.none}
-                          </DropdownMenuItem>
-                          {favoritesGroups.map((group) => (
-                            <DropdownMenuItem
-                              key={group.id}
-                              onClick={() => assignFavoriteGroup(f.id, group.id)}
-                            >
-                              {group.name}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-8 w-8 rounded-xl"
-                        aria-label={
-                          lang === 'en'
-                            ? 'Remove favorite'
-                            : lang === 'sc'
-                              ? '移除收藏'
-                              : '移除收藏'
-                        }
-                        onClick={() => removeFavorite(f.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4 p-6 pt-0">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-on-surface-variant m3-body-md">{t('favorites.tip')}</div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearRecents}
+                className="rounded-xl"
+                disabled={!recents.length}
+              >
+                {t('favorites.clear')}
+              </Button>
             </div>
-          </TabsContent>
 
-          <TabsContent value="recent" className="mt-0 p-6 pt-0">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-muted-foreground text-xs">{t.tip}</div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearRecents}
-                  className="rounded-xl"
-                  disabled={!recents.length}
-                >
-                  {t.clear}
-                </Button>
+            {recents.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                <History className="text-on-surface-variant h-10 w-10 opacity-40" />
+                <div className="m3-body-lg text-on-surface font-medium">
+                  {t('favorites.noRecent')}
+                </div>
+                <div className="text-on-surface-variant m3-body-md max-w-[16rem]">
+                  {t('favorites.noRecentHint')}
+                </div>
               </div>
-
-              {recents.length === 0 ? (
-                <div className="text-muted-foreground text-sm">{t.noRecent}</div>
-              ) : (
-                recents.map((r) => (
-                  <button
-                    key={`${r.id}-${r.at}`}
-                    className="ui-animate-in-fast ui-lift bg-background/40 hover:bg-background/60 w-full rounded-2xl border px-3 py-2 text-left"
-                    onClick={() => onSelect(r)}
-                  >
-                    <div className="text-sm font-medium">
-                      <FavoriteItemDisplay
-                        item={r}
-                        lang={lang}
-                        kmbStopsById={kmbStopsById}
-                        kmbStopIndexById={kmbStopIndexById}
-                        mtrStationsBySta={mtrStationsBySta}
-                        lrtStationsById={lrtStationsById}
-                      />
-                    </div>
-                    <div className="text-muted-foreground mt-0.5 flex items-center justify-between gap-2 text-xs">
-                      <span>{r.mode.toUpperCase()}</span>
-                      <span>{dateFormatter.format(new Date(r.at))}</span>
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-
-            <Separator className="my-2" />
-          </TabsContent>
-        </CardContent>
-      </Tabs>
+            ) : (
+              <div className="space-y-5">
+                {groupedRecents.map((group) => (
+                  <div key={group.label} className="space-y-2">
+                    <div className="text-on-surface-variant m3-label-md px-1">{group.label}</div>
+                    <StaggerContainer className="space-y-2">
+                      {group.items.map((r) => (
+                        <RecentRow
+                          key={`${r.id}-${r.at}`}
+                          item={r}
+                          lang={lang}
+                          maps={maps}
+                          dateFormatter={dateFormatter}
+                          onSelect={onSelect}
+                        />
+                      ))}
+                    </StaggerContainer>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
     </Card>
   )
 }

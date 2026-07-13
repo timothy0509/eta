@@ -397,8 +397,7 @@ export async function fetchKmbStopEtas(
   }
 
   let faresByVariantKey:
-    | Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
-    | undefined
+    Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> | undefined
 
   if (options?.includeFares) {
     faresByVariantKey = {}

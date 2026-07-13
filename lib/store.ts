@@ -146,6 +146,7 @@ type AppState = {
   removeFavorite: (id: string) => void
   toggleFavoritePin: (id: string) => void
   moveFavorite: (id: string, direction: 'up' | 'down') => void
+  reorderFavorites: (newOrder: FavoritesItem[]) => void
   addFavoriteGroup: (name: string) => void
   renameFavoriteGroup: (id: string, name: string) => void
   deleteFavoriteGroup: (id: string) => void
@@ -239,6 +240,13 @@ export const useAppStore = create<AppState>()(
           const [moved] = favorites.splice(index, 1)
           favorites.splice(targetIndex, 0, moved)
           return { favorites }
+        }),
+
+      reorderFavorites: (newOrder) =>
+        set(() => {
+          const pinned = newOrder.filter((f) => f.pinned)
+          const unpinned = newOrder.filter((f) => !f.pinned)
+          return { favorites: [...pinned, ...unpinned] }
         }),
 
       addFavoriteGroup: (name) =>

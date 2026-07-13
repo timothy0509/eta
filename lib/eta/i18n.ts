@@ -152,6 +152,11 @@ const favorites: Record<string, TranslationEntry> = {
   favorites: { en: 'Favorites', tc: '收藏', sc: '收藏' },
   recent: { en: 'Recent', tc: '最近', sc: '最近' },
   noFavorites: { en: 'No favorites yet.', tc: '暫無收藏。', sc: '暂无收藏。' },
+  noFavoritesHint: {
+    en: 'Search and pin your go-to stops.',
+    tc: '搜尋並釘選常用車站。',
+    sc: '搜索并钉选常用车站。',
+  },
   tip: {
     en: 'Results can auto-refresh while you wait.',
     tc: '結果可在等待時自動刷新。',
@@ -159,8 +164,15 @@ const favorites: Record<string, TranslationEntry> = {
   },
   clear: { en: 'Clear', tc: '清除', sc: '清除' },
   noRecent: { en: 'No recent searches.', tc: '暫無搜尋記錄。', sc: '暂无搜索记录。' },
+  noRecentHint: {
+    en: 'Your recent searches will appear here.',
+    tc: '最近搜尋會在此顯示。',
+    sc: '最近搜索会在此显示。',
+  },
   pinned: { en: 'Pinned', tc: '已釘選', sc: '已钉选' },
   unpinned: { en: 'Unpinned', tc: '取消釘選', sc: '取消钉选' },
+  pin: { en: 'Pin', tc: '釘選', sc: '钉选' },
+  unpin: { en: 'Unpin', tc: '取消釘選', sc: '取消钉选' },
   moveUp: { en: 'Move up', tc: '上移', sc: '上移' },
   moveDown: { en: 'Move down', tc: '下移', sc: '下移' },
   group: { en: 'Group', tc: '分組', sc: '分组' },
@@ -170,6 +182,15 @@ const favorites: Record<string, TranslationEntry> = {
   delete: { en: 'Delete', tc: '刪除', sc: '删除' },
   none: { en: 'None', tc: '無', sc: '无' },
   remove: { en: 'Remove favorite', tc: '移除收藏', sc: '移除收藏' },
+  searchPlaceholder: { en: 'Search favorites', tc: '搜尋收藏', sc: '搜索收藏' },
+  all: { en: 'All', tc: '全部', sc: '全部' },
+  unassigned: { en: 'Unassigned', tc: '未分組', sc: '未分组' },
+  today: { en: 'Today', tc: '今天', sc: '今天' },
+  yesterday: { en: 'Yesterday', tc: '昨天', sc: '昨天' },
+  thisWeek: { en: 'This week', tc: '本週', sc: '本周' },
+  earlier: { en: 'Earlier', tc: '更早', sc: '更早' },
+  drag: { en: 'Drag to reorder', tc: '拖曳以重新排序', sc: '拖曳以重新排序' },
+  assignToGroup: { en: 'Assign to group', tc: '加入分組', sc: '加入分组' },
 }
 
 const errors: Record<string, TranslationEntry> = {

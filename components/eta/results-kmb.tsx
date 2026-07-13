@@ -1,6 +1,6 @@
 'use client'
 
-import { Clock, Info, Loader2, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, Info, Loader2, RefreshCw } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
@@ -25,6 +25,8 @@ import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
+import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
+import type { DisplayMode } from '@/lib/store'
 
 function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
   if (lang === 'sc') return fields.sc
@@ -198,6 +200,7 @@ type Props = {
   error?: string | null
   onRefresh: () => void
   loading?: boolean
+  displayMode?: DisplayMode
   /** For showing stop codes next to routes when multiple stops are selected */
   stops?: StopInfo[]
   /** Whether multiple stops are selected (grouped stops mode) */
@@ -234,6 +237,8 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   now,
   staggerClass,
   stopChips,
+  expanded,
+  onToggleExpand,
 }: {
   variantKey: string
   /** Base variant key without leg suffix (co|route|dir|service_type) for route info & fare lookup */
@@ -250,6 +255,8 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   now: number
   staggerClass?: string
   stopChips: StopChips
+  expanded?: boolean
+  onToggleExpand?: () => void
 }) {
   const [co = 'kmb', route = ''] = variantKey.split('|')
   const first = items[0]
@@ -270,6 +277,9 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const badgeStyle = getRouteBadgeStyle(route, co)
 
   const { t } = useTranslations(lang)
+
+  const expandable = Boolean(onToggleExpand) && items.length > 1
+  const isExpanded = expandable && Boolean(expanded)
 
   const metaChips = (
     <div className="hidden items-center gap-1.5 sm:flex">
@@ -292,7 +302,8 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       <DialogTrigger asChild>
         <button
           type="button"
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          onClick={(e) => e.stopPropagation()}
+          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 pointer-events-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
           aria-label={t('common.routeDetails')}
         >
           <Info className="h-4 w-4" />
@@ -357,24 +368,30 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     </Dialog>
   )
 
-  const rowShell = (children: React.ReactNode, muted?: boolean) => (
-    <div
-      className={cn(
-        'bg-surface-container relative overflow-hidden rounded-2xl py-3 pr-3 pl-0',
-        muted && 'opacity-70',
-        staggerClass
-      )}
-    >
-      <span
-        className="absolute inset-y-2 left-0 w-[3px] rounded-full"
-        style={{ backgroundColor: badgeStyle.bgColor }}
-        aria-hidden
-      />
-      <div className="space-y-2.5 pl-4">{children}</div>
-    </div>
-  )
+  const formatMinutesDisplay = (minutes: number | null) => {
+    if (minutes === null || Number.isNaN(minutes)) return '—'
+    if (minutes <= 0) return formatArrivingText(lang)
+    return lang === 'en' ? `${minutes} min` : `${minutes} 分`
+  }
 
-  const routeHeader = (
+  const firstMinutes = first?.eta
+    ? formatRelativeMinutesWithDrift(first.eta, first.data_timestamp, now)
+    : null
+  const firstIsArriving = firstMinutes !== null && !Number.isNaN(firstMinutes) && firstMinutes <= 0
+
+  const FirstEta = () =>
+    firstIsArriving ? (
+      <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
+        <LivePulse />
+        {formatArrivingText(lang)}
+      </span>
+    ) : (
+      <span className="text-on-surface font-tabular shrink-0 text-xl font-semibold tracking-tight">
+        {formatMinutesDisplay(firstMinutes)}
+      </span>
+    )
+
+  const routeHeader = (showEta: boolean) => (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RouteBadge route={route} company={co} size="lg" />
@@ -388,89 +405,129 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       <div className="flex shrink-0 items-center gap-1">
         {metaChips}
         {InfoButton}
+        {showEta && hasEta ? <FirstEta /> : null}
+        {expandable ? (
+          isExpanded ? (
+            <ChevronUp className="text-on-surface-variant h-4 w-4" />
+          ) : (
+            <ChevronDown className="text-on-surface-variant h-4 w-4" />
+          )
+        ) : null}
       </div>
     </div>
   )
 
-  const formatMinutesDisplay = (minutes: number | null) => {
-    if (minutes === null || Number.isNaN(minutes)) return '—'
-    if (minutes <= 0) return formatArrivingText(lang)
-    return lang === 'en' ? `${minutes} min` : `${minutes} 分`
-  }
+  const etaPanel = (
+    <div className="flex flex-wrap gap-2 pb-0.5">
+      {items.map((entry, entryIdx) => {
+        const minutes = entry.eta
+          ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
+          : null
+        const remark = pickLang(
+          {
+            en: entry.rmk_en ?? '',
+            tc: entry.rmk_tc ?? '',
+            sc: entry.rmk_sc ?? '',
+          },
+          lang
+        )
+        const isFirst = entry.eta_seq === 1
+        const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
+
+        if (isFirst) {
+          return (
+            <div
+              key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
+              className="bg-primary-container text-on-primary-container min-w-[108px] shrink-0 rounded-xl px-3 py-2"
+            >
+              <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
+              <div className="font-tabular mt-0.5 flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
+                {isArriving ? <LivePulse /> : null}
+                {formatMinutesDisplay(minutes)}
+              </div>
+              {remark ? (
+                <div className="m3-label-md mt-1 line-clamp-2 break-words opacity-80">{remark}</div>
+              ) : null}
+            </div>
+          )
+        }
+
+        return (
+          <div
+            key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
+            className="bg-surface-container-high min-w-[72px] shrink-0 rounded-lg px-2.5 py-1.5"
+          >
+            <div className="text-on-surface-variant m3-label-md">
+              {formatEtaLabel(entry.eta_seq, lang)}
+            </div>
+            <div className="text-on-surface font-tabular text-lg font-semibold tracking-tight">
+              {formatMinutesDisplay(minutes)}
+            </div>
+            {remark ? (
+              <div className="text-on-surface-variant m3-label-md mt-0.5 line-clamp-2">
+                {remark}
+              </div>
+            ) : null}
+          </div>
+        )
+      })}
+    </div>
+  )
 
   // Routes without valid ETAs get a simplified display
   if (!hasEta) {
     const remark = getGroupRemark(items, lang)
-    return rowShell(
-      <>
-        {routeHeader}
-        <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-          <Info className="h-4 w-4 shrink-0" />
-          {remark || formatNoScheduledText(lang)}
+    return (
+      <div
+        className={cn(
+          'bg-surface-container relative overflow-hidden rounded-2xl py-3 pr-3 pl-0 opacity-70',
+          staggerClass
+        )}
+      >
+        <span
+          className="absolute inset-y-2 left-0 w-[3px] rounded-full"
+          style={{ backgroundColor: badgeStyle.bgColor }}
+          aria-hidden
+        />
+        <div className="space-y-2.5 pl-4">
+          {routeHeader(false)}
+          <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+            <Info className="h-4 w-4 shrink-0" />
+            {remark || formatNoScheduledText(lang)}
+          </div>
         </div>
-      </>,
-      true
+      </div>
     )
   }
 
-  return rowShell(
-    <>
-      {routeHeader}
-      <div className="flex scrollbar-none gap-2 overflow-x-auto pb-0.5">
-        {items.slice(0, 3).map((entry, entryIdx) => {
-          const minutes = entry.eta
-            ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
-            : null
-          const remark = pickLang(
-            {
-              en: entry.rmk_en ?? '',
-              tc: entry.rmk_tc ?? '',
-              sc: entry.rmk_sc ?? '',
-            },
-            lang
-          )
-          const isFirst = entry.eta_seq === 1
-          const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
-
-          if (isFirst) {
-            return (
-              <div
-                key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-                className="bg-primary-container text-on-primary-container min-w-[108px] shrink-0 rounded-xl px-3 py-2"
-              >
-                <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
-                <div className="font-tabular mt-0.5 flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
-                  {isArriving ? <LivePulse /> : null}
-                  {formatMinutesDisplay(minutes)}
-                </div>
-                {remark ? (
-                  <div className="m3-label-md mt-1 line-clamp-2 opacity-80">{remark}</div>
-                ) : null}
-              </div>
-            )
-          }
-
-          return (
-            <div
-              key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-              className="bg-surface-container-high min-w-[72px] shrink-0 rounded-lg px-2.5 py-1.5"
-            >
-              <div className="text-on-surface-variant m3-label-md">
-                {formatEtaLabel(entry.eta_seq, lang)}
-              </div>
-              <div className="text-on-surface font-tabular text-lg font-semibold tracking-tight">
-                {formatMinutesDisplay(minutes)}
-              </div>
-              {remark ? (
-                <div className="text-on-surface-variant m3-label-md mt-0.5 line-clamp-2">
-                  {remark}
-                </div>
-              ) : null}
-            </div>
-          )
-        })}
+  if (!expandable) {
+    return (
+      <div
+        className={cn(
+          'bg-surface-container relative overflow-hidden rounded-2xl py-3 pr-3 pl-0',
+          staggerClass
+        )}
+      >
+        <span
+          className="absolute inset-y-2 left-0 w-[3px] rounded-full"
+          style={{ backgroundColor: badgeStyle.bgColor }}
+          aria-hidden
+        />
+        <div className="space-y-2.5 pl-4">{routeHeader(true)}</div>
       </div>
-    </>
+    )
+  }
+
+  return (
+    <ExpandableEtaRow
+      expanded={isExpanded}
+      onToggle={onToggleExpand!}
+      color={badgeStyle.bgColor}
+      className={staggerClass}
+      panel={etaPanel}
+    >
+      {routeHeader(!isExpanded)}
+    </ExpandableEtaRow>
   )
 })
 
@@ -487,6 +544,8 @@ const StopSection = React.memo(function StopSection({
   stopLookup,
   registerStopRef,
   stopChipsById,
+  expandedKey,
+  onToggleExpand,
 }: {
   stopId: string
   stopInfo?: StopInfo
@@ -499,6 +558,8 @@ const StopSection = React.memo(function StopSection({
   stopLookup: Map<string, StopInfo>
   registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void
   stopChipsById: Map<string, StopChips>
+  expandedKey?: string | null
+  onToggleExpand?: (key: string) => void
 }) {
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
   const parsed = parseKmbStopNameCached(stopName)
@@ -550,6 +611,8 @@ const StopSection = React.memo(function StopSection({
                         : ''
                   : ''
               }
+              expanded={expandedKey === g.key}
+              onToggleExpand={() => onToggleExpand?.(g.key)}
             />
           ))}
         </div>
@@ -583,6 +646,7 @@ export const KmbResults = React.memo(function KmbResults({
   precomputedGroups,
   registerStopRef,
   visibleStopIds,
+  displayMode: _displayMode,
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
   const now = useTickingNow(15_000)
@@ -593,6 +657,11 @@ export const KmbResults = React.memo(function KmbResults({
     staleByStopId && Object.values(staleByStopId).some((entry) => entry.stale)
   )
   const showStale = Boolean(stale || isAgeStale || hasStaleStops)
+
+  const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
+  const onToggleExpand = React.useCallback((key: string) => {
+    setExpandedKey((prev) => (prev === key ? null : key))
+  }, [])
 
   // Create a lookup map for stops by ID
   const stopLookup = React.useMemo(() => {
@@ -669,7 +738,7 @@ export const KmbResults = React.memo(function KmbResults({
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
   return (
-    <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm sm:p-5">
+    <div>
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-2">
@@ -744,6 +813,8 @@ export const KmbResults = React.memo(function KmbResults({
                 stopLookup={stopLookup}
                 registerStopRef={registerStopRef}
                 stopChipsById={stopChipsById}
+                expandedKey={expandedKey}
+                onToggleExpand={onToggleExpand}
               />
             ))}
 
@@ -805,6 +876,8 @@ export const KmbResults = React.memo(function KmbResults({
                     now={now}
                     staggerClass={staggerClass}
                     stopChips={stopChips}
+                    expanded={expandedKey === g.key}
+                    onToggleExpand={() => onToggleExpand(g.key)}
                   />
                 </StaggerItem>
               )
@@ -847,6 +920,8 @@ export const KmbResults = React.memo(function KmbResults({
                     now={now}
                     staggerClass={staggerClass}
                     stopChips={stopChips}
+                    expanded={expandedKey === g.key}
+                    onToggleExpand={() => onToggleExpand(g.key)}
                   />
                 </StaggerItem>
               )

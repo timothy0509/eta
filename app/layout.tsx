@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Noto_Sans_HK, Noto_Sans_SC } from 'next/font/google'
 
 import { DynamicToaster } from '@/components/dynamic-toaster'
@@ -31,6 +31,12 @@ const notoSansSC = Noto_Sans_SC({
 // Geist Mono is loaded via @fontsource in globals.css
 
 const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL)
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+}
 
 export const metadata: Metadata = {
   metadataBase: siteUrl,

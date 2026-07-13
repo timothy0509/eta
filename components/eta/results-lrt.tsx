@@ -13,6 +13,7 @@ import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
+import type { DisplayMode } from '@/lib/store'
 
 function formatTrainLength(length: number, lang: UiLanguage) {
   if (lang === 'en') return `${length}-car`
@@ -47,6 +48,7 @@ type Props = {
   lastUpdatedAt?: number | null
   onRefresh: () => void
   loading?: boolean
+  displayMode?: DisplayMode
 }
 
 export const LrtResults = React.memo(function LrtResults({
@@ -59,6 +61,7 @@ export const LrtResults = React.memo(function LrtResults({
   lastUpdatedAt,
   onRefresh,
   loading,
+  displayMode: _displayMode,
 }: Props) {
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang })
@@ -79,7 +82,7 @@ export const LrtResults = React.memo(function LrtResults({
   }
 
   return (
-    <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm sm:p-5">
+    <div>
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-on-surface m3-headline-sm truncate">{title}</h2>

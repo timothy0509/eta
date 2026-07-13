@@ -1,6 +1,6 @@
 'use client'
 
-import { Globe, Monitor, Moon, Palette, Sun, Timer } from 'lucide-react'
+import { Globe, LayoutTemplate, Monitor, Moon, Palette, Sun, Timer } from 'lucide-react'
 import { useTheme } from 'next-themes'
 import * as React from 'react'
 
@@ -23,6 +23,11 @@ const THEME_OPTIONS = [
   { value: 'system', icon: Monitor, labelKey: 'common.themeSystem' },
 ] as const
 
+const DISPLAY_MODE_OPTIONS = [
+  { value: 'departure-board', icon: LayoutTemplate, labelKey: 'common.departureBoard' },
+  { value: 'platform-display', icon: Monitor, labelKey: 'common.platformDisplay' },
+] as const
+
 export function SettingsView({ lang }: Props) {
   const { t } = useTranslations(lang)
   const { theme, setTheme } = useTheme()
@@ -33,6 +38,8 @@ export function SettingsView({ lang }: Props) {
   const setLang = useAppStore((s) => s.setLang)
   const autoRefreshSeconds = useAppStore((s) => s.autoRefreshSeconds)
   const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds)
+  const displayMode = useAppStore((s) => s.displayMode)
+  const setDisplayMode = useAppStore((s) => s.setDisplayMode)
 
   const scSupported = isLanguageSupported(mode, 'sc')
 
@@ -52,6 +59,31 @@ export function SettingsView({ lang }: Props) {
               className={cn(
                 'm3-label-lg flex items-center gap-2 rounded-full px-5 py-2 transition-colors',
                 activeTheme === value
+                  ? 'bg-primary-container text-on-primary-container'
+                  : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+              )}
+            >
+              <Icon className="h-4 w-4" />
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+        <h2 className="m3-title-md mb-4 flex items-center gap-2">
+          <LayoutTemplate className="h-5 w-5" />
+          {t('common.displayMode')}
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {DISPLAY_MODE_OPTIONS.map(({ value, icon: Icon, labelKey }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setDisplayMode(value)}
+              className={cn(
+                'm3-label-lg flex items-center gap-2 rounded-full px-5 py-2 transition-colors',
+                displayMode === value
                   ? 'bg-primary-container text-on-primary-container'
                   : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
               )}

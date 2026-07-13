@@ -27,8 +27,7 @@ export function ExpandableEtaRow({ expanded, onToggle, color, className, childre
 
   return (
     <motion.div
-      layout
-      transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
       className={cn(
         'bg-surface-container relative overflow-hidden rounded-2xl',
         'hover:bg-surface-container-high focus-within:ring-primary/30 focus-within:ring-2 focus-within:outline-none',
@@ -60,7 +59,7 @@ export function ExpandableEtaRow({ expanded, onToggle, color, className, childre
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
+            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
             className="overflow-hidden"
           >
             <div className="pointer-events-none relative z-10 pr-3 pb-3 pl-4">{panel}</div>

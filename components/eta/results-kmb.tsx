@@ -379,12 +379,12 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const FirstEta = () =>
     firstIsArriving ? (
-      <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
+      <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
         <LivePulse />
         {formatArrivingText(lang)}
       </span>
     ) : (
-      <span className="text-on-surface font-tabular shrink-0 text-xl font-semibold tracking-tight">
+      <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
         {formatMinutesDisplay(firstMinutes)}
       </span>
     )
@@ -393,7 +393,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RouteBadge route={route} company={co} size="lg" />
-        <span className="text-on-surface-variant m3-label-md shrink-0">
+        <span className="text-on-surface-variant m3-label-md hidden shrink-0 sm:inline">
           {formatOperatorLabel(first?.co ?? co, lang)}
         </span>
         <Marquee className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
@@ -416,7 +416,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   )
 
   const etaPanel = (
-    <div className="flex flex-wrap gap-2 pb-0.5">
+    <div className="grid grid-cols-3 gap-1.5 pb-0.5 sm:gap-2">
       {items.map((entry, entryIdx) => {
         const minutes = entry.eta
           ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
@@ -436,16 +436,14 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           return (
             <div
               key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-              className="bg-primary-container text-on-primary-container min-w-[108px] shrink-0 rounded-xl px-3 py-2"
+              className="bg-primary-container text-on-primary-container min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
             >
               <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
-              <div className="font-tabular mt-0.5 flex items-center gap-1.5 text-2xl font-semibold tracking-tight">
+              <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
                 {isArriving ? <LivePulse /> : null}
                 {formatMinutesDisplay(minutes)}
               </div>
-              {remark ? (
-                <div className="m3-label-md mt-1 line-clamp-2 break-words opacity-80">{remark}</div>
-              ) : null}
+              {remark ? <Marquee className="m3-label-md mt-1 opacity-80">{remark}</Marquee> : null}
             </div>
           )
         }
@@ -453,18 +451,16 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         return (
           <div
             key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-            className="bg-surface-container-high min-w-[72px] shrink-0 rounded-lg px-2.5 py-1.5"
+            className="bg-surface-container-high min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
           >
             <div className="text-on-surface-variant m3-label-md">
               {formatEtaLabel(entry.eta_seq, lang)}
             </div>
-            <div className="text-on-surface font-tabular text-lg font-semibold tracking-tight">
+            <div className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg">
               {formatMinutesDisplay(minutes)}
             </div>
             {remark ? (
-              <div className="text-on-surface-variant m3-label-md mt-0.5 line-clamp-2">
-                {remark}
-              </div>
+              <Marquee className="text-on-surface-variant m3-label-md mt-0.5">{remark}</Marquee>
             ) : null}
           </div>
         )

@@ -79,7 +79,7 @@ export const LrtResults = React.memo(function LrtResults({
   }
 
   return (
-    <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm sm:p-5">
+    <div>
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-on-surface m3-headline-sm truncate">{title}</h2>

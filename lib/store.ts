@@ -49,7 +49,8 @@ type FavoritesMeta = {
 
 export type FavoritesItem = FavoritesMeta &
   // KMB: single stop
-  (| {
+  (
+    | {
         id: string
         mode: 'kmb'
         title: string
@@ -291,7 +292,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 3,
+      version: 4,
       storage: createJSONStorage(() => createDebouncedLocalStorage(300)),
       migrate: (persistedState) => {
         const state = persistedState as Partial<AppState> | undefined

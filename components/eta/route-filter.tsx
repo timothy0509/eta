@@ -245,14 +245,17 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                     type="button"
                     onClick={() => toggleOption(opt)}
                     className={cn(
-                      'm3-label-md rounded-full px-3 py-1.5 transition-colors',
+                      'm3-label-md max-w-full overflow-hidden rounded-full px-3 py-1.5 transition-colors',
                       active
                         ? 'bg-primary-container text-on-primary-container'
                         : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
                     )}
+                    title={opt.label}
                   >
-                    {directionHint ? <span className="opacity-80">{directionHint} </span> : null}
-                    {opt.label}
+                    <span className="block truncate">
+                      {directionHint ? <span className="opacity-80">{directionHint} </span> : null}
+                      {opt.label}
+                    </span>
                   </button>
                 )
               })}

@@ -30,6 +30,7 @@ import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
 import { prefetchEtaDb } from '@/lib/eta/prefetch'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
+import { cn } from '@/lib/utils'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
 
@@ -296,100 +297,117 @@ export default function HomeClient() {
     lrtPaneState?.onRefresh?.()
   }, [lrtPaneState])
 
-  const renderStops = () => (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-[420px_1fr]">
-      <FadeIn className="space-y-4">
-        <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm" hidden={mode !== 'kmb'}>
-          <KmbPane
-            lang={lang}
-            routeFilterMode={routeFilterMode}
-            onRouteFilterModeChange={setRouteFilterMode}
-            onAddRecent={addRecent}
-            onAddFavorite={addFavorite}
-            canFavoriteRef={canFavoriteRef}
-            selectedItem={selectedItem}
-            onRegisterRefresh={(refresh) => onRegisterRefresh('kmb', refresh)}
-            onStopsChange={setKmbStops}
-          />
-        </div>
-        <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm" hidden={mode !== 'mtr'}>
-          <MtrPane
-            lang={lang}
-            stations={mtrStations}
-            onAddRecent={addRecent}
-            onAddFavorite={addFavorite}
-            canFavoriteRef={canFavoriteRef}
-            onRegisterRefresh={(refresh) => onRegisterRefresh('mtr', refresh)}
-            selectedItem={selectedItem}
-          />
-        </div>
-        <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm" hidden={mode !== 'lrt'}>
-          <LrtPane
-            lang={lang}
-            stations={lrtStations}
-            onAddRecent={addRecent}
-            onAddFavorite={addFavorite}
-            canFavoriteRef={canFavoriteRef}
-            onRegisterRefresh={(refresh) => onRegisterRefresh('lrt', refresh)}
-            selectedItem={selectedItem}
-          />
-        </div>
-      </FadeIn>
-
-      <FadeIn className="space-y-4" delay={0.05}>
-        <div hidden={mode !== 'kmb'}>
-          <KmbResults
-            lang={kmbPaneState?.lang ?? lang}
-            title={kmbPaneState?.title ?? ''}
-            stopCode={kmbPaneState?.stopCode ?? null}
-            routesFilter={kmbPaneState?.routeFilter.routes ?? ''}
-            eta={kmbPaneState?.eta ?? []}
-            routeInfos={kmbPaneState?.routeInfos ?? {}}
-            faresByVariantKey={kmbPaneState?.faresByVariantKey ?? {}}
-            hasQuery={kmbPaneState?.hasQuery ?? false}
-            error={kmbPaneState?.error ?? null}
-            stale={kmbPaneState?.stale ?? false}
-            lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
-            onRefresh={kmbOnRefresh}
-            loading={kmbPaneState?.loading}
-            stops={kmbPaneState?.stops ?? undefined}
-            multipleStops={kmbPaneState?.multipleStops}
-            isKeyphraseMode={kmbPaneState?.isKeyphraseMode}
-            etaByStopId={kmbPaneState?.etaByStopId}
-            loadedStopIds={kmbPaneState?.loadedStopIds}
-            sentinelRef={kmbPaneState?.sentinelRef}
-            hasMoreStops={kmbPaneState?.hasMoreStops}
-            precomputedGroups={kmbPaneState?.precomputedGroups}
-          />
-        </div>
-        <div hidden={mode !== 'mtr'}>
-          <MtrResults
-            title={mtrPaneState?.title ?? ''}
-            lang={mtrPaneState?.lang ?? lang}
-            schedule={mtrPaneState?.schedule ?? null}
-            error={mtrPaneState?.error ?? null}
-            stale={mtrPaneState?.stale ?? false}
-            lastUpdatedAt={mtrPaneState?.lastUpdatedAt ?? null}
-            onRefresh={mtrOnRefresh}
-            loading={mtrPaneState?.loading}
-          />
-        </div>
-        <div hidden={mode !== 'lrt'}>
-          <LrtResults
-            title={lrtPaneState?.title ?? ''}
-            lang={lrtPaneState?.lang ?? lang}
-            schedule={lrtPaneState?.schedule ?? null}
-            hasStation={Boolean(lrtPaneState?.stationId)}
-            error={lrtPaneState?.error ?? null}
-            stale={lrtPaneState?.stale ?? false}
-            lastUpdatedAt={lrtPaneState?.lastUpdatedAt ?? null}
-            onRefresh={lrtOnRefresh}
-            loading={lrtPaneState?.loading}
-          />
-        </div>
-      </FadeIn>
+  const controls = (
+    <div className="space-y-4">
+      <div hidden={mode !== 'kmb'}>
+        <KmbPane
+          lang={lang}
+          routeFilterMode={routeFilterMode}
+          onRouteFilterModeChange={setRouteFilterMode}
+          onAddRecent={addRecent}
+          onAddFavorite={addFavorite}
+          canFavoriteRef={canFavoriteRef}
+          selectedItem={selectedItem}
+          onRegisterRefresh={(refresh) => onRegisterRefresh('kmb', refresh)}
+          onStopsChange={setKmbStops}
+        />
+      </div>
+      <div hidden={mode !== 'mtr'}>
+        <MtrPane
+          lang={lang}
+          stations={mtrStations}
+          onAddRecent={addRecent}
+          onAddFavorite={addFavorite}
+          canFavoriteRef={canFavoriteRef}
+          onRegisterRefresh={(refresh) => onRegisterRefresh('mtr', refresh)}
+          selectedItem={selectedItem}
+        />
+      </div>
+      <div hidden={mode !== 'lrt'}>
+        <LrtPane
+          lang={lang}
+          stations={lrtStations}
+          onAddRecent={addRecent}
+          onAddFavorite={addFavorite}
+          canFavoriteRef={canFavoriteRef}
+          onRegisterRefresh={(refresh) => onRegisterRefresh('lrt', refresh)}
+          selectedItem={selectedItem}
+        />
+      </div>
     </div>
   )
+
+  const results = (
+    <>
+      <div hidden={mode !== 'kmb'}>
+        <KmbResults
+          lang={kmbPaneState?.lang ?? lang}
+          title={kmbPaneState?.title ?? ''}
+          stopCode={kmbPaneState?.stopCode ?? null}
+          routesFilter={kmbPaneState?.routeFilter.routes ?? ''}
+          eta={kmbPaneState?.eta ?? []}
+          routeInfos={kmbPaneState?.routeInfos ?? {}}
+          faresByVariantKey={kmbPaneState?.faresByVariantKey ?? {}}
+          hasQuery={kmbPaneState?.hasQuery ?? false}
+          error={kmbPaneState?.error ?? null}
+          stale={kmbPaneState?.stale ?? false}
+          lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
+          onRefresh={kmbOnRefresh}
+          loading={kmbPaneState?.loading}
+          stops={kmbPaneState?.stops ?? undefined}
+          multipleStops={kmbPaneState?.multipleStops}
+          isKeyphraseMode={kmbPaneState?.isKeyphraseMode}
+          etaByStopId={kmbPaneState?.etaByStopId}
+          loadedStopIds={kmbPaneState?.loadedStopIds}
+          sentinelRef={kmbPaneState?.sentinelRef}
+          hasMoreStops={kmbPaneState?.hasMoreStops}
+          precomputedGroups={kmbPaneState?.precomputedGroups}
+        />
+      </div>
+      <div hidden={mode !== 'mtr'}>
+        <MtrResults
+          title={mtrPaneState?.title ?? ''}
+          lang={mtrPaneState?.lang ?? lang}
+          schedule={mtrPaneState?.schedule ?? null}
+          error={mtrPaneState?.error ?? null}
+          stale={mtrPaneState?.stale ?? false}
+          lastUpdatedAt={mtrPaneState?.lastUpdatedAt ?? null}
+          onRefresh={mtrOnRefresh}
+          loading={mtrPaneState?.loading}
+        />
+      </div>
+      <div hidden={mode !== 'lrt'}>
+        <LrtResults
+          title={lrtPaneState?.title ?? ''}
+          lang={lrtPaneState?.lang ?? lang}
+          schedule={lrtPaneState?.schedule ?? null}
+          hasStation={Boolean(lrtPaneState?.stationId)}
+          error={lrtPaneState?.error ?? null}
+          stale={lrtPaneState?.stale ?? false}
+          lastUpdatedAt={lrtPaneState?.lastUpdatedAt ?? null}
+          onRefresh={lrtOnRefresh}
+          loading={lrtPaneState?.loading}
+        />
+      </div>
+    </>
+  )
+
+  const renderStops = () => {
+    return (
+      <FadeIn className="mx-auto max-w-7xl overflow-hidden lg:grid lg:grid-cols-[280px_1fr] lg:gap-8">
+        <div className="lg:border-outline/10 border-b bg-transparent p-4 sm:p-5 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-0 lg:pr-6">
+          {controls}
+        </div>
+
+        <FadeIn className="relative" delay={0.05}>
+          <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border p-4 shadow-sm sm:p-5">
+            <span className="bg-primary absolute top-0 right-0 left-0 h-1" aria-hidden />
+            {results}
+          </div>
+        </FadeIn>
+      </FadeIn>
+    )
+  }
 
   const renderRoutes = () => {
     if (mode === 'kmb') return <KmbRoutesView lang={lang} />
@@ -419,14 +437,14 @@ export default function HomeClient() {
   }
 
   return (
-    <div className="bg-surface min-h-dvh pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+    <div className="bg-surface min-h-dvh overflow-x-hidden pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
       <LangSync />
       <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
 
       <div className="mx-auto flex max-w-7xl md:pl-20">
         <SideRail lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
 
-        <main className="flex-1 p-4 sm:p-6">
+        <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6">
           <div className="mx-auto max-w-6xl">{renderContent()}</div>
         </main>
       </div>

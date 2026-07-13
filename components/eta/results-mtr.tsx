@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ExternalLink, Info, RefreshCw, TrainFront } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Info, RefreshCw, TrainFront } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
 import { Badge } from '@/components/ui/badge'
@@ -14,6 +14,7 @@ import type { MtrScheduleResponse } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
+import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 
 type Props = {
   title: string
@@ -112,6 +113,11 @@ export const MtrResults = React.memo(function MtrResults({
   const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: 'mtr' })
   const showStale = Boolean(stale || isAgeStale)
 
+  const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
+  const onToggleExpand = React.useCallback((key: string) => {
+    setExpandedKey((prev) => (prev === key ? null : key))
+  }, [])
+
   const t = {
     nextTrain: lang === 'en' ? 'Next Train' : lang === 'sc' ? '下班车' : '下班車',
     refresh: lang === 'en' ? 'Refresh' : '重新整理',
@@ -126,10 +132,11 @@ export const MtrResults = React.memo(function MtrResults({
     viewDetails: lang === 'en' ? 'View details' : lang === 'sc' ? '查看详情' : '查看詳情',
     up: lang === 'en' ? 'UP' : lang === 'sc' ? '上行' : '上行',
     down: lang === 'en' ? 'DOWN' : lang === 'sc' ? '下行' : '下行',
+    viaRacecourse: lang === 'en' ? ' · Via Racecourse' : ' · 經馬場',
   }
 
   return (
-    <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm sm:p-5">
+    <div>
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h2 className="text-on-surface m3-headline-sm truncate">{title}</h2>
@@ -221,13 +228,7 @@ export const MtrResults = React.memo(function MtrResults({
                     : ''
 
             return (
-              <div
-                key={key}
-                className={cn(
-                  'border-outline-variant relative border-b pb-4 last:border-0',
-                  staggerClass
-                )}
-              >
+              <div key={key} className={cn('relative pb-4', staggerClass)}>
                 {lineColor ? (
                   <span
                     className="absolute top-0 bottom-4 left-0 w-[3px] rounded-full"
@@ -235,7 +236,7 @@ export const MtrResults = React.memo(function MtrResults({
                     aria-hidden
                   />
                 ) : null}
-                <div className="flex min-w-0 items-center gap-2 pl-3">
+                <div className="flex min-w-0 items-center gap-2 pb-3 pl-3">
                   {line ? (
                     <Badge
                       className={cn(
@@ -252,65 +253,150 @@ export const MtrResults = React.memo(function MtrResults({
                   </div>
                 </div>
 
-                <div className="mt-3 grid grid-cols-1 gap-4 pl-3 lg:grid-cols-2">
+                <div className="space-y-2 pl-3">
                   {(['UP', 'DOWN'] as const).map((dir) => {
                     const trains = payload[dir] ?? []
-                    return (
-                      <div key={dir}>
-                        <div className="text-on-surface-variant m3-label-md mb-2 font-medium">
-                          {dir === 'UP' ? t.up : t.down}
-                        </div>
-                        <div className="space-y-1">
-                          {trains.length === 0 ? (
-                            <div className="text-on-surface-variant m3-body-md">—</div>
-                          ) : (
-                            trains.slice(0, 4).map((train, trainIdx) => {
-                              const route = String((train as { route?: unknown }).route ?? '')
-                              const showViaRacecourse = shouldShowViaRacecourse({
-                                line,
-                                currentSta: sta,
-                                dir,
-                                route: route || undefined,
-                              })
-                              const destText = formatDestWithRacecourse(
-                                train.dest,
-                                lang,
-                                showViaRacecourse
-                              )
-                              const platform = formatPlatform(train.plat)
-                              const eta = formatMinutes(train.ttnt, lang)
+                    const dirKey = `${key}-${dir}`
+                    const expanded = expandedKey === dirKey
+                    const expandable = trains.length > 1
 
-                              return (
-                                <div
-                                  key={`${dir}-${trainIdx}`}
-                                  className="flex items-center justify-between gap-3 py-1.5"
-                                >
-                                  <Marquee className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
-                                    {destText}
-                                  </Marquee>
-                                  <div className="flex shrink-0 items-center gap-2">
-                                    {platform ? (
-                                      <span className="text-on-surface-variant m3-label-md font-mono">
-                                        P{platform}
-                                      </span>
-                                    ) : null}
-                                    {eta.arriving ? (
-                                      <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
-                                        <LivePulse />
-                                        {eta.text}
-                                      </span>
-                                    ) : (
-                                      <span className="text-on-surface font-tabular m3-body-md font-semibold">
-                                        {eta.text}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            })
-                          )}
-                        </div>
+                    const first = trains[0]
+                    const firstRoute = String((first as { route?: unknown })?.route ?? '')
+                    const firstShowViaRacecourse = first
+                      ? shouldShowViaRacecourse({
+                          line,
+                          currentSta: sta,
+                          dir,
+                          route: firstRoute || undefined,
+                        })
+                      : false
+                    const firstDest = first
+                      ? formatDestWithRacecourse(first.dest, lang, firstShowViaRacecourse)
+                      : ''
+                    const firstPlatform = first ? formatPlatform(first.plat) : ''
+                    const firstEta = first
+                      ? formatMinutes(first.ttnt, lang)
+                      : { text: '—', arriving: false }
+
+                    const directionLabel = dir === 'UP' ? t.up : t.down
+
+                    const header = (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-on-surface-variant m3-label-md font-medium">
+                          {directionLabel}
+                        </span>
+                        {expanded ? null : (
+                          <div className="flex min-w-0 shrink-0 items-center gap-2">
+                            {firstPlatform ? (
+                              <span className="text-on-surface-variant m3-label-md font-mono">
+                                P{firstPlatform}
+                              </span>
+                            ) : null}
+                            <Marquee className="text-on-surface m3-body-md hidden max-w-[12rem] font-medium sm:block">
+                              {firstDest}
+                            </Marquee>
+                            {firstEta.arriving ? (
+                              <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
+                                <LivePulse />
+                                {firstEta.text}
+                              </span>
+                            ) : (
+                              <span className="text-on-surface font-tabular m3-body-md font-semibold">
+                                {firstEta.text}
+                              </span>
+                            )}
+                            {expanded ? (
+                              <ChevronUp className="text-on-surface-variant h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="text-on-surface-variant h-4 w-4" />
+                            )}
+                          </div>
+                        )}
                       </div>
+                    )
+
+                    const trainList = (
+                      <div className="space-y-1">
+                        {trains.length === 0 ? (
+                          <div className="text-on-surface-variant m3-body-md">—</div>
+                        ) : (
+                          trains.slice(0, 4).map((train, trainIdx) => {
+                            const route = String((train as { route?: unknown }).route ?? '')
+                            const showViaRacecourse = shouldShowViaRacecourse({
+                              line,
+                              currentSta: sta,
+                              dir,
+                              route: route || undefined,
+                            })
+                            const destText = formatDestWithRacecourse(
+                              train.dest,
+                              lang,
+                              showViaRacecourse
+                            )
+                            const platform = formatPlatform(train.plat)
+                            const eta = formatMinutes(train.ttnt, lang)
+
+                            return (
+                              <div
+                                key={`${dir}-${trainIdx}`}
+                                className="flex items-center justify-between gap-3 py-1.5"
+                              >
+                                <Marquee className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
+                                  {destText}
+                                </Marquee>
+                                <div className="flex shrink-0 items-center gap-2">
+                                  {platform ? (
+                                    <span className="text-on-surface-variant m3-label-md font-mono">
+                                      P{platform}
+                                    </span>
+                                  ) : null}
+                                  {eta.arriving ? (
+                                    <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
+                                      <LivePulse />
+                                      {eta.text}
+                                    </span>
+                                  ) : (
+                                    <span className="text-on-surface font-tabular m3-body-md font-semibold">
+                                      {eta.text}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    )
+
+                    if (!expandable) {
+                      return (
+                        <div
+                          key={dirKey}
+                          className="bg-surface-container relative overflow-hidden rounded-2xl p-3"
+                        >
+                          {lineColor ? (
+                            <span
+                              className="absolute inset-y-2 left-0 w-[3px] rounded-full"
+                              style={{ backgroundColor: lineColor }}
+                              aria-hidden
+                            />
+                          ) : null}
+                          <div className="pl-3">{header}</div>
+                        </div>
+                      )
+                    }
+
+                    return (
+                      <ExpandableEtaRow
+                        key={dirKey}
+                        expanded={expanded}
+                        onToggle={() => onToggleExpand(dirKey)}
+                        color={lineColor}
+                        className="ui-lift"
+                        panel={trainList}
+                      >
+                        {header}
+                      </ExpandableEtaRow>
                     )
                   })}
                 </div>

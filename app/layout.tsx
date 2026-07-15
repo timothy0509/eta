@@ -36,6 +36,7 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  themeColor: '#00478d',
 }
 
 export const metadata: Metadata = {
@@ -61,10 +62,10 @@ export const metadata: Metadata = {
     },
   },
   icons: {
-    icon: [{ url: '/timoeta_new.png' }, { url: '/timoeta_new.png', type: 'image/png' }],
-    apple: [{ url: '/timoeta_new.png' }],
-    shortcut: ['/timoeta_new.png'],
+    icon: [{ url: '/icon.png', sizes: '192x192', type: 'image/png' }],
+    apple: [{ url: '/apple-icon.png', sizes: '180x180' }],
   },
+  manifest: '/site.webmanifest',
   openGraph: {
     type: 'website',
     url: '/',

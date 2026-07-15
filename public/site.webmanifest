@@ -1,0 +1,21 @@
+{
+  "name": "TimoETA",
+  "short_name": "TimoETA",
+  "description": "Fast, clean Hong Kong transit ETAs for buses, MTR trains, and Light Rail.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#00478d",
+  "icons": [
+    {
+      "src": "/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

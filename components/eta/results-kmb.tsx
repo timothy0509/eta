@@ -739,8 +739,10 @@ export const KmbResults = React.memo(function KmbResults({
     <div>
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <h2 className="text-on-surface m3-headline-sm truncate">{title || t('kmb.title')}</h2>
+          <div className="flex min-w-0 items-start gap-2">
+            <h2 className="text-on-surface m3-headline-sm min-w-0 flex-1">
+              {title || t('kmb.title')}
+            </h2>
             {stopCode ? (
               <span className="text-on-surface-variant m3-label-md shrink-0 font-mono">
                 {stopCode}

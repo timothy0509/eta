@@ -141,14 +141,14 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
             className={cn(
               'relative flex w-full flex-col items-center gap-0.5 rounded-full px-2 py-2.5 text-[11px] font-medium transition-colors',
               active
-                ? 'text-on-secondary-container'
+                ? 'text-on-primary-container'
                 : 'text-on-surface-variant hover:text-on-surface'
             )}
           >
             {active && (
               <motion.div
                 layoutId="side-rail-pill"
-                className="bg-secondary-container absolute inset-0 -z-10 rounded-full"
+                className="bg-primary-container absolute inset-0 -z-10 rounded-full"
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               />
             )}

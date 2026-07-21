@@ -53,6 +53,47 @@ export function buildRouteFilterString(
   return undefined
 }
 
+export type KmbQueryContext = {
+  selection: StopSearchSelection | undefined
+  routeFilter: RouteFilterState
+  routeFilterMode: RouteFilterMode
+}
+
+function selectionKey(selection: StopSearchSelection): string {
+  if (selection.type === 'stop') return `stop:${selection.stopId}`
+  if (selection.type === 'stops') return `stops:${selection.stopIds.join(',')}`
+  return `contains:${selection.query}`
+}
+
+function entryKeys(entries: RouteFilterState['entries']): string[] {
+  return (entries ?? []).map((entry) => entry.variantKey).sort()
+}
+
+/**
+ * Returns true when stop selection or route filter state changed enough to refetch ETAs.
+ */
+export function hasKmbQueryContextChanged(
+  prev: KmbQueryContext | undefined,
+  next: KmbQueryContext
+): boolean {
+  if (!prev) return true
+  if (!next.selection) return false
+  if (!prev.selection) return true
+  if (prev.routeFilterMode !== next.routeFilterMode) return true
+  if (selectionKey(prev.selection) !== selectionKey(next.selection)) return true
+
+  if (next.routeFilterMode === 'simple') {
+    const prevRoutes = prev.routeFilter.routes?.trim() ?? ''
+    const nextRoutes = next.routeFilter.routes?.trim() ?? ''
+    if (prevRoutes !== nextRoutes) return true
+  }
+
+  const prevEntryKeys = entryKeys(prev.routeFilter.entries)
+  const nextEntryKeys = entryKeys(next.routeFilter.entries)
+  if (prevEntryKeys.length !== nextEntryKeys.length) return true
+  return prevEntryKeys.some((key, index) => key !== nextEntryKeys[index])
+}
+
 /**
  * Builds a KmbQuery from draft stop selection and current route filter state.
  */

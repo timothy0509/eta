@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildKmbQueryFromDraft, buildRouteFilterString } from './use-kmb-route-filter'
+import {
+  buildKmbQueryFromDraft,
+  buildRouteFilterString,
+  hasKmbQueryContextChanged,
+} from './use-kmb-route-filter'
 
 describe('buildRouteFilterString', () => {
   it('extracts route numbers from advanced entries', () => {
@@ -81,5 +85,85 @@ describe('buildKmbQueryFromDraft', () => {
       stopId: '1234',
       serviceType: '1',
     })
+  })
+})
+
+describe('hasKmbQueryContextChanged', () => {
+  const baseContext = {
+    selection: { type: 'stop' as const, stopId: '1234' },
+    routeFilter: { routes: '', entries: [] },
+    routeFilterMode: 'simple' as const,
+  }
+
+  it('returns true when there is no previous context', () => {
+    expect(hasKmbQueryContextChanged(undefined, baseContext)).toBe(true)
+  })
+
+  it('returns false when stop selection and filter are unchanged', () => {
+    expect(hasKmbQueryContextChanged(baseContext, baseContext)).toBe(false)
+  })
+
+  it('returns true when stop selection changes', () => {
+    const next = {
+      ...baseContext,
+      selection: { type: 'stop' as const, stopId: '5678' },
+    }
+
+    expect(hasKmbQueryContextChanged(baseContext, next)).toBe(true)
+  })
+
+  it('returns true when simple route filter routes change', () => {
+    const next = {
+      ...baseContext,
+      routeFilter: { routes: '1,2A', entries: [] },
+    }
+
+    expect(hasKmbQueryContextChanged(baseContext, next)).toBe(true)
+  })
+
+  it('returns true when route filter mode changes', () => {
+    const next = {
+      ...baseContext,
+      routeFilterMode: 'advanced' as const,
+    }
+
+    expect(hasKmbQueryContextChanged(baseContext, next)).toBe(true)
+  })
+
+  it('returns true when advanced entries change', () => {
+    const prev = {
+      ...baseContext,
+      routeFilterMode: 'advanced' as const,
+      routeFilter: {
+        routes: '',
+        entries: [{ id: '1', variantKey: 'kmb|1|O|1' }],
+      },
+    }
+    const next = {
+      ...prev,
+      routeFilter: {
+        routes: '',
+        entries: [
+          { id: '1', variantKey: 'kmb|1|O|1' },
+          { id: '2', variantKey: 'kmb|2A|I|1' },
+        ],
+      },
+    }
+
+    expect(hasKmbQueryContextChanged(prev, next)).toBe(true)
+  })
+
+  it('ignores simple route string changes in advanced mode', () => {
+    const prev = {
+      ...baseContext,
+      routeFilterMode: 'advanced' as const,
+      routeFilter: { routes: '1', entries: [] },
+    }
+    const next = {
+      ...prev,
+      routeFilter: { routes: '2', entries: [] },
+    }
+
+    expect(hasKmbQueryContextChanged(prev, next)).toBe(false)
   })
 })

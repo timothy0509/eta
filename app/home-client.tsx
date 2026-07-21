@@ -238,13 +238,16 @@ export default function HomeClient() {
     (item: FavoritesItem) => {
       setSelectedItem(item)
       setMode(item.mode)
+      if (item.mode === 'kmb' && 'routeFilterMode' in item) {
+        setRouteFilterMode(item.routeFilterMode ?? 'simple')
+      }
       if (item.mode === 'kmb' && 'type' in item && item.type === 'route') {
         setSubView('routes')
       } else {
         setSubView('stops')
       }
     },
-    [setMode, setSubView]
+    [setMode, setRouteFilterMode, setSubView]
   )
 
   const kmbRouteInitialSelection = React.useMemo(() => {

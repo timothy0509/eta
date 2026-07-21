@@ -33,7 +33,9 @@ import {
   buildKmbQueryFromDraft,
   buildRouteFilterString,
   getVariantKeysForStops,
+  hasKmbQueryContextChanged,
   type KmbQuery,
+  type KmbQueryContext,
 } from '@/components/eta/panes/use-kmb-route-filter'
 import {
   buildStopSearchIndex,
@@ -228,6 +230,10 @@ export function KmbPane({
     pageSize: STOPS_PER_PAGE,
     rootMargin: '300px',
   })
+  const infiniteScrollResetRef = React.useRef(infiniteScroll.reset)
+  React.useEffect(() => {
+    infiniteScrollResetRef.current = infiniteScroll.reset
+  }, [infiniteScroll.reset])
 
   const { visibleIds: visibleStopIds, registerRef: registerStopRef } = useVisibleItems(
     loadedStopIds,
@@ -787,10 +793,12 @@ export function KmbPane({
 
   const lastSelectedIdRef = React.useRef<string | null>(null)
   React.useEffect(() => {
-    if (!selectedItem || selectedItem.mode !== 'kmb') return
+    if (!selectedItem || selectedItem.mode !== 'kmb') {
+      lastSelectedIdRef.current = null
+      return
+    }
     if (isKmbRouteFavorite(selectedItem)) return
     if (selectedItem.id === lastSelectedIdRef.current) return
-    lastSelectedIdRef.current = selectedItem.id
 
     const nextRouteFilterMode = selectedItem.routeFilterMode ?? 'simple'
     const restoredEntries = (selectedItem.entries ?? []).map((entry, idx) => ({
@@ -808,7 +816,10 @@ export function KmbPane({
             ? { type: 'contains' as const, query: selectedItem.query }
             : null
 
-    const id = setTimeout(() => {
+    let cancelled = false
+    queueMicrotask(() => {
+      if (cancelled) return
+
       if (nextRouteFilterMode !== routeFilterMode) {
         onRouteFilterModeChange(nextRouteFilterMode)
       }
@@ -821,37 +832,34 @@ export function KmbPane({
       }
       setKmbQuery(null)
       dispatchEta({ type: 'RESET' })
-      infiniteScroll.reset()
-    }, 0)
-    return () => clearTimeout(id)
-  }, [onRouteFilterModeChange, routeFilterMode, selectedItem, infiniteScroll])
+      infiniteScrollResetRef.current()
+      lastSelectedIdRef.current = selectedItem.id
+    })
 
-  const prevStopSelectionRef = React.useRef<StopSearchSelection | undefined>(undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [onRouteFilterModeChange, routeFilterMode, selectedItem])
+
+  const prevQueryContextRef = React.useRef<KmbQueryContext | undefined>(undefined)
   React.useEffect(() => {
     if (!kmbDraftStopSelection) return
     if (!kmbRouteStops.length) return
 
-    const prev = prevStopSelectionRef.current
-    prevStopSelectionRef.current = kmbDraftStopSelection
+    const currentContext: KmbQueryContext = {
+      selection: kmbDraftStopSelection,
+      routeFilter,
+      routeFilterMode,
+    }
+    const prev = prevQueryContextRef.current
+    prevQueryContextRef.current = currentContext
 
-    const isSame =
-      prev &&
-      prev.type === kmbDraftStopSelection.type &&
-      (prev.type === 'stop'
-        ? prev.stopId === (kmbDraftStopSelection as { type: 'stop'; stopId: string }).stopId
-        : prev.type === 'stops'
-          ? JSON.stringify((prev as { type: 'stops'; stopIds: string[] }).stopIds) ===
-            JSON.stringify((kmbDraftStopSelection as { type: 'stops'; stopIds: string[] }).stopIds)
-          : (prev as { type: 'contains'; query: string }).query ===
-            (kmbDraftStopSelection as { type: 'contains'; query: string }).query)
-
-    if (isSame) return
+    if (!hasKmbQueryContextChanged(prev, currentContext)) return
 
     const nextQuery = buildKmbQueryFromDraft(kmbDraftStopSelection, routeFilter, routeFilterMode)
 
-    // Reset infinite scroll and state for new query
     dispatchEta({ type: 'RESET' })
-    infiniteScroll.reset()
+    infiniteScrollResetRef.current()
 
     setKmbQuery(nextQuery)
     void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
@@ -861,32 +869,6 @@ export function KmbPane({
     routeFilter,
     routeFilterMode,
     routeFilter.entries,
-    infiniteScroll,
-  ])
-
-  const prevEntriesRef = React.useRef<typeof routeFilter.entries>([])
-  React.useEffect(() => {
-    if (!kmbDraftStopSelection) return
-    if (!kmbRouteStops.length) return
-
-    const prev = prevEntriesRef.current ?? []
-    const curr = routeFilter.entries ?? []
-    prevEntriesRef.current = curr
-
-    const prevKeys = new Set(prev.map((e) => e.variantKey))
-    const currKeys = new Set(curr.map((e) => e.variantKey))
-    if (prevKeys.size === currKeys.size && [...prevKeys].every((k) => currKeys.has(k))) return
-
-    const nextQuery = buildKmbQueryFromDraft(kmbDraftStopSelection, routeFilter, routeFilterMode)
-
-    setKmbQuery(nextQuery)
-    void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
-  }, [
-    routeFilterMode,
-    routeFilter,
-    routeFilter.entries,
-    kmbDraftStopSelection,
-    kmbRouteStops.length,
   ])
 
   const kmbResultsInfo = React.useMemo(() => {

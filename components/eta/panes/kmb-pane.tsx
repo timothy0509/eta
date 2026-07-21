@@ -30,8 +30,10 @@ import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 import { precomputeRenderGroups, type PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { initialEtaState, etaReducer } from '@/components/eta/panes/kmb-reducer'
 import {
+  buildKmbQueryFromDraft,
   buildRouteFilterString,
   getVariantKeysForStops,
+  type KmbQuery,
 } from '@/components/eta/panes/use-kmb-route-filter'
 import {
   buildStopSearchIndex,
@@ -62,26 +64,6 @@ function isKmbRouteFavorite(
 ): item is Extract<FavoritesItem, { mode: 'kmb'; type: 'route' }> {
   return item.mode === 'kmb' && 'type' in item && item.type === 'route'
 }
-
-type KmbQuery =
-  | {
-      mode: 'stop'
-      stopId: string
-      route?: string
-      serviceType?: string
-    }
-  | {
-      mode: 'stops'
-      stopIds: string[]
-      route?: string
-      serviceType?: string
-    }
-  | {
-      mode: 'contains'
-      query: string
-      route?: string
-      serviceType?: string
-    }
 
 function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
   if (lang === 'en') return stop.nameEn
@@ -402,6 +384,7 @@ export function KmbPane({
 
   React.useEffect(() => {
     if (!(routeFilter.entries ?? []).length) return
+    if (!kmbRouteStops.length) return
 
     const nextEntries = (routeFilter.entries ?? []).filter((entry) =>
       kmbAvailableRouteVariants.some((opt) => opt.key === entry.variantKey)
@@ -415,7 +398,7 @@ export function KmbPane({
       dispatchEta({ type: 'RESET' })
     }, 0)
     return () => clearTimeout(id)
-  }, [kmbAvailableRouteVariants, routeFilter.entries])
+  }, [kmbAvailableRouteVariants, kmbRouteStops.length, routeFilter.entries])
 
   // AbortController for cancelling in-flight requests
   const abortControllerRef = React.useRef<AbortController | null>(null)
@@ -864,24 +847,7 @@ export function KmbPane({
 
     if (isSame) return
 
-    const nextQuery: KmbQuery =
-      kmbDraftStopSelection.type === 'stop'
-        ? {
-            mode: 'stop',
-            stopId: kmbDraftStopSelection.stopId,
-            serviceType: '1',
-          }
-        : kmbDraftStopSelection.type === 'stops'
-          ? {
-              mode: 'stops',
-              stopIds: kmbDraftStopSelection.stopIds,
-              serviceType: '1',
-            }
-          : {
-              mode: 'contains',
-              query: kmbDraftStopSelection.query,
-              serviceType: '1',
-            }
+    const nextQuery = buildKmbQueryFromDraft(kmbDraftStopSelection, routeFilter, routeFilterMode)
 
     // Reset infinite scroll and state for new query
     dispatchEta({ type: 'RESET' })
@@ -889,47 +855,14 @@ export function KmbPane({
 
     setKmbQuery(nextQuery)
     void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
-  }, [kmbDraftStopSelection, kmbRouteStops.length, routeFilter.entries, infiniteScroll])
-
-  React.useEffect(() => {
-    if (!selectedItem) return
-    if (selectedItem.mode !== 'kmb') return
-    if (isKmbRouteFavorite(selectedItem)) return
-    if (selectedItem.id !== lastSelectedIdRef.current) return
-
-    let nextQuery: KmbQuery | null = null
-
-    if ('stopId' in selectedItem) {
-      nextQuery = {
-        mode: 'stop',
-        stopId: selectedItem.stopId,
-        route: selectedItem.route,
-        serviceType: selectedItem.serviceType,
-      }
-    } else if ('stopIds' in selectedItem) {
-      nextQuery = {
-        mode: 'stops',
-        stopIds: selectedItem.stopIds,
-        route: selectedItem.route,
-        serviceType: '1',
-      }
-    } else if ('query' in selectedItem) {
-      nextQuery = {
-        mode: 'contains',
-        query: selectedItem.query,
-        route: selectedItem.route,
-        serviceType: selectedItem.serviceType,
-      }
-    }
-
-    if (!nextQuery) return
-
-    const id = setTimeout(() => {
-      setKmbQuery(nextQuery)
-      void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
-    }, 0)
-    return () => clearTimeout(id)
-  }, [selectedItem])
+  }, [
+    kmbDraftStopSelection,
+    kmbRouteStops.length,
+    routeFilter,
+    routeFilterMode,
+    routeFilter.entries,
+    infiniteScroll,
+  ])
 
   const prevEntriesRef = React.useRef<typeof routeFilter.entries>([])
   React.useEffect(() => {
@@ -944,16 +877,17 @@ export function KmbPane({
     const currKeys = new Set(curr.map((e) => e.variantKey))
     if (prevKeys.size === currKeys.size && [...prevKeys].every((k) => currKeys.has(k))) return
 
-    const nextQuery: KmbQuery =
-      kmbDraftStopSelection.type === 'stop'
-        ? { mode: 'stop', stopId: kmbDraftStopSelection.stopId, serviceType: '1' }
-        : kmbDraftStopSelection.type === 'stops'
-          ? { mode: 'stops', stopIds: kmbDraftStopSelection.stopIds, serviceType: '1' }
-          : { mode: 'contains', query: kmbDraftStopSelection.query, serviceType: '1' }
+    const nextQuery = buildKmbQueryFromDraft(kmbDraftStopSelection, routeFilter, routeFilterMode)
 
     setKmbQuery(nextQuery)
     void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
-  }, [routeFilterMode, routeFilter.entries, kmbDraftStopSelection, kmbRouteStops.length])
+  }, [
+    routeFilterMode,
+    routeFilter,
+    routeFilter.entries,
+    kmbDraftStopSelection,
+    kmbRouteStops.length,
+  ])
 
   const kmbResultsInfo = React.useMemo(() => {
     if (!kmbQuery) {

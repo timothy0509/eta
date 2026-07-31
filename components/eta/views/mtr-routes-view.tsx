@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, MapPin, TrainFront } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MapPin, TrainFront } from 'lucide-react'
 import * as React from 'react'
 
 import {
@@ -8,8 +8,13 @@ import {
   RouteStopTimeline,
   SoonestEtaPill,
 } from '@/components/eta/route-stop-timeline'
-import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
-import { findMtrStationBySta, formatMtrStationName, type MtrLang } from '@/lib/data/mtr-stations'
+import { FadeIn, StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import {
+  findMtrStationBySta,
+  findMtrStationsByLine,
+  formatMtrStationName,
+  type MtrLang,
+} from '@/lib/data/mtr-stations'
 import { fetchMtrRouteSchedules, listMtrRoutes } from '@/lib/eta/client'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
@@ -22,6 +27,19 @@ import { cn } from '@/lib/utils'
 import type { RouteListEntry } from 'hk-bus-eta'
 
 const LINE_ORDER = ['AEL', 'TCL', 'TML', 'TKL', 'EAL', 'SIL', 'TWL', 'ISL', 'KTL', 'DRL']
+
+const MTR_LINE_NAMES: Record<string, { en: string; tc: string }> = {
+  AEL: { en: 'Airport Express', tc: '機場快綫' },
+  TCL: { en: 'Tung Chung Line', tc: '東涌綫' },
+  TML: { en: 'Tuen Ma Line', tc: '屯馬綫' },
+  TKL: { en: 'Tseung Kwan O Line', tc: '將軍澳綫' },
+  EAL: { en: 'East Rail Line', tc: '東鐵綫' },
+  SIL: { en: 'South Island Line', tc: '南港島綫' },
+  TWL: { en: 'Tsuen Wan Line', tc: '荃灣綫' },
+  ISL: { en: 'Island Line', tc: '港島綫' },
+  KTL: { en: 'Kwun Tong Line', tc: '觀塘綫' },
+  DRL: { en: 'Disneyland Resort Line', tc: '迪士尼綫' },
+}
 
 function toMtrLang(lang: UiLanguage): MtrLang {
   return lang === 'en' ? 'EN' : 'TC'
@@ -165,34 +183,48 @@ export function MtrRoutesView({
             {t('common.refresh')}…
           </div>
         ) : (
-          <StaggerContainer className="grid grid-cols-2 gap-3 sm:grid-cols-3" stagger={0.03}>
+          <StaggerContainer className="space-y-1" stagger={0.02}>
             {lines.map((line) => {
               const color = getLineColor(line)
-              const fg = getReadableForeground(color)
+              const name = MTR_LINE_NAMES[line]
+              const stationCount = findMtrStationsByLine(line).length
+              const displayName = name ? (lang === 'en' ? name.en : name.tc) : ''
               return (
                 <StaggerItem key={line}>
-                  <MotionCard
-                    hoverScale={1.02}
-                    tapScale={0.98}
-                    className={cn(
-                      'rounded-2xl p-4 shadow-sm transition-shadow hover:shadow-md',
-                      fg
-                    )}
-                    style={{ backgroundColor: color }}
+                  <button
+                    type="button"
                     onClick={() => {
                       setSchedulesBySta({})
                       setSelectedVariant(null)
                       setSelectedLine(line)
                     }}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') setSelectedLine(line)
-                    }}
+                    className="hover:bg-surface-container-high group flex w-full items-stretch gap-0 overflow-hidden rounded-2xl transition-colors"
                   >
-                    <div className="m3-title-lg">{line}</div>
-                    <div className="m3-label-lg opacity-90">{t('common.route')}</div>
-                  </MotionCard>
+                    <div
+                      className="w-1.5 shrink-0 rounded-l-2xl"
+                      style={{ backgroundColor: color }}
+                    />
+                    <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-3">
+                      <span
+                        className="m3-title-md shrink-0 rounded-lg px-2.5 py-1"
+                        style={{
+                          backgroundColor: color,
+                          color: getReadableForeground(color) === 'text-white' ? '#fff' : '#000',
+                        }}
+                      >
+                        {line}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-on-surface m3-body-md truncate font-medium">
+                          {displayName}
+                        </div>
+                        <div className="text-on-surface-variant m3-label-md">
+                          {stationCount} {lang === 'en' ? 'stations' : '個站'}
+                        </div>
+                      </div>
+                      <ChevronRight className="text-on-surface-variant h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+                    </div>
+                  </button>
                 </StaggerItem>
               )
             })}
@@ -200,7 +232,7 @@ export function MtrRoutesView({
         )
       ) : (
         <FadeIn className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-3">
             <button
               type="button"
               onClick={() => {
@@ -208,24 +240,36 @@ export function MtrRoutesView({
                 setSelectedLine(null)
                 setSelectedVariant(null)
               }}
-              className="bg-secondary-container text-on-secondary-container m3-label-lg inline-flex items-center gap-1 rounded-full px-4 py-2 transition-colors hover:opacity-90"
+              className="bg-secondary-container text-on-secondary-container m3-label-lg mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 transition-colors hover:opacity-90"
             >
               <ChevronLeft className="h-4 w-4" />
               {t('common.back')}
             </button>
-            <span
-              className="m3-title-md rounded-full px-4 py-2"
-              style={{
-                backgroundColor: lineColor,
-                color: getReadableForeground(lineColor) === 'text-white' ? '#fff' : '#000',
-              }}
-            >
-              {selectedLine}
-            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span
+                  className="m3-title-md shrink-0 rounded-lg px-2.5 py-1"
+                  style={{
+                    backgroundColor: lineColor,
+                    color: getReadableForeground(lineColor) === 'text-white' ? '#fff' : '#000',
+                  }}
+                >
+                  {selectedLine}
+                </span>
+                <span className="text-on-surface m3-title-md truncate">
+                  {MTR_LINE_NAMES[selectedLine!]?.[lang === 'en' ? 'en' : 'tc'] ?? selectedLine}
+                </span>
+              </div>
+              {currentVariant && variantsForLine.length > 1 && (
+                <div className="text-on-surface-variant m3-body-md mt-0.5 truncate">
+                  {getRouteDestination(currentVariant.dest, lang)}
+                </div>
+              )}
+            </div>
           </div>
 
           {variantsForLine.length > 1 && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-1.5">
               {variantsForLine.map((variant) => (
                 <button
                   key={variantKey(variant)}
@@ -238,7 +282,7 @@ export function MtrRoutesView({
                     'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
                     currentVariant && variantKey(currentVariant) === variantKey(variant)
                       ? 'bg-primary-container text-on-primary-container'
-                      : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                      : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                   )}
                 >
                   {getRouteDestination(variant.dest, lang)}
@@ -254,45 +298,47 @@ export function MtrRoutesView({
             </div>
           )}
 
-          <div className="bg-surface-container rounded-2xl p-4">
-            <div className="m3-title-md text-on-surface mb-3 flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              {t('mtr.stations')}
-              <span className="text-on-surface-variant m3-body-md ml-auto">
-                {stationStas.length}
-              </span>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
+            <div className="bg-surface-container rounded-2xl p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto">
+              <div className="m3-title-md text-on-surface mb-3 flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                {t('mtr.stations')}
+                <span className="text-on-surface-variant m3-body-md ml-auto">
+                  {stationStas.length}
+                </span>
+              </div>
+
+              <RouteStopTimeline lineColor={lineColor}>
+                {stationStas.map((sta, idx) => {
+                  const station = findMtrStationBySta(sta)
+                  const downstreamStas = new Set(stationStas.slice(idx + 1))
+                  const schedule = schedulesBySta[sta]
+                  const soonest = pickSoonestMtrTrain(schedule, selectedLine, sta, downstreamStas)
+                  const name = station ? formatMtrStationName(station, toMtrLang(lang)) : sta
+                  return (
+                    <RouteStopRow
+                      key={sta}
+                      name={name}
+                      subtitle={<span className="hidden sm:inline">{sta}</span>}
+                      eta={
+                        <SoonestEtaPill
+                          minutes={soonest.minutes}
+                          arriving={soonest.arriving}
+                          lang={lang}
+                        />
+                      }
+                      onClick={() => onSelectStation?.(sta, selectedLine, name)}
+                    />
+                  )
+                })}
+              </RouteStopTimeline>
             </div>
 
-            <RouteStopTimeline lineColor={lineColor}>
-              {stationStas.map((sta, idx) => {
-                const station = findMtrStationBySta(sta)
-                const downstreamStas = new Set(stationStas.slice(idx + 1))
-                const schedule = schedulesBySta[sta]
-                const soonest = pickSoonestMtrTrain(schedule, selectedLine, sta, downstreamStas)
-                const name = station ? formatMtrStationName(station, toMtrLang(lang)) : sta
-                return (
-                  <RouteStopRow
-                    key={sta}
-                    name={name}
-                    subtitle={<span className="hidden sm:inline">{sta}</span>}
-                    eta={
-                      <SoonestEtaPill
-                        minutes={soonest.minutes}
-                        arriving={soonest.arriving}
-                        lang={lang}
-                      />
-                    }
-                    onClick={() => onSelectStation?.(sta, selectedLine, name)}
-                  />
-                )
-              })}
-            </RouteStopTimeline>
-          </div>
-
-          <div className="bg-surface-container rounded-2xl p-4">
-            <div className="m3-title-md text-on-surface mb-2">{t('common.map')}</div>
-            <div className="text-on-surface-variant m3-body-md bg-surface-container-high flex h-32 items-center justify-center rounded-2xl">
-              {t('common.mapUnavailable')}
+            <div className="bg-surface-container rounded-2xl p-4">
+              <div className="m3-title-md text-on-surface mb-2">{t('common.map')}</div>
+              <div className="text-on-surface-variant m3-body-md bg-surface-container-high flex h-32 items-center justify-center rounded-2xl">
+                {t('common.mapUnavailable')}
+              </div>
             </div>
           </div>
         </FadeIn>

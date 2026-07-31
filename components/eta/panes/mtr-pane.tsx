@@ -6,6 +6,7 @@ import * as React from 'react'
 import { MtrStationSearch } from '@/components/eta/station-search'
 import { Button } from '@/components/ui/button'
 import type { MtrStationSearchItem, UiLanguage } from '@/lib/eta/types'
+import { getMtrLineName } from '@/lib/eta/line-colors'
 import { useMtrSchedule } from '@/lib/eta/use-mtr-schedule'
 import type { FavoritesItem } from '@/lib/store'
 import { usePaneStore } from '@/lib/eta/pane-store'
@@ -60,7 +61,9 @@ export function MtrPane({
     if (!sta) return
     const station = stations.find((s) => s.sta === sta)
     const name = station ? (lang === 'en' ? station.nameEn : station.nameTc) : ''
-    const title = station ? `${name} · ${station.lines.join('/')}/${station.sta}` : `MTR · ${sta}`
+    const title = station
+      ? `${name} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`
+      : `MTR · ${sta}`
 
     const item: FavoritesItem = {
       id: `mtr:${sta}`,
@@ -108,7 +111,7 @@ export function MtrPane({
           const item: FavoritesItem = {
             id: `mtr:${station.sta}`,
             mode: 'mtr',
-            title: `${lang === 'en' ? station.nameEn : station.nameTc} · ${station.lines.join('/')}/${station.sta}`,
+            title: `${lang === 'en' ? station.nameEn : station.nameTc} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`,
             line: station.lines[0] ?? '',
             sta: station.sta,
           }

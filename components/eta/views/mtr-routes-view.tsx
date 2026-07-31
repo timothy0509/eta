@@ -11,7 +11,7 @@ import {
 import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import { findMtrStationBySta, formatMtrStationName, type MtrLang } from '@/lib/data/mtr-stations'
 import { fetchMtrRouteSchedules, listMtrRoutes } from '@/lib/eta/client'
-import { getLineColor } from '@/lib/eta/line-colors'
+import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickSoonestMtrTrain } from '@/lib/eta/pick-soonest-eta'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
@@ -190,7 +190,7 @@ export function MtrRoutesView({
                       if (e.key === 'Enter' || e.key === ' ') setSelectedLine(line)
                     }}
                   >
-                    <div className="m3-title-lg">{line}</div>
+                    <div className="m3-title-lg">{getMtrLineName(line, lang)}</div>
                     <div className="m3-label-lg opacity-90">{t('common.route')}</div>
                   </MotionCard>
                 </StaggerItem>
@@ -220,7 +220,7 @@ export function MtrRoutesView({
                 color: getReadableForeground(lineColor) === 'text-white' ? '#fff' : '#000',
               }}
             >
-              {selectedLine}
+              {getMtrLineName(selectedLine, lang)}
             </span>
           </div>
 

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import type { MtrStationSearchItem, UiLanguage } from '@/lib/eta/types'
+import { getMtrLineName } from '@/lib/eta/line-colors'
 import { cn } from '@/lib/utils'
 import Fuse from 'fuse.js'
 
@@ -164,7 +165,7 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
                     </div>
                     <div className="text-on-surface-variant m3-label-md truncate">
                       {formatStationSecondary(station, lang)}
-                      {` · ${lang === 'en' ? 'Lines' : lang === 'sc' ? '线路' : '路線'}: ${station.lines.join('/')}`}
+                      {` · ${lang === 'en' ? 'Lines' : lang === 'sc' ? '线路' : '路線'}: ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}`}
                       {showStationCode
                         ? ` · ${lang === 'en' ? 'Code' : lang === 'sc' ? '代号' : '代號'}: ${station.sta}`
                         : null}

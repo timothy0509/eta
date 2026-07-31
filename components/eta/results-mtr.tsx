@@ -6,7 +6,7 @@ import { ChevronDown, ChevronUp, ExternalLink, Info, RefreshCw, TrainFront } fro
 import { LivePulse } from '@/components/m3/motion'
 import { Marquee } from '@/components/ui/marquee'
 import { findMtrStationBySta } from '@/lib/data/mtr-stations'
-import { getLineColor } from '@/lib/eta/line-colors'
+import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { formatUiTime } from '@/lib/eta/format'
 import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
 import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
@@ -264,7 +264,7 @@ function MtrLineCard({
         )}
         style={{ backgroundColor: lineColor }}
       >
-        <span className="m3-title-md font-medium">{line}</span>
+        <span className="m3-title-md font-medium">{getMtrLineName(line, lang)}</span>
         {includeChevron ? (
           expanded ? (
             <ChevronUp className="h-4 w-4" />

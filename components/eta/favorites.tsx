@@ -38,7 +38,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
-import { getLineColor } from '@/lib/eta/line-colors'
+import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -97,7 +97,7 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
               )}
               style={{ backgroundColor: getLineColor(line) }}
             >
-              {line}
+              {getMtrLineName(line, lang)}
             </span>
           ))}
         </span>

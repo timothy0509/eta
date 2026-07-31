@@ -20,6 +20,7 @@ import type {
 import { isLanguageSupported } from '@/lib/eta/types'
 import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
 import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
+import { getMtrLineName } from '@/lib/eta/line-colors'
 import { prefetchEtaDb } from '@/lib/eta/prefetch'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
@@ -377,7 +378,7 @@ export default function HomeClient() {
     (sta: string, line: string, name: string) => {
       const station = mtrStations.find((s) => s.sta === sta)
       const title = station
-        ? `${lang === 'en' ? station.nameEn : station.nameTc} · ${station.lines.join('/')}/${station.sta}`
+        ? `${lang === 'en' ? station.nameEn : station.nameTc} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`
         : `${name} · ${line}/${sta}`
       const item: FavoritesItem = {
         id: `mtr:${sta}`,

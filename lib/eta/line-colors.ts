@@ -1,3 +1,5 @@
+import type { UiLanguage } from '@/lib/eta/types'
+
 export const MTR_LINE_COLORS: Record<string, string> = {
   AEL: '#00888F',
   EAL: '#53B7E8',
@@ -9,6 +11,27 @@ export const MTR_LINE_COLORS: Record<string, string> = {
   TML: '#A35A00',
   DRL: '#EB6EA5',
   SIL: '#CBCD00',
+}
+
+export const MTR_LINE_NAMES: Record<string, { en: string; tc: string; sc: string }> = {
+  AEL: { en: 'Airport Express', tc: '機場快線', sc: '机场快线' },
+  TCL: { en: 'Tung Chung Line', tc: '東涌線', sc: '东涌线' },
+  TML: { en: 'Tuen Ma Line', tc: '屯馬線', sc: '屯马线' },
+  TKL: { en: 'Tseung Kwan O Line', tc: '將軍澳線', sc: '将军澳线' },
+  EAL: { en: 'East Rail Line', tc: '東鐵線', sc: '东铁线' },
+  SIL: { en: 'South Island Line', tc: '南港島線', sc: '南港岛线' },
+  TWL: { en: 'Tsuen Wan Line', tc: '荃灣線', sc: '荃湾线' },
+  ISL: { en: 'Island Line', tc: '港島線', sc: '港岛线' },
+  KTL: { en: 'Kwun Tong Line', tc: '觀塘線', sc: '观塘线' },
+  DRL: { en: 'Disneyland Resort Line', tc: '迪士尼線', sc: '迪士尼线' },
+}
+
+export function getMtrLineName(code: string, lang: UiLanguage): string {
+  const entry = MTR_LINE_NAMES[code]
+  if (!entry) return code
+  if (lang === 'en') return entry.en
+  if (lang === 'sc') return entry.sc
+  return entry.tc
 }
 
 // Light Rail (route_no) colors

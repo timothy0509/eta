@@ -13,7 +13,7 @@ import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
 import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
-import { getLineColor } from '@/lib/eta/line-colors'
+import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
 import type { TransportMode, UiLanguage } from '@/lib/eta/types'
@@ -335,7 +335,7 @@ function MtrNearbyView({ lang, t }: SharedViewProps) {
                     className="inline-block h-3 w-3 rounded-full"
                     style={{ backgroundColor: getLineColor(line) }}
                   />
-                  {line}
+                  {getMtrLineName(line, lang)}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {stations.map((station) => (

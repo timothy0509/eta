@@ -1,6 +1,6 @@
 'use client'
 
-import { AlertCircle, Clock, Heart, Search } from 'lucide-react'
+import { AlertCircle, ChevronLeft, ChevronRight, Clock, Heart, Search } from 'lucide-react'
 import * as React from 'react'
 
 import { TransitMap } from '@/components/eta/transit-map'
@@ -220,6 +220,23 @@ export function KmbRoutesView({
     return Array.from(map.values()).sort((a, b) =>
       a.route.localeCompare(b.route, undefined, { numeric: true })
     )
+  }, [routes])
+
+  const routeDestinationMap = React.useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        origin: { en: string; tc: string; sc: string }
+        destination: { en: string; tc: string; sc: string }
+      }
+    >()
+    for (const r of routes) {
+      const key = `${normalizeCo(String(r.co ?? 'kmb'))}|${r.route}`
+      if (!map.has(key)) {
+        map.set(key, { origin: r.origin, destination: r.destination })
+      }
+    }
+    return map
   }, [routes])
 
   const initialKey = React.useMemo(
@@ -444,42 +461,83 @@ export function KmbRoutesView({
         )}
 
         {!selectedRouteKey ? (
-          <StaggerContainer className="mt-3 flex flex-wrap gap-2" stagger={0.02}>
-            {filteredRoutes.map((entry) => (
-              <StaggerItem key={routeSelectionKey(entry)}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedRouteKey(entry)}
-                  className="bg-surface-container-high hover:bg-surface-container hover:elevation-1 m3-label-lg flex items-center gap-1.5 rounded-full px-4 py-2 transition-colors"
-                >
-                  <RouteBadge route={entry.route} company={entry.co} size="sm" />
-                  {showOperatorInSearch && (
-                    <span className="text-on-surface-variant m3-label-sm uppercase">
-                      {entry.co}
-                    </span>
-                  )}
-                </button>
-              </StaggerItem>
-            ))}
-          </StaggerContainer>
+          <div className="-mx-1 mt-3 max-h-[60vh] overflow-y-auto px-1">
+            {filteredRoutes.length === 0 ? (
+              <div className="text-on-surface-variant m3-body-md py-8 text-center">
+                {lang === 'en' ? 'No routes match' : '沒有匹配的路線'}
+              </div>
+            ) : (
+              <StaggerContainer className="space-y-0.5" stagger={0.015}>
+                {filteredRoutes.map((entry) => {
+                  const dest = routeDestinationMap.get(`${entry.co}|${entry.route}`)
+                  return (
+                    <StaggerItem key={routeSelectionKey(entry)}>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedRouteKey(entry)}
+                        className="hover:bg-surface-container-high group flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition-colors"
+                      >
+                        <RouteBadge route={entry.route} company={entry.co} size="md" />
+                        <div className="min-w-0 flex-1">
+                          <div className="text-on-surface m3-body-md truncate font-medium">
+                            {dest ? pickLang(dest.destination, lang) : entry.route}
+                          </div>
+                          {showOperatorInSearch && (
+                            <div className="text-on-surface-variant m3-label-md uppercase">
+                              {entry.co}
+                            </div>
+                          )}
+                        </div>
+                        <ChevronRight className="text-on-surface-variant h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+                      </button>
+                    </StaggerItem>
+                  )
+                })}
+              </StaggerContainer>
+            )}
+          </div>
         ) : (
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center gap-2">
+          <div className="mt-4 space-y-3">
+            <div className="flex items-start gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setSelectedRouteKey(null)
                   setSelectedVariant(null)
                 }}
-                className="text-primary m3-label-lg"
+                className="bg-secondary-container text-on-secondary-container m3-label-lg mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 transition-colors hover:opacity-90"
               >
-                ← {t('common.back') ?? 'Back'}
+                <ChevronLeft className="h-4 w-4" />
+                {t('common.back')}
               </button>
-              <RouteBadge route={selectedRouteKey.route} company={selectedRouteKey.co} size="lg" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <RouteBadge
+                    route={selectedRouteKey.route}
+                    company={selectedRouteKey.co}
+                    size="lg"
+                  />
+                  {currentVariant && (
+                    <span className="text-on-surface m3-title-md truncate">
+                      {pickLang(currentVariant.destination, lang)}
+                    </span>
+                  )}
+                </div>
+                {currentVariant && (
+                  <div className="text-on-surface-variant m3-body-md mt-0.5 truncate">
+                    {pickLang(currentVariant.origin, lang)} →{' '}
+                    {pickLang(currentVariant.destination, lang)}
+                  </div>
+                )}
+              </div>
+              <Button size="sm" className="mt-0.5 shrink-0 rounded-full" onClick={onSaveRoute}>
+                <Heart className="mr-1.5 h-4 w-4" />
+                {t('common.save')}
+              </Button>
             </div>
 
             {variantsForRoute.length > 1 && (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 {variantsForRoute.map((v) => (
                   <button
                     key={v.key}
@@ -489,7 +547,7 @@ export function KmbRoutesView({
                       'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
                       currentVariant?.key === v.key
                         ? 'bg-primary-container text-on-primary-container'
-                        : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                        : 'bg-surface-container text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
                     )}
                   >
                     {showOperatorInVariants && (
@@ -508,26 +566,13 @@ export function KmbRoutesView({
                 ))}
               </div>
             )}
-
-            {currentVariant && (
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-on-surface-variant m3-body-md">
-                  {pickLang(currentVariant.origin, lang)} →{' '}
-                  {pickLang(currentVariant.destination, lang)}
-                </div>
-                <Button size="sm" className="rounded-full" onClick={onSaveRoute}>
-                  <Heart className="mr-1.5 h-4 w-4" />
-                  {t('common.save')}
-                </Button>
-              </div>
-            )}
           </div>
         )}
       </div>
 
       {currentVariant && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
+          <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto">
             <div className="m3-title-md mb-3 flex items-center gap-2">
               <Clock className="h-5 w-5" />
               {t('kmb.routeStops')}

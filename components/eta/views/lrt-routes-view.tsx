@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, MapPin, TramFront } from 'lucide-react'
+import { ChevronLeft, ChevronRight, MapPin, TramFront } from 'lucide-react'
 import * as React from 'react'
 
 import {
@@ -8,7 +8,7 @@ import {
   RouteStopTimeline,
   SoonestEtaPill,
 } from '@/components/eta/route-stop-timeline'
-import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import { FadeIn, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
 import { fetchLrtEtasForStop } from '@/lib/eta/client'
 import { listLrtRoutes } from '@/lib/eta/direct/eta-db'
@@ -156,45 +156,45 @@ export function LrtRoutesView({
             </div>
           )}
           {!loading && !error && (
-            <StaggerContainer className="space-y-3" stagger={0.03}>
+            <StaggerContainer className="space-y-1" stagger={0.02}>
               {routes.map((route) => {
                 const color = getLineColor(route.route)
                 const fg = getReadableForeground(color)
+                const stationCount = (route.stops.lightRail ?? []).length
                 return (
                   <StaggerItem key={`${route.route}|${route.serviceType}|${route.bound.lightRail}`}>
-                    <MotionCard
-                      hoverScale={1.01}
-                      tapScale={0.99}
-                      className="bg-surface-container hover:bg-surface-container-high rounded-2xl transition-colors"
+                    <button
+                      type="button"
                       onClick={() => {
                         setStopEtas({})
                         setSelectedRoute(route)
                       }}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') setSelectedRoute(route)
-                      }}
+                      className="hover:bg-surface-container-high group flex w-full items-stretch gap-0 overflow-hidden rounded-2xl transition-colors"
                     >
-                      <div className="flex items-center gap-4 p-4">
+                      <div
+                        className="w-1.5 shrink-0 rounded-l-2xl"
+                        style={{ backgroundColor: color }}
+                      />
+                      <div className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2.5">
                         <span
-                          className={cn('m3-title-md rounded-xl px-3 py-1.5 shadow-sm', fg)}
+                          className={cn('m3-title-md shrink-0 rounded-lg px-2.5 py-1', fg)}
                           style={{ backgroundColor: color }}
                         >
                           {route.route}
                         </span>
                         <div className="min-w-0 flex-1">
-                          <div className="m3-body-md text-on-surface truncate">
+                          <div className="text-on-surface m3-body-md truncate font-medium">
                             {getRouteDestination(route.dest, lang)}
                           </div>
                           <div className="text-on-surface-variant m3-label-md">
                             {route.serviceType !== '1'
-                              ? `${t('common.route')} · ${route.serviceType}`
-                              : t('common.route')}
+                              ? `${stationCount} ${lang === 'en' ? 'stops' : '個站'} · ${route.serviceType}`
+                              : `${stationCount} ${lang === 'en' ? 'stops' : '個站'}`}
                           </div>
                         </div>
+                        <ChevronRight className="text-on-surface-variant h-4 w-4 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
                       </div>
-                    </MotionCard>
+                    </button>
                   </StaggerItem>
                 )
               })}
@@ -203,69 +203,75 @@ export function LrtRoutesView({
         </>
       ) : (
         <FadeIn className="space-y-4">
-          <div className="flex items-center gap-3">
+          <div className="flex items-start gap-3">
             <button
               type="button"
               onClick={() => {
                 setStopEtas({})
                 setSelectedRoute(null)
               }}
-              className="bg-secondary-container text-on-secondary-container m3-label-lg inline-flex items-center gap-1 rounded-full px-4 py-2 transition-colors hover:opacity-90"
+              className="bg-secondary-container text-on-secondary-container m3-label-lg mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-full px-3 py-1.5 transition-colors hover:opacity-90"
             >
               <ChevronLeft className="h-4 w-4" />
               {t('common.back')}
             </button>
-            <span
-              className="m3-title-md rounded-full px-4 py-2"
-              style={{
-                backgroundColor: lineColor,
-                color: getReadableForeground(lineColor) === 'text-white' ? '#fff' : '#000',
-              }}
-            >
-              {selectedRoute.route}
-            </span>
-            <span className="text-on-surface-variant m3-body-md truncate">
-              {getRouteDestination(selectedRoute.dest, lang)}
-            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span
+                  className="m3-title-md shrink-0 rounded-lg px-2.5 py-1"
+                  style={{
+                    backgroundColor: lineColor,
+                    color: getReadableForeground(lineColor) === 'text-white' ? '#fff' : '#000',
+                  }}
+                >
+                  {selectedRoute.route}
+                </span>
+                <span className="text-on-surface m3-title-md truncate">
+                  {getRouteDestination(selectedRoute.dest, lang)}
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="bg-surface-container rounded-2xl p-4">
-            <div className="m3-title-md text-on-surface mb-3 flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              {t('lrt.stations')}
-              <span className="text-on-surface-variant m3-body-md ml-auto">
-                {stationIds.length}
-              </span>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1fr]">
+            <div className="bg-surface-container rounded-2xl p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:overflow-y-auto">
+              <div className="m3-title-md text-on-surface mb-3 flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                {t('lrt.stations')}
+                <span className="text-on-surface-variant m3-body-md ml-auto">
+                  {stationIds.length}
+                </span>
+              </div>
+
+              <RouteStopTimeline lineColor={lineColor}>
+                {stationIds.map((stationId, idx) => {
+                  const etas = stopEtas[stationId] ?? []
+                  const soonest = pickSoonestIsoEta(etas.map(mapEtaForPick), now)
+                  const name = getLrtStationName(stationId, lang)
+                  return (
+                    <RouteStopRow
+                      key={`${stationId}-${idx}`}
+                      name={name}
+                      subtitle={<span className="hidden sm:inline">{stationId}</span>}
+                      eta={
+                        <SoonestEtaPill
+                          minutes={soonest.minutes}
+                          arriving={soonest.arriving}
+                          lang={lang}
+                        />
+                      }
+                      onClick={() => onSelectStation?.(stationId, name)}
+                    />
+                  )
+                })}
+              </RouteStopTimeline>
             </div>
 
-            <RouteStopTimeline lineColor={lineColor}>
-              {stationIds.map((stationId, idx) => {
-                const etas = stopEtas[stationId] ?? []
-                const soonest = pickSoonestIsoEta(etas.map(mapEtaForPick), now)
-                const name = getLrtStationName(stationId, lang)
-                return (
-                  <RouteStopRow
-                    key={`${stationId}-${idx}`}
-                    name={name}
-                    subtitle={<span className="hidden sm:inline">{stationId}</span>}
-                    eta={
-                      <SoonestEtaPill
-                        minutes={soonest.minutes}
-                        arriving={soonest.arriving}
-                        lang={lang}
-                      />
-                    }
-                    onClick={() => onSelectStation?.(stationId, name)}
-                  />
-                )
-              })}
-            </RouteStopTimeline>
-          </div>
-
-          <div className="bg-surface-container rounded-2xl p-4">
-            <div className="m3-title-md text-on-surface mb-2">{t('common.map')}</div>
-            <div className="text-on-surface-variant m3-body-md bg-surface-container-high flex h-32 items-center justify-center rounded-2xl">
-              {t('common.mapUnavailable')}
+            <div className="bg-surface-container rounded-2xl p-4">
+              <div className="m3-title-md text-on-surface mb-2">{t('common.map')}</div>
+              <div className="text-on-surface-variant m3-body-md bg-surface-container-high flex h-32 items-center justify-center rounded-2xl">
+                {t('common.mapUnavailable')}
+              </div>
             </div>
           </div>
         </FadeIn>

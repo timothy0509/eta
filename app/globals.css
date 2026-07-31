@@ -400,6 +400,7 @@
 
 .marquee-track {
   animation: marquee-scroll var(--marquee-duration, 5s) linear infinite;
+  will-change: transform;
 }
 
 .marquee-container:hover .marquee-track,
@@ -492,7 +493,7 @@
   }
 
   .ui-lift {
-    transition-property: transform, box-shadow;
+    transition-property: transform;
     transition-duration: var(--ui-dur-fast);
     transition-timing-function: var(--ui-ease-out);
     will-change: transform;

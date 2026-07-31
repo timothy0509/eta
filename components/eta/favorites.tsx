@@ -45,10 +45,10 @@ import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 import { type FavoritesGroup, type FavoritesItem, type RecentItem, useAppStore } from '@/lib/store'
+import { usePaneStore } from '@/lib/eta/pane-store'
 
 type Props = {
   lang: UiLanguage
-  kmbStops?: KmbStopSearchItem[]
   onSelect: (item: FavoritesItem) => void
 }
 
@@ -591,7 +591,8 @@ function GroupsEditor({
   )
 }
 
-export function FavoritesAndRecents({ lang, kmbStops, onSelect }: Props) {
+export function FavoritesAndRecents({ lang, onSelect }: Props) {
+  const kmbStops = usePaneStore((s) => s.kmbStops)
   const { favorites, favoritesGroups, recents } = useAppStore(
     useShallow((s) => ({
       favorites: s.favorites,

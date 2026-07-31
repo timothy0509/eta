@@ -3,6 +3,7 @@ import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import { fetchLrtEtasForStop, listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { getCachedValue } from '@/lib/eta/direct/shared'
 import { lrtStopIdToStationId, lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
+import { promisePool } from '@/lib/eta/promise-pool'
 
 export type LrtScheduleResponse = {
   system_time?: string
@@ -117,46 +118,44 @@ async function loadLrtSchedule(stationId: string): Promise<LrtScheduleResponse> 
 
   const platformMap = new Map<number, LrtRouteEntry[]>()
 
-  const results = await Promise.allSettled(
-    variants.map(async (entry) => {
-      const bound = entry.bound.lightRail ?? ''
-      const stop = entry.stops.lightRail?.find((id) => lrtStopIdsEqual(id, stopId)) ?? stopId
-      const stationIdForEta = lrtStopIdToStationId(stop) ?? stationId
-      const etas = await fetchLrtEtasForStop({
-        route: entry.route,
-        bound,
-        serviceType: entry.serviceType,
-        stationId: stationIdForEta,
-        language: 'tc',
-      })
-
-      return etas.flatMap((eta) => {
-        const hasEta = Boolean(eta.eta)
-        const hasDest = Boolean(
-          (eta as { dest?: { en?: string; zh?: string } }).dest?.en ||
-          (eta as { dest?: { en?: string; zh?: string } }).dest?.zh
-        )
-        if (!hasEta && !hasDest) {
-          return [] as LrtRouteEntry[]
-        }
-        const remark = eta.remark?.en ?? eta.remark?.zh ?? ''
-        const platformMatch = remark.match(/Platform\s+(\d+)/i) || remark.match(/(\d+)\s*號月台/)
-        const platformId = platformMatch?.[1] ? Number(platformMatch[1]) : 0
-        return [
-          mapEtaToRouteEntry({
-            eta: eta as {
-              eta: string
-              remark: { en: string; zh: string }
-              dest?: { en?: string; zh?: string }
-            },
-            route: entry.route,
-            dest: destByRoute.get(entry.route.toUpperCase()) ?? entry.dest,
-            platformId,
-          }),
-        ]
-      })
+  const results = await promisePool(variants, 5, async (entry) => {
+    const bound = entry.bound.lightRail ?? ''
+    const stop = entry.stops.lightRail?.find((id) => lrtStopIdsEqual(id, stopId)) ?? stopId
+    const stationIdForEta = lrtStopIdToStationId(stop) ?? stationId
+    const etas = await fetchLrtEtasForStop({
+      route: entry.route,
+      bound,
+      serviceType: entry.serviceType,
+      stationId: stationIdForEta,
+      language: 'tc',
     })
-  )
+
+    return etas.flatMap((eta) => {
+      const hasEta = Boolean(eta.eta)
+      const hasDest = Boolean(
+        (eta as { dest?: { en?: string; zh?: string } }).dest?.en ||
+        (eta as { dest?: { en?: string; zh?: string } }).dest?.zh
+      )
+      if (!hasEta && !hasDest) {
+        return [] as LrtRouteEntry[]
+      }
+      const remark = eta.remark?.en ?? eta.remark?.zh ?? ''
+      const platformMatch = remark.match(/Platform\s+(\d+)/i) || remark.match(/(\d+)\s*號月台/)
+      const platformId = platformMatch?.[1] ? Number(platformMatch[1]) : 0
+      return [
+        mapEtaToRouteEntry({
+          eta: eta as {
+            eta: string
+            remark: { en: string; zh: string }
+            dest?: { en?: string; zh?: string }
+          },
+          route: entry.route,
+          dest: destByRoute.get(entry.route.toUpperCase()) ?? entry.dest,
+          platformId,
+        }),
+      ]
+    })
+  })
 
   for (const result of results) {
     if (result.status !== 'fulfilled') continue

@@ -4,21 +4,14 @@ import * as React from 'react'
 import dynamic from 'next/dynamic'
 
 import { BottomNav, SideRail, TopAppBar } from '@/components/eta/app-shell'
-import { FavoritesAndRecents } from '@/components/eta/favorites'
 import { LangSync } from '@/components/eta/lang-sync'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
-import { KmbRoutesView } from '@/components/eta/views/kmb-routes-view'
-import { LrtRoutesView } from '@/components/eta/views/lrt-routes-view'
-import { MtrRoutesView } from '@/components/eta/views/mtr-routes-view'
-import { NearbyView } from '@/components/eta/views/nearby-view'
-import { SettingsView } from '@/components/eta/views/settings-view'
 import { FadeIn } from '@/components/m3/motion'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS } from '@/lib/data/mtr-stations'
 import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
 import type {
-  KmbStopSearchItem,
   LrtStationSearchItem,
   MtrStationSearchItem,
   SubView,
@@ -30,7 +23,6 @@ import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
 import { prefetchEtaDb } from '@/lib/eta/prefetch'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
-import { cn } from '@/lib/utils'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
 
@@ -57,6 +49,46 @@ const MtrResults = dynamic(
 )
 const LrtResults = dynamic(
   () => import('@/components/eta/results-lrt').then((mod) => ({ default: mod.LrtResults })),
+  { loading: () => <ResultsSkeleton />, ssr: false }
+)
+
+const FavoritesAndRecents = dynamic(
+  () =>
+    import('@/components/eta/favorites').then((mod) => ({
+      default: mod.FavoritesAndRecents,
+    })),
+  { loading: () => <ResultsSkeleton />, ssr: false }
+)
+const KmbRoutesView = dynamic(
+  () =>
+    import('@/components/eta/views/kmb-routes-view').then((mod) => ({
+      default: mod.KmbRoutesView,
+    })),
+  { loading: () => <ResultsSkeleton />, ssr: false }
+)
+const MtrRoutesView = dynamic(
+  () =>
+    import('@/components/eta/views/mtr-routes-view').then((mod) => ({
+      default: mod.MtrRoutesView,
+    })),
+  { loading: () => <ResultsSkeleton />, ssr: false }
+)
+const LrtRoutesView = dynamic(
+  () =>
+    import('@/components/eta/views/lrt-routes-view').then((mod) => ({
+      default: mod.LrtRoutesView,
+    })),
+  { loading: () => <ResultsSkeleton />, ssr: false }
+)
+const NearbyView = dynamic(
+  () => import('@/components/eta/views/nearby-view').then((mod) => ({ default: mod.NearbyView })),
+  { loading: () => <ResultsSkeleton />, ssr: false }
+)
+const SettingsView = dynamic(
+  () =>
+    import('@/components/eta/views/settings-view').then((mod) => ({
+      default: mod.SettingsView,
+    })),
   { loading: () => <ResultsSkeleton />, ssr: false }
 )
 
@@ -96,7 +128,8 @@ export default function HomeClient() {
     addRecent,
   } = useAppStoreActions()
 
-  const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([])
+  const setKmbStops = usePaneStore((s) => s.setKmbStops)
+
   const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(() => {
     if (typeof window === 'undefined') return null
     try {
@@ -115,9 +148,70 @@ export default function HomeClient() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const kmbPaneState = usePaneStore((s) => s.kmb)
-  const mtrPaneState = usePaneStore((s) => s.mtr)
-  const lrtPaneState = usePaneStore((s) => s.lrt)
+  const kmbPaneState = usePaneStore(
+    useShallow((s) =>
+      s.kmb
+        ? {
+            lang: s.kmb.lang,
+            title: s.kmb.title,
+            stopCode: s.kmb.stopCode,
+            routeFilter: s.kmb.routeFilter,
+            eta: s.kmb.eta,
+            routeInfos: s.kmb.routeInfos,
+            faresByVariantKey: s.kmb.faresByVariantKey,
+            hasQuery: s.kmb.hasQuery,
+            error: s.kmb.error,
+            stale: s.kmb.stale,
+            lastUpdatedAt: s.kmb.lastUpdatedAt,
+            loading: s.kmb.loading,
+            stops: s.kmb.stops,
+            multipleStops: s.kmb.multipleStops,
+            isKeyphraseMode: s.kmb.isKeyphraseMode,
+            etaByStopId: s.kmb.etaByStopId,
+            loadedStopIds: s.kmb.loadedStopIds,
+            sentinelRef: s.kmb.sentinelRef,
+            hasMoreStops: s.kmb.hasMoreStops,
+            precomputedGroups: s.kmb.precomputedGroups,
+            querySummary: s.kmb.querySummary,
+            refresh: s.kmb.refresh,
+          }
+        : null
+    )
+  )
+  const mtrPaneState = usePaneStore(
+    useShallow((s) =>
+      s.mtr
+        ? {
+            title: s.mtr.title,
+            lang: s.mtr.lang,
+            schedule: s.mtr.schedule,
+            error: s.mtr.error,
+            stale: s.mtr.stale,
+            lastUpdatedAt: s.mtr.lastUpdatedAt,
+            loading: s.mtr.loading,
+            sta: s.mtr.sta,
+            onRefresh: s.mtr.onRefresh,
+          }
+        : null
+    )
+  )
+  const lrtPaneState = usePaneStore(
+    useShallow((s) =>
+      s.lrt
+        ? {
+            title: s.lrt.title,
+            lang: s.lrt.lang,
+            schedule: s.lrt.schedule,
+            stationId: s.lrt.stationId,
+            error: s.lrt.error,
+            stale: s.lrt.stale,
+            lastUpdatedAt: s.lrt.lastUpdatedAt,
+            loading: s.lrt.loading,
+            onRefresh: s.lrt.onRefresh,
+          }
+        : null
+    )
+  )
 
   const mtrStations: MtrStationSearchItem[] = React.useMemo(
     () =>
@@ -505,7 +599,7 @@ export default function HomeClient() {
       case 'saved':
         return (
           <FadeIn>
-            <FavoritesAndRecents lang={lang} kmbStops={kmbStops} onSelect={onSelectFromLists} />
+            <FavoritesAndRecents lang={lang} onSelect={onSelectFromLists} />
           </FadeIn>
         )
       case 'settings':

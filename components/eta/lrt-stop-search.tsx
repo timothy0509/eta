@@ -40,9 +40,15 @@ function isStationIdQuery(query: string) {
 export function LrtStationSearch({ lang, stations, selectedStationId, onSelect }: Props) {
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
+  const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const listId = React.useId()
 
-  const trimmedQuery = query.trim()
+  React.useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 150)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  const trimmedQuery = debouncedQuery
   const showStationId = isStationIdQuery(trimmedQuery)
 
   const stationsById = React.useMemo(() => {

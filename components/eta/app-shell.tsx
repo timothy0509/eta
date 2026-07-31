@@ -69,10 +69,8 @@ type TopAppBarProps = {
 }
 
 export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
-  const { t } = useTranslations(lang)
-
   return (
-    <header className="bg-surface-container-low/80 sticky top-0 z-40 backdrop-blur-md">
+    <header className="bg-surface-container-low sticky top-0 z-40">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
         <div className="flex items-center gap-3">
           <div className="bg-primary text-on-primary flex h-9 w-9 items-center justify-center rounded-xl text-lg font-bold">
@@ -94,7 +92,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   className={cn(
                     'relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-sm font-medium transition-colors',
                     active
-                ? 'text-on-secondary-container'
+                      ? 'text-on-secondary-container'
                       : 'text-on-surface-variant hover:text-on-surface'
                   )}
                   aria-current={active ? 'page' : undefined}
@@ -102,7 +100,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   {active && (
                     <motion.div
                       layoutId="top-mode-pill"
-                  className="bg-secondary-container absolute inset-0 -z-10 rounded-full"
+                      className="bg-secondary-container absolute inset-0 -z-10 rounded-full"
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}
@@ -140,9 +138,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
             onClick={() => onSubViewChange(sv.id)}
             className={cn(
               'relative flex w-full flex-col items-center gap-0.5 rounded-full px-2 py-2.5 text-[11px] font-medium transition-colors',
-              active
-                ? 'text-on-primary-container'
-                : 'text-on-surface-variant hover:text-on-surface'
+              active ? 'text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'
             )}
           >
             {active && (
@@ -184,7 +180,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
               className={cn(
                 'relative flex min-w-0 flex-1 flex-col items-center gap-0.5 rounded-full px-2 py-2 text-[11px] font-medium transition-colors',
                 active
-                ? 'text-on-primary-container'
+                  ? 'text-on-primary-container'
                   : 'text-on-surface-variant hover:text-on-surface'
               )}
             >

@@ -187,21 +187,19 @@ export async function buildEtaDbIndexes(
       if (!routeVariantIndex.has(variantKey)) {
         routeVariantIndex.set(variantKey, entry)
       }
-      for (const stopId of stops) {
+      for (let idx = 0; idx < stops.length; idx++) {
+        const stopId = stops[idx]
         const key = normalizeStopId(stopId)
         if (!key) continue
         const candidateKey = variantKey
         const seen = stationToRouteDedup.get(key) ?? new Set<string>()
-        if (seen.has(candidateKey)) continue
-        seen.add(candidateKey)
-        stationToRouteDedup.set(key, seen)
-        const list = stationToRouteIndex.get(key) ?? []
-        list.push({ entry, co })
-        stationToRouteIndex.set(key, list)
-      }
-      stops.forEach((stopId, idx) => {
-        const key = normalizeStopId(stopId)
-        if (!key) return
+        if (!seen.has(candidateKey)) {
+          seen.add(candidateKey)
+          stationToRouteDedup.set(key, seen)
+          const list = stationToRouteIndex.get(key) ?? []
+          list.push({ entry, co })
+          stationToRouteIndex.set(key, list)
+        }
         const routeList = stopRoutesIndex.get(key) ?? []
         routeList.push({
           stopId: key,
@@ -212,7 +210,7 @@ export async function buildEtaDbIndexes(
           seq: idx,
         })
         stopRoutesIndex.set(key, routeList)
-      })
+      }
     }
     processed += 1
     if (processed % CHUNK_SIZE === 0) {

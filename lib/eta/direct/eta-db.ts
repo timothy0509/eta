@@ -74,8 +74,10 @@ async function getEtaDbRecord(): Promise<EtaDbCacheValue> {
   const memory = etaDbCache.get(ETA_DB_CACHE_KEY)
   if (memory) return memory
 
-  const stored = await idbGet<EtaDbCacheValue>(ETA_DB_CACHE_KEY)
-  const storedMd5 = await idbGet<string>(ETA_DB_MD5_KEY)
+  const [stored, storedMd5] = await Promise.all([
+    idbGet<EtaDbCacheValue>(ETA_DB_CACHE_KEY),
+    idbGet<string>(ETA_DB_MD5_KEY),
+  ])
   const storedValue = stored?.value ?? null
   const storedIsFresh = stored ? isFresh(stored) : false
 

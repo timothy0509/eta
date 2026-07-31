@@ -99,6 +99,48 @@ export async function idbGet<T>(key: string, options?: IdbOptions): Promise<IdbR
   return (record as IdbRecord<T> | undefined) ?? null
 }
 
+export async function idbGetMany<T>(
+  keys: string[],
+  options?: IdbOptions
+): Promise<Map<string, IdbRecord<T>>> {
+  if (!isIndexedDbAvailable()) return new Map()
+  if (keys.length === 0) return new Map()
+
+  const normalized = normalizeOptions(options)
+  const db = await getDb(normalized)
+
+  return new Promise<Map<string, IdbRecord<T>>>((resolve, reject) => {
+    const tx = db.transaction(normalized.storeName, 'readonly')
+    const store = tx.objectStore(normalized.storeName)
+    const results = new Map<string, IdbRecord<T>>()
+    let completed = 0
+
+    for (const key of keys) {
+      const request = store.get(key)
+      request.onsuccess = () => {
+        if (request.result !== undefined) {
+          results.set(key, request.result as IdbRecord<T>)
+        }
+        completed++
+        if (completed === keys.length) {
+          resolve(results)
+        }
+      }
+      request.onerror = () => {
+        reject(request.error)
+      }
+    }
+
+    tx.oncomplete = () => {
+      if (completed < keys.length) {
+        resolve(results)
+      }
+    }
+    tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'))
+    tx.onabort = () => reject(tx.error ?? new Error('IndexedDB transaction aborted'))
+  })
+}
+
 export async function idbSet<T>(
   key: string,
   record: IdbRecord<T>,

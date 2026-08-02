@@ -4,7 +4,6 @@ import * as React from 'react'
 import dynamic from 'next/dynamic'
 
 import { BottomNav, SideRail, TopAppBar } from '@/components/eta/app-shell'
-import { LangSync } from '@/components/eta/lang-sync'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { FadeIn } from '@/components/m3/motion'
@@ -151,8 +150,9 @@ export default function HomeClient() {
 
   const kmbPaneState = usePaneStore(
     useShallow((s) =>
-      s.kmb
-        ? {
+      mode !== 'kmb' || !s.kmb
+        ? null
+        : {
             lang: s.kmb.lang,
             title: s.kmb.title,
             stopCode: s.kmb.stopCode,
@@ -176,13 +176,13 @@ export default function HomeClient() {
             querySummary: s.kmb.querySummary,
             refresh: s.kmb.refresh,
           }
-        : null
     )
   )
   const mtrPaneState = usePaneStore(
     useShallow((s) =>
-      s.mtr
-        ? {
+      mode !== 'mtr' || !s.mtr
+        ? null
+        : {
             title: s.mtr.title,
             lang: s.mtr.lang,
             schedule: s.mtr.schedule,
@@ -193,13 +193,13 @@ export default function HomeClient() {
             sta: s.mtr.sta,
             onRefresh: s.mtr.onRefresh,
           }
-        : null
     )
   )
   const lrtPaneState = usePaneStore(
     useShallow((s) =>
-      s.lrt
-        ? {
+      mode !== 'lrt' || !s.lrt
+        ? null
+        : {
             title: s.lrt.title,
             lang: s.lrt.lang,
             schedule: s.lrt.schedule,
@@ -210,7 +210,6 @@ export default function HomeClient() {
             loading: s.lrt.loading,
             onRefresh: s.lrt.onRefresh,
           }
-        : null
     )
   )
 
@@ -465,7 +464,7 @@ export default function HomeClient() {
 
   const controls = (
     <div className="space-y-4">
-      <div hidden={mode !== 'kmb'}>
+      {mode === 'kmb' && (
         <KmbPane
           lang={lang}
           routeFilterMode={routeFilterMode}
@@ -477,8 +476,8 @@ export default function HomeClient() {
           onRegisterRefresh={(refresh) => onRegisterRefresh('kmb', refresh)}
           onStopsChange={setKmbStops}
         />
-      </div>
-      <div hidden={mode !== 'mtr'}>
+      )}
+      {mode === 'mtr' && (
         <MtrPane
           lang={lang}
           stations={mtrStations}
@@ -488,8 +487,8 @@ export default function HomeClient() {
           onRegisterRefresh={(refresh) => onRegisterRefresh('mtr', refresh)}
           selectedItem={selectedItem}
         />
-      </div>
-      <div hidden={mode !== 'lrt'}>
+      )}
+      {mode === 'lrt' && (
         <LrtPane
           lang={lang}
           stations={lrtStations}
@@ -499,13 +498,13 @@ export default function HomeClient() {
           onRegisterRefresh={(refresh) => onRegisterRefresh('lrt', refresh)}
           selectedItem={selectedItem}
         />
-      </div>
+      )}
     </div>
   )
 
   const results = (
     <>
-      <div hidden={mode !== 'kmb'}>
+      {mode === 'kmb' && (
         <KmbResults
           lang={kmbPaneState?.lang ?? lang}
           title={kmbPaneState?.title ?? ''}
@@ -529,8 +528,8 @@ export default function HomeClient() {
           hasMoreStops={kmbPaneState?.hasMoreStops}
           precomputedGroups={kmbPaneState?.precomputedGroups}
         />
-      </div>
-      <div hidden={mode !== 'mtr'}>
+      )}
+      {mode === 'mtr' && (
         <MtrResults
           title={mtrPaneState?.title ?? ''}
           lang={mtrPaneState?.lang ?? lang}
@@ -541,8 +540,8 @@ export default function HomeClient() {
           onRefresh={mtrOnRefresh}
           loading={mtrPaneState?.loading}
         />
-      </div>
-      <div hidden={mode !== 'lrt'}>
+      )}
+      {mode === 'lrt' && (
         <LrtResults
           title={lrtPaneState?.title ?? ''}
           lang={lrtPaneState?.lang ?? lang}
@@ -554,7 +553,7 @@ export default function HomeClient() {
           onRefresh={lrtOnRefresh}
           loading={lrtPaneState?.loading}
         />
-      </div>
+      )}
     </>
   )
 
@@ -612,7 +611,6 @@ export default function HomeClient() {
 
   return (
     <div className="bg-surface min-h-dvh overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
-      <LangSync />
       <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
 
       <div className="mx-auto flex max-w-7xl md:pl-20">

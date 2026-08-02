@@ -22,8 +22,32 @@ import {
   type KmbStopSearchItem,
   type SerializedEtaDbIndexes,
 } from '@/lib/eta/eta-db-index'
+import { fetchJson } from '@/lib/eta/http'
 import { lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
+
+const KMB_STOP_ETA_URL = 'https://data.etabus.gov.hk/v1/transport/kmb/stop-eta'
+
+type OfficialKmbStopEta = {
+  co: string
+  route: string
+  dir: string
+  service_type: number | string
+  seq: number
+  dest_tc: string
+  dest_sc: string
+  dest_en: string
+  eta_seq: number
+  eta: string | null
+  rmk_tc: string
+  rmk_sc: string
+  rmk_en: string
+  data_timestamp: string
+}
+
+type OfficialStopEtaResponse = {
+  data: OfficialKmbStopEta[]
+}
 
 type EtaDbCacheValue = SnapshotValue
 
@@ -189,20 +213,22 @@ export async function findKmbRouteInfo(params: {
   bound: string
   serviceType: string
 }): Promise<KmbRouteInfoLite | null> {
-  const { kmbRouteListEntries } = await getEtaDbIndexes()
+  const { routeVariantIndex } = await getEtaDbIndexes()
   const routeName = params.route.toUpperCase()
   const bound = normalizeBound(params.bound)
   const serviceType = String(params.serviceType ?? '')
   const co = (params.co ?? 'kmb') as Company
 
-  const entry = kmbRouteListEntries.find((item) => {
-    if (!item.co.includes(co)) return false
-    if (item.route.toUpperCase() !== routeName) return false
-    if (String(item.serviceType) !== serviceType) return false
-    return normalizeBound(item.bound[co]) === bound
-  })
+  const entry = routeVariantIndex.get(
+    routeVariantKey({
+      co,
+      route: routeName,
+      bound,
+      serviceType,
+    })
+  )
 
-  if (!entry) return null
+  if (!entry || !entry.co.includes(co)) return null
 
   return {
     co,
@@ -222,70 +248,68 @@ export type KmbEta = Eta & {
   serviceType: string
   seq: number
   etaSeq: number
+  data_timestamp?: string
+  dest_tc?: string
+  dest_sc?: string
+  dest_en?: string
+  rmk_tc?: string
+  rmk_sc?: string
+  rmk_en?: string
 }
 
+/**
+ * Fetch all ETAs at a stop via the official KMB Stop ETA API (one call per stop).
+ * https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/{stop_id}
+ */
 export async function fetchKmbEtasForStop(params: {
   stopId: string
   route?: string
   serviceType?: string
   language: UiLanguage
 }): Promise<KmbEta[]> {
-  const { stopRoutesIndex, routeVariantIndex } = await getEtaDbIndexes()
   const stopId = normalizeStopId(params.stopId)
+  if (!stopId) return [] as KmbEta[]
+
   const routeFilter = params.route ? params.route.toUpperCase() : null
   const serviceType = params.serviceType ? String(params.serviceType) : null
-  const language = toHkBusEtaLanguage(params.language)
 
-  const routeEntries = (stopRoutesIndex.get(stopId) ?? []).filter((e) => {
-    if (routeFilter && e.route.toUpperCase() !== routeFilter) return false
-    if (serviceType && String(e.serviceType) !== serviceType) return false
-    return true
-  })
-
-  if (routeEntries.length === 0) return [] as KmbEta[]
-
-  const candidateMap = new Map<string, { entry: RouteListEntry; co: Company; stopIndex: number }>()
-
-  for (const re of routeEntries) {
-    const variantKey = routeVariantKey({
-      co: re.co,
-      route: re.route,
-      bound: re.bound,
-      serviceType: re.serviceType,
-    })
-    const entry = routeVariantIndex.get(variantKey)
-    if (!entry) continue
-    const existing = candidateMap.get(variantKey)
-    if (!existing || re.seq < existing.stopIndex) {
-      candidateMap.set(variantKey, { entry, co: re.co, stopIndex: re.seq })
-    }
-  }
-
-  const etas = await Promise.all(
-    Array.from(candidateMap.values()).map(async ({ entry, co, stopIndex }) => {
-      const result = await fetchEtas({
-        ...entry,
-        co: [co],
-        seq: stopIndex,
-        language,
-      })
-      return result.map((eta, idx) => ({
-        ...eta,
-        co: eta.co ?? co,
-        route: entry.route,
-        dir: normalizeBound(entry.bound[co]),
-        serviceType: entry.serviceType,
-        seq: stopIndex + 1,
-        etaSeq: idx + 1,
-      }))
-    })
+  const payload = await fetchJson<OfficialStopEtaResponse>(
+    `${KMB_STOP_ETA_URL}/${encodeURIComponent(stopId)}`
   )
+  const rows = Array.isArray(payload.data) ? payload.data : []
 
-  const flat = etas.flat()
   const deduped = new Map<string, KmbEta>()
-  for (const eta of flat) {
-    const key = `${eta.co}|${eta.route}|${eta.dir}|${eta.serviceType}|${eta.etaSeq}|${eta.eta ?? ''}`
-    if (!deduped.has(key)) deduped.set(key, eta)
+  for (const entry of rows) {
+    const route = String(entry.route ?? '')
+    if (routeFilter && route.toUpperCase() !== routeFilter) continue
+    if (serviceType && String(entry.service_type) !== serviceType) continue
+
+    const co = String(entry.co ?? 'kmb').toLowerCase() as Company
+    const dir = normalizeBound(entry.dir)
+    const entryServiceType = String(entry.service_type ?? '')
+    const etaSeq = Number(entry.eta_seq) || 0
+    const eta = entry.eta ?? ''
+    const key = `${co}|${route}|${dir}|${entryServiceType}|${etaSeq}|${eta}`
+    if (deduped.has(key)) continue
+
+    deduped.set(key, {
+      eta,
+      co,
+      route,
+      dir,
+      serviceType: entryServiceType,
+      seq: Number(entry.seq) || 0,
+      etaSeq,
+      dest: { en: entry.dest_en ?? '', zh: entry.dest_tc ?? '' },
+      remark: { en: entry.rmk_en ?? '', zh: entry.rmk_tc ?? '' },
+      data_timestamp: entry.data_timestamp,
+      dest_en: entry.dest_en ?? '',
+      dest_tc: entry.dest_tc ?? '',
+      dest_sc: entry.dest_sc ?? '',
+      rmk_en: entry.rmk_en ?? '',
+      rmk_tc: entry.rmk_tc ?? '',
+      rmk_sc: entry.rmk_sc ?? '',
+    })
   }
 
   return Array.from(deduped.values())

@@ -356,7 +356,7 @@ export function KmbPane({
     // Use the route-stop index instead of filtering the entire array
     const variantKeys = getVariantKeysForStops(routeStopIndex, availableStopIdsForFilter)
 
-    const missing = variantKeys.filter((key) => !kmbRouteInfos[key])
+    const missing = variantKeys.filter((key) => !kmbRouteInfos[key]).slice(0, 30)
     if (!missing.length) return
 
     let cancelled = false

@@ -1,9 +1,9 @@
 'use client'
 
 import { MapPin, Navigation, RefreshCw } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import * as React from 'react'
 
-import { TransitMap } from '@/components/eta/transit-map'
 import { Button } from '@/components/ui/button'
 import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import { useGeolocation } from '@/components/eta/use-geolocation'
@@ -19,6 +19,14 @@ import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
 import type { TransportMode, UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import type { RouteListEntry } from 'hk-bus-eta'
+
+const TransitMap = dynamic(
+  () => import('@/components/eta/transit-map').then((mod) => mod.TransitMap),
+  {
+    ssr: false,
+    loading: () => <div className="bg-surface-container h-72 animate-pulse rounded-2xl" />,
+  }
+)
 
 function pickLang<T>(record: { en: T; tc: T; sc: T }, lang: UiLanguage): T {
   if (lang === 'sc') return record.sc

@@ -16,7 +16,6 @@ import { useTranslations } from '@/lib/eta/i18n'
 import { pickSoonestMtrTrain } from '@/lib/eta/pick-soonest-eta'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
-import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 import type { RouteListEntry } from 'hk-bus-eta'
@@ -52,7 +51,6 @@ export function MtrRoutesView({
   onSelectStation?: (sta: string, line: string, name: string) => void
 }) {
   const { t } = useTranslations(lang)
-  useTickingNow(15_000)
   const [selectedLine, setSelectedLine] = React.useState<string | null>(null)
   const [mtrRoutes, setMtrRoutes] = React.useState<RouteListEntry[]>([])
   const [routesLoading, setRoutesLoading] = React.useState(true)
@@ -115,38 +113,52 @@ export function MtrRoutesView({
     if (!selectedLine || stationStas.length === 0) return
 
     let cancelled = false
+    let inFlight = false
     const line = selectedLine
     const mtrLang = toMtrLang(lang)
 
     const load = async () => {
-      const result = await fetchMtrRouteSchedules({
-        line,
-        stas: stationStas,
-        lang: mtrLang,
-      })
+      if (cancelled || inFlight) return
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      inFlight = true
+      try {
+        const result = await fetchMtrRouteSchedules({
+          line,
+          stas: stationStas,
+          lang: mtrLang,
+        })
 
-      if (cancelled) return
+        if (cancelled) return
 
-      const next: Record<string, MtrScheduleResponse> = {}
-      for (const sta of stationStas) {
-        const scheduleKey = `${line}-${sta}-${mtrLang}`
-        const schedule = result.byKey[scheduleKey]
-        if (schedule) next[sta] = schedule
+        const next: Record<string, MtrScheduleResponse> = {}
+        for (const sta of stationStas) {
+          const scheduleKey = `${line}-${sta}-${mtrLang}`
+          const schedule = result.byKey[scheduleKey]
+          if (schedule) next[sta] = schedule
+        }
+        setSchedulesBySta(next)
+      } catch {
+        if (!cancelled) setSchedulesBySta({})
+      } finally {
+        inFlight = false
       }
-      setSchedulesBySta(next)
     }
 
-    void load().catch(() => {
-      if (!cancelled) setSchedulesBySta({})
-    })
+    void load()
 
     const interval = window.setInterval(() => {
-      void load().catch(() => {})
+      void load()
     }, 30_000)
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
       cancelled = true
       window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [selectedLine, stationStas, lang])
 

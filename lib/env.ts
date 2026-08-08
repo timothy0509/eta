@@ -1,5 +1,4 @@
 const NEXT_PUBLIC_SITE_URL = process.env.NEXT_PUBLIC_SITE_URL
-const NEXT_PUBLIC_GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY
 
 // Only validate at runtime, not during build.
 // During `next build`, NODE_ENV is 'production' but the app isn't serving requests yet.
@@ -12,5 +11,4 @@ if (!NEXT_PUBLIC_SITE_URL && isRuntime) {
 
 export const env = {
   NEXT_PUBLIC_SITE_URL: NEXT_PUBLIC_SITE_URL ?? 'https://eta.hkjc.uk',
-  NEXT_PUBLIC_GOOGLE_MAPS_API_KEY: NEXT_PUBLIC_GOOGLE_MAPS_API_KEY ?? '',
 }

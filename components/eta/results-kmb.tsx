@@ -245,6 +245,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   routeInfos,
   faresByVariantKey,
   lang,
+  now,
   staggerClass,
   stopChips,
   expanded,
@@ -262,12 +263,12 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   routeInfos: Record<string, KmbRouteInfoLite>
   faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
   lang: UiLanguage
+  now: number
   staggerClass?: string
   stopChips: StopChips
   expanded?: boolean
   onToggleExpand?: () => void
 }) {
-  const now = useTickingNow(15_000)
   const [co = 'kmb', route = ''] = variantKey.split('|')
   const first = items[0]
   // Use baseKey for route info lookup (full key may have leg suffix)
@@ -537,6 +538,7 @@ const StopSection = React.memo(function StopSection({
   routeInfos,
   faresByVariantKey,
   lang,
+  now,
   isFirst,
   stopLookup,
   registerStopRef,
@@ -550,6 +552,7 @@ const StopSection = React.memo(function StopSection({
   routeInfos: Record<string, KmbRouteInfoLite>
   faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
   lang: UiLanguage
+  now: number
   isFirst?: boolean
   stopLookup: Map<string, StopInfo>
   registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void
@@ -592,6 +595,7 @@ const StopSection = React.memo(function StopSection({
               routeInfos={routeInfos}
               faresByVariantKey={faresByVariantKey}
               lang={lang}
+              now={now}
               stopChips={
                 stopChipsById.get(stopId) ?? getStopChips(g.items, stopLookup, stopChipsById, lang)
               }
@@ -804,6 +808,7 @@ export const KmbResults = React.memo(function KmbResults({
                 routeInfos={routeInfos}
                 faresByVariantKey={faresByVariantKey}
                 lang={lang}
+                now={now}
                 isFirst={idx === 0}
                 stopLookup={stopLookup}
                 registerStopRef={registerStopRef}
@@ -868,6 +873,7 @@ export const KmbResults = React.memo(function KmbResults({
                     routeInfos={routeInfos}
                     faresByVariantKey={faresByVariantKey}
                     lang={lang}
+                    now={now}
                     staggerClass={staggerClass}
                     stopChips={stopChips}
                     expanded={expandedKey === g.key}
@@ -911,6 +917,7 @@ export const KmbResults = React.memo(function KmbResults({
                     routeInfos={routeInfos}
                     faresByVariantKey={faresByVariantKey}
                     lang={lang}
+                    now={now}
                     staggerClass={staggerClass}
                     stopChips={stopChips}
                     expanded={expandedKey === g.key}

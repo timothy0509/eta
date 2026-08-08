@@ -52,23 +52,22 @@ export type KmbEtaEntryWithLeg = KmbEtaEntry & {
 }
 
 function mapKmbEtaEntry(eta: KmbEta, stopId: string): KmbEtaEntry {
-  const now = new Date().toISOString()
   return {
-    co: eta.co ?? 'kmb',
+    co: String(eta.co ?? 'kmb').toLowerCase(),
     route: eta.route,
     dir: eta.dir,
     service_type: eta.serviceType,
     seq: eta.seq,
     stop: stopId,
-    dest_en: eta.dest?.en ?? '',
-    dest_tc: eta.dest?.zh ?? '',
-    dest_sc: eta.dest?.zh ?? '',
+    dest_en: eta.dest_en ?? eta.dest?.en ?? '',
+    dest_tc: eta.dest_tc ?? eta.dest?.zh ?? '',
+    dest_sc: eta.dest_sc ?? eta.dest_tc ?? eta.dest?.zh ?? '',
     eta_seq: eta.etaSeq,
     eta: eta.eta ?? '',
-    rmk_en: eta.remark?.en ?? '',
-    rmk_tc: eta.remark?.zh ?? '',
-    rmk_sc: eta.remark?.zh ?? '',
-    data_timestamp: now,
+    rmk_en: eta.rmk_en ?? eta.remark?.en ?? '',
+    rmk_tc: eta.rmk_tc ?? eta.remark?.zh ?? '',
+    rmk_sc: eta.rmk_sc ?? eta.rmk_tc ?? eta.remark?.zh ?? '',
+    data_timestamp: eta.data_timestamp ?? new Date().toISOString(),
   }
 }
 
@@ -295,23 +294,9 @@ export async function fetchKmbStopEtas(
       staleMaxMs: CACHE_POLICIES.kmbStopEta.maxStaleMs,
       fetcher: async () => {
         const results = await fetchKmbEtasForStop({ stopId, language: 'tc' })
-        const now = new Date().toISOString()
         return results.map((entry, idx) => ({
-          co: entry.co ?? 'kmb',
-          route: entry.route,
-          dir: entry.dir,
-          service_type: entry.serviceType,
-          seq: entry.seq,
-          stop: stopId,
-          dest_en: entry.dest?.en ?? '',
-          dest_tc: entry.dest?.zh ?? '',
-          dest_sc: entry.dest?.zh ?? '',
+          ...mapKmbEtaEntry(entry, stopId),
           eta_seq: entry.etaSeq ?? idx + 1,
-          eta: entry.eta ?? '',
-          rmk_en: entry.remark?.en ?? '',
-          rmk_tc: entry.remark?.zh ?? '',
-          rmk_sc: entry.remark?.zh ?? '',
-          data_timestamp: now,
           leg: null,
         }))
       },
@@ -397,7 +382,8 @@ export async function fetchKmbStopEtas(
   }
 
   let faresByVariantKey:
-    Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> | undefined
+    | Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+    | undefined
 
   if (options?.includeFares) {
     faresByVariantKey = {}

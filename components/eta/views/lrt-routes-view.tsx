@@ -95,31 +95,39 @@ export function LrtRoutesView({
     if (!selectedRoute || stationIds.length === 0) return
 
     let cancelled = false
+    let inFlight = false
     const bound = selectedRoute.bound.lightRail ?? ''
     const route = selectedRoute.route
     const serviceType = selectedRoute.serviceType
 
     const load = async () => {
-      const results = await promisePool(stationIds, 4, async (stationId) => {
-        const etas = await fetchLrtEtasForStop({
-          route,
-          bound,
-          serviceType,
-          stationId,
-          language: lang,
+      if (cancelled || inFlight) return
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      inFlight = true
+      try {
+        const results = await promisePool(stationIds, 4, async (stationId) => {
+          const etas = await fetchLrtEtasForStop({
+            route,
+            bound,
+            serviceType,
+            stationId,
+            language: lang,
+          })
+          return { stationId, etas }
         })
-        return { stationId, etas }
-      })
 
-      if (cancelled) return
+        if (cancelled) return
 
-      const next: Record<string, Eta[]> = {}
-      for (const result of results) {
-        if (result.status === 'fulfilled') {
-          next[result.value.stationId] = result.value.etas
+        const next: Record<string, Eta[]> = {}
+        for (const result of results) {
+          if (result.status === 'fulfilled') {
+            next[result.value.stationId] = result.value.etas
+          }
         }
+        setStopEtas(next)
+      } finally {
+        inFlight = false
       }
-      setStopEtas(next)
     }
 
     void load()
@@ -128,9 +136,15 @@ export function LrtRoutesView({
       void load()
     }, 30_000)
 
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void load()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
     return () => {
       cancelled = true
       window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [selectedRoute, stationIds, lang])
 

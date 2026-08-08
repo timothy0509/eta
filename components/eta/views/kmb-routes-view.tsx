@@ -1,9 +1,9 @@
 'use client'
 
 import { AlertCircle, Clock, Heart, Search } from 'lucide-react'
+import dynamic from 'next/dynamic'
 import * as React from 'react'
 
-import { TransitMap } from '@/components/eta/transit-map'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,8 +14,8 @@ import {
 } from '@/components/eta/route-stop-timeline'
 import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import {
-  fetchKmbRouteInfo,
   fetchKmbRouteStops,
+  fetchKmbRoutes,
   fetchKmbStopEtas,
   fetchKmbStops,
   type KmbEtaEntryWithLeg,
@@ -30,7 +30,14 @@ import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
-import type { Company } from 'hk-bus-eta'
+
+const TransitMap = dynamic(
+  () => import('@/components/eta/transit-map').then((mod) => mod.TransitMap),
+  {
+    ssr: false,
+    loading: () => <div className="bg-surface-container h-56 animate-pulse rounded-2xl" />,
+  }
+)
 
 function pickLang<T>(record: { en: T; tc: T; sc: T }, lang: UiLanguage): T {
   if (lang === 'sc') return record.sc
@@ -123,37 +130,27 @@ function useKmbRouteList() {
 
   React.useEffect(() => {
     let cancelled = false
-    fetchKmbRouteStops()
-      .then(async (routeStops) => {
-        const uniqueKeys = new Set<string>()
-        const variants: Array<{ co: Company; route: string; bound: string; serviceType: string }> =
-          []
-        for (const rs of routeStops) {
-          const key = `${rs.co}|${rs.route}|${rs.bound}|${rs.serviceType}`
-          if (uniqueKeys.has(key)) continue
-          uniqueKeys.add(key)
-          variants.push({
-            co: rs.co,
-            route: rs.route,
-            bound: rs.bound,
-            serviceType: rs.serviceType,
-          })
-        }
-        const infos = await Promise.allSettled(
-          variants.map((v) =>
-            fetchKmbRouteInfo({
-              co: v.co,
-              route: v.route,
-              direction: v.bound,
-              serviceType: v.serviceType,
-            })
-          )
+    fetchKmbRoutes()
+      .then((data) => {
+        if (cancelled) return
+        setRoutes(
+          data.map((entry) => ({
+            co: entry.co ?? 'kmb',
+            route: entry.route,
+            bound: entry.bound,
+            serviceType: String(entry.service_type),
+            origin: {
+              en: (entry.orig_en ?? '').trim(),
+              tc: (entry.orig_tc ?? '').trim(),
+              sc: (entry.orig_sc ?? '').trim(),
+            },
+            destination: {
+              en: (entry.dest_en ?? '').trim(),
+              tc: (entry.dest_tc ?? '').trim(),
+              sc: (entry.dest_sc ?? '').trim(),
+            },
+          }))
         )
-        const result: KmbRouteInfoLite[] = []
-        for (const item of infos) {
-          if (item.status === 'fulfilled') result.push(item.value)
-        }
-        if (!cancelled) setRoutes(result)
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load routes')

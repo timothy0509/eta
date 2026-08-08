@@ -227,6 +227,7 @@ export function KmbRoutesView({
     variant: RouteVariant | null
   }>({ sourceKey: '', routeKey: null, variant: null })
   const [variantStops, setVariantStops] = React.useState<KmbRouteStopLite[]>([])
+  const [stopsVariantKey, setStopsVariantKey] = React.useState<string | null>(null)
   const [etas, setEtas] = React.useState<Record<string, KmbEtaEntryWithLeg[]>>({})
 
   const addFavorite = useAppStore((s) => s.addFavorite)
@@ -377,6 +378,7 @@ export function KmbRoutesView({
         )
         .sort((a, b) => a.seq - b.seq)
       setVariantStops(filtered)
+      setStopsVariantKey(currentVariant.key)
 
       const stopIds = filtered.map((rs) => rs.stopId)
       if (!stopIds.length) return
@@ -406,7 +408,11 @@ export function KmbRoutesView({
       .filter(Boolean) as Array<{ lat: number; lng: number }>
   }, [variantStops, stopsById])
 
-  const routedGeometry = useKmbRouteGeometry(currentVariant?.key ?? null, routePath)
+  const geometryPoints = React.useMemo(
+    () => (stopsVariantKey === currentVariant?.key ? routePath : []),
+    [stopsVariantKey, currentVariant, routePath]
+  )
+  const routedGeometry = useKmbRouteGeometry(currentVariant?.key ?? null, geometryPoints)
   const displayPath = routedGeometry ?? routePath
 
   const mapCenter = React.useMemo(() => {

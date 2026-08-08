@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 
-import { getRoutedGeometry } from './routing'
+import { getRoutedGeometry, pointsSignature } from './routing'
 
 const POINTS = [
   { lat: 22.3193, lng: 114.1694 },
@@ -68,5 +68,39 @@ describe('getRoutedGeometry', () => {
     const result = await getRoutedGeometry('routing-test-short', [{ lat: 1, lng: 1 }])
     expect(result).toBeNull()
     expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('uses distinct cache entries for different waypoints under the same variant', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(okBody()))
+    const otherPoints = [
+      { lat: 22.1, lng: 114.1 },
+      { lat: 22.2, lng: 114.2 },
+    ]
+
+    await getRoutedGeometry('routing-test-waysig', POINTS)
+    await getRoutedGeometry('routing-test-waysig', otherPoints)
+
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('serves from cache for identical variant and waypoints', async () => {
+    const spy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(okBody()))
+
+    const first = await getRoutedGeometry('routing-test-cachehit', POINTS)
+    const second = await getRoutedGeometry('routing-test-cachehit', POINTS)
+
+    expect(spy).toHaveBeenCalledTimes(1)
+    expect(first).not.toBeNull()
+    expect(second).toEqual(first)
+  })
+
+  it('computes a stable signature for identical waypoints', async () => {
+    expect(pointsSignature(POINTS)).toBe(pointsSignature(POINTS))
+    expect(pointsSignature(POINTS)).not.toBe(
+      pointsSignature([
+        { lat: 22.1, lng: 114.1 },
+        { lat: 22.2, lng: 114.2 },
+      ])
+    )
   })
 })

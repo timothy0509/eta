@@ -18,3 +18,7 @@ export function lrtScheduleKey(params: {
   const lang = params.lang ? `:${params.lang}` : ''
   return `lrt:${params.route}:${params.stationId}${lang}`
 }
+
+export function kmbRouteGeometryKey(variantKey: string): string {
+  return `kmb-route-geometry:${variantKey}`
+}

@@ -293,10 +293,10 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const isExpanded = expandable && Boolean(expanded)
 
   const metaChips = (
-    <div className="hidden items-center gap-1.5 sm:flex">
-      <MetaChip widthClass="w-8 sm:w-10">{stopChips.platform}</MetaChip>
-      <MetaChip widthClass="w-16 sm:w-20">{fare ? `HK$ ${fare.hkd.toFixed(1)}` : null}</MetaChip>
-      <MetaChip widthClass="w-14 sm:w-16">{stopChips.stopCode}</MetaChip>
+    <div className="hidden items-center gap-2 lg:flex">
+      <MetaChip widthClass="w-10">{stopChips.platform}</MetaChip>
+      <MetaChip widthClass="w-20">{fare ? `HK$ ${fare.hkd.toFixed(1)}` : null}</MetaChip>
+      <MetaChip widthClass="w-16">{stopChips.stopCode}</MetaChip>
     </div>
   )
 
@@ -479,12 +479,12 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     return (
       <div
         className={cn(
-          'bg-surface-container relative overflow-hidden rounded-2xl py-3 pr-3 pl-0 opacity-70',
+          'bg-surface-container relative overflow-hidden rounded-2xl border border-transparent py-3.5 pr-3 pl-0 opacity-70',
           staggerClass
         )}
       >
         <span
-          className="absolute inset-y-2 left-0 w-[3px] rounded-full"
+          className="absolute inset-y-2.5 left-0 w-[3px] rounded-full"
           style={{ backgroundColor: badgeStyle.bgColor }}
           aria-hidden
         />
@@ -503,12 +503,12 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     return (
       <div
         className={cn(
-          'bg-surface-container relative overflow-hidden rounded-2xl py-3 pr-3 pl-0',
+          'bg-surface-container relative overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 py-3.5 pr-3 pl-0 shadow-sm',
           staggerClass
         )}
       >
         <span
-          className="absolute inset-y-2 left-0 w-[3px] rounded-full"
+          className="absolute inset-y-2.5 left-0 w-[3px] rounded-full"
           style={{ backgroundColor: badgeStyle.bgColor }}
           aria-hidden
         />
@@ -740,16 +740,16 @@ export const KmbResults = React.memo(function KmbResults({
       <div className="mb-5 flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex min-w-0 items-start gap-2">
-            <h2 className="text-on-surface m3-headline-sm min-w-0 flex-1">
+            <h2 className="text-on-surface m3-title-lg sm:m3-headline-sm min-w-0 flex-1 font-semibold tracking-tight">
               {title || t('kmb.title')}
             </h2>
             {stopCode ? (
-              <span className="text-on-surface-variant m3-label-md shrink-0 font-mono">
+              <span className="bg-surface-container text-on-surface-variant m3-label-sm shrink-0 rounded-full px-2.5 py-1 font-mono">
                 {stopCode}
               </span>
             ) : null}
           </div>
-          <p className="text-on-surface-variant m3-label-md mt-0.5 flex flex-wrap items-center gap-1.5">
+          <p className="text-on-surface-variant m3-label-md mt-1 flex flex-wrap items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 shrink-0" />
             {routesFilter?.trim()
               ? `${t('kmb.filtered')} ${routesFilter}`

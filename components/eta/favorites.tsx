@@ -713,8 +713,8 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
   )
 
   return (
-    <Card className="bg-surface-container-low rounded-3xl">
-      <CardHeader className="flex flex-row items-center justify-between gap-3">
+    <Card className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 shadow-sm">
+      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-[var(--outline-variant)]/10 pb-4">
         <CardTitle className="m3-title-md">{t('favorites.saved')}</CardTitle>
         <div className="bg-surface-container-high inline-flex items-center rounded-full p-1">
           <button

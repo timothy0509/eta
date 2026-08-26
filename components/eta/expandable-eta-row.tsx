@@ -29,14 +29,14 @@ export function ExpandableEtaRow({ expanded, onToggle, color, className, childre
     <motion.div
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
       className={cn(
-        'bg-surface-container relative overflow-hidden rounded-2xl',
-        'hover:bg-surface-container-high focus-within:ring-primary/30 focus-within:ring-2 focus-within:outline-none',
+        'bg-surface-container relative overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm',
+        'hover:bg-surface-container-high focus-within:ring-primary/30 focus-within:ring-2 focus-within:outline-none hover:shadow',
         className
       )}
     >
       {color ? (
         <span
-          className="absolute inset-y-2 left-0 w-[3px] rounded-full"
+          className="absolute inset-y-2.5 left-0 w-[3px] rounded-full"
           style={{ backgroundColor: color }}
           aria-hidden
         />

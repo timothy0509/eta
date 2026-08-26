@@ -217,8 +217,8 @@ function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
-        <div className="m3-title-md mb-3 flex items-center justify-between gap-3">
+      <div className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+        <div className="m3-title-md mb-4 flex items-center justify-between gap-3">
           <span className="flex items-center gap-2">
             <Navigation className="h-5 w-5" />
             {t('common.nearby')}
@@ -226,7 +226,7 @@ function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }
           <Button
             variant="outline"
             size="sm"
-            className="rounded-full"
+            className="rounded-full shadow-sm"
             onClick={onRefresh}
             disabled={locating}
           >
@@ -251,13 +251,13 @@ function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }
         )}
 
         {(loading || stops.length > 0) && (
-          <div className="mb-4">
+          <div className="mb-4 overflow-hidden rounded-2xl border border-[var(--outline-variant)]/15">
             <TransitMap
               center={mapCenter}
               markers={mapMarkers}
               userLocation={location}
               zoom={15}
-              className="h-72"
+              className="h-72 lg:h-80"
             />
           </div>
         )}
@@ -323,8 +323,8 @@ function MtrNearbyView({ lang, t }: SharedViewProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
-        <div className="m3-title-md mb-3 flex items-center gap-2">
+      <div className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+        <div className="m3-title-md mb-4 flex items-center gap-2">
           <Navigation className="h-5 w-5" />
           {t('common.nearby')}
         </div>
@@ -333,7 +333,7 @@ function MtrNearbyView({ lang, t }: SharedViewProps) {
           {t('common.mtrNoCoords')}
         </div>
 
-        <div className="m3-title-md mb-2">{t('common.allMtrLines')}</div>
+        <div className="m3-title-md mb-3">{t('common.allMtrLines')}</div>
         <StaggerContainer className="space-y-3" stagger={0.04}>
           {lines.map(({ line, stations }) => (
             <StaggerItem key={line}>
@@ -375,8 +375,8 @@ function LrtNearbyView({ lang, t }: SharedViewProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
-        <div className="m3-title-md mb-3 flex items-center gap-2">
+      <div className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+        <div className="m3-title-md mb-4 flex items-center gap-2">
           <Navigation className="h-5 w-5" />
           {t('common.nearby')}
         </div>

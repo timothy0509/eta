@@ -183,14 +183,21 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
   const useScrollCap = routeNumbers.length > 16
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2.5">
       <div className="flex items-center justify-between gap-2">
-        <span className="m3-label-lg text-on-surface-variant">{t.routes}</span>
+        <div className="flex items-center gap-2">
+          <span className="m3-label-lg text-on-surface">{t.routes}</span>
+          {activeCount > 0 && (
+            <span className="bg-primary-container text-on-primary-container m3-label-sm rounded-full px-2 py-0.5">
+              {activeCount}
+            </span>
+          )}
+        </div>
         {activeCount > 0 && (
           <button
             type="button"
             onClick={clearAll}
-            className="text-on-surface-variant hover:text-on-surface m3-label-md flex items-center gap-1 rounded-full px-2 py-0.5 transition-colors"
+            className="text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high m3-label-md flex items-center gap-1 rounded-full px-2.5 py-1 transition-colors"
           >
             <X className="h-3.5 w-3.5" />
             {t.clear}
@@ -199,11 +206,16 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
       </div>
 
       {!opts.length ? (
-        <p className="text-on-surface-variant m3-body-md py-1">{t.noOptions}</p>
+        <p className="text-on-surface-variant m3-body-md rounded-2xl bg-[var(--surface-container)]/60 px-3 py-3 text-sm">
+          {t.noOptions}
+        </p>
       ) : (
         <>
           <div
-            className={cn('flex flex-wrap gap-2', useScrollCap && 'max-h-32 overflow-y-auto pr-1')}
+            className={cn(
+              'flex flex-wrap gap-1.5',
+              useScrollCap && 'max-h-32 overflow-y-auto pr-1'
+            )}
           >
             {routeNumbers.map((route) => {
               const variants = groupedByRoute.get(route) ?? []
@@ -219,9 +231,9 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                   title={tooltip}
                   onClick={() => handleRouteClick(route, variants)}
                   className={cn(
-                    'inline-flex rounded-lg p-0.5 transition-colors',
-                    active && 'bg-primary-container',
-                    focused && !active && 'bg-surface-container ring-primary/40 ring-2',
+                    'inline-flex rounded-xl p-0.5 transition-all',
+                    active && 'bg-primary-container shadow-sm',
+                    focused && !active && 'bg-surface-container-high ring-primary/30 ring-2',
                     !active && !focused && 'hover:bg-surface-container-high'
                   )}
                 >
@@ -232,7 +244,7 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
           </div>
 
           {showVariantRow && focusedVariants ? (
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div className="bg-surface-container/50 flex flex-wrap gap-1.5 rounded-2xl p-2">
               {focusedVariants.map((opt) => {
                 const active = selectedKeys.has(opt.key)
                 const direction = getDirectionFromVariantKey(opt.key)
@@ -247,13 +259,13 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                     className={cn(
                       'm3-label-md max-w-full overflow-hidden rounded-full px-3 py-1.5 transition-colors',
                       active
-                        ? 'bg-primary-container text-on-primary-container'
+                        ? 'bg-primary-container text-on-primary-container shadow-sm'
                         : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
                     )}
                     title={opt.label}
                   >
                     <span className="block truncate">
-                      {directionHint ? <span className="opacity-80">{directionHint} </span> : null}
+                      {directionHint ? <span className="opacity-70">{directionHint} </span> : null}
                       {opt.label}
                     </span>
                   </button>

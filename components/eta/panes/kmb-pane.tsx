@@ -1050,19 +1050,33 @@ export function KmbPane({
       {stopsError ? <p className="text-error m3-body-md">{stopsError}</p> : null}
       {routeStopsError ? <p className="text-error m3-body-md">{routeStopsError}</p> : null}
 
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <Button size="sm" className="rounded-full" disabled={!canFavorite} onClick={onSave}>
-          <Heart className="mr-1.5 h-4 w-4" />
+      <div className="border-outline-variant/15 -mx-4 mt-2 flex items-center justify-between gap-3 border-t px-4 pt-3 sm:-mx-5 sm:px-5">
+        <Button
+          size="sm"
+          className="rounded-full shadow-sm"
+          disabled={!canFavorite}
+          onClick={onSave}
+        >
+          <Heart className="mr-1 h-4 w-4" />
           {lang === 'en' ? 'Save' : '收藏'}
         </Button>
-        <span className="text-on-surface-variant m3-label-md text-right">
+        <span className="text-on-surface-variant m3-label-sm text-right">
           {loadingStops || loadingRouteStops ? (
             <span className="inline-flex items-center gap-1.5">
               <Loader2 className="h-3 w-3 animate-spin" />
               {lang === 'en' ? 'Loading…' : lang === 'sc' ? '载入中…' : '載入中…'}
             </span>
           ) : (
-            `${kmbStops.length.toLocaleString()} ${lang === 'en' ? 'stops' : '個車站'} · ${kmbRouteStops.length.toLocaleString()} ${lang === 'en' ? 'route-stops' : '個路線車站'}`
+            <>
+              <span className="hidden sm:inline">
+                {kmbStops.length.toLocaleString()} {lang === 'en' ? 'stops' : '個車站'} ·{' '}
+                {kmbRouteStops.length.toLocaleString()}{' '}
+                {lang === 'en' ? 'route-stops' : '個路線車站'}
+              </span>
+              <span className="sm:hidden">
+                {kmbStops.length.toLocaleString()} {lang === 'en' ? 'stops' : '站'}
+              </span>
+            </>
           )}
         </span>
       </div>

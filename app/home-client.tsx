@@ -559,14 +559,16 @@ export default function HomeClient() {
 
   const renderStops = () => {
     return (
-      <FadeIn className="mx-auto max-w-7xl overflow-hidden lg:grid lg:grid-cols-[280px_1fr] lg:gap-8">
-        <div className="lg:border-outline/10 border-b-0 bg-transparent p-4 pb-3 sm:p-5 sm:pb-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-3rem)] lg:self-start lg:overflow-y-auto lg:border-r lg:p-0 lg:pr-6">
-          {controls}
+      <FadeIn className="mx-auto max-w-[1280px] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
+        <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
+          <div className="bg-surface-container-low lg:bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-5 lg:p-5">
+            {controls}
+          </div>
         </div>
 
-        <FadeIn className="relative" delay={0.05}>
-          <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border p-4 shadow-sm sm:p-5">
-            <span className="bg-primary absolute top-0 right-0 left-0 h-1" aria-hidden />
+        <FadeIn className="relative mt-4 lg:mt-0" delay={0.05}>
+          <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-6">
+            <span className="bg-primary absolute top-0 right-0 left-0 h-[3px]" aria-hidden />
             {results}
           </div>
         </FadeIn>
@@ -613,11 +615,11 @@ export default function HomeClient() {
     <div className="bg-surface min-h-dvh overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
       <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
 
-      <div className="mx-auto flex max-w-7xl md:pl-20">
+      <div className="mx-auto flex max-w-[1280px] gap-6 px-4 py-4 sm:px-6 sm:py-6">
         <SideRail lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
 
-        <main className="min-w-0 flex-1 overflow-x-hidden p-4 sm:p-6">
-          <div className="mx-auto max-w-6xl">{renderContent()}</div>
+        <main className="min-w-0 flex-1 overflow-hidden">
+          <div className="mx-auto max-w-[1100px]">{renderContent()}</div>
         </main>
       </div>
 

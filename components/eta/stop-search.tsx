@@ -421,8 +421,8 @@ export function StopSearch({
           aria-controls={open ? listId : undefined}
           aria-haspopup="listbox"
           className={cn(
-            'bg-surface-container-high/70 text-on-surface w-full min-w-0 justify-start rounded-full border-0 py-5 text-left shadow-sm',
-            'hover:bg-surface-container-high',
+            'bg-surface-container-high text-on-surface w-full min-w-0 justify-start rounded-2xl border border-[var(--outline-variant)]/20 py-5 text-left shadow-sm',
+            'hover:bg-surface-container hover:border-[var(--outline-variant)]/30',
             !selectedLabel && 'text-on-surface-variant'
           )}
         >
@@ -434,7 +434,7 @@ export function StopSearch({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="bg-surface-container-low w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0"
+        className="bg-surface-container-low w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[var(--outline-variant)]/20 p-0 shadow-lg"
         align="start"
       >
         <Command shouldFilter={false} className="rounded-none bg-transparent">

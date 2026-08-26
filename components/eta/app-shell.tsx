@@ -70,17 +70,17 @@ type TopAppBarProps = {
 
 export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
   return (
-    <header className="bg-surface-container-low sticky top-0 z-40">
-      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-6">
-        <div className="flex items-center gap-3">
-          <div className="bg-primary text-on-primary flex h-9 w-9 items-center justify-center rounded-xl text-lg font-bold">
+    <header className="bg-surface-container-low/90 supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
+      <div className="mx-auto flex h-[3.5rem] max-w-[1280px] items-center justify-between gap-3 px-4 sm:h-14 sm:px-6">
+        <div className="flex items-center gap-2.5">
+          <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-xl text-[15px] font-bold shadow-sm sm:h-9 sm:w-9 sm:text-lg">
             T
           </div>
-          <span className="m3-title-lg hidden font-semibold sm:inline">TimoETA</span>
+          <span className="hidden text-[17px] font-semibold tracking-tight sm:inline">TimoETA</span>
         </div>
 
-        <nav className="flex-1 px-2 sm:px-6">
-          <div className="bg-surface-container relative flex max-w-md items-center rounded-full p-1 shadow-sm">
+        <nav className="flex flex-1 justify-center px-2 sm:px-6">
+          <div className="bg-surface-container-high/70 relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20">
             {MODES.map((m) => {
               const Icon = m.icon
               const active = mode === m.mode
@@ -90,7 +90,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   type="button"
                   onClick={() => onModeChange(m.mode)}
                   className={cn(
-                    'relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-full py-2 text-sm font-medium transition-colors',
+                    'relative z-10 flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 text-[13px] font-medium transition-colors sm:py-2 sm:text-sm',
                     active
                       ? 'text-on-secondary-container'
                       : 'text-on-surface-variant hover:text-on-surface'
@@ -100,11 +100,11 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   {active && (
                     <motion.div
                       layoutId="top-mode-pill"
-                      className="bg-secondary-container absolute inset-0 -z-10 rounded-full"
+                      className="bg-secondary-container absolute inset-0 -z-10 rounded-full shadow-sm"
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}
-                  <Icon className="h-4 w-4" />
+                  <Icon className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                   <span className="hidden sm:inline">{m.labels[lang]}</span>
                   <span className="sm:hidden">{m.mode.toUpperCase()}</span>
                 </button>
@@ -112,6 +112,8 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
             })}
           </div>
         </nav>
+
+        <div className="hidden w-[72px] shrink-0 sm:block" aria-hidden />
       </div>
     </header>
   )
@@ -127,7 +129,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
   const { t } = useTranslations(lang)
 
   return (
-    <nav className="bg-surface-container-low elevation-2 fixed top-1/2 left-[max(0.75rem,env(safe-area-inset-left,0px))] z-50 hidden -translate-y-1/2 flex-col items-center gap-1 rounded-full px-2 py-2 md:flex">
+    <nav className="bg-surface-container-low border-outline-variant/20 sticky top-20 hidden h-fit shrink-0 flex-col items-center gap-1 rounded-[28px] border px-2 py-3 shadow-sm md:flex">
       {SUB_VIEWS.map((sv) => {
         const Icon = sv.icon
         const active = subView === sv.id
@@ -137,19 +139,19 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
             type="button"
             onClick={() => onSubViewChange(sv.id)}
             className={cn(
-              'relative flex w-full flex-col items-center gap-0.5 rounded-full px-2 py-2.5 text-[11px] font-medium transition-colors',
+              'relative flex w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-colors',
               active ? 'text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'
             )}
           >
             {active && (
               <motion.div
                 layoutId="side-rail-pill"
-                className="bg-primary-container absolute inset-0 -z-10 rounded-full"
+                className="bg-primary-container absolute inset-0 -z-10 rounded-2xl"
                 transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               />
             )}
             <Icon className="h-5 w-5" />
-            <span>{t(`common.${sv.id}`)}</span>
+            <span className="leading-none">{t(`common.${sv.id}`)}</span>
           </button>
         )
       })}
@@ -167,7 +169,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
   const { t } = useTranslations(lang)
 
   return (
-    <nav className="bg-surface-container-low elevation-2 fixed bottom-[max(1rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-2.5rem),26rem)] -translate-x-1/2 rounded-full px-2 py-1.5 md:hidden">
+    <nav className="bg-surface-container-low fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),28rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg md:hidden">
       <div className="flex w-full items-center">
         {SUB_VIEWS.map((sv) => {
           const Icon = sv.icon
@@ -191,7 +193,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
                   transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 />
               )}
-              <Icon className="h-5 w-5" />
+              <Icon className="h-[22px] w-[22px]" />
               <span>{t(`common.${sv.id}`)}</span>
             </button>
           )

@@ -23,8 +23,10 @@ import {
   type KmbRouteStopLite,
 } from '@/lib/eta/client'
 import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
+import type { GeoPoint } from '@/lib/eta/geo'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
+import { getRoutedGeometry } from '@/lib/eta/routing'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
@@ -182,6 +184,28 @@ function useKmbStops() {
   return stops
 }
 
+function useKmbRouteGeometry(variantKey: string | null, points: GeoPoint[]): GeoPoint[] | null {
+  const [result, setResult] = React.useState<{
+    variantKey: string
+    geometry: GeoPoint[]
+  } | null>(null)
+
+  React.useEffect(() => {
+    if (!variantKey || points.length < 2) return
+    let cancelled = false
+    getRoutedGeometry(variantKey, points)
+      .then((geometry) => {
+        if (!cancelled && geometry) setResult({ variantKey, geometry })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [variantKey, points])
+
+  return result && result.variantKey === variantKey ? result.geometry : null
+}
+
 export function KmbRoutesView({
   lang,
   initialSelection,
@@ -203,6 +227,7 @@ export function KmbRoutesView({
     variant: RouteVariant | null
   }>({ sourceKey: '', routeKey: null, variant: null })
   const [variantStops, setVariantStops] = React.useState<KmbRouteStopLite[]>([])
+  const [stopsVariantKey, setStopsVariantKey] = React.useState<string | null>(null)
   const [etas, setEtas] = React.useState<Record<string, KmbEtaEntryWithLeg[]>>({})
 
   const addFavorite = useAppStore((s) => s.addFavorite)
@@ -353,6 +378,7 @@ export function KmbRoutesView({
         )
         .sort((a, b) => a.seq - b.seq)
       setVariantStops(filtered)
+      setStopsVariantKey(currentVariant.key)
 
       const stopIds = filtered.map((rs) => rs.stopId)
       if (!stopIds.length) return
@@ -382,6 +408,13 @@ export function KmbRoutesView({
       .filter(Boolean) as Array<{ lat: number; lng: number }>
   }, [variantStops, stopsById])
 
+  const geometryPoints = React.useMemo(
+    () => (stopsVariantKey === currentVariant?.key ? routePath : []),
+    [stopsVariantKey, currentVariant, routePath]
+  )
+  const routedGeometry = useKmbRouteGeometry(currentVariant?.key ?? null, geometryPoints)
+  const displayPath = routedGeometry ?? routePath
+
   const mapCenter = React.useMemo(() => {
     if (routePath.length) return routePath[Math.floor(routePath.length / 2)]
     return { lat: 22.3193, lng: 114.1694 }
@@ -396,6 +429,11 @@ export function KmbRoutesView({
       })
       .filter(Boolean) as Array<{ id: string; lat: number; lng: number; title?: string }>
   }, [variantStops, stopsById])
+
+  const mapPolylines = React.useMemo(() => {
+    if (!currentVariant) return []
+    return [{ id: currentVariant.key, path: displayPath, color: '#00478d' }]
+  }, [currentVariant, displayPath])
 
   const onSaveRoute = () => {
     if (!currentVariant) return
@@ -589,7 +627,7 @@ export function KmbRoutesView({
             <TransitMap
               center={mapCenter}
               markers={mapMarkers}
-              polylines={[{ id: currentVariant.key, path: routePath, color: '#00478d' }]}
+              polylines={mapPolylines}
               zoom={13}
               className="h-96"
             />

@@ -1,5 +1,10 @@
-import { formatRelativeMinutes } from './format'
 import type { UiLanguage } from './types'
+
+function normalizeNowMs(now?: number | Date): number {
+  if (now instanceof Date) return now.getTime()
+  if (typeof now === 'number') return now
+  return Date.now()
+}
 
 export type StaleMode = 'kmb' | 'mtr' | 'lrt'
 
@@ -16,12 +21,7 @@ export function isStaleByAge(params: {
 }) {
   const lastUpdatedAt = params.lastUpdatedAt
   if (!lastUpdatedAt) return false
-  const nowMs =
-    params.now instanceof Date
-      ? params.now.getTime()
-      : typeof params.now === 'number'
-        ? params.now
-        : Date.now()
+  const nowMs = normalizeNowMs(params.now)
   return nowMs - lastUpdatedAt > STALE_THRESHOLDS_MS[params.mode]
 }
 
@@ -49,14 +49,8 @@ export function formatRelativeAgeLabel(params: {
   const lastUpdatedAt = params.lastUpdatedAt
   if (!lastUpdatedAt) return null
 
-  const nowMs =
-    params.now instanceof Date
-      ? params.now.getTime()
-      : typeof params.now === 'number'
-        ? params.now
-        : Date.now()
-  const updatedAt = new Date(lastUpdatedAt)
-  const updatedAtTime = updatedAt.getTime()
+  const nowMs = normalizeNowMs(params.now)
+  const updatedAtTime = lastUpdatedAt
   if (Number.isNaN(updatedAtTime)) return null
 
   const diffMs = nowMs - updatedAtTime
@@ -65,7 +59,7 @@ export function formatRelativeAgeLabel(params: {
     return params.lang === 'en' ? 'just now' : params.lang === 'sc' ? '刚刚' : '剛剛'
   }
 
-  const minutes = Math.abs(formatRelativeMinutes(updatedAt.toISOString(), nowMs))
+  const minutes = Math.abs(Math.round(diffMs / 60000))
   if (minutes < 60) {
     if (params.lang === 'en') return `${minutes} min ago`
     return `${minutes} ${params.lang === 'sc' ? '分钟前' : '分鐘前'}`

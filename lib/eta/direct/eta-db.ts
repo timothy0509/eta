@@ -374,38 +374,37 @@ export async function fetchKmbEtasForStop(
 
   const results: KmbEta[] = []
 
-  if (hasKmb) {
+  const fetchNonKmb = () =>
+    promisePool(nonKmb, NON_KMB_ETA_CONCURRENCY, async ({ entry, co, stopIndex }) => {
+      const etas = await deps.fetchVariantEtas({
+        ...entry,
+        co: [co],
+        seq: stopIndex,
+        language,
+      })
+      return etas.map((eta, idx) => ({
+        ...eta,
+        co: eta.co ?? co,
+        route: entry.route,
+        dir: normalizeBound(entry.bound[co]),
+        serviceType: entry.serviceType,
+        seq: stopIndex + 1,
+        etaSeq: idx + 1,
+      })) as KmbEta[]
+    })
+
+  if (hasKmb && nonKmb.length > 0) {
+    const [payload, pooled] = await Promise.all([deps.fetchOfficialStopEta(stopId), fetchNonKmb()])
+    const rows = Array.isArray(payload.data) ? payload.data : []
+    results.push(...mapOfficialStopEtaRows(rows, { routeFilter, serviceType }))
+    for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
+  } else if (hasKmb) {
     const payload = await deps.fetchOfficialStopEta(stopId)
     const rows = Array.isArray(payload.data) ? payload.data : []
     results.push(...mapOfficialStopEtaRows(rows, { routeFilter, serviceType }))
-  }
-
-  if (nonKmb.length > 0) {
-    const pooled = await promisePool(
-      nonKmb,
-      NON_KMB_ETA_CONCURRENCY,
-      async ({ entry, co, stopIndex }) => {
-        const etas = await deps.fetchVariantEtas({
-          ...entry,
-          co: [co],
-          seq: stopIndex,
-          language,
-        })
-        return etas.map((eta, idx) => ({
-          ...eta,
-          co: eta.co ?? co,
-          route: entry.route,
-          dir: normalizeBound(entry.bound[co]),
-          serviceType: entry.serviceType,
-          seq: stopIndex + 1,
-          etaSeq: idx + 1,
-        })) as KmbEta[]
-      }
-    )
-
-    for (const result of pooled) {
-      if (result.status === 'fulfilled') results.push(...result.value)
-    }
+  } else if (nonKmb.length > 0) {
+    const pooled = await fetchNonKmb()
+    for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
   }
 
   const deduped = new Map<string, KmbEta>()

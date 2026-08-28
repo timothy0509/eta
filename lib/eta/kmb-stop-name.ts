@@ -18,10 +18,14 @@ const STOP_CODE_RE = '[A-Z]{1,2}[0-9]{3,}'
  * - "Chuk Yuen Estate Bus Terminus (WT916)" -> { name: "Chuk Yuen Estate Bus Terminus", platform: null, stopCode: "WT916" }
  * - "Tuen Mun Road BBI (A12) (TM744)" -> { name: "Tuen Mun Road BBI", platform: "A12", stopCode: "TM744" }
  */
+const RE_PLATFORM_AND_CODE = new RegExp(
+  `^(.+?)\\s*\\((${PLATFORM_RE})\\)\\s*\\((${STOP_CODE_RE})\\)\\s*$`
+)
+const RE_CODE_ONLY = new RegExp(`^(.+?)\\s*\\((${STOP_CODE_RE})\\)\\s*$`)
+const RE_PLATFORM_ONLY = new RegExp(`^(.+?)\\s*\\((${PLATFORM_RE})\\)\\s*$`)
+
 export function parseKmbStopName(fullName: string): ParsedKmbStopName {
-  const withPlatformAndCode = fullName.match(
-    new RegExp(`^(.+?)\\s*\\((${PLATFORM_RE})\\)\\s*\\((${STOP_CODE_RE})\\)\\s*$`)
-  )
+  const withPlatformAndCode = fullName.match(RE_PLATFORM_AND_CODE)
 
   if (withPlatformAndCode) {
     return {
@@ -31,12 +35,12 @@ export function parseKmbStopName(fullName: string): ParsedKmbStopName {
     }
   }
 
-  const withCodeOnly = fullName.match(new RegExp(`^(.+?)\\s*\\((${STOP_CODE_RE})\\)\\s*$`))
+  const withCodeOnly = fullName.match(RE_CODE_ONLY)
   if (withCodeOnly) {
     return { name: withCodeOnly[1].trim(), platform: null, stopCode: withCodeOnly[2] }
   }
 
-  const withPlatformOnly = fullName.match(new RegExp(`^(.+?)\\s*\\((${PLATFORM_RE})\\)\\s*$`))
+  const withPlatformOnly = fullName.match(RE_PLATFORM_ONLY)
   if (withPlatformOnly) {
     return { name: withPlatformOnly[1].trim(), platform: withPlatformOnly[2], stopCode: null }
   }

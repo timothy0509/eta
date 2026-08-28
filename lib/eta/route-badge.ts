@@ -7,6 +7,10 @@ export type RouteBadgeStyle = {
   bgColor: string
 }
 
+const RE_KMB_NUM = /^[A-OQ-Z]?(\d+)/
+const RE_CITYBUS_15 = /^15(?!\d)/
+const RE_ANY_DIGITS = /(\d+)/
+
 function getKmbRouteBadgeStyle(route: string): RouteBadgeStyle {
   const r = route.toUpperCase().trim()
 
@@ -43,7 +47,7 @@ function getKmbRouteBadgeStyle(route: string): RouteBadgeStyle {
   // Priority 7-8: Cross harbour / Western harbour
   // Match optional single letter prefix (except P which is Premium) followed by 3XX, 6XX, 9XX
   // Examples: 307, 603, 962, R603, X962
-  const numMatch = r.match(/^[A-OQ-Z]?(\d+)/)
+  const numMatch = r.match(RE_KMB_NUM)
   if (numMatch) {
     const num = parseInt(numMatch[1], 10)
     // 1XX, 3XX or 6XX: Cross harbour (red)
@@ -87,7 +91,7 @@ function getCitybusRouteBadgeStyle(route: string): RouteBadgeStyle {
     return { textColor: '#213769', bgColor: '#9CC6E5' }
   }
 
-  if (/^15(?!\d)/.test(r)) {
+  if (RE_CITYBUS_15.test(r)) {
     return { textColor: '#FFFFFF', bgColor: '#3CC3D9' }
   }
 
@@ -111,7 +115,7 @@ function getCitybusRouteBadgeStyle(route: string): RouteBadgeStyle {
     return { textColor: '#FFFFFF', bgColor: '#DB3831' }
   }
 
-  const numMatch = r.match(/(\d+)/)
+  const numMatch = r.match(RE_ANY_DIGITS)
   const num = numMatch ? parseInt(numMatch[1], 10) : null
   const isWhc = r.startsWith('E11') || (num !== null && num >= 900 && num < 1000)
 

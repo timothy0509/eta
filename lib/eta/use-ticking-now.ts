@@ -13,11 +13,39 @@ export function useTickingNow(intervalMs = 15_000): number {
   const [now, setNow] = React.useState(() => Date.now())
 
   React.useEffect(() => {
-    const id = setInterval(() => {
-      setNow(Date.now())
-    }, intervalMs)
+    let id: ReturnType<typeof setInterval> | undefined
 
-    return () => clearInterval(id)
+    const start = () => {
+      if (id) return
+      id = setInterval(() => {
+        if (document.visibilityState === 'visible') {
+          setNow(Date.now())
+        }
+      }, intervalMs)
+    }
+
+    const stop = () => {
+      if (id) {
+        clearInterval(id)
+        id = undefined
+      }
+    }
+
+    const onVis = () => {
+      if (document.visibilityState === 'visible') {
+        setNow(Date.now())
+        start()
+      } else {
+        stop()
+      }
+    }
+
+    start()
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      stop()
+      document.removeEventListener('visibilitychange', onVis)
+    }
   }, [intervalMs])
 
   return now

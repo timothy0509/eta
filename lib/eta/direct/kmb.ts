@@ -461,22 +461,23 @@ export type KmbFaresResponse = {
 }
 
 export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFaresResponse> {
-  const byVariantStops = await getCachedKmbVariantStops(async () => {
-    const routeStops = await listKmbRouteStops()
-    const lite: KmbRouteStopLite[] = routeStops
-      .map((entry) => ({
-        co: entry.co,
-        route: entry.route,
-        bound: entry.bound,
-        serviceType: String(entry.serviceType),
-        seq: entry.seq,
-        stopId: entry.stopId,
-      }))
-      .filter((entry) => entry.route && entry.stopId)
-    return lite
-  })
-
-  const { routeVariantIndex } = await getEtaDbIndexes()
+  const [byVariantStops, { routeVariantIndex }] = await Promise.all([
+    getCachedKmbVariantStops(async () => {
+      const routeStops = await listKmbRouteStops()
+      const lite: KmbRouteStopLite[] = routeStops
+        .map((entry) => ({
+          co: entry.co,
+          route: entry.route,
+          bound: entry.bound,
+          serviceType: String(entry.serviceType),
+          seq: entry.seq,
+          stopId: entry.stopId,
+        }))
+        .filter((entry) => entry.route && entry.stopId)
+      return lite
+    }),
+    getEtaDbIndexes(),
+  ])
 
   // Deduplicate by variant key
   const uniqueVariants = new Map<string, KmbFareVariant>()

@@ -38,18 +38,34 @@ export function formatRelativeMinutesWithDrift(
   return minutes === 0 ? 0 : minutes
 }
 
+const LOCALE_MAP: Record<UiLanguage, string> = {
+  en: 'en-HK',
+  sc: 'zh-Hans-HK',
+  tc: 'zh-Hant-HK',
+}
+
 export function getUiLocale(lang: UiLanguage) {
-  if (lang === 'en') return 'en-HK'
-  if (lang === 'sc') return 'zh-Hans-HK'
-  return 'zh-Hant-HK'
+  return LOCALE_MAP[lang] ?? 'zh-Hant-HK'
+}
+
+const timeFormatters = new Map<string, Intl.DateTimeFormat>()
+
+function getTimeFormatter(lang: UiLanguage): Intl.DateTimeFormat {
+  const locale = getUiLocale(lang)
+  let f = timeFormatters.get(locale)
+  if (!f) {
+    f = new Intl.DateTimeFormat(locale, {
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    })
+    timeFormatters.set(locale, f)
+  }
+  return f
 }
 
 export function formatUiTime(date: Date, lang: UiLanguage) {
-  return new Intl.DateTimeFormat(getUiLocale(lang), {
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(date)
+  return getTimeFormatter(lang).format(date)
 }
 
 export function formatUiLanguageLabel(lang: UiLanguage) {

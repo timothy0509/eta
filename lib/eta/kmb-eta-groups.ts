@@ -15,7 +15,12 @@ export type PrecomputedGroups = {
 }
 
 function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
-  return items.some((entry) => entry.eta && !isNaN(Date.parse(entry.eta)))
+  for (const entry of items) {
+    if (!entry.eta) continue
+    const t = Date.parse(entry.eta)
+    if (!Number.isNaN(t)) return true
+  }
+  return false
 }
 
 function buildDefaultKey(entry: KmbEtaEntryWithLeg): string {
@@ -55,17 +60,28 @@ export function groupEtasByVariant(
     return { key, baseKey, items: sorted, hasEta, hasFare, isArrivingLeg }
   })
 
-  const sortByRoute = (a: { key: string }, b: { key: string }) => {
-    const [, routeA = ''] = a.key.split('|')
-    const [, routeB = ''] = b.key.split('|')
-    return routeA.localeCompare(routeB, undefined, { numeric: true })
+  // Single-pass partition + extract route for sort to avoid repeated split+filter
+  const withEtaAndFare: EtaGroup[] = []
+  const withEtaOnly: EtaGroup[] = []
+  const withoutEtas: EtaGroup[] = []
+
+  for (const g of groups) {
+    if (!g.hasEta) {
+      withoutEtas.push(g)
+    } else if (g.hasFare && faresByVariantKey[g.baseKey]) {
+      withEtaAndFare.push(g)
+    } else {
+      withEtaOnly.push(g)
+    }
   }
 
-  const hasFareLoaded = (g: EtaGroup) => g.hasFare && Boolean(faresByVariantKey[g.baseKey])
+  const routeOf = (g: EtaGroup) => g.key.split('|', 2)[1] ?? ''
+  const sortByRoute = (a: EtaGroup, b: EtaGroup) =>
+    routeOf(a).localeCompare(routeOf(b), undefined, { numeric: true })
 
-  const withEtaAndFare = groups.filter((g) => g.hasEta && hasFareLoaded(g)).sort(sortByRoute)
-  const withEtaOnly = groups.filter((g) => g.hasEta && !hasFareLoaded(g)).sort(sortByRoute)
-  const withoutEtas = groups.filter((g) => !g.hasEta).sort(sortByRoute)
+  withEtaAndFare.sort(sortByRoute)
+  withEtaOnly.sort(sortByRoute)
+  withoutEtas.sort(sortByRoute)
 
   return [...withEtaAndFare, ...withEtaOnly, ...withoutEtas]
 }

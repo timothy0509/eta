@@ -16,7 +16,6 @@ export function useAutoRefresh(refreshMs: number, refresh: () => void) {
     if (!refreshMs) return
 
     let timeout: ReturnType<typeof setTimeout> | undefined
-
     let lastRefreshTime = Date.now()
 
     const refreshWithTimestamp = () => {
@@ -24,8 +23,15 @@ export function useAutoRefresh(refreshMs: number, refresh: () => void) {
       lastRefreshTime = Date.now()
     }
 
+    const clear = () => {
+      if (timeout) {
+        clearTimeout(timeout)
+        timeout = undefined
+      }
+    }
+
     const scheduleNext = () => {
-      // Add jitter to each interval to prevent synchronized refreshes
+      clear()
       const nextMs = addJitter(refreshMs)
       timeout = setTimeout(() => {
         if (document.visibilityState === 'visible') {
@@ -35,24 +41,24 @@ export function useAutoRefresh(refreshMs: number, refresh: () => void) {
       }, nextMs)
     }
 
-    scheduleNext()
-
-    // Handle visibility change - refresh immediately when tab becomes visible
-    // but only if enough time has passed since last refresh
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         const elapsed = Date.now() - lastRefreshTime
-        // Only refresh if at least 30% of the interval has passed
         if (elapsed > refreshMs * 0.3) {
           refreshWithTimestamp()
         }
+        // Re-anchor timer so we don't fire immediately after resume
+        scheduleNext()
+      } else {
+        clear()
       }
     }
 
+    scheduleNext()
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
-      if (timeout) clearTimeout(timeout)
+      clear()
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [refreshMs, refresh])

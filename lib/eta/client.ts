@@ -105,16 +105,24 @@ export type KmbEtaEntryWithLeg = KmbEtaEntry & {
 export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
   const stops = await getKmbStops()
 
+  const toCoord = (value: string | number) => {
+    if (typeof value === 'string') {
+      if (!value.trim()) return Number.NaN
+      return Number(value)
+    }
+    return value
+  }
+
   return stops
     .map((s) => ({
       stopId: s.stop,
       nameEn: (s.name_en ?? '').trim(),
       nameTc: (s.name_tc ?? '').trim(),
       nameSc: (s.name_sc ?? '').trim(),
-      lat: typeof s.lat === 'string' ? Number(s.lat) : s.lat,
-      lng: typeof s.long === 'string' ? Number(s.long) : s.long,
+      lat: toCoord(s.lat),
+      lng: toCoord(s.long),
     }))
-    .filter((s) => s.stopId && s.nameEn)
+    .filter((s) => s.stopId && s.nameEn && Number.isFinite(s.lat) && Number.isFinite(s.lng))
 }
 
 export async function fetchKmbRoutes(): Promise<KmbRouteListEntry[]> {

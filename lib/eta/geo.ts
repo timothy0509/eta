@@ -4,6 +4,17 @@ const EARTH_RADIUS_KM = 6371
 
 export type GeoPoint = { lat: number; lng: number }
 
+export function isValidGeoPoint(p: unknown): p is GeoPoint {
+  if (typeof p !== 'object' || p === null) return false
+  const { lat, lng } = p as { lat: unknown; lng: unknown }
+  return (
+    typeof lat === 'number' &&
+    typeof lng === 'number' &&
+    Number.isFinite(lat) &&
+    Number.isFinite(lng)
+  )
+}
+
 function toRad(deg: number): number {
   return (deg * Math.PI) / 180
 }
@@ -40,6 +51,7 @@ const DISTANCE_LABELS: Record<UiLanguage, { m: string; km: string }> = {
  */
 export function formatDistanceKm(km: number, lang: UiLanguage): string {
   const labels = DISTANCE_LABELS[lang]
+  if (!Number.isFinite(km) || km < 0) return `—`
   if (km < 1) {
     const metres = Math.max(0, Math.round(km * 1000))
     return `${metres} ${labels.m}`
@@ -58,10 +70,13 @@ export function computeNearbyStops<T extends GeoPoint>(
   stops: T[],
   limit?: number
 ): Array<T & { distanceKm: number }> {
-  const withDistance = stops.map((stop) => ({
-    ...stop,
-    distanceKm: haversineDistanceKm(user, stop),
-  }))
+  if (!isValidGeoPoint(user)) return []
+  const withDistance = stops
+    .filter((stop) => isValidGeoPoint(stop))
+    .map((stop) => ({
+      ...stop,
+      distanceKm: haversineDistanceKm(user, stop),
+    }))
 
   withDistance.sort((a, b) => a.distanceKm - b.distanceKm)
 

@@ -1,12 +1,12 @@
 'use client'
 
-import { MapPin, Navigation, RefreshCw } from 'lucide-react'
+import { ChevronRight, MapPin, Navigation, RefreshCw } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
 import { Button } from '@/components/ui/button'
 import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
-import { useGeolocation } from '@/components/eta/use-geolocation'
+import { useGeolocation, type GeolocationErrorCode } from '@/components/eta/use-geolocation'
 import { fetchKmbStops } from '@/lib/eta/client'
 import { computeNearbyStops, formatDistanceKm } from '@/lib/eta/geo'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
@@ -45,35 +45,39 @@ type KmbNearbyStop = {
 }
 
 function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
-  const [stops, setStops] = React.useState<KmbNearbyStop[]>([])
-  const [loading, setLoading] = React.useState(true)
-  const [error, setError] = React.useState<string | null>(null)
+  const [result, setResult] = React.useState<{
+    key: string
+    stops: KmbNearbyStop[]
+    error: string | null
+  } | null>(null)
+  const key = userLocation ? `${userLocation.lat.toFixed(5)},${userLocation.lng.toFixed(5)}` : null
 
   React.useEffect(() => {
+    if (!userLocation || !key) return
     let cancelled = false
     fetchKmbStops()
       .then((data) => {
         if (cancelled) return
-        if (!userLocation) {
-          setStops([])
-          return
-        }
-        const nearby = computeNearbyStops(userLocation, data, 15)
-        setStops(nearby)
-        setError(null)
+        setResult({ key, stops: computeNearbyStops(userLocation, data, 15), error: null })
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load stops')
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setResult({
+            key,
+            stops: [],
+            error: err instanceof Error ? err.message : 'Failed to load stops',
+          })
+        }
       })
     return () => {
       cancelled = true
     }
-  }, [userLocation])
+  }, [key, userLocation])
 
-  return { stops, loading, error }
+  if (!key) return { stops: [], loading: false, error: null }
+  if (!result || result.key !== key)
+    return { stops: result?.stops ?? [], loading: true, error: null }
+  return { stops: result.stops, loading: false, error: result.error }
 }
 
 function useLrtRouteStations() {
@@ -144,7 +148,21 @@ function useLrtStationsByRoute(routes: RouteListEntry[]) {
   }, [routes])
 }
 
-export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMode }) {
+export type NearbyViewProps = {
+  lang: UiLanguage
+  mode: TransportMode
+  onSelectStopGroup?: (selection: { stopIds: string[]; title: string; route: string }) => void
+  onSelectMtrStation?: (sta: string, line: string, name: string) => void
+  onSelectLrtStation?: (stationId: string, name: string) => void
+}
+
+export function NearbyView({
+  lang,
+  mode,
+  onSelectStopGroup,
+  onSelectMtrStation,
+  onSelectLrtStation,
+}: NearbyViewProps) {
   const { t } = useTranslations(lang)
   const { location, loading: locating, error: locationError, refresh } = useGeolocation()
 
@@ -156,6 +174,7 @@ export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMo
         locating={locating}
         locationError={locationError}
         onRefresh={refresh}
+        onSelectStopGroup={onSelectStopGroup}
         t={t}
       />
     )
@@ -169,6 +188,7 @@ export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMo
         locating={false}
         locationError={null}
         onRefresh={refresh}
+        onSelectMtrStation={onSelectMtrStation}
         t={t}
       />
     )
@@ -181,21 +201,46 @@ export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMo
       locating={false}
       locationError={null}
       onRefresh={refresh}
+      onSelectLrtStation={onSelectLrtStation}
       t={t}
     />
   )
+}
+
+function locationErrorMessage(code: GeolocationErrorCode, t: (key: string) => string): string {
+  switch (code) {
+    case 'denied':
+      return t('common.locationDenied')
+    case 'timeout':
+      return t('common.locationTimeout')
+    case 'unsupported':
+      return t('common.locationUnsupported')
+    default:
+      return t('common.locationUnavailable')
+  }
 }
 
 type SharedViewProps = {
   lang: UiLanguage
   location: { lat: number; lng: number } | null
   locating: boolean
-  locationError: string | null
+  locationError: GeolocationErrorCode | null
   onRefresh: () => void
+  onSelectStopGroup?: (selection: { stopIds: string[]; title: string; route: string }) => void
+  onSelectMtrStation?: (sta: string, line: string, name: string) => void
+  onSelectLrtStation?: (stationId: string, name: string) => void
   t: (key: string) => string
 }
 
-function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }: SharedViewProps) {
+function KmbNearbyView({
+  lang,
+  location,
+  locating,
+  locationError,
+  onRefresh,
+  onSelectStopGroup,
+  t,
+}: SharedViewProps) {
   const { stops, loading, error } = useKmbNearbyStops(location)
 
   const mapCenter = React.useMemo(() => {
@@ -241,7 +286,15 @@ function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }
         {locationError && !location && (
           <div className="text-error m3-body-md flex items-center gap-2 py-2">
             <MapPin className="h-4 w-4" />
-            {t('common.locationError')}: {locationError}
+            {locationErrorMessage(locationError, t)}
+          </div>
+        )}
+        {!location && !locating && (
+          <div className="py-2">
+            <Button className="rounded-full shadow-sm" onClick={onRefresh}>
+              <MapPin className="mr-1.5 h-4 w-4" />
+              {t('common.enableLocation')}
+            </Button>
           </div>
         )}
         {location && (
@@ -289,19 +342,30 @@ function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }
                 const parsed = parseKmbStopNameCached(fullName)
                 return (
                   <StaggerItem key={stop.stopId}>
-                    <div className="bg-surface-container hover:bg-surface-container-high rounded-2xl p-3 transition-colors">
-                      <div className="flex items-start justify-between gap-3">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        onSelectStopGroup?.({
+                          stopIds: [stop.stopId],
+                          title: parsed.name,
+                          route: '',
+                        })
+                      }
+                      className="bg-surface-container hover:bg-surface-container-high w-full rounded-2xl p-3 text-left transition-colors"
+                    >
+                      <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="m3-body-md truncate font-medium">{parsed.name}</div>
                           <div className="text-on-surface-variant m3-label-md">
-                            {parsed.stopCode ?? stop.stopId}
+                            {parsed.stopCode ?? stop.stopId} · {t('common.viewEtas')}
                           </div>
                         </div>
                         <div className="bg-primary-container text-on-primary-container m3-label-lg shrink-0 rounded-full px-2.5 py-1">
                           {formatDistanceKm(stop.distanceKm, lang)}
                         </div>
+                        <ChevronRight className="text-on-surface-variant h-4 w-4 shrink-0" />
                       </div>
-                    </div>
+                    </button>
                   </StaggerItem>
                 )
               })}
@@ -313,7 +377,7 @@ function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }
   )
 }
 
-function MtrNearbyView({ lang, t }: SharedViewProps) {
+function MtrNearbyView({ lang, onSelectMtrStation, t }: SharedViewProps) {
   const lines = useMtrStationsByLine()
 
   const stationName = React.useCallback(
@@ -347,12 +411,14 @@ function MtrNearbyView({ lang, t }: SharedViewProps) {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {stations.map((station) => (
-                    <span
+                    <button
                       key={station.sta}
-                      className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1"
+                      type="button"
+                      onClick={() => onSelectMtrStation?.(station.sta, line, stationName(station))}
+                      className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1 transition-colors hover:opacity-80"
                     >
                       {stationName(station)}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -364,7 +430,7 @@ function MtrNearbyView({ lang, t }: SharedViewProps) {
   )
 }
 
-function LrtNearbyView({ lang, t }: SharedViewProps) {
+function LrtNearbyView({ lang, onSelectLrtStation, t }: SharedViewProps) {
   const { routes, loading, error } = useLrtRouteStations()
   const routeGroups = useLrtStationsByRoute(routes)
 
@@ -413,12 +479,16 @@ function LrtNearbyView({ lang, t }: SharedViewProps) {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {group.stations.map((station) => (
-                        <span
+                        <button
                           key={station.stationId}
-                          className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1"
+                          type="button"
+                          onClick={() =>
+                            onSelectLrtStation?.(station.stationId, stationName(station))
+                          }
+                          className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1 transition-colors hover:opacity-80"
                         >
                           {stationName(station)}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   </div>

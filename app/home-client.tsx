@@ -597,7 +597,15 @@ export default function HomeClient() {
       case 'stops':
         return renderStops()
       case 'nearby':
-        return <NearbyView lang={lang} mode={mode} />
+        return (
+          <NearbyView
+            lang={lang}
+            mode={mode}
+            onSelectStopGroup={onSelectStopGroupFromRoute}
+            onSelectMtrStation={onSelectMtrStationFromRoute}
+            onSelectLrtStation={onSelectLrtStationFromRoute}
+          />
+        )
       case 'saved':
         return (
           <FadeIn>

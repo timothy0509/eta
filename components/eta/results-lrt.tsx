@@ -4,11 +4,11 @@ import * as React from 'react'
 import { Info, RefreshCw, TramFront } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
+import { ResultsHeader } from '@/components/eta/results-header'
 import { Badge } from '@/components/ui/badge'
 import { Marquee } from '@/components/ui/marquee'
 import { getLineColor } from '@/lib/eta/line-colors'
-import { formatUiTime } from '@/lib/eta/format'
-import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
+import { useTranslations } from '@/lib/eta/i18n'
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
@@ -60,103 +60,52 @@ export const LrtResults = React.memo(function LrtResults({
   onRefresh,
   loading,
 }: Props) {
-  const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
-  const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang })
-  const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: 'lrt' })
-  const showStale = Boolean(stale || isAgeStale)
-
-  const t = {
-    systemTime: lang === 'en' ? 'System time' : lang === 'sc' ? '系统时间' : '系統時間',
-    emptyPlatform:
-      lang === 'en'
-        ? 'No platform data right now.'
-        : lang === 'sc'
-          ? '暂时没有月台信息。'
-          : '暫時沒有月台資訊。',
-    refresh: lang === 'en' ? 'Refresh' : '重新整理',
-    selectStation: lang === 'en' ? 'Select a station to view trains.' : '選擇車站以查看班次',
-    loading: lang === 'en' ? 'Loading trains…' : lang === 'sc' ? '载入班次中…' : '載入班次中…',
-  }
+  const { t, tWithParams } = useTranslations(lang)
 
   return (
     <div>
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-on-surface m3-title-lg sm:m3-headline-sm truncate font-semibold tracking-tight">
-            {title}
-          </h2>
-          <p className="text-on-surface-variant m3-label-md mt-1 flex flex-wrap items-center gap-1.5">
-            <TramFront className="h-3.5 w-3.5 shrink-0" />
-            {lang === 'en' ? 'Light Rail' : lang === 'sc' ? '轻铁' : '輕鐵'}
-            {updatedAt ? (
-              <>
-                <span aria-hidden>·</span>
-                <span>
-                  {lang === 'en'
-                    ? `Updated ${formatUiTime(updatedAt, lang)}`
-                    : `更新 ${formatUiTime(updatedAt, lang)}`}
-                </span>
-                {relativeAgeLabel ? (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>{relativeAgeLabel}</span>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-            {showStale ? (
-              <>
-                <span aria-hidden>·</span>
-                <span className="text-error">{lang === 'en' ? 'Stale' : '未更新'}</span>
-              </>
-            ) : null}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 shrink-0 rounded-full p-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
-          onClick={onRefresh}
-          disabled={loading}
-          aria-label={t.refresh}
-        >
-          <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
-        </button>
-      </div>
+      <ResultsHeader
+        lang={lang}
+        mode="lrt"
+        title={title}
+        icon={<TramFront className="h-3.5 w-3.5 shrink-0" />}
+        subtitle={t('lrt.title')}
+        lastUpdatedAt={lastUpdatedAt}
+        stale={stale}
+        loading={loading}
+        onRefresh={onRefresh}
+      />
 
       <div className="space-y-4">
         {error ? (
-          <p className="text-error m3-body-md">
-            {lang === 'en'
-              ? `Update failed. Showing last results. (${error})`
-              : `更新失敗。顯示上次結果。(${error})`}
-          </p>
+          <p className="text-error m3-body-md">{tWithParams('common.updateFailed', { error })}</p>
         ) : null}
         {loading && !schedule ? (
           <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
             <RefreshCw className="h-4 w-4 animate-spin" />
-            {t.loading}
+            {t('lrt.loadingTrains')}
           </div>
         ) : !schedule ? (
           !hasStation ? (
             <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
               <Info className="h-4 w-4" />
-              {t.selectStation}
+              {t('lrt.selectStation')}
             </div>
           ) : !error ? (
             <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
               <RefreshCw className="h-4 w-4 animate-spin" />
-              {t.loading}
+              {t('lrt.loadingTrains')}
             </div>
           ) : null
         ) : (schedule.platform_list ?? []).length === 0 ? (
           <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
             <Info className="h-4 w-4" />
-            {t.emptyPlatform}
+            {t('lrt.emptyPlatform')}
           </div>
         ) : (
           <>
             <div className="text-on-surface-variant m3-label-md flex items-center justify-between gap-2">
-              <span>{t.systemTime}</span>
+              <span>{t('lrt.systemTime')}</span>
               <span className="font-tabular">{schedule.system_time ?? ''}</span>
             </div>
 
@@ -211,7 +160,10 @@ export const LrtResults = React.memo(function LrtResults({
                                 {r.route_no}
                               </Badge>
                               <div className="min-w-0 flex-1">
-                                <Marquee className="text-on-surface m3-body-md font-medium">
+                                <Marquee
+                                  title={lang === 'en' ? r.dest_en : r.dest_ch}
+                                  className="text-on-surface m3-body-md font-medium"
+                                >
                                   {lang === 'en' ? r.dest_en : r.dest_ch}
                                 </Marquee>
                                 <div className="text-on-surface-variant m3-label-md">

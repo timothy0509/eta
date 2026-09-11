@@ -86,6 +86,12 @@ const common: Record<string, TranslationEntry> = {
   allLrtRoutes: { en: 'All Light Rail routes', tc: '所有輕鐵路線', sc: '所有轻铁路线' },
   loading: { en: 'Loading…', tc: '載入中…', sc: '载入中…' },
   viewEtas: { en: 'View ETAs', tc: '查看到站時間', sc: '查看到站时间' },
+  updated: { en: 'Updated {time}', tc: '更新 {time}', sc: '更新 {time}' },
+  updateFailed: {
+    en: 'Update failed. Showing last results. ({error})',
+    tc: '更新失敗。顯示上次結果。({error})',
+    sc: '更新失败。显示上次结果。({error})',
+  },
 }
 
 const kmb: Record<string, TranslationEntry> = {
@@ -100,7 +106,7 @@ const kmb: Record<string, TranslationEntry> = {
   },
   allStopsLoaded: {
     en: 'All {count} stops loaded',
-    tc: '已載入全部 {count} 個车站',
+    tc: '已載入全部 {count} 個車站',
     sc: '已载入全部 {count} 个车站',
   },
   updateFailed: {
@@ -132,6 +138,11 @@ const mtr: Record<string, TranslationEntry> = {
   viewDetails: { en: 'View details', tc: '查看詳情', sc: '查看详情' },
   up: { en: 'UP', tc: '上行', sc: '上行' },
   down: { en: 'DOWN', tc: '下行', sc: '下行' },
+  noSchedule: {
+    en: 'No schedule available.',
+    tc: '暫無班次信息。',
+    sc: '暂无班次信息。',
+  },
   viaRacecourse: { en: ' · Via Racecourse', tc: ' · 經馬場', sc: ' · 经马场' },
 }
 
@@ -145,6 +156,16 @@ const lrt: Record<string, TranslationEntry> = {
     sc: '选择车站以查看班次',
   },
   routes: { en: 'routes', tc: '條路線', sc: '条路线' },
+  emptyPlatform: {
+    en: 'No platform data right now.',
+    tc: '暫時沒有月台資訊。',
+    sc: '暂时没有月台信息。',
+  },
+  loadingTrains: {
+    en: 'Loading trains…',
+    tc: '載入班次中…',
+    sc: '载入班次中…',
+  },
 }
 
 const favorites: Record<string, TranslationEntry> = {

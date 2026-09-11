@@ -262,6 +262,7 @@ export function LrtRoutesView({
                     key={`${stationId}-${idx}`}
                     name={name}
                     subtitle={<span className="hidden sm:inline">{stationId}</span>}
+                    ariaLabel={name}
                     eta={
                       <SoonestEtaPill
                         minutes={soonest.minutes}
@@ -274,13 +275,6 @@ export function LrtRoutesView({
                 )
               })}
             </RouteStopTimeline>
-          </div>
-
-          <div className="bg-surface-container rounded-2xl p-4">
-            <div className="m3-title-md text-on-surface mb-2">{t('common.map')}</div>
-            <div className="text-on-surface-variant m3-body-md bg-surface-container-high flex h-32 items-center justify-center rounded-2xl">
-              {t('common.mapUnavailable')}
-            </div>
           </div>
         </FadeIn>
       )}

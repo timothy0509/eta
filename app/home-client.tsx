@@ -561,9 +561,7 @@ export default function HomeClient() {
     return (
       <FadeIn className="mx-auto max-w-[1280px] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
         <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
-          <div className="bg-surface-container-low lg:bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-5 lg:p-5">
-            {controls}
-          </div>
+          <div className="card-m3 p-4 sm:p-5 lg:p-5">{controls}</div>
         </div>
 
         <FadeIn className="relative mt-4 lg:mt-0" delay={0.05}>
@@ -597,7 +595,14 @@ export default function HomeClient() {
       case 'stops':
         return renderStops()
       case 'nearby':
-        return <NearbyView lang={lang} mode={mode} />
+        return (
+          <NearbyView
+            lang={lang}
+            mode={mode}
+            onSelectMtrStation={onSelectMtrStationFromRoute}
+            onSelectLrtStation={onSelectLrtStationFromRoute}
+          />
+        )
       case 'saved':
         return (
           <FadeIn>
@@ -612,15 +617,15 @@ export default function HomeClient() {
   }
 
   return (
-    <div className="bg-surface min-h-dvh overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] md:pb-0">
+    <div className="bg-surface min-h-dvh overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
       <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
 
       <div className="mx-auto flex max-w-[1280px] gap-6 px-4 py-4 sm:px-6 sm:py-6">
         <SideRail lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
 
-        <main className="min-w-0 flex-1 overflow-hidden">
+        <div className="min-w-0 flex-1">
           <div className="mx-auto max-w-[1100px]">{renderContent()}</div>
-        </main>
+        </div>
       </div>
 
       <BottomNav lang={lang} subView={subView} onSubViewChange={onSubViewChange} />

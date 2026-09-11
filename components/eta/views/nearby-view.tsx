@@ -144,7 +144,17 @@ function useLrtStationsByRoute(routes: RouteListEntry[]) {
   }, [routes])
 }
 
-export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMode }) {
+export function NearbyView({
+  lang,
+  mode,
+  onSelectMtrStation,
+  onSelectLrtStation,
+}: {
+  lang: UiLanguage
+  mode: TransportMode
+  onSelectMtrStation?: (sta: string, line: string, name: string) => void
+  onSelectLrtStation?: (stationId: string, name: string) => void
+}) {
   const { t } = useTranslations(lang)
   const { location, loading: locating, error: locationError, refresh } = useGeolocation()
 
@@ -170,6 +180,7 @@ export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMo
         locationError={null}
         onRefresh={refresh}
         t={t}
+        onSelectStation={onSelectMtrStation}
       />
     )
   }
@@ -182,6 +193,7 @@ export function NearbyView({ lang, mode }: { lang: UiLanguage; mode: TransportMo
       locationError={null}
       onRefresh={refresh}
       t={t}
+      onSelectStation={onSelectLrtStation}
     />
   )
 }
@@ -313,7 +325,13 @@ function KmbNearbyView({ lang, location, locating, locationError, onRefresh, t }
   )
 }
 
-function MtrNearbyView({ lang, t }: SharedViewProps) {
+function MtrNearbyView({
+  lang,
+  t,
+  onSelectStation,
+}: SharedViewProps & {
+  onSelectStation?: (sta: string, line: string, name: string) => void
+}) {
   const lines = useMtrStationsByLine()
 
   const stationName = React.useCallback(
@@ -347,12 +365,14 @@ function MtrNearbyView({ lang, t }: SharedViewProps) {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {stations.map((station) => (
-                    <span
+                    <button
                       key={station.sta}
-                      className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1"
+                      type="button"
+                      onClick={() => onSelectStation?.(station.sta, line, stationName(station))}
+                      className="bg-surface-container-high text-on-surface-variant hover:bg-surface-container-high/70 hover:text-on-surface focus-visible:ring-primary/30 m3-label-md inline-flex min-h-[36px] items-center rounded-full px-2.5 py-1 transition-colors focus-visible:ring-2 focus-visible:outline-none"
                     >
                       {stationName(station)}
-                    </span>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -364,7 +384,13 @@ function MtrNearbyView({ lang, t }: SharedViewProps) {
   )
 }
 
-function LrtNearbyView({ lang, t }: SharedViewProps) {
+function LrtNearbyView({
+  lang,
+  t,
+  onSelectStation,
+}: SharedViewProps & {
+  onSelectStation?: (stationId: string, name: string) => void
+}) {
   const { routes, loading, error } = useLrtRouteStations()
   const routeGroups = useLrtStationsByRoute(routes)
 
@@ -413,12 +439,14 @@ function LrtNearbyView({ lang, t }: SharedViewProps) {
                     </div>
                     <div className="flex flex-wrap gap-2">
                       {group.stations.map((station) => (
-                        <span
+                        <button
                           key={station.stationId}
-                          className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1"
+                          type="button"
+                          onClick={() => onSelectStation?.(station.stationId, stationName(station))}
+                          className="bg-surface-container-high text-on-surface-variant hover:bg-surface-container-high/70 hover:text-on-surface focus-visible:ring-primary/30 m3-label-md inline-flex min-h-[36px] items-center rounded-full px-2.5 py-1 transition-colors focus-visible:ring-2 focus-visible:outline-none"
                         >
                           {stationName(station)}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   </div>

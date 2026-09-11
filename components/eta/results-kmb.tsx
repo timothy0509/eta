@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronUp, Clock, Info, Loader2, RefreshCw } from 'lucide-react'
+import { ChevronDown, ChevronUp, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
@@ -17,10 +17,10 @@ import {
 } from '@/components/ui/dialog'
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
-import { formatRelativeMinutesWithDrift, formatUiTime } from '@/lib/eta/format'
+import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
-import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
+import { ResultsHeader } from '@/components/eta/results-header'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -401,7 +401,10 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         <span className="text-on-surface-variant m3-label-md hidden shrink-0 sm:inline">
           {formatOperatorLabel(first?.co ?? co, lang)}
         </span>
-        <Marquee className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
+        <Marquee
+          title={typeof label === 'string' ? label : undefined}
+          className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
+        >
           {label || 'Route'}
         </Marquee>
       </div>
@@ -448,7 +451,11 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
                 {isArriving ? <LivePulse /> : null}
                 {formatMinutesDisplay(minutes)}
               </div>
-              {remark ? <Marquee className="m3-label-md mt-1 opacity-80">{remark}</Marquee> : null}
+              {remark ? (
+                <Marquee title={remark} className="m3-label-md mt-1 opacity-80">
+                  {remark}
+                </Marquee>
+              ) : null}
             </div>
           )
         }
@@ -465,7 +472,9 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
               {formatMinutesDisplay(minutes)}
             </div>
             {remark ? (
-              <Marquee className="text-on-surface-variant m3-label-md mt-0.5">{remark}</Marquee>
+              <Marquee title={remark} className="text-on-surface-variant m3-label-md mt-0.5">
+                {remark}
+              </Marquee>
             ) : null}
           </div>
         )
@@ -524,6 +533,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       color={badgeStyle.bgColor}
       className={staggerClass}
       panel={etaPanel}
+      toggleLabel={`${route} ${label ?? ''}`.trim()}
     >
       {routeHeader(!isExpanded)}
     </ExpandableEtaRow>
@@ -648,13 +658,9 @@ export const KmbResults = React.memo(function KmbResults({
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
   const now = useTickingNow(15_000)
-  const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
-  const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang, now })
-  const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: 'kmb', now })
   const hasStaleStops = Boolean(
     staleByStopId && Object.values(staleByStopId).some((entry) => entry.stale)
   )
-  const showStale = Boolean(stale || isAgeStale || hasStaleStops)
 
   const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
   const onToggleExpand = React.useCallback((key: string) => {
@@ -737,55 +743,30 @@ export const KmbResults = React.memo(function KmbResults({
 
   return (
     <div>
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-start gap-2">
-            <h2 className="text-on-surface m3-title-lg sm:m3-headline-sm min-w-0 flex-1 font-semibold tracking-tight">
-              {title || t('kmb.title')}
-            </h2>
-            {stopCode ? (
-              <span className="bg-surface-container text-on-surface-variant m3-label-sm shrink-0 rounded-full px-2.5 py-1 font-mono">
-                {stopCode}
-              </span>
-            ) : null}
-          </div>
-          <p className="text-on-surface-variant m3-label-md mt-1 flex flex-wrap items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5 shrink-0" />
-            {routesFilter?.trim()
-              ? `${t('kmb.filtered')} ${routesFilter}`
-              : isKeyphraseMode
-                ? `${loadedStopIds?.length ?? 0} ${t('kmb.stopsLoaded')}`
-                : t('kmb.allRoutesAtStop')}
-            {updatedAt ? (
-              <>
-                <span aria-hidden>·</span>
-                <span>{tWithParams('kmb.updated', { time: formatUiTime(updatedAt, lang) })}</span>
-                {relativeAgeLabel ? (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>{relativeAgeLabel}</span>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-            {showStale ? (
-              <>
-                <span aria-hidden>·</span>
-                <span className="text-error">{t('common.stale')}</span>
-              </>
-            ) : null}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 shrink-0 rounded-full p-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
-          onClick={onRefresh}
-          disabled={loading}
-          aria-label={t('common.refresh')}
-        >
-          <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
-        </button>
-      </div>
+      <ResultsHeader
+        lang={lang}
+        mode="kmb"
+        title={title || t('kmb.title')}
+        titleAddon={
+          stopCode ? (
+            <span className="bg-surface-container text-on-surface-variant m3-label-sm shrink-0 rounded-full px-2.5 py-1 font-mono">
+              {stopCode}
+            </span>
+          ) : null
+        }
+        icon={<Clock className="h-3.5 w-3.5 shrink-0" />}
+        subtitle={
+          routesFilter?.trim()
+            ? `${t('kmb.filtered')} ${routesFilter}`
+            : isKeyphraseMode
+              ? `${loadedStopIds?.length ?? 0} ${t('kmb.stopsLoaded')}`
+              : t('kmb.allRoutesAtStop')
+        }
+        lastUpdatedAt={lastUpdatedAt}
+        stale={stale || hasStaleStops}
+        loading={loading}
+        onRefresh={onRefresh}
+      />
 
       <div className="space-y-2">
         {error ? (
@@ -824,11 +805,7 @@ export const KmbResults = React.memo(function KmbResults({
                 {loading ? (
                   <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    {lang === 'en'
-                      ? 'Loading more stops...'
-                      : lang === 'sc'
-                        ? '正在载入更多车站...'
-                        : '正在载入更多车站...'}
+                    {t('kmb.loadingMoreStops')}
                   </div>
                 ) : (
                   <div className="h-1" /> // Invisible sentinel
@@ -836,11 +813,7 @@ export const KmbResults = React.memo(function KmbResults({
               </div>
             ) : loadedStopIds!.length > 0 ? (
               <div className="text-on-surface-variant m3-label-md py-2 text-center">
-                {lang === 'en'
-                  ? `All ${loadedStopIds!.length} stops loaded`
-                  : lang === 'sc'
-                    ? `已载入全部 ${loadedStopIds!.length} 个车站`
-                    : `已载入全部 ${loadedStopIds!.length} 個车站`}
+                {tWithParams('kmb.allStopsLoaded', { count: loadedStopIds!.length })}
               </div>
             ) : null}
           </>

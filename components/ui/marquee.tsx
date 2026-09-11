@@ -8,6 +8,8 @@ type Props = {
   className?: string
   /** Speed in pixels per second (default 30) */
   speed?: number
+  /** Tooltip with the full text, shown when content truncates */
+  title?: string
 }
 
 /**
@@ -16,7 +18,7 @@ type Props = {
  * - Only animates when overflow is detected (scrollWidth > clientWidth)
  * - Pauses animation on hover / touch
  */
-export function Marquee({ children, className, speed = 30 }: Props) {
+export function Marquee({ children, className, speed = 30, title }: Props) {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [needsMarquee, setNeedsMarquee] = React.useState(false)
   const [animDuration, setAnimDuration] = React.useState(5)
@@ -61,6 +63,7 @@ export function Marquee({ children, className, speed = 30 }: Props) {
   return (
     <div
       ref={containerRef}
+      title={title}
       className={cn(
         'overflow-hidden whitespace-nowrap',
         needsMarquee && 'marquee-container',

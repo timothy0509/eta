@@ -101,8 +101,8 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
           aria-controls={open ? listId : undefined}
           aria-haspopup="listbox"
           className={cn(
-            'bg-surface-container-high/70 text-on-surface w-full justify-start rounded-full border-0 py-5 text-left shadow-sm',
-            'hover:bg-surface-container-high',
+            'bg-surface-container-high text-on-surface w-full min-w-0 justify-start rounded-2xl border border-[var(--outline-variant)]/20 py-5 text-left shadow-sm',
+            'hover:bg-surface-container hover:border-[var(--outline-variant)]/30',
             !selectedStation && 'text-on-surface-variant'
           )}
         >

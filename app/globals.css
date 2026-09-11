@@ -530,6 +530,16 @@
     animation: live-pulse 1.6s var(--ui-ease-in-out) infinite;
   }
 
+  /* Shared M3 card: surface, radius, outline, shadow. Padding stays in markup. */
+  .card-m3 {
+    background-color: var(--color-surface-container-low);
+    border-radius: 1.5rem;
+    border: 1px solid color-mix(in srgb, var(--outline-variant) 15%, transparent);
+    box-shadow:
+      0 1px 2px 0 rgb(0 0 0 / 0.05),
+      0 1px 3px 1px rgb(0 0 0 / 0.04);
+  }
+
   /* M3 elevation tints */
   .elevation-1 {
     box-shadow:

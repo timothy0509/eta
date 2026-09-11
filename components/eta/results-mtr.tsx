@@ -1,14 +1,14 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Info, RefreshCw, TrainFront } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, Info, TrainFront } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
+import { ResultsHeader } from '@/components/eta/results-header'
 import { Marquee } from '@/components/ui/marquee'
 import { findMtrStationBySta } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
-import { formatUiTime } from '@/lib/eta/format'
-import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
+import { useTranslations } from '@/lib/eta/i18n'
 import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
@@ -168,7 +168,10 @@ function MtrLineCard({
       ) : (
         collapsedItems.map((item) => (
           <div key={item.key} className="flex items-center justify-between gap-3 py-0.5">
-            <Marquee className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
+            <Marquee
+              title={item.dest}
+              className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
+            >
               {item.dest}
             </Marquee>
             <div className="flex shrink-0 items-center gap-2">
@@ -208,7 +211,7 @@ function MtrLineCard({
 
     return (
       <div key={`${dir}-${trainIdx}`} className="flex items-center justify-between gap-3 py-1.5">
-        <Marquee className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
+        <Marquee title={destText} className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
           {destText}
         </Marquee>
         <div className="flex shrink-0 items-center gap-2">
@@ -295,6 +298,7 @@ function MtrLineCard({
       onToggle={onToggle}
       className="ui-lift"
       panel={expandedPanel}
+      toggleLabel={line ? getMtrLineName(line, lang) : 'MTR'}
     >
       <div className="-mt-3 -mr-3 -ml-4">{header(true)}</div>
       {expanded ? null : <div className="pt-2">{collapsedSummary}</div>}
@@ -312,96 +316,41 @@ export const MtrResults = React.memo(function MtrResults({
   onRefresh,
   loading,
 }: Props) {
-  const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
-  const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang })
-  const isAgeStale = isStaleByAge({ lastUpdatedAt, mode: 'mtr' })
-  const showStale = Boolean(stale || isAgeStale)
+  const { t, tWithParams } = useTranslations(lang)
 
   const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
   const onToggleExpand = React.useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
 
-  const t = {
-    nextTrain: lang === 'en' ? 'Next Train' : lang === 'sc' ? '下班车' : '下班車',
-    refresh: lang === 'en' ? 'Refresh' : '重新整理',
-    selectStation: lang === 'en' ? 'Select a station to view trains.' : '選擇車站以查看班次',
-    serviceMessage: lang === 'en' ? 'Service message' : lang === 'sc' ? '服务信息' : '服務信息',
-    noSchedule:
-      lang === 'en'
-        ? 'No schedule available.'
-        : lang === 'sc'
-          ? '暂无班次信息。'
-          : '暫無班次信息。',
-    viewDetails: lang === 'en' ? 'View details' : lang === 'sc' ? '查看详情' : '查看詳情',
-    up: lang === 'en' ? 'UP' : lang === 'sc' ? '上行' : '上行',
-    down: lang === 'en' ? 'DOWN' : lang === 'sc' ? '下行' : '下行',
-    viaRacecourse: lang === 'en' ? ' · Via Racecourse' : ' · 經馬場',
-  }
-
   return (
     <div>
-      <div className="mb-5 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h2 className="text-on-surface m3-title-lg sm:m3-headline-sm truncate font-semibold tracking-tight">
-            {title}
-          </h2>
-          <p className="text-on-surface-variant m3-label-md mt-1 flex flex-wrap items-center gap-1.5">
-            <TrainFront className="h-3.5 w-3.5 shrink-0" />
-            {t.nextTrain}
-            {updatedAt ? (
-              <>
-                <span aria-hidden>·</span>
-                <span>
-                  {lang === 'en'
-                    ? `Updated ${formatUiTime(updatedAt, lang)}`
-                    : `更新 ${formatUiTime(updatedAt, lang)}`}
-                </span>
-                {relativeAgeLabel ? (
-                  <>
-                    <span aria-hidden>·</span>
-                    <span>{relativeAgeLabel}</span>
-                  </>
-                ) : null}
-              </>
-            ) : null}
-            {showStale ? (
-              <>
-                <span aria-hidden>·</span>
-                <span className="text-error">{lang === 'en' ? 'Stale' : '未更新'}</span>
-              </>
-            ) : null}
-          </p>
-        </div>
-        <button
-          type="button"
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 shrink-0 rounded-full p-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
-          onClick={onRefresh}
-          disabled={loading}
-          aria-label={t.refresh}
-        >
-          <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
-        </button>
-      </div>
+      <ResultsHeader
+        lang={lang}
+        mode="mtr"
+        title={title}
+        icon={<TrainFront className="h-3.5 w-3.5 shrink-0" />}
+        subtitle={t('mtr.nextTrain')}
+        lastUpdatedAt={lastUpdatedAt}
+        stale={stale}
+        loading={loading}
+        onRefresh={onRefresh}
+      />
 
       <div className="space-y-4">
         {error ? (
-          <p className="text-error m3-body-md">
-            {lang === 'en'
-              ? `Update failed. Showing last results. (${error})`
-              : `更新失敗。顯示上次結果。(${error})`}
-          </p>
+          <p className="text-error m3-body-md">{tWithParams('common.updateFailed', { error })}</p>
         ) : null}
         {!schedule ? (
           <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
             <Info className="h-4 w-4" />
-            {t.selectStation}
+            {t('mtr.selectStation')}
           </div>
         ) : schedule.status === 0 ? (
           <div className="bg-surface-container rounded-2xl p-4">
-            <div className="text-on-surface m3-title-md">{t.serviceMessage}</div>
+            <div className="text-on-surface m3-title-md">{t('mtr.serviceMessage')}</div>
             <div className="text-on-surface-variant m3-body-md mt-1">
-              {schedule.message ?? t.noSchedule}
+              {schedule.message ?? t('mtr.noSchedule')}
             </div>
             {schedule.url ? (
               <a
@@ -413,7 +362,7 @@ export const MtrResults = React.memo(function MtrResults({
                   lang === 'en' ? 'View details (opens in new tab)' : '查看詳情（在新分頁開啟）'
                 }
               >
-                {t.viewDetails} <ExternalLink className="h-4 w-4" />
+                {t('mtr.viewDetails')} <ExternalLink className="h-4 w-4" />
               </a>
             ) : null}
           </div>
@@ -439,8 +388,8 @@ export const MtrResults = React.memo(function MtrResults({
                 sta={sta}
                 lang={lang}
                 lineColor={lineColor}
-                upLabel={t.up}
-                downLabel={t.down}
+                upLabel={t('mtr.up')}
+                downLabel={t('mtr.down')}
                 expanded={expandedKey === key}
                 onToggle={() => onToggleExpand(key)}
                 staggerClass={staggerClass}

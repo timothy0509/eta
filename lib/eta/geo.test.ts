@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeNearbyStops, formatDistanceKm, haversineDistanceKm } from './geo'
+import { computeNearbyStops, formatDistanceKm, haversineDistanceKm, isValidGeoPoint } from './geo'
 
 describe('haversineDistanceKm', () => {
   it('returns a known distance between Hong Kong Central and Tsim Sha Tsui', () => {
@@ -61,5 +61,32 @@ describe('computeNearbyStops', () => {
 
     expect(result).toHaveLength(3)
     expect(result.map((s) => s.name)).toEqual(['near', 'mid', 'far'])
+  })
+
+  it('drops stops with invalid coords and returns [] for an invalid user', () => {
+    const user = { lat: 22.3, lng: 114.1 }
+    const stops = [
+      { id: 'ok', lat: 22.301, lng: 114.101 },
+      { id: 'nan', lat: Number.NaN, lng: 114.101 },
+      { id: 'inf', lat: 22.301, lng: Number.POSITIVE_INFINITY },
+    ]
+
+    const result = computeNearbyStops(user, stops)
+    expect(result.map((s) => s.id)).toEqual(['ok'])
+    expect(computeNearbyStops({ lat: Number.NaN, lng: 0 }, stops)).toEqual([])
+  })
+
+  it('never renders NaN distances', () => {
+    expect(formatDistanceKm(Number.NaN, 'en')).toBe('—')
+    expect(formatDistanceKm(Number.NEGATIVE_INFINITY, 'tc')).toBe('—')
+  })
+})
+
+describe('isValidGeoPoint', () => {
+  it('rejects non-finite and non-object input', () => {
+    expect(isValidGeoPoint({ lat: 22.3, lng: 114.1 })).toBe(true)
+    expect(isValidGeoPoint({ lat: Number.NaN, lng: 114.1 })).toBe(false)
+    expect(isValidGeoPoint(null)).toBe(false)
+    expect(isValidGeoPoint({ lat: '22', lng: 114 })).toBe(false)
   })
 })

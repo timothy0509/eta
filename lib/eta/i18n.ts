@@ -65,6 +65,27 @@ const common: Record<string, TranslationEntry> = {
   refreshLocation: { en: 'Refresh location', tc: '重新整理位置', sc: '重新整理位置' },
   locating: { en: 'Locating…', tc: '正在定位…', sc: '正在定位…' },
   locationError: { en: 'Location error', tc: '定位失敗', sc: '定位失败' },
+  locationDenied: {
+    en: 'Location permission was denied. Enable it in your browser settings, then try again.',
+    tc: '已拒絕定位權限，請在瀏覽器設定中開啟，然後再試一次。',
+    sc: '已拒绝定位权限，请在浏览器设置中开启，然后再试一次。',
+  },
+  locationUnavailable: {
+    en: 'Location is unavailable. Move somewhere with a clearer signal, then try again.',
+    tc: '無法取得位置，請移到訊號較佳的地方再試一次。',
+    sc: '无法取得位置，请移到信号较佳的地方再试一次。',
+  },
+  locationTimeout: {
+    en: 'The location request timed out. Try again.',
+    tc: '定位要求逾時，請再試一次。',
+    sc: '定位要求超时，请再试一次。',
+  },
+  locationUnsupported: {
+    en: 'This browser does not support location. Try a recent version of Chrome or Safari.',
+    tc: '此瀏覽器不支援定位，請使用新版 Chrome 或 Safari。',
+    sc: '此浏览器不支持定位，请使用新版 Chrome 或 Safari。',
+  },
+  enableLocation: { en: 'Enable location', tc: '開啟定位', sc: '开启定位' },
   noStopsNearby: {
     en: 'No stops found nearby.',
     tc: '附近沒有找到車站。',

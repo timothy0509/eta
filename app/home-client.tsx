@@ -599,6 +599,7 @@ export default function HomeClient() {
           <NearbyView
             lang={lang}
             mode={mode}
+            onSelectStopGroup={onSelectStopGroupFromRoute}
             onSelectMtrStation={onSelectMtrStationFromRoute}
             onSelectLrtStation={onSelectLrtStationFromRoute}
           />

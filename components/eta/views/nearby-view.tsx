@@ -416,7 +416,7 @@ function MtrNearbyView({ lang, onSelectMtrStation, t }: SharedViewProps) {
                       key={station.sta}
                       type="button"
                       onClick={() => onSelectMtrStation?.(station.sta, line, stationName(station))}
-                      className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1 transition-colors hover:opacity-80"
+                      className="bg-surface-container-high text-on-surface-variant hover:bg-surface-container-high/70 hover:text-on-surface focus-visible:ring-primary/30 m3-label-md inline-flex min-h-[36px] items-center rounded-full px-2.5 py-1 transition-colors focus-visible:ring-2 focus-visible:outline-none"
                     >
                       {stationName(station)}
                     </button>
@@ -486,7 +486,7 @@ function LrtNearbyView({ lang, onSelectLrtStation, t }: SharedViewProps) {
                           onClick={() =>
                             onSelectLrtStation?.(station.stationId, stationName(station))
                           }
-                          className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1 transition-colors hover:opacity-80"
+                          className="bg-surface-container-high text-on-surface-variant hover:bg-surface-container-high/70 hover:text-on-surface focus-visible:ring-primary/30 m3-label-md inline-flex min-h-[36px] items-center rounded-full px-2.5 py-1 transition-colors focus-visible:ring-2 focus-visible:outline-none"
                         >
                           {stationName(station)}
                         </button>

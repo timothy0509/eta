@@ -71,11 +71,13 @@ export function RouteStopRow({
   subtitle,
   eta,
   onClick,
+  ariaLabel,
 }: {
   name: React.ReactNode
   subtitle?: React.ReactNode
   eta?: React.ReactNode
   onClick?: () => void
+  ariaLabel?: string
 }) {
   const clickable = Boolean(onClick)
   return (
@@ -88,6 +90,7 @@ export function RouteStopRow({
         )}
         role={clickable ? 'button' : undefined}
         tabIndex={clickable ? 0 : undefined}
+        aria-label={clickable ? ariaLabel : undefined}
         onClick={onClick}
         onKeyDown={
           clickable

@@ -2,7 +2,7 @@ import * as React from 'react'
 
 export function ResultsSkeleton() {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" role="status" aria-busy>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-2">
           <div className="bg-muted/50 h-6 w-40 animate-pulse rounded" />

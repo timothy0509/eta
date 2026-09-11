@@ -1,5 +1,3 @@
-'use client'
-
 import { AnimatePresence, motion } from 'framer-motion'
 import * as React from 'react'
 
@@ -12,18 +10,19 @@ type Props = {
   className?: string
   children: React.ReactNode
   panel: React.ReactNode
+  toggleLabel: string
 }
 
-export function ExpandableEtaRow({ expanded, onToggle, color, className, children, panel }: Props) {
-  const onKeyDown = React.useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Enter' || e.key === ' ') {
-        e.preventDefault()
-        onToggle()
-      }
-    },
-    [onToggle]
-  )
+export function ExpandableEtaRow({
+  expanded,
+  onToggle,
+  color,
+  className,
+  children,
+  panel,
+  toggleLabel,
+}: Props) {
+  const panelId = React.useId()
 
   return (
     <motion.div
@@ -42,12 +41,12 @@ export function ExpandableEtaRow({ expanded, onToggle, color, className, childre
         />
       ) : null}
 
-      <div
-        role="button"
-        tabIndex={0}
+      <button
+        type="button"
         aria-expanded={expanded}
+        aria-controls={panelId}
+        aria-label={toggleLabel}
         onClick={onToggle}
-        onKeyDown={onKeyDown}
         className="absolute inset-0 z-0 cursor-pointer"
       />
 
@@ -56,6 +55,7 @@ export function ExpandableEtaRow({ expanded, onToggle, color, className, childre
       <AnimatePresence initial={false}>
         {expanded ? (
           <motion.div
+            id={panelId}
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}

@@ -594,6 +594,7 @@ export function KmbRoutesView({
                       key={rs.stopId}
                       name={<span className="font-medium">{parsed.name}</span>}
                       subtitle={parsed.stopCode}
+                      ariaLabel={parsed.name}
                       eta={
                         firstEta ? (
                           <SoonestEtaPill

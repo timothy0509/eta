@@ -39,7 +39,7 @@ export function SettingsView({ lang }: Props) {
   return (
     <FadeIn className="mx-auto max-w-3xl space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
-        <section className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+        <section className="card-m3 p-5">
           <h2 className="m3-title-md mb-4 flex items-center gap-2">
             <Palette className="h-5 w-5" />
             {t('common.appearance')}
@@ -51,7 +51,7 @@ export function SettingsView({ lang }: Props) {
                 type="button"
                 onClick={() => setTheme(value)}
                 className={cn(
-                  'm3-label-lg flex items-center gap-2 rounded-full px-5 py-2 shadow-sm transition-colors',
+                  'm3-label-lg flex min-h-[44px] items-center gap-2 rounded-full px-5 py-2 shadow-sm transition-colors',
                   activeTheme === value
                     ? 'bg-primary-container text-on-primary-container'
                     : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
@@ -64,7 +64,7 @@ export function SettingsView({ lang }: Props) {
           </div>
         </section>
 
-        <section className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+        <section className="card-m3 p-5">
           <h2 className="m3-title-md mb-4 flex items-center gap-2">
             <Globe className="h-5 w-5" />
             {t('common.language')}
@@ -79,7 +79,7 @@ export function SettingsView({ lang }: Props) {
                   disabled={disabled}
                   onClick={() => setLang(l)}
                   className={cn(
-                    'm3-label-lg rounded-full px-5 py-2 shadow-sm transition-colors',
+                    'm3-label-lg flex min-h-[44px] items-center justify-center rounded-full px-5 py-2 shadow-sm transition-colors',
                     storeLang === l
                       ? 'bg-primary-container text-on-primary-container'
                       : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
@@ -103,7 +103,7 @@ export function SettingsView({ lang }: Props) {
         </section>
       </div>
 
-      <section className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+      <section className="card-m3 p-5">
         <h2 className="m3-title-md mb-4 flex items-center gap-2">
           <Timer className="h-5 w-5" />
           {t('common.autoRefresh')}

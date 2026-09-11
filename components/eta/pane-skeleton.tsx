@@ -1,23 +1,33 @@
 'use client'
 
 import * as React from 'react'
-import { Loader2 } from 'lucide-react'
+
+import { useTranslations } from '@/lib/eta/i18n'
+import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 /**
- * Skeleton loading state for transport mode panes
- * Shows a spinner and placeholder text while dynamic imports load
+ * Skeleton loading state for transport mode panes.
+ * Uses the same shimmer rhythm as ResultsSkeleton so the pane
+ * and results swap without a visual jump.
  */
 export function PaneSkeleton({ className }: { className?: string }) {
+  const lang = useAppStore((s) => s.lang)
+  const { t } = useTranslations(lang)
   return (
     <div
-      className={cn(
-        'text-muted-foreground flex flex-col items-center justify-center gap-3 py-8',
-        className
-      )}
+      role="status"
+      aria-busy
+      aria-label={t('common.loading')}
+      className={cn('space-y-4', className)}
     >
-      <Loader2 className="h-6 w-6 animate-spin" />
-      <span className="text-sm">Loading...</span>
+      <div className="bg-muted/50 h-11 w-full animate-pulse rounded-2xl" />
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="bg-muted/50 h-7 w-20 animate-pulse rounded-full" />
+        <div className="bg-muted/50 h-7 w-20 animate-pulse rounded-full" />
+        <div className="bg-muted/50 h-7 w-20 animate-pulse rounded-full" />
+      </div>
+      <span className="sr-only">{t('common.loading')}</span>
     </div>
   )
 }

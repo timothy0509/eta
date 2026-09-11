@@ -54,6 +54,7 @@ function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
 
   React.useEffect(() => {
     if (!userLocation || !key) return
+    if (result?.key === key) return
     let cancelled = false
     fetchKmbStops()
       .then((data) => {
@@ -72,7 +73,7 @@ function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
     return () => {
       cancelled = true
     }
-  }, [key, userLocation])
+  }, [key, result?.key, userLocation])
 
   if (!key) return { stops: [], loading: false, error: null }
   if (!result || result.key !== key)
@@ -283,7 +284,7 @@ function KmbNearbyView({
         {locating && (
           <div className="text-on-surface-variant m3-body-md py-2">{t('common.locating')}</div>
         )}
-        {locationError && !location && (
+        {locationError && (
           <div className="text-error m3-body-md flex items-center gap-2 py-2">
             <MapPin className="h-4 w-4" />
             {locationErrorMessage(locationError, t)}

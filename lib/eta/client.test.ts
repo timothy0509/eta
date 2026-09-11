@@ -37,6 +37,14 @@ describe('fetchKmbStops', () => {
       },
       { stop: 'E', name_en: '', name_tc: '沒有英文名', name_sc: '', lat: 22.28, long: 114.15 },
       { stop: 'F', name_en: 'Numbers', name_tc: '', name_sc: '', lat: 22.3, long: 114.16 },
+      {
+        stop: 'G',
+        name_en: 'Missing',
+        name_tc: '',
+        name_sc: '',
+        lat: 22.3,
+        long: undefined as unknown as number,
+      },
     ])
 
     const stops = await fetchKmbStops()

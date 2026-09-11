@@ -105,12 +105,13 @@ export type KmbEtaEntryWithLeg = KmbEtaEntry & {
 export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
   const stops = await getKmbStops()
 
-  const toCoord = (value: string | number) => {
+  const toCoord = (value: unknown) => {
     if (typeof value === 'string') {
       if (!value.trim()) return Number.NaN
       return Number(value)
     }
-    return value
+    if (typeof value === 'number') return value
+    return Number.NaN
   }
 
   return stops

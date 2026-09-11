@@ -1,5 +1,3 @@
-'use client'
-
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -126,5 +124,23 @@ describe('useGeolocation', () => {
     })
     expect(result.current.location).toBeNull()
     expect(getCurrentPosition).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects a non-finite fix without caching it', async () => {
+    stubGeolocation((_call, { onSuccess }) => {
+      onSuccess(successAt(Number.NaN, 114.15))
+    })
+
+    const { result } = renderHook(() => useGeolocation())
+
+    act(() => {
+      result.current.refresh()
+    })
+
+    await waitFor(() => {
+      expect(result.current.error).toBe('unavailable')
+    })
+    expect(result.current.location).toBeNull()
+    expect(window.localStorage.getItem(LAST_LOCATION_KEY)).toBeNull()
   })
 })

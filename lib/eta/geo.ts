@@ -51,7 +51,7 @@ const DISTANCE_LABELS: Record<UiLanguage, { m: string; km: string }> = {
  */
 export function formatDistanceKm(km: number, lang: UiLanguage): string {
   const labels = DISTANCE_LABELS[lang]
-  if (!Number.isFinite(km) || km < 0) return `—`
+  if (!Number.isFinite(km) || km < 0) return '—'
   if (km < 1) {
     const metres = Math.max(0, Math.round(km * 1000))
     return `${metres} ${labels.m}`

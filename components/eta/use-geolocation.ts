@@ -119,6 +119,7 @@ export function useGeolocation(): UseGeolocationReturn {
     requestWithRetry()
       .then((next) => {
         if (seq !== seqRef.current) return
+        if (!isValidLocation(next)) throw new Error('Invalid coordinates in geolocation fix.')
         setLocation(next)
         writeCachedLocation(next)
       })

@@ -1,0 +1,53 @@
+name: opencode-review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+concurrency:
+  group: opencode-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Check author permission
+        id: permission
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              username: context.actor,
+            })
+            return ['admin', 'write', 'maintain'].includes(data.permission)
+          result-encoding: string
+
+      - name: Checkout repository
+        if: steps.permission.outputs.result == 'true'
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Run opencode
+        if: steps.permission.outputs.result == 'true'
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode-go/muse-spark-1.3-contributor
+          prompt: |
+            Review this pull request against the conventions in AGENTS.md.
+            - Flag bugs, broken behavior, and type-safety problems. `any` is not allowed.
+            - Point out missing tests for changes to fetch, cache, or URL state.
+            - Flag new UI strings that are not translated, and new upstream hosts
+              that are missing from the CSP `connect-src` in next.config.ts.
+            - Suggest concrete improvements. Comment only on real problems.

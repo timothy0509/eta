@@ -5,26 +5,53 @@ import { fetchKmbEtasForStop, type FetchKmbEtasForStopDeps } from './eta-db'
 import type { EtaDbIndexes } from '@/lib/eta/eta-db-index'
 
 function makeRouteEntry(
-  overrides: Partial<RouteListEntry> & {
+  overrides: Omit<Partial<RouteListEntry>, 'bound' | 'stops'> & {
     route: string
     co: Company[]
     bound: Partial<Record<Company, string>>
+    stops?: Partial<Record<Company, string[]>>
   }
 ): RouteListEntry {
+  const companies: Company[] = [
+    'kmb',
+    'nlb',
+    'ctb',
+    'lrtfeeder',
+    'gmb',
+    'lightRail',
+    'mtr',
+    'sunferry',
+    'hkkf',
+    'fortuneferry',
+  ]
+  const bound = Object.fromEntries(
+    companies.map((co) => [co, 'O'])
+  ) as unknown as RouteListEntry['bound']
+  for (const [co, value] of Object.entries(overrides.bound)) {
+    bound[co as Company] = value as RouteListEntry['bound'][Company]
+  }
+  const stops = Object.fromEntries(
+    companies.map((co) => [co, []])
+  ) as unknown as RouteListEntry['stops']
+  for (const [co, value] of Object.entries(overrides.stops ?? {})) {
+    stops[co as Company] = value as string[]
+  }
   return {
     route: overrides.route,
     co: overrides.co,
-    bound: overrides.bound as RouteListEntry['bound'],
+    bound,
     serviceType: overrides.serviceType ?? '1',
     orig: overrides.orig ?? { en: 'A', zh: 'A' },
     dest: overrides.dest ?? { en: 'B', zh: 'B' },
-    stops: overrides.stops ?? {},
-    fares: overrides.fares,
-    freq: overrides.freq,
-    nlbId: overrides.nlbId,
-    gtfsId: overrides.gtfsId,
-    jointly: overrides.jointly,
-  } as RouteListEntry
+    stops,
+    fares: overrides.fares ?? null,
+    faresHoliday: overrides.faresHoliday ?? null,
+    freq: overrides.freq ?? null,
+    jt: overrides.jt ?? null,
+    seq: overrides.seq ?? 1,
+    nlbId: overrides.nlbId ?? '',
+    gtfsId: overrides.gtfsId ?? '',
+  }
 }
 
 function emptyIndexes(): EtaDbIndexes {

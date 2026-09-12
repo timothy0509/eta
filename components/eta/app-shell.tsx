@@ -13,7 +13,7 @@ import {
   TrainFront,
   TramFront,
 } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { useTheme } from 'next-themes'
 import * as React from 'react'
 
@@ -59,7 +59,7 @@ const MODE_SHORT_LABELS: Record<TransportMode, string> = {
   lrt: 'LRT',
 }
 
-const SUB_VIEWS: Array<{
+const JOURNEY_VIEWS: Array<{
   id: SubView
   icon: React.ComponentType<{ className?: string }>
 }> = [
@@ -69,6 +69,10 @@ const SUB_VIEWS: Array<{
   { id: 'saved', icon: Heart },
   { id: 'settings', icon: Settings },
 ]
+
+// Bottom floating pill stays compact: max 4 journey tabs. Settings lives
+// in the side rail on desktop and behind the top-bar gear on mobile.
+const MOBILE_JOURNEY_VIEWS = JOURNEY_VIEWS.filter((v) => v.id !== 'settings')
 
 const LANG_LABELS: Record<UiLanguage, string> = {
   en: 'EN',
@@ -129,73 +133,188 @@ function LanguageMenu({ lang, mode }: { lang: UiLanguage; mode: TransportMode })
   )
 }
 
-type TopAppBarProps = {
+function useMinuteClock(): string {
+  const [now, setNow] = React.useState(() => new Date())
+  React.useEffect(() => {
+    const id = window.setInterval(() => setNow(new Date()), 15_000)
+    return () => window.clearInterval(id)
+  }, [])
+  return React.useMemo(
+    () =>
+      new Intl.DateTimeFormat('en-HK', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false,
+      }).format(now),
+    [now]
+  )
+}
+
+function TransitClock() {
+  const time = useMinuteClock()
+  return (
+    <div
+      role="timer"
+      aria-label={time}
+      className="text-ink text-on-surface-variant hidden items-center gap-2 tabular-nums sm:flex"
+    >
+      <span className="relative inline-flex h-2 w-2" aria-hidden>
+        <span className="bg-primary absolute inline-flex h-full w-full rounded-full opacity-60 motion-safe:animate-ping motion-reduce:hidden" />
+        <span className="bg-primary relative inline-flex h-2 w-2 rounded-full" />
+      </span>
+      <span className="text-[13px] font-semibold tracking-wide">{time}</span>
+    </div>
+  )
+}
+
+type ModeTabsProps = {
   lang: UiLanguage
   mode: TransportMode
   onModeChange: (mode: TransportMode) => void
 }
 
-export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
-  const { t } = useTranslations(lang)
+function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
+  const reduceMotion = useReducedMotion()
+  const tabRefs = React.useRef<Array<HTMLButtonElement | null>>([])
+  const activeIndex = MODES.findIndex((m) => m.mode === mode)
+
+  const activateAt = React.useCallback(
+    (index: number) => {
+      const next = MODES[(index + MODES.length) % MODES.length]
+      if (!next) return
+      tabRefs.current[index]?.focus()
+      if (next.mode !== mode) onModeChange(next.mode)
+    },
+    [mode, onModeChange]
+  )
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      activateAt(activeIndex + 1)
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      activateAt(activeIndex - 1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      activateAt(0)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      activateAt(MODES.length - 1)
+    }
+  }
 
   return (
-    <header className="bg-surface-container-low/90 supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
-      <div className="mx-auto flex h-[3.5rem] max-w-[1280px] items-center justify-between gap-2 px-4 sm:h-14 sm:gap-3 sm:px-6">
-        <div className="flex shrink-0 items-center gap-2">
-          <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-xl text-[15px] font-bold shadow-sm sm:h-9 sm:w-9 sm:text-lg">
+    <div className="border-trackline border-outline-variant/10 border-t">
+      <nav aria-label="Transport mode" className="mx-auto max-w-[1280px] px-4 pb-2 sm:px-6">
+        <div
+          role="tablist"
+          aria-label="Transport mode"
+          onKeyDown={onKeyDown}
+          className="bg-platform bg-surface-container-high/70 relative flex w-full items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
+        >
+          {MODES.map((m, index) => {
+            const Icon = m.icon
+            const active = mode === m.mode
+            return (
+              <button
+                key={m.mode}
+                ref={(el) => {
+                  tabRefs.current[index] = el
+                }}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                aria-label={m.labels[lang]}
+                title={m.labels[lang]}
+                tabIndex={active ? 0 : -1}
+                onClick={() => onModeChange(m.mode)}
+                className={cn(
+                  'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-[var(--surface-tint)] focus-visible:outline-none sm:text-sm',
+                  active
+                    ? 'text-on-secondary-container'
+                    : 'text-on-surface-variant hover:text-on-surface'
+                )}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="transit-mode-pill"
+                    aria-hidden
+                    className="bg-secondary-container absolute inset-0 -z-10 rounded-full shadow-sm"
+                    transition={
+                      reduceMotion
+                        ? { duration: 0 }
+                        : { type: 'spring', stiffness: 380, damping: 32 }
+                    }
+                  />
+                )}
+                <Icon className="h-4 w-4 shrink-0" />
+                <span className="hidden truncate sm:inline">{m.labels[lang]}</span>
+                <span className="truncate sm:hidden">{MODE_SHORT_LABELS[m.mode]}</span>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+    </div>
+  )
+}
+
+type TopAppBarProps = {
+  lang: UiLanguage
+  mode: TransportMode
+  onModeChange: (mode: TransportMode) => void
+  subView?: SubView
+  onSubViewChange?: (subView: SubView) => void
+}
+
+export function TopAppBar({ lang, mode, onModeChange, subView, onSubViewChange }: TopAppBarProps) {
+  const { t } = useTranslations(lang)
+  const settingsActive = subView === 'settings'
+
+  return (
+    <header className="bg-backdrop bg-surface/95 supports-[backdrop-filter]:bg-surface/80 border-trackline sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
+      <div className="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-2 px-4 sm:px-6">
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-lg text-[15px] font-bold shadow-sm">
             T
           </div>
-          <span className="text-[15px] font-semibold tracking-tight sm:text-[17px]">TimoETA</span>
+          <div className="leading-none">
+            <p className="text-ink text-on-surface text-[15px] font-semibold tracking-tight">
+              TimoETA
+            </p>
+            <p className="text-on-surface-variant mt-0.5 hidden text-[10px] font-medium tracking-[0.14em] sm:block">
+              HK TRANSIT
+            </p>
+          </div>
         </div>
 
-        <nav
-          className="flex min-w-0 flex-1 justify-center px-1 sm:px-6"
-          aria-label={t('common.routes')}
-        >
-          <div
-            role="group"
-            aria-label="Transport mode"
-            className="bg-surface-container-high/70 relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
-          >
-            {MODES.map((m) => {
-              const Icon = m.icon
-              const active = mode === m.mode
-              return (
-                <button
-                  key={m.mode}
-                  type="button"
-                  onClick={() => onModeChange(m.mode)}
-                  aria-pressed={active}
-                  aria-label={m.labels[lang]}
-                  title={m.labels[lang]}
-                  className={cn(
-                    'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-medium transition-colors sm:py-2 sm:text-sm',
-                    active
-                      ? 'text-on-secondary-container'
-                      : 'text-on-surface-variant hover:text-on-surface'
-                  )}
-                >
-                  {active && (
-                    <motion.div
-                      layoutId="top-mode-pill"
-                      className="bg-secondary-container absolute inset-0 -z-10 rounded-full shadow-sm"
-                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                    />
-                  )}
-                  <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-                  <span className="hidden truncate sm:inline">{m.labels[lang]}</span>
-                  <span className="truncate sm:hidden">{MODE_SHORT_LABELS[m.mode]}</span>
-                </button>
-              )
-            })}
-          </div>
-        </nav>
+        <TransitClock />
 
         <div className="flex shrink-0 items-center">
+          {onSubViewChange && (
+            <button
+              type="button"
+              onClick={() => onSubViewChange('settings')}
+              aria-label={t('common.settings')}
+              aria-current={settingsActive ? 'page' : undefined}
+              title={t('common.settings')}
+              className={cn(
+                'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-[var(--surface-tint)] focus-visible:outline-none lg:hidden',
+                settingsActive
+                  ? 'text-on-primary-container bg-primary-container'
+                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
+              )}
+            >
+              <Settings className="h-5 w-5" />
+            </button>
+          )}
           <LanguageMenu lang={lang} mode={mode} />
           <ThemeToggle label={t('common.toggleTheme')} />
         </div>
       </div>
+
+      <ModeTabs lang={lang} mode={mode} onModeChange={onModeChange} />
     </header>
   )
 }
@@ -208,13 +327,14 @@ type SideRailProps = {
 
 export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
   const { t } = useTranslations(lang)
+  const reduceMotion = useReducedMotion()
 
   return (
     <nav
       aria-label="Sections"
-      className="bg-surface-container-low border-outline-variant/20 sticky top-20 hidden h-fit shrink-0 flex-col items-center gap-1 rounded-[28px] border px-2 py-3 shadow-sm lg:flex"
+      className="bg-platform bg-surface-container-low border-trackline border-outline-variant/20 sticky top-[8.75rem] hidden h-fit w-[76px] shrink-0 flex-col items-center gap-1 rounded-3xl border px-1.5 py-3 shadow-sm lg:flex"
     >
-      {SUB_VIEWS.map((sv) => {
+      {JOURNEY_VIEWS.map((sv) => {
         const Icon = sv.icon
         const active = subView === sv.id
         return (
@@ -224,19 +344,22 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
             onClick={() => onSubViewChange(sv.id)}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'relative flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-colors',
+              'relative flex min-h-[44px] w-full flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-[11px] font-medium transition-colors',
               active ? 'text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'
             )}
           >
             {active && (
-              <motion.div
-                layoutId="side-rail-pill"
-                className="bg-primary-container absolute inset-0 -z-10 rounded-2xl"
-                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+              <motion.span
+                layoutId="transit-journey-pill"
+                aria-hidden
+                className="bg-primary-container absolute inset-0 rounded-2xl"
+                transition={
+                  reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 32 }
+                }
               />
             )}
-            <Icon className="h-5 w-5" />
-            <span className="leading-none">{t(`common.${sv.id}`)}</span>
+            <Icon className="relative h-5 w-5" />
+            <span className="relative leading-none">{t(`common.${sv.id}`)}</span>
           </button>
         )
       })}
@@ -252,14 +375,15 @@ type BottomNavProps = {
 
 export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
   const { t } = useTranslations(lang)
+  const reduceMotion = useReducedMotion()
 
   return (
     <nav
       aria-label="Sections"
-      className="bg-surface-container-low fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),28rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg lg:hidden"
+      className="bg-platform bg-surface-container-low/95 supports-[backdrop-filter]:bg-surface-container-low/85 border-trackline fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),26rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg backdrop-blur lg:hidden"
     >
       <div className="flex w-full items-center">
-        {SUB_VIEWS.map((sv) => {
+        {MOBILE_JOURNEY_VIEWS.map((sv) => {
           const Icon = sv.icon
           const active = subView === sv.id
           return (
@@ -276,14 +400,17 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
               )}
             >
               {active && (
-                <motion.div
-                  layoutId="bottom-nav-pill"
-                  className="bg-primary-container absolute inset-0 -z-10 rounded-full"
-                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                <motion.span
+                  layoutId="transit-journey-pill"
+                  aria-hidden
+                  className="bg-primary-container absolute inset-0 rounded-full"
+                  transition={
+                    reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 32 }
+                  }
                 />
               )}
-              <Icon className="h-[22px] w-[22px]" />
-              <span className="leading-none">{t(`common.${sv.id}`)}</span>
+              <Icon className="relative h-[22px] w-[22px]" />
+              <span className="relative leading-none">{t(`common.${sv.id}`)}</span>
             </button>
           )
         })}

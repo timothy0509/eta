@@ -1,92 +1,91 @@
 'use client'
 
-import { motion, type HTMLMotionProps } from 'framer-motion'
+import { motion, useReducedMotion, type HTMLMotionProps } from 'framer-motion'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
-type FadeInProps = HTMLMotionProps<'div'> & {
+const FADE_DURATION = 0.22
+const STAGGER_STEP = 0.03
+const MAX_STAGGER_INDEX = 5
+
+type FadeInProps = Omit<HTMLMotionProps<'div'>, 'children'> & {
+  children?: React.ReactNode
   delay?: number
   duration?: number
+  staggerIndex?: number
 }
 
 export const FadeIn = React.forwardRef<HTMLDivElement, FadeInProps>(
-  ({ children, className, delay = 0, duration = 0.25, ...props }, ref) => (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration, delay, ease: [0.2, 0.8, 0.2, 1] }}
-      className={className}
-      {...props}
-    >
-      {children}
-    </motion.div>
-  )
+  (
+    { children, className, delay = 0, duration = FADE_DURATION, staggerIndex = 0, ...props },
+    ref
+  ) => {
+    const reduceMotion = useReducedMotion()
+    if (reduceMotion) {
+      return (
+        <div ref={ref} className={className}>
+          {children}
+        </div>
+      )
+    }
+    const capped = Math.max(0, Math.min(MAX_STAGGER_INDEX, Math.floor(staggerIndex)))
+    return (
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration, delay: delay + capped * STAGGER_STEP, ease: [0.2, 0.8, 0.2, 1] }}
+        className={className}
+        {...props}
+      >
+        {children}
+      </motion.div>
+    )
+  }
 )
 FadeIn.displayName = 'FadeIn'
 
+// Backward-compatible wrappers. They render a single FadeIn or plain div so
+// pages keep working without the old triple motion stack.
 export function StaggerContainer({
   children,
   className,
-  stagger = 0.04,
 }: {
   children: React.ReactNode
   className?: string
   stagger?: number
 }) {
-  return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={{
-        hidden: {},
-        visible: { transition: { staggerChildren: stagger } },
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
+  return <div className={className}>{children}</div>
 }
 
 export function StaggerItem({
   children,
   className,
+  index = 0,
 }: {
   children: React.ReactNode
   className?: string
+  index?: number
 }) {
   return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 8 },
-        visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.2, 0.8, 0.2, 1] } },
-      }}
-      className={className}
-    >
+    <FadeIn className={className} staggerIndex={index}>
       {children}
-    </motion.div>
+    </FadeIn>
   )
 }
 
-type MotionCardProps = Omit<HTMLMotionProps<'div'>, 'whileHover' | 'whileTap'> & {
+type MotionCardProps = React.HTMLAttributes<HTMLDivElement> & {
+  children?: React.ReactNode
   hoverScale?: number
   tapScale?: number
 }
 
 export const MotionCard = React.forwardRef<HTMLDivElement, MotionCardProps>(
-  ({ children, className, hoverScale = 1.01, tapScale = 0.99, ...props }, ref) => (
-    <motion.div
-      ref={ref}
-      whileHover={{ scale: hoverScale }}
-      whileTap={{ scale: tapScale }}
-      transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}
-      className={className}
-      {...props}
-    >
+  ({ children, className, hoverScale: _hoverScale, tapScale: _tapScale, ...props }, ref) => (
+    <div ref={ref} className={cn('ui-press', className)} {...props}>
       {children}
-    </motion.div>
+    </div>
   )
 )
 MotionCard.displayName = 'MotionCard'

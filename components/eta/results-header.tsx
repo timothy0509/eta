@@ -1,13 +1,12 @@
 'use client'
 
-import { RefreshCw } from 'lucide-react'
 import * as React from 'react'
 
+import { RefreshPulse } from '@/components/eta/signal/refresh-pulse'
 import { formatUiTime } from '@/lib/eta/format'
 import { useTranslations } from '@/lib/eta/i18n'
 import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
 import type { TransportMode, UiLanguage } from '@/lib/eta/types'
-import { cn } from '@/lib/utils'
 
 type Props = {
   lang: UiLanguage
@@ -19,13 +18,13 @@ type Props = {
   lastUpdatedAt?: number | null
   stale?: boolean
   loading?: boolean
+  intervalSec?: number
   onRefresh?: () => void
 }
 
 /**
- * Shared header for KMB, MTR, and LRT results. Shows the title,
- * updated time with relative age, a stale marker announced to
- * screen readers, and a refresh button with a 44px touch target.
+ * Signal results header: Signal type scale plus RefreshPulse age chip.
+ * Keeps last good board visible on stale, retry inline.
  */
 export function ResultsHeader({
   lang,
@@ -37,24 +36,34 @@ export function ResultsHeader({
   lastUpdatedAt,
   stale,
   loading,
+  intervalSec = 15,
   onRefresh,
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
   const relativeAgeLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang })
   const showStale = Boolean(stale || isStaleByAge({ lastUpdatedAt, mode }))
+  const [now, setNow] = React.useState(() => Date.now())
+
+  React.useEffect(() => {
+    if (!lastUpdatedAt) return
+    const id = setInterval(() => setNow(Date.now()), 15000)
+    return () => clearInterval(id)
+  }, [lastUpdatedAt])
+
+  const ageMs = lastUpdatedAt ? Math.max(0, now - lastUpdatedAt) : null
 
   return (
     <div className="mb-5 flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-start gap-2">
-          <h2 className="text-on-surface m3-title-lg min-w-0 flex-1 truncate font-semibold tracking-tight">
+          <h2 className="signal-stop-name text-ink min-w-0 flex-1 truncate text-xl leading-7 font-semibold tracking-tight">
             {title}
           </h2>
           {titleAddon}
         </div>
         <p
-          className="text-on-surface-variant m3-label-md mt-1 flex flex-wrap items-center gap-1.5"
+          className="signal-caption text-ink-soft mt-1 flex flex-wrap items-center gap-1.5"
           aria-live="polite"
         >
           {icon}
@@ -74,21 +83,19 @@ export function ResultsHeader({
           {showStale ? (
             <>
               <span aria-hidden>·</span>
-              <span className="text-error">{t('common.stale')}</span>
+              <span className="text-signal-alert">{t('common.stale')}</span>
             </>
           ) : null}
         </p>
       </div>
       {onRefresh ? (
-        <button
-          type="button"
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
-          onClick={onRefresh}
-          disabled={loading}
-          aria-label={t('common.refresh')}
-        >
-          <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
-        </button>
+        <RefreshPulse
+          ageMs={ageMs}
+          stale={showStale}
+          loading={Boolean(loading)}
+          onRefresh={onRefresh}
+          intervalSec={intervalSec}
+        />
       ) : null}
     </div>
   )

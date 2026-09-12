@@ -559,13 +559,15 @@ export default function HomeClient() {
 
   const renderStops = () => {
     return (
-      <FadeIn className="mx-auto max-w-[1280px] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
-        <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
-          <div className="card-m3 p-4 sm:p-5 lg:p-5">{controls}</div>
+      <FadeIn className="mx-auto max-w-[1280px] lg:grid lg:grid-cols-[360px_minmax(0,1fr)] lg:items-start lg:gap-6">
+        <div className="lg:sticky lg:top-[8.75rem] lg:max-h-[calc(100dvh-10rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
+          <div className="card-m3 bg-platform bg-surface-container-low rounded-[20px] p-4 sm:p-5 lg:p-5">
+            {controls}
+          </div>
         </div>
 
         <FadeIn className="relative mt-4 lg:mt-0" delay={0.05}>
-          <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-6">
+          <div className="bg-platform bg-surface-container-lowest relative overflow-hidden rounded-[20px] border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-6">
             <span className="bg-primary absolute top-0 right-0 left-0 h-[3px]" aria-hidden />
             {results}
           </div>
@@ -618,8 +620,14 @@ export default function HomeClient() {
   }
 
   return (
-    <div className="bg-surface min-h-dvh overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
-      <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
+    <div className="bg-backdrop bg-surface min-h-dvh overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
+      <TopAppBar
+        lang={lang}
+        mode={mode}
+        onModeChange={onModeChange}
+        subView={subView}
+        onSubViewChange={onSubViewChange}
+      />
 
       <div className="mx-auto flex max-w-[1280px] gap-6 px-4 py-4 sm:px-6 sm:py-6">
         <SideRail lang={lang} subView={subView} onSubViewChange={onSubViewChange} />

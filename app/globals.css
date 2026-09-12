@@ -12,277 +12,142 @@
     sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   --font-numbers: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
-  --radius-3xl: 1.75rem;
-  --radius-4xl: 2rem;
 
-  /* Material 3 surface roles */
-  --color-surface: var(--surface);
-  --color-surface-dim: var(--surface-dim);
-  --color-surface-bright: var(--surface-bright);
-  --color-surface-container-lowest: var(--surface-container-lowest);
-  --color-surface-container-low: var(--surface-container-low);
-  --color-surface-container: var(--surface-container);
-  --color-surface-container-high: var(--surface-container-high);
-  --color-surface-container-highest: var(--surface-container-highest);
-  --color-surface-variant: var(--surface-variant);
-  --color-on-surface: var(--on-surface);
-  --color-on-surface-variant: var(--on-surface-variant);
-  --color-inverse-surface: var(--inverse-surface);
-  --color-inverse-on-surface: var(--inverse-on-surface);
-  --color-outline: var(--outline);
-  --color-outline-variant: var(--outline-variant);
-  --color-surface-tint: var(--surface-tint);
+  /* Signal system: canonical transit tokens */
+  --color-backdrop: var(--backdrop);
+  --color-platform: var(--platform);
+  --color-concourse: var(--concourse);
+  --color-trackline: var(--trackline);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-dispatch: var(--dispatch);
+  --color-dispatch-ink: var(--dispatch-ink);
+  --color-signal-now: var(--signal-now);
+  --color-signal-now-wash: var(--signal-now-wash);
+  --color-signal-soon: var(--signal-soon);
+  --color-signal-soon-wash: var(--signal-soon-wash);
+  --color-signal-later: var(--signal-later);
+  --color-signal-later-wash: var(--signal-later-wash);
+  --color-signal-lost: var(--signal-lost);
+  --color-signal-lost-wash: var(--signal-lost-wash);
+  --color-signal-alert: var(--signal-alert);
+  --color-signal-alert-wash: var(--signal-alert-wash);
+  --color-mode-kmb: var(--mode-kmb);
+  --color-mode-mtr: var(--mode-mtr);
+  --color-mode-lrt: var(--mode-lrt);
 
-  /* M3 extended roles */
-  --color-primary-container: var(--primary-container);
-  --color-on-primary-container: var(--on-primary-container);
-  --color-inverse-primary: var(--inverse-primary);
-  --color-on-primary: var(--on-primary);
-  --color-on-secondary: var(--on-secondary);
-  --color-secondary-container: var(--secondary-container);
-  --color-on-secondary-container: var(--on-secondary-container);
-  --color-tertiary: var(--tertiary);
-  --color-on-tertiary: var(--on-tertiary);
-  --color-tertiary-container: var(--tertiary-container);
-  --color-on-tertiary-container: var(--on-tertiary-container);
-  --color-error-container: var(--error-container);
-  --color-on-error-container: var(--on-error-container);
-  --color-on-error: var(--on-error);
-  --color-primary-fixed: var(--primary-fixed);
-  --color-primary-fixed-dim: var(--primary-fixed-dim);
-  --color-on-primary-fixed: var(--on-primary-fixed);
-  --color-on-primary-fixed-variant: var(--on-primary-fixed-variant);
-  --color-secondary-fixed: var(--secondary-fixed);
-  --color-secondary-fixed-dim: var(--secondary-fixed-dim);
-  --color-on-secondary-fixed: var(--on-secondary-fixed);
-  --color-on-secondary-fixed-variant: var(--on-secondary-fixed-variant);
-  --color-tertiary-fixed: var(--tertiary-fixed);
-  --color-tertiary-fixed-dim: var(--tertiary-fixed-dim);
-  --color-on-tertiary-fixed: var(--on-tertiary-fixed);
-  --color-on-tertiary-fixed-variant: var(--on-tertiary-fixed-variant);
+  /* Legacy shadcn compat, mapped onto Signal */
+  --color-card: var(--platform);
+  --color-card-foreground: var(--ink);
+  --color-popover: var(--platform);
+  --color-popover-foreground: var(--ink);
+  --color-primary: var(--dispatch);
+  --color-primary-foreground: var(--dispatch-ink);
+  --color-secondary: var(--concourse);
+  --color-secondary-foreground: var(--ink);
+  --color-muted: var(--concourse);
+  --color-muted-foreground: var(--ink-soft);
+  --color-accent: var(--concourse);
+  --color-accent-foreground: var(--ink);
+  --color-destructive: var(--signal-alert);
+  --color-destructive-foreground: var(--dispatch-ink);
+  --color-border: var(--trackline);
+  --color-input: var(--concourse);
+  --color-ring: var(--dispatch);
+
+  /* Deprecated M3 aliases, kept so old views render until migrated */
+  --color-surface: var(--platform);
+  --color-surface-container-lowest: var(--platform);
+  --color-surface-container-low: var(--platform);
+  --color-surface-container: var(--concourse);
+  --color-surface-container-high: var(--concourse);
+  --color-surface-container-highest: var(--concourse);
+  --color-on-surface: var(--ink);
+  --color-on-surface-variant: var(--ink-soft);
+  --color-outline-variant: var(--trackline);
+  --color-error: var(--signal-alert);
+
+  --radius-platform: 20px;
+  --radius-card: 16px;
+  --radius-badge: 8px;
+  --radius-pill: 999px;
 }
 
 :root {
-  /* Material 3 baseline radius */
-  --radius: 0.75rem;
+  --radius: 1rem;
 
-  /* Surface roles */
-  --surface: #faf8fd;
-  --surface-dim: #dbd9de;
-  --surface-bright: #faf8fd;
-  --surface-container-lowest: #ffffff;
-  --surface-container-low: #f5f3f7;
-  --surface-container: #efedf2;
-  --surface-container-high: #e9e7ec;
-  --surface-container-highest: #e3e2e6;
-  --on-surface: #1b1b1f;
-  --on-surface-variant: #424752;
-  --inverse-surface: #303034;
-  --inverse-on-surface: #f2f0f4;
-  --outline: #727783;
-  --outline-variant: #c2c6d4;
-  --surface-tint: #005db6;
-  --surface-variant: #e3e2e6;
+  /* Signal light: built for daylight legibility */
+  --backdrop: #f6f6f3;
+  --platform: #ffffff;
+  --concourse: #eceee9;
+  --trackline: #d5d8d1;
+  --ink: #14171a;
+  --ink-soft: #41484e;
+  --ink-faint: #6b747b;
+  --dispatch: #003e7e;
+  --dispatch-ink: #ffffff;
 
-  /* Primary roles */
-  --primary: #00478d;
-  --on-primary: #ffffff;
-  --primary-container: #005eb8;
-  --on-primary-container: #c8daff;
-  --inverse-primary: #a9c7ff;
+  --signal-now: #0a6b2d;
+  --signal-now-wash: #ddf1e1;
+  --signal-soon: #8a5100;
+  --signal-soon-wash: #fbeccb;
+  --signal-later: #3f4753;
+  --signal-later-wash: #e4e8ee;
+  --signal-lost: #979ea8;
+  --signal-lost-wash: #e9ebee;
+  --signal-alert: #b11a1a;
+  --signal-alert-wash: #fbe3e1;
 
-  /* Secondary roles */
-  --secondary: #565e71;
-  --on-secondary: #ffffff;
-  --secondary-container: #dae2f9;
-  --on-secondary-container: #5c6478;
+  --mode-kmb: #c2251c;
+  --mode-mtr: #0058a9;
+  --mode-lrt: #0a7a62;
 
-  /* Tertiary roles */
-  --tertiary: #583f5b;
-  --on-tertiary: #ffffff;
-  --tertiary-container: #715674;
-  --on-tertiary-container: #f1cff2;
+  /* Motion: one curve, three durations */
+  --dur-quick: 140ms;
+  --dur-cross: 220ms;
+  --dur-arrive: 340ms;
+  --ease-depart: cubic-bezier(0.2, 0.8, 0.2, 1);
 
-  /* Error roles */
-  --error: #ba1a1a;
-  --on-error: #ffffff;
-  --error-container: #ffdad6;
-  --on-error-container: #93000a;
-
-  /* Fixed accent roles */
-  --primary-fixed: #d6e3ff;
-  --primary-fixed-dim: #a9c7ff;
-  --on-primary-fixed: #001b3d;
-  --on-primary-fixed-variant: #00468c;
-  --secondary-fixed: #dae2f9;
-  --secondary-fixed-dim: #bec6dc;
-  --on-secondary-fixed: #131b2c;
-  --on-secondary-fixed-variant: #3f4759;
-  --tertiary-fixed: #fbd8fc;
-  --tertiary-fixed-dim: #ddbcdf;
-  --on-tertiary-fixed: #29132d;
-  --on-tertiary-fixed-variant: #573e5b;
-
-  /* Mapped shadcn variables */
-  --background: var(--surface);
-  --foreground: var(--on-surface);
-  --card: var(--surface-container-low);
-  --card-foreground: var(--on-surface);
-  --popover: var(--surface-container-lowest);
-  --popover-foreground: var(--on-surface);
-  --primary-foreground: var(--on-primary);
-  --secondary-foreground: var(--on-secondary-container);
-  --muted: var(--surface-container-high);
-  --muted-foreground: var(--on-surface-variant);
-  --accent: var(--primary-fixed);
-  --accent-foreground: var(--on-primary-fixed);
-  --destructive: var(--error);
-  --destructive-foreground: var(--on-error);
-  --border: var(--outline-variant);
-  --input: var(--surface-variant);
-  --ring: var(--surface-tint);
-
-  --chart-1: #00478d;
-  --chart-2: #565e71;
-  --chart-3: #583f5b;
-  --chart-4: #ba1a1a;
-  --chart-5: #715674;
-
-  --sidebar: var(--surface-container-low);
-  --sidebar-foreground: var(--on-surface);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--on-primary);
-  --sidebar-accent: var(--surface-container-high);
-  --sidebar-accent-foreground: var(--on-surface);
-  --sidebar-border: var(--outline-variant);
-  --sidebar-ring: var(--surface-tint);
+  /* Legacy compat */
+  --background: var(--backdrop);
+  --foreground: var(--ink);
+  --border: var(--trackline);
+  --input: var(--concourse);
+  --ring: var(--dispatch);
 }
 
 .dark {
-  /* Surface roles */
-  --surface: #141218;
-  --surface-dim: #141218;
-  --surface-bright: #3c3c40;
-  --surface-container-lowest: #0f0e12;
-  --surface-container-low: #1b1b1f;
-  --surface-container: #222226;
-  --surface-container-high: #2c2c30;
-  --surface-container-highest: #36363a;
-  --on-surface: #e3e2e6;
-  --on-surface-variant: #bec6dc;
-  --inverse-surface: #e3e2e6;
-  --inverse-on-surface: #1b1b1f;
-  --outline: #727783;
-  --outline-variant: #424752;
-  --surface-tint: #a9c7ff;
-  --surface-variant: #303034;
+  --backdrop: #0d1114;
+  --platform: #151b1f;
+  --concourse: #1e262b;
+  --trackline: #2e383e;
+  --ink: #f2f5f4;
+  --ink-soft: #b7c0c6;
+  --ink-faint: #849096;
+  --dispatch: #8fbeff;
+  --dispatch-ink: #00233f;
 
-  /* Primary roles */
-  --primary: #a9c7ff;
-  --on-primary: #001b3d;
-  --primary-container: #00468c;
-  --on-primary-container: #c8daff;
-  --inverse-primary: #00478d;
+  --signal-now: #4cc38a;
+  --signal-now-wash: #0e2a1c;
+  --signal-soon: #f2b544;
+  --signal-soon-wash: #33230a;
+  --signal-later: #a9b4c0;
+  --signal-later-wash: #232c33;
+  --signal-lost: #5a636c;
+  --signal-lost-wash: #1c2227;
+  --signal-alert: #ff7a70;
+  --signal-alert-wash: #3a1715;
 
-  /* Secondary roles */
-  --secondary: #bec6dc;
-  --on-secondary: #131b2c;
-  --secondary-container: #3f4759;
-  --on-secondary-container: #dae2f9;
+  --mode-kmb: #ff6b61;
+  --mode-mtr: #6eadf5;
+  --mode-lrt: #45c9a8;
 
-  /* Tertiary roles */
-  --tertiary: #ddbcdf;
-  --on-tertiary: #29132d;
-  --tertiary-container: #573e5b;
-  --on-tertiary-container: #fbd8fc;
-
-  /* Error roles */
-  --error: #ffb4ab;
-  --on-error: #690005;
-  --error-container: #93000a;
-  --on-error-container: #ffdad6;
-
-  /* Fixed accent roles */
-  --primary-fixed: #d6e3ff;
-  --primary-fixed-dim: #a9c7ff;
-  --on-primary-fixed: #001b3d;
-  --on-primary-fixed-variant: #c8daff;
-  --secondary-fixed: #dae2f9;
-  --secondary-fixed-dim: #bec6dc;
-  --on-secondary-fixed: #131b2c;
-  --on-secondary-fixed-variant: #e3e2e6;
-  --tertiary-fixed: #fbd8fc;
-  --tertiary-fixed-dim: #ddbcdf;
-  --on-tertiary-fixed: #29132d;
-  --on-tertiary-fixed-variant: #f1cff2;
-
-  /* Mapped shadcn variables */
-  --background: var(--surface);
-  --foreground: var(--on-surface);
-  --card: var(--surface-container-low);
-  --card-foreground: var(--on-surface);
-  --popover: var(--surface-container-lowest);
-  --popover-foreground: var(--on-surface);
-  --primary-foreground: var(--on-primary);
-  --secondary-foreground: var(--on-secondary-container);
-  --muted: var(--surface-container-high);
-  --muted-foreground: var(--on-surface-variant);
-  --accent: var(--primary-container);
-  --accent-foreground: var(--on-primary-container);
-  --destructive: var(--error);
-  --destructive-foreground: var(--on-error);
-  --border: var(--outline-variant);
-  --input: var(--surface-variant);
-  --ring: var(--surface-tint);
-
-  --chart-1: #a9c7ff;
-  --chart-2: #bec6dc;
-  --chart-3: #ddbcdf;
-  --chart-4: #ffb4ab;
-  --chart-5: #f1cff2;
-
-  --sidebar: var(--surface-container-low);
-  --sidebar-foreground: var(--on-surface);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--on-primary);
-  --sidebar-accent: var(--surface-container-high);
-  --sidebar-accent-foreground: var(--on-surface);
-  --sidebar-border: var(--outline-variant);
-  --sidebar-ring: var(--surface-tint);
+  --background: var(--backdrop);
+  --foreground: var(--ink);
+  --border: var(--trackline);
+  --input: var(--concourse);
+  --ring: var(--dispatch);
 }
 
 @layer base {
@@ -302,87 +167,148 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Material 3 typography scale utilities */
-.m3-display-lg {
-  font-size: 57px;
-  line-height: 64px;
-  letter-spacing: -0.25px;
+/* Signal type scale: huge tabular numerals, CJK-safe body */
+.signal-eta-hero {
+  font-size: 52px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.signal-eta-card {
+  font-size: 38px;
+  line-height: 1.1;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.signal-route-no {
+  font-size: 19px;
+  line-height: 26px;
+  font-weight: 700;
+}
+.signal-stop-name {
+  font-size: 15px;
+  line-height: 26px;
+  font-weight: 500;
+}
+.signal-body {
+  font-size: 15px;
+  line-height: 1.65;
   font-weight: 400;
 }
-.m3-display-md {
-  font-size: 45px;
-  line-height: 52px;
-  letter-spacing: 0px;
-  font-weight: 400;
+.signal-meta {
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 500;
 }
-.m3-headline-lg {
-  font-size: 32px;
-  line-height: 40px;
-  letter-spacing: 0px;
-  font-weight: 400;
+.signal-caption {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
 }
-.m3-headline-md {
-  font-size: 28px;
-  line-height: 36px;
-  letter-spacing: 0px;
-  font-weight: 400;
-}
-.m3-headline-sm {
-  font-size: 24px;
-  line-height: 32px;
-  letter-spacing: 0px;
-  font-weight: 400;
-}
+
+/* Deprecated M3 type aliases, mapped onto Signal */
 .m3-title-lg {
   font-size: 22px;
   line-height: 28px;
-  letter-spacing: 0px;
-  font-weight: 400;
+  font-weight: 600;
 }
 .m3-title-md {
   font-size: 16px;
   line-height: 24px;
-  letter-spacing: 0.15px;
   font-weight: 500;
 }
-.m3-body-lg {
-  font-size: 16px;
-  line-height: 24px;
-  letter-spacing: 0.5px;
-  font-weight: 400;
-}
+.m3-body-lg,
 .m3-body-md {
-  font-size: 14px;
-  line-height: 20px;
-  letter-spacing: 0.25px;
-  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.65;
 }
-.m3-label-lg {
-  font-size: 14px;
-  line-height: 20px;
-  letter-spacing: 0.1px;
-  font-weight: 500;
-}
+.m3-label-lg,
 .m3-label-md {
-  font-size: 12px;
-  line-height: 16px;
-  letter-spacing: 0.5px;
+  font-size: 13px;
+  line-height: 18px;
   font-weight: 500;
 }
 .m3-label-sm {
-  font-size: 11px;
+  font-size: 12px;
   line-height: 16px;
-  letter-spacing: 0.5px;
   font-weight: 500;
 }
 
-/* Marquee animation for overflow text */
+/* Signal motion: entrance explains a change of place or time */
+@keyframes signal-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes signal-fade {
+  0% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(1.25);
+  }
+}
+
+@layer utilities {
+  .signal-animate-in {
+    animation: signal-rise var(--dur-cross) var(--ease-depart) both;
+  }
+  .signal-animate-fade {
+    animation: signal-fade var(--dur-cross) var(--ease-depart) both;
+  }
+  .live-pulse {
+    animation: pulse-dot 1.6s var(--ease-depart) infinite;
+  }
+
+  /* Deprecated ui-* aliases */
+  .ui-animate-in,
+  .ui-animate-in-fast,
+  .ui-animate-fade {
+    animation: signal-rise var(--dur-cross) var(--ease-depart) both;
+  }
+  .ui-stagger-1 {
+    animation-delay: 40ms;
+  }
+  .ui-stagger-2 {
+    animation-delay: 80ms;
+  }
+  .ui-stagger-3 {
+    animation-delay: 120ms;
+  }
+  .ui-press:active {
+    transform: scale(0.98);
+  }
+  .ui-pop {
+    animation: signal-fade var(--dur-quick) var(--ease-depart) both;
+  }
+}
+
+/* Marquee for long destination text, kept from old system */
 @keyframes marquee-scroll {
   0% {
     transform: translateX(0);
   }
   100% {
-    /* Scroll by exactly one copy (content + gap) using pixel value */
     transform: translateX(calc(-1 * var(--marquee-distance, 100px)));
   }
 }
@@ -408,174 +334,15 @@
   animation-play-state: paused;
 }
 
-/* -----------------------------
- * UI motion primitives
- * ----------------------------- */
-
-:root {
-  --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --ui-dur-fast: 140ms;
-  --ui-dur-md: 220ms;
-  --ui-dur-slow: 360ms;
-}
-
-@keyframes ui-fade-up {
-  0% {
-    opacity: 0;
-    transform: translateY(8px) scale(0.99);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-@keyframes ui-fade {
-  0% {
-    opacity: 0;
-  }
-  100% {
-    opacity: 1;
-  }
-}
-
-@keyframes ui-soft-pop {
-  0% {
-    transform: scale(0.98);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes ui-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes live-pulse {
-  0%,
-  100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.5;
-    transform: scale(1.25);
-  }
-}
-
-@layer utilities {
-  .ui-animate-in {
-    animation: ui-fade-up var(--ui-dur-md) var(--ui-ease-out) both;
-  }
-
-  .ui-animate-in-fast {
-    animation: ui-fade-up var(--ui-dur-fast) var(--ui-ease-out) both;
-  }
-
-  .ui-animate-fade {
-    animation: ui-fade var(--ui-dur-md) var(--ui-ease-out) both;
-  }
-
-  .ui-stagger-1 {
-    animation-delay: 40ms;
-  }
-
-  .ui-stagger-2 {
-    animation-delay: 80ms;
-  }
-
-  .ui-stagger-3 {
-    animation-delay: 120ms;
-  }
-
-  .ui-lift {
-    transition-property: transform;
-    transition-duration: var(--ui-dur-fast);
-    transition-timing-function: var(--ui-ease-out);
-    will-change: transform;
-  }
-
-  .ui-lift:hover {
-    transform: translateY(-1px);
-  }
-
-  .ui-lift:active {
-    transform: translateY(0) scale(0.99);
-  }
-
-  .ui-press {
-    transition-property: transform;
-    transition-duration: var(--ui-dur-fast);
-    transition-timing-function: var(--ui-ease-out);
-    will-change: transform;
-  }
-
-  .ui-press:active {
-    transform: scale(0.98);
-  }
-
-  .ui-pop {
-    animation: ui-soft-pop var(--ui-dur-fast) var(--ui-ease-out) both;
-  }
-
-  .ui-spin {
-    animation: ui-spin 900ms linear infinite;
-  }
-
-  .live-pulse {
-    animation: live-pulse 1.6s var(--ui-ease-in-out) infinite;
-  }
-
-  /* Shared M3 card: surface, radius, outline, shadow. Padding stays in markup. */
-  .card-m3 {
-    background-color: var(--color-surface-container-low);
-    border-radius: 1.5rem;
-    border: 1px solid color-mix(in srgb, var(--outline-variant) 15%, transparent);
-    box-shadow:
-      0 1px 2px 0 rgb(0 0 0 / 0.05),
-      0 1px 3px 1px rgb(0 0 0 / 0.04);
-  }
-
-  /* M3 elevation tints */
-  .elevation-1 {
-    box-shadow:
-      0 1px 2px 0 rgb(0 0 0 / 0.05),
-      0 1px 3px 1px rgb(0 0 0 / 0.04);
-  }
-  .elevation-2 {
-    box-shadow:
-      0 1px 2px 0 rgb(0 0 0 / 0.05),
-      0 2px 6px 2px rgb(0 0 0 / 0.06);
-  }
-  .elevation-3 {
-    box-shadow:
-      0 1px 3px 0 rgb(0 0 0 / 0.05),
-      0 4px 8px 3px rgb(0 0 0 / 0.08);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
+  .signal-animate-in,
+  .signal-animate-fade,
   .ui-animate-in,
   .ui-animate-in-fast,
   .ui-animate-fade,
   .ui-pop,
-  .ui-spin,
-  .live-pulse {
+  .live-pulse,
+  .marquee-track {
     animation: none !important;
-  }
-
-  .ui-lift,
-  .ui-press {
-    transition: none !important;
-  }
-
-  .ui-lift:hover,
-  .ui-lift:active,
-  .ui-press:active {
-    transform: none !important;
   }
 }

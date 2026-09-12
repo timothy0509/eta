@@ -25,6 +25,8 @@ function formatAge(ageMs: number | null): string {
 
 export function RefreshPulse({ ageMs, stale, loading, onRefresh, intervalSec, className }: Props) {
   const age = formatAge(ageMs)
+  const unknown = ageMs === null
+  const showStale = stale || unknown
   const ageLabel =
     ageMs === null ? 'age unknown' : `${Math.max(0, Math.round(ageMs / 1000))} seconds old`
 
@@ -39,7 +41,10 @@ export function RefreshPulse({ ageMs, stale, loading, onRefresh, intervalSec, cl
       >
         <span
           aria-hidden
-          className={cn('h-1.5 w-1.5 rounded-full', stale ? 'bg-signal-lost' : 'bg-signal-now')}
+          className={cn(
+            'h-1.5 w-1.5 rounded-full',
+            showStale ? 'bg-signal-lost' : 'live-pulse bg-signal-now'
+          )}
         />
         <span className="font-mono tabular-nums" aria-hidden>
           {age}

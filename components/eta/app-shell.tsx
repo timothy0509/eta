@@ -205,13 +205,13 @@ function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
   }
 
   return (
-    <div className="border-trackline border-outline-variant/10 border-t">
-      <nav aria-label="Transport mode" className="mx-auto max-w-[1280px] px-4 pb-2 sm:px-6">
+    <div className="border-trackline border-t">
+      <nav aria-label="Transport mode" className="mx-auto max-w-[1280px] px-4 py-2 sm:px-6">
         <div
           role="tablist"
           aria-label="Transport mode"
           onKeyDown={onKeyDown}
-          className="bg-platform bg-surface-container-high/70 relative flex w-full items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
+          className="border-trackline bg-platform relative mx-auto flex w-full max-w-xl items-center gap-1 rounded-full border p-1 shadow-sm"
         >
           {MODES.map((m, index) => {
             const Icon = m.icon
@@ -230,17 +230,15 @@ function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
                 tabIndex={active ? 0 : -1}
                 onClick={() => onModeChange(m.mode)}
                 className={cn(
-                  'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-medium transition-colors focus-visible:ring-2 focus-visible:ring-[var(--surface-tint)] focus-visible:outline-none sm:text-sm',
-                  active
-                    ? 'text-on-secondary-container'
-                    : 'text-on-surface-variant hover:text-on-surface'
+                  'focus-visible:ring-dispatch relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none sm:text-sm',
+                  active ? 'text-platform' : 'text-ink-soft hover:text-ink'
                 )}
               >
                 {active && (
                   <motion.span
                     layoutId="transit-mode-pill"
                     aria-hidden
-                    className="bg-secondary-container absolute inset-0 -z-10 rounded-full shadow-sm"
+                    className="bg-ink absolute inset-0 -z-10 rounded-full shadow-sm"
                     transition={
                       reduceMotion
                         ? { duration: 0 }

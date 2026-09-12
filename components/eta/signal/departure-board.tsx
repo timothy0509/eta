@@ -63,7 +63,7 @@ export function DepartureBoard({ minutes, lang, stale, showPulse, className }: P
         <span
           className={cn(
             'inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-semibold whitespace-nowrap',
-            urgency === 'now' && 'border-signal-now/40 bg-signal-now-wash text-signal-now',
+            urgency === 'now' && 'border-signal-now bg-signal-now text-white dark:text-[#0e2a1c]',
             urgency === 'soon' && 'border-signal-soon/40 bg-signal-soon-wash text-signal-soon',
             urgency === 'later' && 'border-signal-later/40 bg-signal-later-wash text-signal-later',
             urgency === 'lost' && 'border-signal-lost/40 bg-signal-lost-wash text-signal-lost'
@@ -74,7 +74,7 @@ export function DepartureBoard({ minutes, lang, stale, showPulse, className }: P
             className={cn(
               'h-1.5 w-1.5 shrink-0 rounded-full',
               pulse && 'live-pulse',
-              urgency === 'now' && 'bg-signal-now',
+              urgency === 'now' && 'bg-white dark:bg-[#0e2a1c]',
               urgency === 'soon' && 'bg-signal-soon',
               urgency === 'later' && 'bg-signal-later',
               urgency === 'lost' && 'bg-signal-lost'

@@ -56,17 +56,52 @@
   --color-input: var(--concourse);
   --color-ring: var(--dispatch);
 
-  /* Deprecated M3 aliases, kept so old views render until migrated */
+  /* Full deprecated M3 alias map so unmigrated views keep rendering on Signal */
   --color-surface: var(--platform);
+  --color-surface-dim: var(--backdrop);
+  --color-surface-bright: var(--platform);
   --color-surface-container-lowest: var(--platform);
   --color-surface-container-low: var(--platform);
   --color-surface-container: var(--concourse);
   --color-surface-container-high: var(--concourse);
   --color-surface-container-highest: var(--concourse);
+  --color-surface-variant: var(--concourse);
+  --color-surface-tint: var(--dispatch);
   --color-on-surface: var(--ink);
   --color-on-surface-variant: var(--ink-soft);
+  --color-inverse-surface: var(--ink);
+  --color-inverse-on-surface: var(--platform);
+  --color-outline: var(--trackline);
   --color-outline-variant: var(--trackline);
+  --color-primary-container: var(--dispatch);
+  --color-on-primary-container: var(--dispatch-ink);
+  --color-inverse-primary: var(--dispatch);
+  --color-on-primary: var(--dispatch-ink);
+  --color-on-secondary: var(--dispatch-ink);
+  --color-secondary: var(--concourse);
+  --color-secondary-container: var(--trackline);
+  --color-on-secondary-container: var(--ink);
+  --color-tertiary: var(--mode-lrt);
+  --color-on-tertiary: var(--dispatch-ink);
+  --color-tertiary-container: var(--concourse);
+  --color-on-tertiary-container: var(--ink);
   --color-error: var(--signal-alert);
+  --color-error-container: var(--signal-alert-wash);
+  --color-on-error-container: var(--signal-alert);
+  --color-on-error: var(--dispatch-ink);
+  --color-sidebar: var(--platform);
+  --color-sidebar-foreground: var(--ink);
+  --color-sidebar-primary: var(--dispatch);
+  --color-sidebar-primary-foreground: var(--dispatch-ink);
+  --color-sidebar-accent: var(--concourse);
+  --color-sidebar-accent-foreground: var(--ink);
+  --color-sidebar-border: var(--trackline);
+  --color-sidebar-ring: var(--dispatch);
+  --color-chart-1: var(--mode-mtr);
+  --color-chart-2: var(--mode-kmb);
+  --color-chart-3: var(--mode-lrt);
+  --color-chart-4: var(--signal-alert);
+  --color-chart-5: var(--signal-soon);
 
   --radius-platform: 20px;
   --radius-card: 16px;
@@ -78,10 +113,10 @@
   --radius: 1rem;
 
   /* Signal light: built for daylight legibility */
-  --backdrop: #f6f6f3;
+  --backdrop: #efeeea;
   --platform: #ffffff;
-  --concourse: #eceee9;
-  --trackline: #d5d8d1;
+  --concourse: #e6e8e2;
+  --trackline: #b9beb6;
   --ink: #14171a;
   --ink-soft: #41484e;
   --ink-faint: #6b747b;
@@ -118,10 +153,10 @@
 }
 
 .dark {
-  --backdrop: #0d1114;
-  --platform: #151b1f;
-  --concourse: #1e262b;
-  --trackline: #2e383e;
+  --backdrop: #090c0e;
+  --platform: #161d21;
+  --concourse: #212a30;
+  --trackline: #3d4a54;
   --ink: #f2f5f4;
   --ink-soft: #b7c0c6;
   --ink-faint: #849096;

@@ -132,6 +132,7 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
     clear: lang === 'en' ? 'Clear' : '清除',
     inbound: lang === 'en' ? 'Inbound' : '往',
     outbound: lang === 'en' ? 'Outbound' : '往',
+    showLess: lang === 'en' ? 'Show less' : '收起',
   }
 
   const selectedKeys = React.useMemo(() => {
@@ -180,7 +181,26 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
   const activeCount = countActiveFilters(value)
   const focusedVariants = focusedRoute ? groupedByRoute.get(focusedRoute) : undefined
   const showVariantRow = Boolean(focusedVariants && focusedVariants.length > 1)
-  const useScrollCap = routeNumbers.length > 16
+  const [expandState, setExpandState] = React.useState({
+    generation: optsFingerprint,
+    expanded: false,
+  })
+  const expanded = expandState.generation === optsFingerprint && expandState.expanded
+  const toggleExpanded = React.useCallback(() => {
+    setExpandState((prev) => ({
+      generation: optsFingerprint,
+      expanded: prev.generation === optsFingerprint ? !prev.expanded : true,
+    }))
+  }, [optsFingerprint])
+  const VISIBLE_ROUTES = 12
+  const visibleRoutes = expanded ? routeNumbers : routeNumbers.slice(0, VISIBLE_ROUTES)
+  const hiddenCount = routeNumbers.length - visibleRoutes.length
+  const showMore =
+    lang === 'en'
+      ? `Show ${hiddenCount} more`
+      : lang === 'sc'
+        ? `显示其余 ${hiddenCount} 条路线`
+        : `顯示其餘 ${hiddenCount} 條路線`
 
   return (
     <div className="space-y-2.5">
@@ -211,13 +231,8 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
         </p>
       ) : (
         <>
-          <div
-            className={cn(
-              'flex flex-wrap gap-1.5',
-              useScrollCap && 'max-h-32 overflow-y-auto pr-1'
-            )}
-          >
-            {routeNumbers.map((route) => {
+          <div className="flex flex-wrap gap-1.5">
+            {visibleRoutes.map((route) => {
               const variants = groupedByRoute.get(route) ?? []
               const company = getCompanyFromVariantKey(variants[0]?.key ?? '')
               const active = isRouteActive(route, variants, selectedKeys, mode)
@@ -242,6 +257,17 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
               )
             })}
           </div>
+
+          {hiddenCount > 0 || expanded ? (
+            <button
+              type="button"
+              onClick={toggleExpanded}
+              aria-expanded={expanded}
+              className="m3-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high rounded-full px-3 py-1.5 transition-colors"
+            >
+              {expanded ? t.showLess : showMore}
+            </button>
+          ) : null}
 
           {showVariantRow && focusedVariants ? (
             <div className="bg-surface-container/50 flex flex-wrap gap-1.5 rounded-2xl p-2">

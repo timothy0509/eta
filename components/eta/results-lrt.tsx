@@ -7,8 +7,8 @@ import { LivePulse } from '@/components/m3/motion'
 import {
   ApiStatusFooter,
   EtaRealtimeBadge,
-  EtaTimeline,
   SortByTimeToggle,
+  etaNumeralClass,
 } from '@/components/eta/eta-card-parts'
 import { resolveEtaBadge, sortBySoonestMinutes } from '@/lib/eta/eta-badges'
 import { ResultsHeader } from '@/components/eta/results-header'
@@ -154,7 +154,6 @@ export const LrtResults = React.memo(function LrtResults({
                 const routes = sortByTime
                   ? sortBySoonestMinutes(p.route_list ?? [], (r) => lrtMinutes(r, lang))
                   : (p.route_list ?? [])
-                const timelineMinutes = routes.slice(0, 3).map((r) => lrtMinutes(r, lang))
 
                 return (
                   <div
@@ -217,7 +216,9 @@ export const LrtResults = React.memo(function LrtResults({
                                   {timeText}
                                 </span>
                               ) : (
-                                <div className="text-on-surface font-tabular m3-body-md font-semibold">
+                                <div
+                                  className={etaNumeralClass(lrtMinutes(r, lang), platformBadge)}
+                                >
                                   {timeText}
                                 </div>
                               )}
@@ -230,9 +231,6 @@ export const LrtResults = React.memo(function LrtResults({
                           </div>
                         )
                       })}
-                    </div>
-                    <div className="mt-2">
-                      <EtaTimeline minutes={timelineMinutes} lang={lang} stale={stale} />
                     </div>
                   </div>
                 )

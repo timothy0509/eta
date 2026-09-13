@@ -19,6 +19,10 @@ import {
 } from '@/lib/eta/direct/eta-db'
 import { getLrtSchedule } from '@/lib/eta/direct/lrt'
 import { fetchMtrSchedules as fetchMtrSchedulesDirect } from '@/lib/eta/direct/mtr'
+import {
+  getTdTrafficAlerts as getTdTrafficAlertsDirect,
+  type TdTrafficRecord,
+} from '@/lib/eta/direct/td-traffic'
 import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
 
@@ -359,4 +363,17 @@ export async function fetchMtrRouteSchedules(
     lang: params.lang,
   }))
   return await fetchMtrSchedules(queries, options)
+}
+
+/**
+ * Live TD Special Traffic News, deduped in flight by lang.
+ */
+export async function fetchTdTraffic(
+  lang: UiLanguage,
+  options?: { signal?: AbortSignal }
+): Promise<TdTrafficRecord[]> {
+  const key = `td:traffic:${lang}`
+  return await fetchJsonDedupe(key, async () => getTdTrafficAlertsDirect(lang), {
+    signal: options?.signal,
+  })
 }

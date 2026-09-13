@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 import dynamic from 'next/dynamic'
-import { X } from 'lucide-react'
+import { ChevronDown, X } from 'lucide-react'
 
 import { AlertBannerSlot, BottomNav, SideRail, TopAppBar } from '@/components/eta/app-shell'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
@@ -11,7 +11,7 @@ import { FadeIn } from '@/components/m3/motion'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS } from '@/lib/data/mtr-stations'
 import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
-import { getTrafficAlerts } from '@/lib/eta/traffic-alerts'
+import { useTdTrafficAlerts, type TdTrafficAlert } from '@/lib/eta/traffic-alerts'
 import { useTranslations } from '@/lib/eta/i18n'
 import type {
   LrtStationSearchItem,
@@ -122,33 +122,55 @@ const useAppStoreActions = () =>
 
 function HomeAlertBanner({ lang }: { lang: UiLanguage }) {
   const { t } = useTranslations(lang)
+  const { alerts, error } = useTdTrafficAlerts(lang)
   const dismissedAlertIds = usePaneStore((s) => s.dismissedAlertIds)
   const dismissAlert = usePaneStore((s) => s.dismissAlert)
-  const alert = getTrafficAlerts().find((entry) => !dismissedAlertIds.includes(entry.id))
-  if (!alert) return null
-  const text = lang === 'en' ? alert.en : lang === 'sc' ? alert.sc : alert.tc
+  const [expandedId, setExpandedId] = React.useState<string | null>(null)
+  const alert: TdTrafficAlert | undefined = alerts.find(
+    (entry: TdTrafficAlert) => !dismissedAlertIds.includes(entry.id)
+  )
+  const alertId = alert ? alert.id : null
+  const expanded = expandedId !== null && expandedId === alertId
+  if (error || !alert) return null
+  const heading = alert.heading || alert.detail || alert.location
+  if (!heading) return null
+  const detail = [alert.detail, alert.location, alert.district].filter(Boolean).join(' · ')
+  const showDetail = expanded && detail && detail !== heading
   return (
     <div
       role="alert"
-      className="mb-3 flex items-center gap-2 rounded-2xl border border-yellow-500/30 bg-yellow-400/15 px-3 py-2.5 text-sm sm:mb-4"
+      className="mb-3 rounded-2xl border border-[#f59e0b]/30 bg-[#fffbeb] px-3 py-2 text-sm text-[#78350f] sm:mb-4 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
     >
-      <p className="min-w-0 flex-1 truncate">{text}</p>
-      <a
-        className="shrink-0 underline underline-offset-2"
-        href={alert.link}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        {t('common.viewAll')}
-      </a>
-      <button
-        type="button"
-        aria-label={t('common.dismiss')}
-        onClick={() => dismissAlert(alert.id)}
-        className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors hover:bg-yellow-500/20"
-      >
-        <X className="h-4 w-4" />
-      </button>
+      <div className="flex h-9 items-center gap-1.5">
+        <p className={`min-w-0 flex-1 ${expanded ? '' : 'truncate'}`}>{heading}</p>
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-label={expanded ? t('common.trafficCollapse') : t('common.trafficExpand')}
+          title={expanded ? t('common.trafficCollapse') : t('common.trafficExpand')}
+          onClick={() => setExpandedId(expanded ? null : alertId)}
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors hover:bg-[#f59e0b]/20"
+        >
+          <ChevronDown className={`h-4 w-4 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+        </button>
+        <a
+          className="shrink-0 underline underline-offset-2"
+          href={alert.link}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          {t('common.viewAll')}
+        </a>
+        <button
+          type="button"
+          aria-label={t('common.dismiss')}
+          onClick={() => dismissAlert(alert.id)}
+          className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors hover:bg-[#f59e0b]/20"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      {showDetail ? <p className="px-0 pt-1 pb-1.5 leading-snug">{detail}</p> : null}
     </div>
   )
 }
@@ -610,7 +632,6 @@ export default function HomeClient() {
 
         <FadeIn className="relative mt-4 lg:mt-0" delay={0.05}>
           <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-6">
-            <span className="bg-primary absolute top-0 right-0 left-0 h-[3px]" aria-hidden />
             {results}
           </div>
         </FadeIn>

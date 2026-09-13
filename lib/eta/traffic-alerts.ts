@@ -1,35 +1,89 @@
-export type TrafficAlert = {
-  id: string
-  tc: string
-  en: string
-  sc: string
+'use client'
+
+import { useEffect, useState } from 'react'
+
+import { fetchTdTraffic } from '@/lib/eta/client'
+import type { TdTrafficRecord } from '@/lib/eta/direct/td-traffic'
+import type { UiLanguage } from '@/lib/eta/types'
+
+export type TdTrafficAlert = TdTrafficRecord & {
+  /** View-all link to the TD Special Traffic News page. */
   link: string
 }
 
-const TD_SPECIAL_TRAFFIC_NEWS = 'https://www.td.gov.hk/en/special_news/spnews.htm'
+export type TrafficAlertsResult = {
+  alerts: TdTrafficAlert[]
+  error: string | null
+}
+
+export type UseTdTrafficAlertsState = TrafficAlertsResult & {
+  loading: boolean
+}
+
+const TD_SPECIAL_TRAFFIC_NEWS: Record<UiLanguage, string> = {
+  en: 'https://www.td.gov.hk/en/special_news/spnews.htm',
+  tc: 'https://www.td.gov.hk/tc/special_news/spnews.htm',
+  sc: 'https://www.td.gov.hk/sc/special_news/spnews.htm',
+}
+
+export function getTdTrafficNewsUrl(lang: UiLanguage): string {
+  return TD_SPECIAL_TRAFFIC_NEWS[lang] ?? TD_SPECIAL_TRAFFIC_NEWS.en
+}
+
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message
+  return 'Failed to load traffic alerts'
+}
 
 /**
- * Static translated traffic alerts. There is no simple TD incident JSON
- * feed, so these entries point readers at the Transport Department
- * Special Traffic News page instead of inventing live incidents.
+ * Live TD Special Traffic News with the TD page kept only as the view-all
+ * link on each item. Never throws. Aborted requests resolve without an error.
  */
-export const TRAFFIC_ALERTS: TrafficAlert[] = [
-  {
-    id: 'td-special-traffic-news',
-    tc: '請查閱運輸署特別交通消息，了解最新交通事故及道路狀況。',
-    en: 'Check Transport Department Special Traffic News for the latest incidents and road conditions.',
-    sc: '请查阅运输署特别交通消息，了解最新交通事故及道路状况。',
-    link: TD_SPECIAL_TRAFFIC_NEWS,
-  },
-  {
-    id: 'td-planned-works-notices',
-    tc: '計劃中的道路工程及公共交通服務改動會於運輸署通告頁公布，出門前請先查閱。',
-    en: 'Planned road works and public transport service changes are announced on the TD notices page.',
-    sc: '计划中的道路工程及公共交通服务改动会于运输署通告页公布，出门前请先查阅。',
-    link: TD_SPECIAL_TRAFFIC_NEWS,
-  },
-]
+export async function fetchTdTrafficAlerts(
+  lang: UiLanguage,
+  options?: { signal?: AbortSignal }
+): Promise<TrafficAlertsResult> {
+  try {
+    const records = await fetchTdTraffic(lang, options)
+    const link = getTdTrafficNewsUrl(lang)
+    return { alerts: records.map((record) => ({ ...record, link })), error: null }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      return { alerts: [], error: null }
+    }
+    return { alerts: [], error: toErrorMessage(error) }
+  }
+}
 
-export function getTrafficAlerts(): TrafficAlert[] {
-  return [...TRAFFIC_ALERTS]
+const INITIAL_STATE: UseTdTrafficAlertsState = { alerts: [], loading: true, error: null }
+
+/** Live traffic alerts with loading and error states for the banner UI. */
+export function useTdTrafficAlerts(lang: UiLanguage): UseTdTrafficAlertsState {
+  const [activeLang, setActiveLang] = useState(lang)
+  const [state, setState] = useState<UseTdTrafficAlertsState>(INITIAL_STATE)
+
+  if (activeLang !== lang) {
+    setActiveLang(lang)
+    setState(INITIAL_STATE)
+  }
+
+  useEffect(() => {
+    const controller = new AbortController()
+    fetchTdTrafficAlerts(lang, { signal: controller.signal })
+      .then((result) => {
+        if (!controller.signal.aborted) {
+          setState({ alerts: result.alerts, loading: false, error: result.error })
+        }
+      })
+      .catch((error: unknown) => {
+        if (!controller.signal.aborted) {
+          setState({ alerts: [], loading: false, error: toErrorMessage(error) })
+        }
+      })
+    return () => {
+      controller.abort()
+    }
+  }, [lang])
+
+  return state
 }

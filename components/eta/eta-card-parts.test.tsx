@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@/lib/test-utils'
 
-import { EtaRealtimeBadge, SortByTimeToggle, WheelchairBadge } from './eta-card-parts'
+import { EtaRealtimeBadge, SortByTimeToggle, etaNumeralClass } from './eta-card-parts'
 
 describe('EtaRealtimeBadge', () => {
   it('renders the realtime label', () => {
@@ -13,17 +13,32 @@ describe('EtaRealtimeBadge', () => {
     render(<EtaRealtimeBadge badge="scheduled" lang="tc" />)
     expect(screen.getByText('原定班次')).toBeDefined()
   })
+
+  it('uses distinct pill classes for realtime vs scheduled', () => {
+    const { container: realtimeContainer, unmount } = render(
+      <EtaRealtimeBadge badge="realtime" lang="en" />
+    )
+    const realtimeClass = (realtimeContainer.firstChild as HTMLElement).className
+    unmount()
+    const { container: scheduledContainer } = render(
+      <EtaRealtimeBadge badge="scheduled" lang="en" />
+    )
+    const scheduledClass = (scheduledContainer.firstChild as HTMLElement).className
+    expect(realtimeClass).not.toBe(scheduledClass)
+  })
 })
 
-describe('WheelchairBadge', () => {
-  it('stays hidden when no wheelchair flag was parsed', () => {
-    const { container } = render(<WheelchairBadge visible={false} lang="en" />)
-    expect(container.firstChild).toBeNull()
+describe('etaNumeralClass', () => {
+  it('is green when due within 2 min', () => {
+    expect(etaNumeralClass(2, 'realtime')).toBe('eta-numeral eta-numeral-soon')
   })
 
-  it('shows the low-floor marker when parsed', () => {
-    render(<WheelchairBadge visible lang="en" />)
-    expect(screen.getByLabelText('Low-floor')).toBeDefined()
+  it('is blue for normal realtime departures', () => {
+    expect(etaNumeralClass(5, 'realtime')).toBe('eta-numeral eta-numeral-normal')
+  })
+
+  it('is amber for scheduled departures', () => {
+    expect(etaNumeralClass(5, 'scheduled')).toBe('eta-numeral eta-numeral-scheduled')
   })
 })
 

@@ -147,7 +147,7 @@ export function LiveSyncPill({ lang }: { lang: UiLanguage }) {
       className={cn(
         'm3-label-md hidden items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold ring-1 sm:inline-flex',
         live
-          ? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300'
+          ? 'bg-[#dcfce7] text-[#15803d] ring-[#15803d]/25 dark:bg-emerald-500/15 dark:text-emerald-300'
           : 'bg-surface-container-high text-on-surface-variant ring-[var(--outline-variant)]/25'
       )}
     >
@@ -216,7 +216,9 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
           <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-xl text-[15px] font-bold shadow-sm sm:h-9 sm:w-9 sm:text-lg">
             T
           </div>
-          <span className="text-[15px] font-semibold tracking-tight sm:text-[17px]">TimoETA</span>
+          <span className="hidden text-[15px] font-semibold tracking-tight min-[480px]:block sm:text-[17px]">
+            TimoETA
+          </span>
         </div>
 
         <nav
@@ -226,7 +228,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
           <div
             role="group"
             aria-label="Transport mode"
-            className="bg-surface-container-high/70 relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
+            className="bg-surface-container relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]"
           >
             {MODES.map((m) => {
               const Icon = m.icon
@@ -240,16 +242,14 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   aria-label={m.labels[lang]}
                   title={m.labels[lang]}
                   className={cn(
-                    'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-medium transition-colors sm:py-2 sm:text-sm',
-                    active
-                      ? 'text-on-secondary-container'
-                      : 'text-on-surface-variant hover:text-on-surface'
+                    'relative z-10 flex min-h-[44px] min-w-0 flex-1 items-center justify-center gap-1 rounded-full px-1 text-[13px] font-medium transition-colors sm:gap-1.5 sm:px-2 sm:py-2 sm:text-sm',
+                    active ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'
                   )}
                 >
                   {active && (
                     <motion.div
                       layoutId="top-mode-pill"
-                      className="bg-secondary-container absolute inset-0 -z-10 rounded-full shadow-sm"
+                      className="bg-primary absolute inset-0 -z-10 rounded-full shadow-sm"
                       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}

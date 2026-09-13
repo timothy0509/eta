@@ -1,15 +1,31 @@
 import { parseRmkFlags } from '@/lib/eta/rmk-flags'
 import { STALE_THRESHOLDS_MS, type StaleMode } from '@/lib/eta/stale'
 
+export type MtrTimeType = 'arrival' | 'departure'
+
 /**
- * MTR `timetype` mapping: '1' means scheduled, anything else means realtime.
- * A missing timetype falls back to scheduled so we never invent live data.
+ * MTR `timetype` follows the official Next Train data dictionary: it is an
+ * EAL-only field where 'A' means the time is an arrival time and 'D' a
+ * departure time. It says nothing about scheduled vs realtime, so it must
+ * never drive a scheduled pill. Anything else returns null.
  */
-export function isMtrRealtime(timetype?: string | number | null): boolean {
-  if (timetype === undefined || timetype === null) return false
-  const normalized = String(timetype).trim()
-  if (normalized === '') return false
-  return normalized !== '1'
+export function parseMtrTimeType(timetype?: string | number | null): MtrTimeType | null {
+  if (timetype === undefined || timetype === null) return null
+  const normalized = String(timetype).trim().toUpperCase()
+  if (normalized === 'A' || normalized === 'ARRIVAL') return 'arrival'
+  if (normalized === 'D' || normalized === 'DEPARTURE') return 'departure'
+  return null
+}
+
+/**
+ * Reads the official `timeType` field (capital T) from a live MTR train
+ * entry, falling back to the legacy lowercase `timetype` key.
+ */
+export function mtrTimeTypeOf(entry: {
+  timeType?: string | number | null
+  timetype?: string | number | null
+}): MtrTimeType | null {
+  return parseMtrTimeType(entry.timeType ?? entry.timetype)
 }
 
 function toTimestampMs(value: string | number | Date | null | undefined): number | null {
@@ -98,8 +114,7 @@ export function isLrtRealtime(params: LrtRealtimeParams = {}): boolean {
 }
 
 export type RealtimeParams = {
-  mode: StaleMode
-  timetype?: string | number | null
+  mode: Exclude<StaleMode, 'mtr'>
   etaSeq?: number | string | null
   rmk_tc?: string | null
   rmk_sc?: string | null
@@ -109,9 +124,8 @@ export type RealtimeParams = {
   now?: number | Date
 }
 
-/** Mode dispatcher for Streams B/C ETA badges. */
+/** Mode dispatcher for the KMB/LRT ETA badges. MTR has no scheduled-vs-realtime signal. */
 export function isRealtime(params: RealtimeParams): boolean {
-  if (params.mode === 'mtr') return isMtrRealtime(params.timetype)
   if (params.mode === 'lrt')
     return isLrtRealtime({
       lastUpdatedAt: params.lastUpdatedAt,

@@ -1,10 +1,9 @@
 'use client'
 
-import { Accessibility, ArrowDownWideNarrow, ExternalLink, ListOrdered } from 'lucide-react'
+import { ArrowDownWideNarrow, ListOrdered } from 'lucide-react'
 import * as React from 'react'
 
-import { KMB_INTERCHANGE_INFO_URL } from '@/lib/eta/direct/shared'
-import { timelineFraction, type EtaBadgeKind } from '@/lib/eta/eta-badges'
+import type { EtaBadgeKind } from '@/lib/eta/eta-badges'
 import { formatUiTime } from '@/lib/eta/format'
 import { useTranslations } from '@/lib/eta/i18n'
 import { formatRelativeAgeLabel, isStaleByAge, type StaleMode } from '@/lib/eta/stale'
@@ -18,16 +17,16 @@ export function EtaRealtimeBadge({ badge, lang }: { badge: EtaBadgeKind; lang: U
   return (
     <span
       className={cn(
-        'm3-label-md inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-medium',
+        'm3-label-md inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-medium ring-1 ring-black/5',
         realtime
-          ? 'bg-primary-container text-on-primary-container'
-          : 'bg-surface-container-high text-on-surface-variant'
+          ? 'bg-[#dcfce7] text-[#15803d] ring-[#15803d]/20 dark:bg-emerald-500/15 dark:text-emerald-300'
+          : 'bg-[#fffbeb] text-[#92400e] ring-[#92400e]/20 dark:bg-amber-500/15 dark:text-amber-300'
       )}
     >
       <span
         className={cn(
           'h-1.5 w-1.5 shrink-0 rounded-full',
-          realtime ? 'bg-primary' : 'bg-current opacity-40'
+          realtime ? 'bg-[#15803d] dark:bg-emerald-400' : 'bg-current opacity-40'
         )}
         aria-hidden
       />
@@ -36,82 +35,21 @@ export function EtaRealtimeBadge({ badge, lang }: { badge: EtaBadgeKind; lang: U
   )
 }
 
-/** Low-floor/wheelchair marker. Returns null unless parsed from remarks, never a guess. */
-export function WheelchairBadge({ visible, lang }: { visible: boolean; lang: UiLanguage }) {
-  const { t } = useTranslations(lang)
-  if (!visible) return null
-  const label = t('common.etaLowFloor')
-  return (
-    <span
-      className="text-on-surface-variant m3-label-md inline-flex shrink-0 items-center gap-1"
-      aria-label={label}
-      title={label}
-    >
-      <Accessibility className="h-4 w-4" aria-hidden />
-      <span className="hidden sm:inline">{label}</span>
-    </span>
-  )
-}
-
 /**
- * Static staged timeline. Dot positions derive from ETA minutes only.
- * Speed always renders as a dash. No GPS, km/h, or distance is implied.
+ * ETA numeral color: green when due within 2 min, amber for scheduled
+ * (non-realtime) departures, otherwise concept blue.
  */
-export function EtaTimeline({
-  minutes,
-  lang,
-  stale,
-}: {
-  minutes: Array<number | null>
-  lang: UiLanguage
-  stale?: boolean
-}) {
-  const { t } = useTranslations(lang)
-  const dots = minutes.slice(0, 3)
-  return (
-    <div className={cn(stale && 'opacity-60')}>
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-on-surface-variant m3-label-md">{t('common.etaProgress')}</span>
-        <span className="text-on-surface-variant m3-label-md font-mono">
-          {t('common.etaSpeed')} —
-        </span>
-      </div>
-      <div
-        className="bg-surface-container-high relative mt-1.5 h-1.5 rounded-full"
-        role="img"
-        aria-label={t('common.etaProgress')}
-      >
-        {dots.map((value, idx) => (
-          <span
-            key={idx}
-            className="bg-primary absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-white/60"
-            style={{ left: `${timelineFraction(value) * 100}%` }}
-            aria-hidden
-          />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/** Blue interchange promo. Static copy plus outbound link, never a computed fare. */
-export function InterchangePromoBanner({ lang }: { lang: UiLanguage }) {
-  const { t } = useTranslations(lang)
-  return (
-    <div className="rounded-2xl bg-blue-700 p-4 text-white dark:bg-blue-800">
-      <div className="m3-title-md font-medium">{t('common.etaInterchangeTitle')}</div>
-      <p className="m3-body-md mt-1 opacity-90">{t('common.etaInterchangeBody')}</p>
-      <a
-        className="m3-label-lg mt-2 inline-flex items-center gap-1.5 underline underline-offset-2"
-        href={KMB_INTERCHANGE_INFO_URL}
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        {t('common.etaInterchangeCta')}
-        <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-      </a>
-    </div>
-  )
+export function etaNumeralClass(
+  minutes: number | null,
+  badge: EtaBadgeKind
+):
+  | 'eta-numeral eta-numeral-soon'
+  | 'eta-numeral eta-numeral-normal'
+  | 'eta-numeral eta-numeral-scheduled' {
+  if (badge === 'scheduled') return 'eta-numeral eta-numeral-scheduled'
+  if (minutes !== null && !Number.isNaN(minutes) && minutes <= 2)
+    return 'eta-numeral eta-numeral-soon'
+  return 'eta-numeral eta-numeral-normal'
 }
 
 /** API status footer. Falls back to plain updated-at text when cache info is absent. */

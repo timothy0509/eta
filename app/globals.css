@@ -101,29 +101,29 @@
   --radius: 0.75rem;
 
   /* Surface roles */
-  --surface: #faf8fd;
-  --surface-dim: #dbd9de;
-  --surface-bright: #faf8fd;
+  --surface: #f5f6fa;
+  --surface-dim: #e3e5ec;
+  --surface-bright: #f5f6fa;
   --surface-container-lowest: #ffffff;
-  --surface-container-low: #f5f3f7;
-  --surface-container: #efedf2;
-  --surface-container-high: #e9e7ec;
-  --surface-container-highest: #e3e2e6;
-  --on-surface: #1b1b1f;
-  --on-surface-variant: #424752;
+  --surface-container-low: #ffffff;
+  --surface-container: #f1f3f8;
+  --surface-container-high: #eceef4;
+  --surface-container-highest: #e3e5ec;
+  --on-surface: #111827;
+  --on-surface-variant: #6b7280;
   --inverse-surface: #303034;
   --inverse-on-surface: #f2f0f4;
-  --outline: #727783;
-  --outline-variant: #c2c6d4;
-  --surface-tint: #005db6;
+  --outline: #9ca3af;
+  --outline-variant: #e5e7eb;
+  --surface-tint: #0d3b9e;
   --surface-variant: #e3e2e6;
 
   /* Primary roles */
-  --primary: #00478d;
+  --primary: #0d3b9e;
   --on-primary: #ffffff;
-  --primary-container: #005eb8;
-  --on-primary-container: #c8daff;
-  --inverse-primary: #a9c7ff;
+  --primary-container: #0d3b9e;
+  --on-primary-container: #ffffff;
+  --inverse-primary: #bcd0ff;
 
   /* Secondary roles */
   --secondary: #565e71;
@@ -530,14 +530,51 @@
     animation: live-pulse 1.6s var(--ui-ease-in-out) infinite;
   }
 
-  /* Shared M3 card: surface, radius, outline, shadow. Padding stays in markup. */
+  /* Shared M3 card: white surface, 16px radius, hairline, flat shadow. Padding stays in markup. */
   .card-m3 {
     background-color: var(--color-surface-container-low);
-    border-radius: 1.5rem;
-    border: 1px solid color-mix(in srgb, var(--outline-variant) 15%, transparent);
-    box-shadow:
-      0 1px 2px 0 rgb(0 0 0 / 0.05),
-      0 1px 3px 1px rgb(0 0 0 / 0.04);
+    border-radius: 1rem;
+    border: 1px solid var(--border);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  }
+
+  /* ETA numerals: 28-32px, weight 800, tabular. Color set by modifier. */
+  .eta-numeral {
+    font-size: 1.75rem;
+    line-height: 1.15;
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+  }
+
+  @media (min-width: 640px) {
+    .eta-numeral {
+      font-size: 2rem;
+    }
+  }
+
+  .eta-numeral-soon {
+    color: #15803d;
+  }
+
+  .eta-numeral-normal {
+    color: #0d3b9e;
+  }
+
+  .eta-numeral-scheduled {
+    color: #92400e;
+  }
+
+  .dark .eta-numeral-soon {
+    color: #4ade80;
+  }
+
+  .dark .eta-numeral-normal {
+    color: #bcd0ff;
+  }
+
+  .dark .eta-numeral-scheduled {
+    color: #fbbf24;
   }
 
   /* M3 elevation tints */

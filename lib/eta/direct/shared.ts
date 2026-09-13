@@ -126,12 +126,6 @@ export function normalizeDirection(direction: string): 'I' | 'O' | string {
   return direction
 }
 
-/**
- * Static link for the interchange promo banner. The per-stop discount
- * rules have no public API, so the card links out instead of computing fares.
- */
-export const KMB_INTERCHANGE_INFO_URL = 'https://www.kmb.hk'
-
 export function mapRecord<T>(record: CacheRecord<T> | null): T | null {
   return record?.value ?? null
 }

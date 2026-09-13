@@ -9,10 +9,8 @@ import { RouteBadge } from '@/components/eta/route-badge'
 import {
   ApiStatusFooter,
   EtaRealtimeBadge,
-  EtaTimeline,
-  InterchangePromoBanner,
   SortByTimeToggle,
-  WheelchairBadge,
+  etaNumeralClass,
 } from '@/components/eta/eta-card-parts'
 import { LivePulse, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import {
@@ -25,7 +23,7 @@ import {
 } from '@/components/ui/dialog'
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
-import { hasWheelchairAccess, resolveEtaBadge, sortBySoonestMinutes } from '@/lib/eta/eta-badges'
+import { resolveEtaBadge, sortBySoonestMinutes } from '@/lib/eta/eta-badges'
 import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
@@ -416,15 +414,6 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         now,
       })
     : 'scheduled'
-  const groupWheelchair = items.some((entry) =>
-    hasWheelchairAccess(entry.rmk_tc, entry.rmk_sc, entry.rmk_en)
-  )
-  const timelineMinutes = items
-    .slice(0, 3)
-    .map((entry) =>
-      entry.eta ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now) : null
-    )
-
   const FirstEta = () =>
     firstIsArriving ? (
       <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
@@ -432,7 +421,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         {formatArrivingText(lang)}
       </span>
     ) : (
-      <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
+      <span className={etaNumeralClass(firstMinutes, firstBadge)}>
         {formatMinutesDisplay(firstMinutes)}
       </span>
     )
@@ -457,7 +446,6 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         {showEta && hasEta ? (
           <>
             <EtaRealtimeBadge badge={firstBadge} lang={lang} />
-            <WheelchairBadge visible={groupWheelchair} lang={lang} />
           </>
         ) : null}
         {showEta && hasEta ? <FirstEta /> : null}
@@ -489,6 +477,15 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           )
           const isFirst = entry.eta_seq === 1
           const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
+          const entryBadge = resolveEtaBadge({
+            mode: 'kmb',
+            etaSeq: entry.eta_seq,
+            rmk_tc: entry.rmk_tc,
+            rmk_sc: entry.rmk_sc,
+            rmk_en: entry.rmk_en,
+            dataTimestamp: entry.data_timestamp,
+            now,
+          })
 
           if (isFirst) {
             return (
@@ -497,7 +494,11 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
                 className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
               >
                 <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
-                <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
+                <div
+                  className={cn(
+                    'eta-numeral mt-0.5 flex items-center justify-center gap-1.5 text-white'
+                  )}
+                >
                   {isArriving ? <LivePulse /> : null}
                   {formatMinutesDisplay(minutes)}
                 </div>
@@ -518,7 +519,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
               <div className="text-on-surface-variant m3-label-md">
                 {formatEtaLabel(entry.eta_seq, lang)}
               </div>
-              <div className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg">
+              <div className={etaNumeralClass(minutes, entryBadge)}>
                 {formatMinutesDisplay(minutes)}
               </div>
               {remark ? (
@@ -530,7 +531,6 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           )
         })}
       </div>
-      <EtaTimeline minutes={timelineMinutes} lang={lang} stale={dimmed} />
     </div>
   )
 
@@ -574,10 +574,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           style={{ backgroundColor: badgeStyle.bgColor }}
           aria-hidden
         />
-        <div className="space-y-2.5 pl-4">
-          {routeHeader(true)}
-          <EtaTimeline minutes={timelineMinutes} lang={lang} stale={dimmed} />
-        </div>
+        <div className="space-y-2.5 pl-4">{routeHeader(true)}</div>
       </div>
     )
   }
@@ -995,7 +992,6 @@ export const KmbResults = React.memo(function KmbResults({
       </div>
       {hasQuery ? (
         <div className="mt-4 space-y-3">
-          <InterchangePromoBanner lang={lang} />
           <ApiStatusFooter
             lang={lang}
             mode="kmb"

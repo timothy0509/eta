@@ -440,11 +440,13 @@ export function KmbPane({
     if (!primaryStop) return null
     const fullName = pickKmbStopTitle(primaryStop, lang)
     const { name, stopCode } = parseKmbStopNameCached(fullName)
+    const titleTc = parseKmbStopNameCached(primaryStop.nameTc).name
+    const titleEn = parseKmbStopNameCached(primaryStop.nameEn).name
     const coords =
       Number.isFinite(primaryStop.lat) && Number.isFinite(primaryStop.lng)
         ? { lat: primaryStop.lat, lng: primaryStop.lng }
         : null
-    return { title: name, stopCode, coords }
+    return { title: name, titleTc, titleEn, stopCode, coords }
   }, [primaryStop, lang])
 
   React.useEffect(() => {
@@ -1142,6 +1144,8 @@ export function KmbPane({
         <StopDetailCard
           lang={lang}
           title={cardProps.title}
+          titleTc={cardProps.titleTc}
+          titleEn={cardProps.titleEn}
           stopCode={cardProps.stopCode}
           exitInfo={null}
           coords={cardProps.coords}

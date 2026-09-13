@@ -35,6 +35,8 @@ export type StopCardNearby = {
 type Props = {
   lang: UiLanguage
   title: string
+  titleTc?: string | null
+  titleEn?: string | null
   stopCode: string | null
   exitInfo?: string | null
   coords: { lat: number; lng: number } | null
@@ -50,6 +52,8 @@ const MAX_ROUTE_BADGES = 8
 export function StopDetailCard({
   lang,
   title,
+  titleTc,
+  titleEn,
   stopCode,
   exitInfo,
   coords,
@@ -76,7 +80,14 @@ export function StopDetailCard({
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="m3-title-md text-on-surface truncate">{title}</h2>
+          {titleTc && titleEn && titleTc !== titleEn ? (
+            <>
+              <h2 className="m3-title-md text-on-surface truncate font-bold">{titleTc}</h2>
+              <p className="text-on-surface-variant m3-body-sm truncate">{titleEn}</p>
+            </>
+          ) : (
+            <h2 className="m3-title-md text-on-surface truncate font-bold">{title}</h2>
+          )}
           <div className="text-on-surface-variant m3-label-md mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
             {stopCode ? (
               <span>
@@ -158,31 +169,6 @@ export function StopDetailCard({
         ) : (
           <p className="text-on-surface-variant m3-body-md">{t('errors.noResults')}</p>
         )}
-      </div>
-
-      <div className="mt-3">
-        <div className="m3-label-lg text-on-surface mb-1.5 flex items-center gap-2">
-          {t('common.crowdLevel')}
-          <span className="text-on-surface-variant m3-label-sm font-normal">
-            {t('common.crowdStaticNote')}
-          </span>
-        </div>
-        <div className="bg-surface-container flex items-center gap-2 rounded-2xl px-3 py-2">
-          <div className="flex flex-1 gap-1" aria-hidden="true">
-            {['quiet', 'typical', 'busy'].map((level) => (
-              <span
-                key={level}
-                className={cn(
-                  'h-1.5 flex-1 rounded-full',
-                  level === 'typical' ? 'bg-primary' : 'bg-outline-variant/30'
-                )}
-              />
-            ))}
-          </div>
-          <span className="m3-label-md text-on-surface-variant shrink-0">
-            {t('common.crowdLevel')}: {t('common.crowdTypical')}
-          </span>
-        </div>
       </div>
 
       {nearby.length ? (

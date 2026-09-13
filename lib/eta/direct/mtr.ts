@@ -71,6 +71,8 @@ export type MtrScheduleResponse = {
   url?: string
   curr_time?: string
   sys_time?: string
+  /** 'Y' when the line is delayed, 'N' when running normally. */
+  isdelay?: string
   data?: Record<
     string,
     {
@@ -86,6 +88,8 @@ export type MtrTrainEntry = {
   dest?: string
   seq?: string | number
   timetype?: string
+  /** Official casing used by the live API (EAL-only, 'A' arrival / 'D' departure). */
+  timeType?: string
   [key: string]: unknown
 }
 

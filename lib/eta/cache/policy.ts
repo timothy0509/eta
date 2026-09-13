@@ -14,6 +14,7 @@ export const CACHE_POLICIES = {
   mtrSchedule: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
   lrtSchedule: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
   etaDb: { ttlMs: 24 * 60 * 60 * 1000, persist: true },
+  tdTraffic: { ttlMs: 60_000, persist: false },
   kmbRouteGeometry: {
     ttlMs: 30 * 24 * 60 * 60 * 1000,
     maxStaleMs: 90 * 24 * 60 * 60 * 1000,

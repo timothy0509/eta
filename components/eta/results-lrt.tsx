@@ -4,11 +4,19 @@ import * as React from 'react'
 import { Info, RefreshCw, TramFront } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
+import {
+  ApiStatusFooter,
+  EtaRealtimeBadge,
+  EtaTimeline,
+  SortByTimeToggle,
+} from '@/components/eta/eta-card-parts'
+import { resolveEtaBadge, sortBySoonestMinutes } from '@/lib/eta/eta-badges'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { Badge } from '@/components/ui/badge'
 import { Marquee } from '@/components/ui/marquee'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
@@ -37,6 +45,18 @@ function isArrivingTime(time: string | number | null | undefined) {
   )
 }
 
+/** Soonest-first minutes for a Light Rail route entry. Dash text maps to null (last). */
+function lrtMinutes(
+  route: { arrival_departure: string; time_en: string; time_ch: string },
+  lang: UiLanguage
+): number | null {
+  if (route.arrival_departure === 'A') return 0
+  const text = String(lang === 'en' ? route.time_en : (route.time_ch ?? ''))
+  if (isArrivingTime(text)) return 0
+  const match = text.match(/-?\d+/)
+  return match ? Number(match[0]) : null
+}
+
 type Props = {
   title: string
   lang: UiLanguage
@@ -62,6 +82,16 @@ export const LrtResults = React.memo(function LrtResults({
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
 
+  /** Sort-by-time toggle. Transient pane-store state, works in the desktop column and mobile list. */
+  const sortByTime = usePaneStore((s) => s.sortByTime)
+  const setSortByTime = usePaneStore((s) => s.setSortByTime)
+  const onToggleSort = React.useCallback(() => {
+    setSortByTime(!sortByTime)
+  }, [setSortByTime, sortByTime])
+
+  /** Freshness heuristic badge, shared by every route on this card. */
+  const platformBadge = resolveEtaBadge({ mode: 'lrt', lastUpdatedAt })
+
   return (
     <div>
       <ResultsHeader
@@ -74,6 +104,7 @@ export const LrtResults = React.memo(function LrtResults({
         stale={stale}
         loading={loading}
         onRefresh={onRefresh}
+        sortControl={<SortByTimeToggle active={sortByTime} onToggle={onToggleSort} lang={lang} />}
       />
 
       <div className="space-y-4">
@@ -120,12 +151,18 @@ export const LrtResults = React.memo(function LrtResults({
                         ? 'ui-stagger-3'
                         : ''
 
+                const routes = sortByTime
+                  ? sortBySoonestMinutes(p.route_list ?? [], (r) => lrtMinutes(r, lang))
+                  : (p.route_list ?? [])
+                const timelineMinutes = routes.slice(0, 3).map((r) => lrtMinutes(r, lang))
+
                 return (
                   <div
                     key={p.platform_id}
                     className={cn(
                       'border-outline-variant border-b pb-4 last:border-0',
-                      staggerClass
+                      staggerClass,
+                      stale && 'opacity-60'
                     )}
                   >
                     <div className="mb-2 flex items-center gap-2">
@@ -136,10 +173,11 @@ export const LrtResults = React.memo(function LrtResults({
                       <span className="text-on-surface-variant m3-label-md">
                         {(p.route_list ?? []).length} {lang === 'en' ? 'routes' : '條路線'}
                       </span>
+                      <EtaRealtimeBadge badge={platformBadge} lang={lang} />
                     </div>
 
                     <div className="space-y-1">
-                      {(p.route_list ?? []).map((r, routeIdx) => {
+                      {routes.map((r, routeIdx) => {
                         const routeColor = getLineColor(String(r.route_no ?? ''))
                         const timeText = String(lang === 'en' ? r.time_en : (r.time_ch ?? ''))
                         const arriving = r.arrival_departure === 'A' || isArrivingTime(timeText)
@@ -193,9 +231,15 @@ export const LrtResults = React.memo(function LrtResults({
                         )
                       })}
                     </div>
+                    <div className="mt-2">
+                      <EtaTimeline minutes={timelineMinutes} lang={lang} stale={stale} />
+                    </div>
                   </div>
                 )
               })}
+            </div>
+            <div className="mt-4">
+              <ApiStatusFooter lang={lang} mode="lrt" lastUpdatedAt={lastUpdatedAt} stale={stale} />
             </div>
           </>
         )}

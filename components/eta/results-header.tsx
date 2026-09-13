@@ -20,6 +20,8 @@ type Props = {
   stale?: boolean
   loading?: boolean
   onRefresh?: () => void
+  /** Optional sort control rendered beside the refresh button (mobile + desktop). */
+  sortControl?: React.ReactNode
 }
 
 /**
@@ -38,6 +40,7 @@ export function ResultsHeader({
   stale,
   loading,
   onRefresh,
+  sortControl,
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
   const updatedAt = lastUpdatedAt ? new Date(lastUpdatedAt) : null
@@ -79,17 +82,20 @@ export function ResultsHeader({
           ) : null}
         </p>
       </div>
-      {onRefresh ? (
-        <button
-          type="button"
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
-          onClick={onRefresh}
-          disabled={loading}
-          aria-label={t('common.refresh')}
-        >
-          <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
-        </button>
-      ) : null}
+      <div className="flex shrink-0 items-center gap-1">
+        {sortControl}
+        {onRefresh ? (
+          <button
+            type="button"
+            className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
+            onClick={onRefresh}
+            disabled={loading}
+            aria-label={t('common.refresh')}
+          >
+            <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
+          </button>
+        ) : null}
+      </div>
     </div>
   )
 }

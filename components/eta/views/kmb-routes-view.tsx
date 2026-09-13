@@ -1,6 +1,7 @@
 'use client'
 
 import { AlertCircle, Clock, Heart, Search } from 'lucide-react'
+import Fuse from 'fuse.js'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
@@ -312,13 +313,41 @@ export function KmbRoutesView({
     [routeEntries]
   )
 
+  // Fuzzy route search over route numbers plus origin/destination names.
+  const routeFuse = React.useMemo(
+    () =>
+      new Fuse(routes, {
+        threshold: 0.35,
+        ignoreLocation: true,
+        minMatchCharLength: 1,
+        keys: [
+          { name: 'route', weight: 0.6 },
+          { name: 'origin.en', weight: 0.1 },
+          { name: 'origin.tc', weight: 0.1 },
+          { name: 'origin.sc', weight: 0.05 },
+          { name: 'destination.en', weight: 0.1 },
+          { name: 'destination.tc', weight: 0.1 },
+          { name: 'destination.sc', weight: 0.05 },
+        ],
+      }),
+    [routes]
+  )
+
   const filteredRoutes = React.useMemo(() => {
-    const needle = query.trim().toUpperCase()
-    const matches = needle
-      ? routeEntries.filter((e) => e.route.toUpperCase().includes(needle))
-      : routeEntries
+    const needle = query.trim()
+    if (!needle) return routeEntries.slice(0, 30)
+    const entryByKey = new Map(routeEntries.map((entry) => [routeSelectionKey(entry), entry]))
+    const seen = new Set<string>()
+    const matches: RouteSelection[] = []
+    for (const hit of routeFuse.search(needle).slice(0, 60)) {
+      const key = `${normalizeCo(String(hit.item.co ?? 'kmb'))}|${hit.item.route}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const entry = entryByKey.get(key)
+      if (entry) matches.push(entry)
+    }
     return matches.slice(0, 30)
-  }, [query, routeEntries])
+  }, [query, routeFuse, routeEntries])
 
   const variantsForRoute = React.useMemo(() => {
     if (!selectedRouteKey) return []

@@ -4,11 +4,19 @@ import * as React from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, Info, TrainFront } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
+import {
+  ApiStatusFooter,
+  EtaRealtimeBadge,
+  EtaTimeline,
+  SortByTimeToggle,
+} from '@/components/eta/eta-card-parts'
+import { resolveEtaBadge, sortBySoonestMinutes } from '@/lib/eta/eta-badges'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { Marquee } from '@/components/ui/marquee'
 import { findMtrStationBySta } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
@@ -111,6 +119,7 @@ type MtrLineCardProps = {
   expanded: boolean
   onToggle: () => void
   staggerClass?: string
+  stale?: boolean
 }
 
 function MtrLineCard({
@@ -124,10 +133,15 @@ function MtrLineCard({
   expanded,
   onToggle,
   staggerClass,
+  stale,
 }: MtrLineCardProps) {
   const upTrains = payload.UP ?? []
   const downTrains = payload.DOWN ?? []
   const totalTrains = upTrains.length + downTrains.length
+  const timelineMinutes = [...upTrains, ...downTrains].slice(0, 4).map((train) => {
+    const minutes = Number(String(train.ttnt ?? '').trim())
+    return Number.isNaN(minutes) ? null : minutes
+  })
   const expandable = totalTrains > 1
 
   const computeUniqueDestEtas = React.useCallback(
@@ -145,7 +159,8 @@ function MtrLineCard({
           const dest = formatDestWithRacecourse(train.dest, lang, showViaRacecourse)
           const platform = formatPlatform(train.plat)
           const eta = formatMinutes(train.ttnt, lang)
-          return { dest, platform, eta, key: `${dest}-${route}` }
+          const badge = resolveEtaBadge({ mode: 'mtr', timetype: train.timetype })
+          return { dest, platform, eta, badge, key: `${dest}-${route}` }
         })
         .filter((item) => {
           if (!item.dest || seenDests.has(item.dest)) return false
@@ -180,6 +195,7 @@ function MtrLineCard({
                   P{item.platform}
                 </span>
               ) : null}
+              <EtaRealtimeBadge badge={item.badge} lang={lang} />
               {item.eta.arriving ? (
                 <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
                   <LivePulse />
@@ -208,6 +224,7 @@ function MtrLineCard({
     const destText = formatDestWithRacecourse(train.dest, lang, showViaRacecourse)
     const platform = formatPlatform(train.plat)
     const eta = formatMinutes(train.ttnt, lang)
+    const trainBadge = resolveEtaBadge({ mode: 'mtr', timetype: train.timetype })
 
     return (
       <div key={`${dir}-${trainIdx}`} className="flex items-center justify-between gap-3 py-1.5">
@@ -228,6 +245,7 @@ function MtrLineCard({
               {eta.text}
             </span>
           )}
+          <EtaRealtimeBadge badge={trainBadge} lang={lang} />
         </div>
       </div>
     )
@@ -235,6 +253,7 @@ function MtrLineCard({
 
   const expandedPanel = (
     <div className="space-y-4">
+      <EtaTimeline minutes={timelineMinutes} lang={lang} stale={stale} />
       <div>
         <div className="text-on-surface-variant m3-label-md mb-1 font-medium">{upLabel}</div>
         <div className="space-y-1">
@@ -283,7 +302,8 @@ function MtrLineCard({
       <div
         className={cn(
           'overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm',
-          staggerClass
+          staggerClass,
+          stale && 'opacity-60'
         )}
       >
         {header(false)}
@@ -296,7 +316,7 @@ function MtrLineCard({
     <ExpandableEtaRow
       expanded={expanded}
       onToggle={onToggle}
-      className="ui-lift"
+      className={cn('ui-lift', stale && 'opacity-60')}
       panel={expandedPanel}
       toggleLabel={line ? getMtrLineName(line, lang) : 'MTR'}
     >
@@ -304,6 +324,16 @@ function MtrLineCard({
       {expanded ? null : <div className="pt-2">{collapsedSummary}</div>}
     </ExpandableEtaRow>
   )
+}
+
+function soonestTtnt(payload: { UP?: MtrTrainEntry[]; DOWN?: MtrTrainEntry[] }): number | null {
+  let best: number | null = null
+  for (const train of [...(payload.UP ?? []), ...(payload.DOWN ?? [])]) {
+    const minutes = Number(String(train.ttnt ?? '').trim())
+    if (Number.isNaN(minutes)) continue
+    if (best === null || minutes < best) best = minutes
+  }
+  return best
 }
 
 export const MtrResults = React.memo(function MtrResults({
@@ -323,6 +353,19 @@ export const MtrResults = React.memo(function MtrResults({
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
 
+  /** Sort-by-time toggle. Transient pane-store state, works in the desktop column and mobile list. */
+  const sortByTime = usePaneStore((s) => s.sortByTime)
+  const setSortByTime = usePaneStore((s) => s.setSortByTime)
+  const onToggleSort = React.useCallback(() => {
+    setSortByTime(!sortByTime)
+  }, [setSortByTime, sortByTime])
+
+  const sortedEntries = React.useMemo(() => {
+    const entries = Object.entries(schedule?.data ?? {})
+    if (!sortByTime) return entries
+    return sortBySoonestMinutes(entries, ([, payload]) => soonestTtnt(payload))
+  }, [schedule, sortByTime])
+
   return (
     <div>
       <ResultsHeader
@@ -335,6 +378,7 @@ export const MtrResults = React.memo(function MtrResults({
         stale={stale}
         loading={loading}
         onRefresh={onRefresh}
+        sortControl={<SortByTimeToggle active={sortByTime} onToggle={onToggleSort} lang={lang} />}
       />
 
       <div className="space-y-4">
@@ -367,7 +411,7 @@ export const MtrResults = React.memo(function MtrResults({
             ) : null}
           </div>
         ) : (
-          Object.entries(schedule.data ?? {}).map(([key, payload], idx) => {
+          sortedEntries.map(([key, payload], idx) => {
             const [line, sta] = key.split('-')
             const lineColor = line ? getLineColor(line) : undefined
 
@@ -393,11 +437,17 @@ export const MtrResults = React.memo(function MtrResults({
                 expanded={expandedKey === key}
                 onToggle={() => onToggleExpand(key)}
                 staggerClass={staggerClass}
+                stale={stale}
               />
             )
           })
         )}
       </div>
+      {schedule ? (
+        <div className="mt-4">
+          <ApiStatusFooter lang={lang} mode="mtr" lastUpdatedAt={lastUpdatedAt} stale={stale} />
+        </div>
+      ) : null}
     </div>
   )
 })

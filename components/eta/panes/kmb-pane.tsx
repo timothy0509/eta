@@ -8,6 +8,12 @@ import {
   type RouteFilterOption,
   type RouteFilterState,
 } from '@/components/eta/route-filter'
+import { CompanyChips } from '@/components/eta/company-chips'
+import {
+  StopDetailCard,
+  type StopCardNearby,
+  type StopCardRoute,
+} from '@/components/eta/stop-detail-card'
 import { StopSearch, type StopSearchSelection } from '@/components/eta/stop-search'
 import { Button } from '@/components/ui/button'
 import {
@@ -21,6 +27,12 @@ import {
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
 } from '@/lib/eta/client'
+import {
+  filterByCompanyChip,
+  findJointRouteNumbers,
+  type CompanyChip,
+} from '@/lib/eta/company-filter'
+import { computeNearbyStops } from '@/lib/eta/geo'
 import { isStaleByFlagOrAge } from '@/lib/eta/stale'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -348,6 +360,92 @@ export function KmbPane({
       })
       .filter((opt) => opt.route)
   }, [availableStopIdsForFilter, kmbRouteInfos, routeStopIndex, pickRouteVariantLabel])
+
+  // --- Stop detail card: company chips filter the route grid client-side. ---
+  const companyChip = usePaneStore((s) => s.companyChip)
+  const setCompanyChip = usePaneStore((s) => s.setCompanyChip)
+  const quickHopStopId = usePaneStore((s) => s.quickHopStopId)
+  const setQuickHopStopId = usePaneStore((s) => s.setQuickHopStopId)
+
+  const variantsWithCo: StopCardRoute[] = React.useMemo(
+    () =>
+      kmbAvailableRouteVariants.map((opt) => ({
+        ...opt,
+        co: (opt.key.split('|')[0] || 'kmb').toLowerCase(),
+      })),
+    [kmbAvailableRouteVariants]
+  )
+
+  const jointRoutes = React.useMemo(
+    () => findJointRouteNumbers(kmbRouteStops.map((rs) => ({ route: rs.route, co: rs.co }))),
+    [kmbRouteStops]
+  )
+
+  const chipCounts = React.useMemo(() => {
+    const chips: CompanyChip[] = ['all', 'kmb', 'ctb', 'cross-harbour', 'n-line']
+    return Object.fromEntries(
+      chips.map((chip) => [chip, filterByCompanyChip(variantsWithCo, chip, jointRoutes).length])
+    ) as Record<CompanyChip, number>
+  }, [variantsWithCo, jointRoutes])
+
+  const filteredCardRoutes = React.useMemo(
+    () => filterByCompanyChip(variantsWithCo, companyChip, jointRoutes),
+    [variantsWithCo, companyChip, jointRoutes]
+  )
+
+  const primaryStop = React.useMemo(() => {
+    if (!kmbQuery) return null
+    if (kmbQuery.mode === 'stop') return kmbStopsById.get(kmbQuery.stopId) ?? null
+    if (kmbQuery.mode === 'stops') {
+      for (const stopId of kmbQuery.stopIds) {
+        const stop = kmbStopsById.get(stopId)
+        if (stop) return stop
+      }
+    }
+    return null
+  }, [kmbQuery, kmbStopsById])
+
+  const cardNearby: StopCardNearby[] = React.useMemo(() => {
+    if (!primaryStop) return []
+    if (!Number.isFinite(primaryStop.lat) || !Number.isFinite(primaryStop.lng)) return []
+    const exclude = new Set(kmbQuery?.mode === 'stops' ? kmbQuery.stopIds : [primaryStop.stopId])
+    const candidates = kmbStops.filter((stop) => !exclude.has(stop.stopId))
+    return computeNearbyStops({ lat: primaryStop.lat, lng: primaryStop.lng }, candidates, 6).map(
+      (stop) => {
+        const fullName = pickKmbStopTitle(stop, lang)
+        const { name } = parseKmbStopNameCached(fullName)
+        return { stopId: stop.stopId, title: name, distanceKm: stop.distanceKm }
+      }
+    )
+  }, [primaryStop, kmbQuery, kmbStops, lang])
+
+  const handleQuickHop = React.useCallback(
+    (stopId: string) => {
+      const stop = kmbStopsById.get(stopId)
+      setQuickHopStopId(stopId)
+      setKmbDraftStopSelection({ type: 'stop', stopId })
+      if (stop) {
+        onAddRecent({
+          id: `kmb:${stop.stopId}:__stop__`,
+          mode: 'kmb',
+          title: pickKmbStopTitle(stop, lang),
+          stopId: stop.stopId,
+        })
+      }
+    },
+    [kmbStopsById, setQuickHopStopId, onAddRecent, lang]
+  )
+
+  const cardProps = React.useMemo(() => {
+    if (!primaryStop) return null
+    const fullName = pickKmbStopTitle(primaryStop, lang)
+    const { name, stopCode } = parseKmbStopNameCached(fullName)
+    const coords =
+      Number.isFinite(primaryStop.lat) && Number.isFinite(primaryStop.lng)
+        ? { lat: primaryStop.lat, lng: primaryStop.lng }
+        : null
+    return { title: name, stopCode, coords }
+  }, [primaryStop, lang])
 
   React.useEffect(() => {
     if (!availableStopIdsForFilter.length) return
@@ -1037,6 +1135,23 @@ export function KmbPane({
           setKmbDraftStopSelection({ type: 'contains', query })
         }}
       />
+
+      <CompanyChips lang={lang} value={companyChip} onChange={setCompanyChip} counts={chipCounts} />
+
+      {cardProps ? (
+        <StopDetailCard
+          lang={lang}
+          title={cardProps.title}
+          stopCode={cardProps.stopCode}
+          exitInfo={null}
+          coords={cardProps.coords}
+          routes={filteredCardRoutes}
+          totalRouteCount={filteredCardRoutes.length}
+          nearby={cardNearby}
+          quickHopStopId={quickHopStopId}
+          onSelectNearby={handleQuickHop}
+        />
+      ) : null}
 
       <RouteFilter
         lang={lang}

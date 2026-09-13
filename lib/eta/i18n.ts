@@ -113,6 +113,51 @@ const common: Record<string, TranslationEntry> = {
     tc: '更新失敗。顯示上次結果。({error})',
     sc: '更新失败。显示上次结果。({error})',
   },
+  liveSync: { en: 'Live Sync', tc: '即時同步', sc: '即时同步' },
+  paused: { en: 'Paused', tc: '已暫停', sc: '已暂停' },
+  networkStatus: { en: 'Network status', tc: '網絡狀態', sc: '网络状态' },
+  noDataYet: { en: 'No data yet', tc: '尚無資料', sc: '尚无资料' },
+  dismiss: { en: 'Dismiss', tc: '關閉', sc: '关闭' },
+  viewAll: { en: 'View all', tc: '查看全部', sc: '查看全部' },
+  etaRealtime: { en: 'Real-time', tc: '實時', sc: '实时' },
+  etaScheduled: { en: 'Scheduled', tc: '原定班次', sc: '原定班次' },
+  etaSortByTime: { en: 'Sort by time', tc: '按時間排序', sc: '按时间排序' },
+  etaRouteOrder: { en: 'Route order', tc: '路線順序', sc: '路线顺序' },
+  etaLowFloor: { en: 'Low-floor', tc: '低地台', sc: '低地台' },
+  etaProgress: { en: 'Journey progress', tc: '行程進度', sc: '行程进度' },
+  etaSpeed: { en: 'Speed', tc: '車速', sc: '车速' },
+  etaInterchangeTitle: { en: 'Interchange discounts', tc: '轉乘優惠', sc: '转乘优惠' },
+  etaInterchangeBody: {
+    en: 'Interchanging buses with Octopus can lower your fare. Check KMB for the latest schemes.',
+    tc: '以八達通轉乘巴士可享車費優惠，詳情請查閱九巴最新計劃。',
+    sc: '以八达通转乘巴士可享车费优惠，详情请查阅九巴最新计划。',
+  },
+  etaInterchangeCta: { en: 'Learn more', tc: '了解更多', sc: '了解更多' },
+  companyFilter: { en: 'Filter by company', tc: '按公司篩選', sc: '按公司筛选' },
+  companyAll: { en: 'All', tc: '全部', sc: '全部' },
+  companyKmb: { en: 'KMB', tc: '九巴', sc: '九巴' },
+  companyCitybus: { en: 'Citybus', tc: '城巴', sc: '城巴' },
+  companyCrossHarbour: { en: 'Cross-Harbour', tc: '過海', sc: '过海' },
+  companyNLine: { en: 'N-Line', tc: 'N 線', sc: 'N 线' },
+  stopCode: { en: 'Stop code', tc: '車站編號', sc: '车站编号' },
+  exit: { en: 'Exit', tc: '出口', sc: '出口' },
+  coordinates: { en: 'Coordinates', tc: '座標', sc: '坐标' },
+  mapPlaceholder: { en: 'Map preview', tc: '地圖預覽', sc: '地图预览' },
+  showMap: { en: 'Show map', tc: '顯示地圖', sc: '显示地图' },
+  hideMap: { en: 'Hide map', tc: '隱藏地圖', sc: '隐藏地图' },
+  quickHop: { en: 'Quick hop', tc: '快速前往', sc: '快速前往' },
+  crowdLevel: { en: 'Platform crowd', tc: '月台擠擁程度', sc: '月台拥挤程度' },
+  crowdTypical: { en: 'Typical', tc: '一般', sc: '一般' },
+  crowdStaticNote: {
+    en: 'Typical level, not live',
+    tc: '一般水平，非即時數據',
+    sc: '一般水平，非即时数据',
+  },
+  searchShortcutHint: {
+    en: 'Press Control K or Command K to focus search, Escape to leave',
+    tc: '按 Control K 或 Command K 聚焦搜尋，按 Escape 離開',
+    sc: '按 Control K 或 Command K 聚焦搜索，按 Escape 离开',
+  },
 }
 
 const kmb: Record<string, TranslationEntry> = {
@@ -143,6 +188,11 @@ const kmb: Record<string, TranslationEntry> = {
   bus: { en: 'Bus', tc: '巴士', sc: '巴士' },
   routes: { en: 'routes', tc: '條路線', sc: '条路线' },
   routeSingular: { en: 'route', tc: '條路線', sc: '条路线' },
+  showingRoutes: {
+    en: 'Showing {shown} of {total} routes',
+    tc: '顯示 {total} 條路線中的 {shown} 條',
+    sc: '显示 {total} 条路线中的 {shown} 条',
+  },
 }
 
 const mtr: Record<string, TranslationEntry> = {

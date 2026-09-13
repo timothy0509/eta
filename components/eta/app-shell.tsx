@@ -28,6 +28,7 @@ import {
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { isLanguageSupported } from '@/lib/eta/types'
 import { useTranslations } from '@/lib/eta/i18n'
+import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
 import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
@@ -135,6 +136,76 @@ type TopAppBarProps = {
   onModeChange: (mode: TransportMode) => void
 }
 
+export function LiveSyncPill({ lang }: { lang: UiLanguage }) {
+  const autoRefreshSeconds = useAppStore((s) => s.autoRefreshSeconds)
+  const { t } = useTranslations(lang)
+  const live = autoRefreshSeconds > 0
+  return (
+    <span
+      aria-live="polite"
+      title={live ? t('common.liveSync') : t('common.paused')}
+      className={cn(
+        'm3-label-md hidden items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold ring-1 sm:inline-flex',
+        live
+          ? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/30 dark:text-emerald-300'
+          : 'bg-surface-container-high text-on-surface-variant ring-[var(--outline-variant)]/25'
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'h-1.5 w-1.5 rounded-full',
+          live ? 'animate-pulse bg-emerald-500' : 'bg-current opacity-50'
+        )}
+      />
+      {live ? t('common.liveSync') : t('common.paused')}
+    </span>
+  )
+}
+
+export function AlertBannerSlot({ children }: { children?: React.ReactNode }) {
+  if (!children) return null
+  return <>{children}</>
+}
+
+export function NetworkStatusCard({
+  lang,
+  mode,
+  lastUpdatedAt,
+  stale,
+}: {
+  lang: UiLanguage
+  mode: TransportMode
+  lastUpdatedAt?: number | null
+  stale?: boolean
+}) {
+  const { t, tWithParams } = useTranslations(lang)
+  const ageLabel = formatRelativeAgeLabel({ lastUpdatedAt, lang })
+  const old = isStaleByAge({ lastUpdatedAt, mode })
+  const showStale = Boolean(stale) || old
+  return (
+    <div className="mt-3 w-[132px] rounded-2xl border border-[var(--outline-variant)]/20 bg-[var(--surface-container-high)]/60 p-2.5 text-left">
+      <p className="m3-label-sm text-on-surface-variant font-semibold">
+        {t('common.networkStatus')}
+      </p>
+      {ageLabel ? (
+        <p className="m3-body-sm text-on-surface mt-1 leading-snug">
+          {tWithParams('common.updated', { time: ageLabel })}
+        </p>
+      ) : (
+        <p className="m3-body-sm text-on-surface-variant mt-1 leading-snug">
+          {t('common.noDataYet')}
+        </p>
+      )}
+      {showStale && ageLabel ? (
+        <p className="m3-label-sm mt-1 font-semibold text-amber-600 dark:text-amber-400">
+          {t('common.stale')}
+        </p>
+      ) : null}
+    </div>
+  )
+}
+
 export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
   const { t } = useTranslations(lang)
 
@@ -191,7 +262,8 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
           </div>
         </nav>
 
-        <div className="flex shrink-0 items-center">
+        <div className="flex shrink-0 items-center gap-1">
+          <LiveSyncPill lang={lang} />
           <LanguageMenu lang={lang} mode={mode} />
           <ThemeToggle label={t('common.toggleTheme')} />
         </div>
@@ -204,9 +276,19 @@ type SideRailProps = {
   lang: UiLanguage
   subView: SubView
   onSubViewChange: (subView: SubView) => void
+  mode?: TransportMode
+  lastUpdatedAt?: number | null
+  stale?: boolean
 }
 
-export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
+export function SideRail({
+  lang,
+  subView,
+  onSubViewChange,
+  mode = 'kmb',
+  lastUpdatedAt,
+  stale,
+}: SideRailProps) {
   const { t } = useTranslations(lang)
 
   return (
@@ -240,6 +322,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
           </button>
         )
       })}
+      <NetworkStatusCard lang={lang} mode={mode} lastUpdatedAt={lastUpdatedAt} stale={stale} />
     </nav>
   )
 }

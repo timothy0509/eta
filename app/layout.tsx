@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Noto_Sans_HK, Noto_Sans_SC } from 'next/font/google'
+import { Archivo, Inter, Noto_Sans_HK, Noto_Sans_SC } from 'next/font/google'
 
 import { DynamicToaster } from '@/components/dynamic-toaster'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -29,6 +29,14 @@ const notoSansSC = Noto_Sans_SC({
 })
 
 // Geist Mono is loaded via @fontsource in globals.css
+
+// Display grotesque for the departure-board identity: wordmark, board titles.
+const archivo = Archivo({
+  variable: '--font-archivo',
+  subsets: ['latin'],
+  weight: ['700', '800', '900'],
+  display: 'swap',
+})
 
 const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL)
 
@@ -108,7 +116,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://www.lrtetas.hk" />
       </head>
       <body
-        className={`${inter.variable} ${notoSansHK.variable} ${notoSansSC.variable} min-h-dvh antialiased`}
+        className={`${inter.variable} ${notoSansHK.variable} ${notoSansSC.variable} ${archivo.variable} min-h-dvh antialiased`}
       >
         <ThemeProvider
           attribute="class"

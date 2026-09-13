@@ -179,7 +179,7 @@ export const LrtResults = React.memo(function LrtResults({
                                   {timeText}
                                 </span>
                               ) : (
-                                <div className="text-on-surface font-tabular m3-body-md font-semibold">
+                                <div className="text-on-surface eta-numerals m3-body-md font-semibold">
                                   {timeText}
                                 </div>
                               )}

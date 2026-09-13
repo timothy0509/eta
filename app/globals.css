@@ -11,6 +11,9 @@
     var(--font-inter), var(--font-noto-sans-hk), var(--font-noto-sans-sc), ui-sans-serif, system-ui,
     sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  --font-display:
+    var(--font-archivo), var(--font-noto-sans-hk), var(--font-noto-sans-sc), ui-sans-serif,
+    system-ui, sans-serif;
   --font-numbers: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   /* Signal system: canonical transit tokens */
@@ -195,6 +198,44 @@
   --border: var(--trackline);
   --input: var(--concourse);
   --ring: var(--dispatch);
+}
+
+/* Departure board: arrivals render as a station sign. Dark ink in both
+   themes; every row component uses semantic tokens, so scoping the token
+   values flips the whole board without touching row markup. */
+.board {
+  color-scheme: dark;
+  --platform: #0e1318;
+  --backdrop: #090d10;
+  --concourse: #1b232b;
+  --trackline: #2b3540;
+  --ink: #f3f1e9;
+  --ink-soft: #b9bfc4;
+  --ink-faint: #868e95;
+  --dispatch: #ffb63d;
+  --dispatch-ink: #241300;
+
+  --signal-now: #3fd47f;
+  --signal-now-wash: #0f2f1e;
+  --signal-soon: #ffb63d;
+  --signal-soon-wash: #33230a;
+  --signal-later: #a7b2bc;
+  --signal-later-wash: #222b33;
+  --signal-lost: #646e77;
+  --signal-lost-wash: #1b2228;
+  --signal-alert: #ff7a6e;
+  --signal-alert-wash: #3a1715;
+
+  --mode-kmb: #ff6b61;
+  --mode-mtr: #6eadf5;
+  --mode-lrt: #45c9a8;
+}
+
+/* LED numerals for minute readouts: mono, tabular, tight */
+.eta-numerals {
+  font-family: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 @layer base {

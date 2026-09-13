@@ -186,7 +186,7 @@ function MtrLineCard({
                   {item.eta.text}
                 </span>
               ) : (
-                <span className="text-on-surface font-tabular m3-body-md font-semibold">
+                <span className="text-on-surface eta-numerals m3-body-md font-semibold">
                   {item.eta.text}
                 </span>
               )}

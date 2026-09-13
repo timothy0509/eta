@@ -389,7 +389,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         {formatArrivingText(lang)}
       </span>
     ) : (
-      <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
+      <span className="text-on-surface eta-numerals shrink-0 text-base font-semibold sm:text-xl">
         {formatMinutesDisplay(firstMinutes)}
       </span>
     )
@@ -447,7 +447,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
               className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
             >
               <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
-              <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
+              <div className="eta-numerals mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold sm:text-2xl">
                 {isArriving ? <LivePulse /> : null}
                 {formatMinutesDisplay(minutes)}
               </div>
@@ -468,7 +468,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
             <div className="text-on-surface-variant m3-label-md">
               {formatEtaLabel(entry.eta_seq, lang)}
             </div>
-            <div className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg">
+            <div className="text-on-surface eta-numerals text-base font-semibold sm:text-lg">
               {formatMinutesDisplay(minutes)}
             </div>
             {remark ? (

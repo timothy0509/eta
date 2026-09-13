@@ -567,7 +567,7 @@ export default function HomeClient() {
         </div>
 
         <FadeIn className="relative mt-4 lg:mt-0" delay={0.05}>
-          <div className="border-trackline bg-platform relative overflow-hidden rounded-[20px] border p-4 shadow-md sm:p-6">
+          <div className="border-trackline bg-platform board relative overflow-hidden rounded-[20px] border p-4 shadow-md sm:p-6">
             <span
               className={
                 mode === 'mtr'

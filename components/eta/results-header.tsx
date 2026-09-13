@@ -66,7 +66,9 @@ export function ResultsHeader({
                 mode === 'mtr' ? 'bg-mode-mtr' : mode === 'lrt' ? 'bg-mode-lrt' : 'bg-mode-kmb'
               )}
             />
-            <h2 className="signal-display text-ink min-w-0 flex-1 truncate">{title}</h2>
+            <h2 className="signal-display font-display text-ink min-w-0 flex-1 truncate">
+              {title}
+            </h2>
             {titleAddon}
           </div>
         </div>

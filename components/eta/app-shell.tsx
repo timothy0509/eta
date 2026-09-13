@@ -307,7 +307,9 @@ export function TopAppBar({ lang, mode, onModeChange, subView, onSubViewChange }
               T
             </div>
             <div className="leading-none">
-              <p className="text-[16px] font-bold tracking-tight text-white">TimoETA</p>
+              <p className="font-display text-[17px] font-black tracking-tight text-white uppercase">
+                TimoETA
+              </p>
               <p className="mt-1 hidden text-[10px] font-semibold tracking-[0.22em] text-white/70 sm:block">
                 HK TRANSIT
               </p>

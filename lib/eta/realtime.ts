@@ -1,0 +1,144 @@
+import { parseRmkFlags } from '@/lib/eta/rmk-flags'
+import { STALE_THRESHOLDS_MS, type StaleMode } from '@/lib/eta/stale'
+
+export type MtrTimeType = 'arrival' | 'departure'
+
+/**
+ * MTR `timetype` follows the official Next Train data dictionary: it is an
+ * EAL-only field where 'A' means the time is an arrival time and 'D' a
+ * departure time. It says nothing about scheduled vs realtime, so it must
+ * never drive a scheduled pill. Anything else returns null.
+ */
+export function parseMtrTimeType(timetype?: string | number | null): MtrTimeType | null {
+  if (timetype === undefined || timetype === null) return null
+  const normalized = String(timetype).trim().toUpperCase()
+  if (normalized === 'A' || normalized === 'ARRIVAL') return 'arrival'
+  if (normalized === 'D' || normalized === 'DEPARTURE') return 'departure'
+  return null
+}
+
+/**
+ * Reads the official `timeType` field (capital T) from a live MTR train
+ * entry, falling back to the legacy lowercase `timetype` key.
+ */
+export function mtrTimeTypeOf(entry: {
+  timeType?: string | number | null
+  timetype?: string | number | null
+}): MtrTimeType | null {
+  return parseMtrTimeType(entry.timeType ?? entry.timetype)
+}
+
+function toTimestampMs(value: string | number | Date | null | undefined): number | null {
+  if (value === undefined || value === null) return null
+  if (value instanceof Date) {
+    const ms = value.getTime()
+    return Number.isNaN(ms) ? null : ms
+  }
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null
+  }
+  const ms = new Date(value).getTime()
+  return Number.isNaN(ms) ? null : ms
+}
+
+function normalizeNowMs(now?: number | Date): number {
+  if (now instanceof Date) return now.getTime()
+  if (typeof now === 'number') return now
+  return Date.now()
+}
+
+function isFresh(params: {
+  mode: StaleMode
+  lastUpdatedAt?: number | null
+  dataTimestamp?: string | number | Date | null
+  now?: number | Date
+}): boolean {
+  const timestampMs =
+    params.lastUpdatedAt ??
+    toTimestampMs(params.dataTimestamp ?? null) ??
+    normalizeNowMs(params.now)
+  const ageMs = normalizeNowMs(params.now) - timestampMs
+  if (!Number.isFinite(ageMs) || ageMs < 0) return true
+  return ageMs <= STALE_THRESHOLDS_MS[params.mode]
+}
+
+function hasEtaSeq(etaSeq?: number | string | null): boolean {
+  if (etaSeq === undefined || etaSeq === null) return false
+  const seq = typeof etaSeq === 'string' ? Number(etaSeq.trim()) : etaSeq
+  return typeof seq === 'number' && Number.isFinite(seq) && seq > 0
+}
+
+export type KmbRealtimeParams = {
+  etaSeq?: number | string | null
+  rmk_tc?: string | null
+  rmk_sc?: string | null
+  rmk_en?: string | null
+  lastUpdatedAt?: number | null
+  dataTimestamp?: string | number | Date | null
+  now?: number | Date
+}
+
+/**
+ * KMB heuristic: a scheduled remark always wins, otherwise realtime needs
+ * a present `eta_seq` plus fresh data within the KMB stale threshold.
+ */
+export function isKmbRealtime(params: KmbRealtimeParams): boolean {
+  const flags = parseRmkFlags(params.rmk_tc, params.rmk_sc, params.rmk_en)
+  if (flags.scheduled) return false
+  if (!hasEtaSeq(params.etaSeq)) return false
+  return isFresh({
+    mode: 'kmb',
+    lastUpdatedAt: params.lastUpdatedAt,
+    dataTimestamp: params.dataTimestamp,
+    now: params.now,
+  })
+}
+
+export type LrtRealtimeParams = {
+  lastUpdatedAt?: number | null
+  dataTimestamp?: string | number | Date | null
+  now?: number | Date
+}
+
+/**
+ * LRT heuristic: no scheduled marker exists in the feed, so freshness
+ * within the LRT stale threshold decides realtime vs scheduled display.
+ */
+export function isLrtRealtime(params: LrtRealtimeParams = {}): boolean {
+  return isFresh({
+    mode: 'lrt',
+    lastUpdatedAt: params.lastUpdatedAt,
+    dataTimestamp: params.dataTimestamp,
+    now: params.now,
+  })
+}
+
+export type RealtimeParams = {
+  mode: Exclude<StaleMode, 'mtr'>
+  etaSeq?: number | string | null
+  rmk_tc?: string | null
+  rmk_sc?: string | null
+  rmk_en?: string | null
+  lastUpdatedAt?: number | null
+  dataTimestamp?: string | number | Date | null
+  now?: number | Date
+}
+
+/** Mode dispatcher for the KMB/LRT ETA badges. MTR has no scheduled-vs-realtime signal. */
+export function isRealtime(params: RealtimeParams): boolean {
+  if (params.mode === 'lrt')
+    return isLrtRealtime({
+      lastUpdatedAt: params.lastUpdatedAt,
+      dataTimestamp: params.dataTimestamp,
+      now: params.now,
+    })
+  return isKmbRealtime({
+    etaSeq: params.etaSeq,
+    rmk_tc: params.rmk_tc,
+    rmk_sc: params.rmk_sc,
+    rmk_en: params.rmk_en,
+    lastUpdatedAt: params.lastUpdatedAt,
+    dataTimestamp: params.dataTimestamp,
+    now: params.now,
+  })
+}

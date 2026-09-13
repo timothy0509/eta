@@ -4,11 +4,15 @@ import * as React from 'react'
 import { ChevronDown, ChevronUp, ExternalLink, Info, TrainFront } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
+import { ApiStatusFooter, SortByTimeToggle, etaNumeralClass } from '@/components/eta/eta-card-parts'
+import { sortBySoonestMinutes } from '@/lib/eta/eta-badges'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { Marquee } from '@/components/ui/marquee'
 import { findMtrStationBySta } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
+import { mtrTimeTypeOf, type MtrTimeType } from '@/lib/eta/realtime'
 import { useTranslations } from '@/lib/eta/i18n'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
@@ -27,6 +31,16 @@ type Props = {
 }
 
 type MtrDirection = 'UP' | 'DOWN'
+
+/**
+ * EAL-only arrival/departure marker from the official timetype field.
+ * Module scope so the memoised row builders can use it without i18n hooks.
+ */
+function timeTypeLabel(timeType: MtrTimeType | null, lang: UiLanguage): string | null {
+  if (timeType === 'arrival') return lang === 'en' ? 'Arrival' : '到站'
+  if (timeType === 'departure') return lang === 'en' ? 'Departure' : lang === 'sc' ? '离站' : '離站'
+  return null
+}
 
 // Stations where “via Racecourse” is relevant, by direction.
 // These rules are intentionally explicit (do not infer via station ordering).
@@ -111,6 +125,7 @@ type MtrLineCardProps = {
   expanded: boolean
   onToggle: () => void
   staggerClass?: string
+  stale?: boolean
 }
 
 function MtrLineCard({
@@ -124,6 +139,7 @@ function MtrLineCard({
   expanded,
   onToggle,
   staggerClass,
+  stale,
 }: MtrLineCardProps) {
   const upTrains = payload.UP ?? []
   const downTrains = payload.DOWN ?? []
@@ -145,7 +161,16 @@ function MtrLineCard({
           const dest = formatDestWithRacecourse(train.dest, lang, showViaRacecourse)
           const platform = formatPlatform(train.plat)
           const eta = formatMinutes(train.ttnt, lang)
-          return { dest, platform, eta, key: `${dest}-${route}` }
+          const timeType = mtrTimeTypeOf(train)
+          const ttntMinutes = Number(String(train.ttnt ?? '').trim())
+          return {
+            dest,
+            platform,
+            eta,
+            timeTypeLabel: timeTypeLabel(timeType, lang),
+            minutes: Number.isNaN(ttntMinutes) ? null : ttntMinutes,
+            key: `${dest}-${route}`,
+          }
         })
         .filter((item) => {
           if (!item.dest || seenDests.has(item.dest)) return false
@@ -180,15 +205,16 @@ function MtrLineCard({
                   P{item.platform}
                 </span>
               ) : null}
+              {item.timeTypeLabel ? (
+                <span className="text-on-surface-variant m3-label-md">{item.timeTypeLabel}</span>
+              ) : null}
               {item.eta.arriving ? (
                 <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
                   <LivePulse />
                   {item.eta.text}
                 </span>
               ) : (
-                <span className="text-on-surface font-tabular m3-body-md font-semibold">
-                  {item.eta.text}
-                </span>
+                <span className={etaNumeralClass(item.minutes, 'realtime')}>{item.eta.text}</span>
               )}
             </div>
           </div>
@@ -208,6 +234,8 @@ function MtrLineCard({
     const destText = formatDestWithRacecourse(train.dest, lang, showViaRacecourse)
     const platform = formatPlatform(train.plat)
     const eta = formatMinutes(train.ttnt, lang)
+    const trainTimeTypeLabel = timeTypeLabel(mtrTimeTypeOf(train), lang)
+    const trainMinutes = Number(String(train.ttnt ?? '').trim())
 
     return (
       <div key={`${dir}-${trainIdx}`} className="flex items-center justify-between gap-3 py-1.5">
@@ -218,13 +246,21 @@ function MtrLineCard({
           {platform ? (
             <span className="text-on-surface-variant m3-label-md font-mono">P{platform}</span>
           ) : null}
+          {trainTimeTypeLabel ? (
+            <span className="text-on-surface-variant m3-label-md">{trainTimeTypeLabel}</span>
+          ) : null}
           {eta.arriving ? (
             <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
               <LivePulse />
               {eta.text}
             </span>
           ) : (
-            <span className="text-on-surface font-tabular m3-body-md font-semibold">
+            <span
+              className={etaNumeralClass(
+                Number.isNaN(trainMinutes) ? null : trainMinutes,
+                'realtime'
+              )}
+            >
               {eta.text}
             </span>
           )}
@@ -283,7 +319,8 @@ function MtrLineCard({
       <div
         className={cn(
           'overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm',
-          staggerClass
+          staggerClass,
+          stale && 'opacity-60'
         )}
       >
         {header(false)}
@@ -296,7 +333,7 @@ function MtrLineCard({
     <ExpandableEtaRow
       expanded={expanded}
       onToggle={onToggle}
-      className="ui-lift"
+      className={cn('ui-lift', stale && 'opacity-60')}
       panel={expandedPanel}
       toggleLabel={line ? getMtrLineName(line, lang) : 'MTR'}
     >
@@ -304,6 +341,16 @@ function MtrLineCard({
       {expanded ? null : <div className="pt-2">{collapsedSummary}</div>}
     </ExpandableEtaRow>
   )
+}
+
+function soonestTtnt(payload: { UP?: MtrTrainEntry[]; DOWN?: MtrTrainEntry[] }): number | null {
+  let best: number | null = null
+  for (const train of [...(payload.UP ?? []), ...(payload.DOWN ?? [])]) {
+    const minutes = Number(String(train.ttnt ?? '').trim())
+    if (Number.isNaN(minutes)) continue
+    if (best === null || minutes < best) best = minutes
+  }
+  return best
 }
 
 export const MtrResults = React.memo(function MtrResults({
@@ -323,6 +370,19 @@ export const MtrResults = React.memo(function MtrResults({
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
 
+  /** Sort-by-time toggle. Transient pane-store state, works in the desktop column and mobile list. */
+  const sortByTime = usePaneStore((s) => s.sortByTime)
+  const setSortByTime = usePaneStore((s) => s.setSortByTime)
+  const onToggleSort = React.useCallback(() => {
+    setSortByTime(!sortByTime)
+  }, [setSortByTime, sortByTime])
+
+  const sortedEntries = React.useMemo(() => {
+    const entries = Object.entries(schedule?.data ?? {})
+    if (!sortByTime) return entries
+    return sortBySoonestMinutes(entries, ([, payload]) => soonestTtnt(payload))
+  }, [schedule, sortByTime])
+
   return (
     <div>
       <ResultsHeader
@@ -335,11 +395,26 @@ export const MtrResults = React.memo(function MtrResults({
         stale={stale}
         loading={loading}
         onRefresh={onRefresh}
+        sortControl={<SortByTimeToggle active={sortByTime} onToggle={onToggleSort} lang={lang} />}
       />
 
       <div className="space-y-4">
         {error ? (
           <p className="text-error m3-body-md">{tWithParams('common.updateFailed', { error })}</p>
+        ) : null}
+        {schedule && schedule.isdelay !== undefined ? (
+          schedule.isdelay === 'Y' ? (
+            <p className="m3-label-md inline-flex max-w-full items-center gap-1.5 rounded-full bg-[#fffbeb] px-2.5 py-1 font-medium text-[#92400e] ring-1 ring-[#92400e]/25 dark:bg-amber-500/15 dark:text-amber-300">
+              <span className="min-w-0 truncate">
+                {t('mtr.delayed')}
+                {schedule.message ? ` · ${schedule.message}` : null}
+              </span>
+            </p>
+          ) : (
+            <p className="m3-label-md inline-flex items-center gap-1.5 rounded-full bg-[#dcfce7] px-2.5 py-1 font-medium text-[#15803d] ring-1 ring-[#15803d]/25 dark:bg-emerald-500/15 dark:text-emerald-300">
+              {t('mtr.normal')}
+            </p>
+          )
         ) : null}
         {!schedule ? (
           <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
@@ -367,7 +442,7 @@ export const MtrResults = React.memo(function MtrResults({
             ) : null}
           </div>
         ) : (
-          Object.entries(schedule.data ?? {}).map(([key, payload], idx) => {
+          sortedEntries.map(([key, payload], idx) => {
             const [line, sta] = key.split('-')
             const lineColor = line ? getLineColor(line) : undefined
 
@@ -393,11 +468,17 @@ export const MtrResults = React.memo(function MtrResults({
                 expanded={expandedKey === key}
                 onToggle={() => onToggleExpand(key)}
                 staggerClass={staggerClass}
+                stale={stale}
               />
             )
           })
         )}
       </div>
+      {schedule ? (
+        <div className="mt-4">
+          <ApiStatusFooter lang={lang} mode="mtr" lastUpdatedAt={lastUpdatedAt} stale={stale} />
+        </div>
+      ) : null}
     </div>
   )
 })

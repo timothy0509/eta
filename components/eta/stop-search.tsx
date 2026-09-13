@@ -230,6 +230,20 @@ export function StopSearch({
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
   const listId = React.useId()
+  const inputRef = React.useRef<HTMLInputElement>(null)
+
+  // Cmd-K / Ctrl-K focuses search from anywhere.
+  React.useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setOpen(true)
+        requestAnimationFrame(() => inputRef.current?.focus())
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
 
   // Debounce the search query (150ms) to reduce Fuse.js invocations
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
@@ -420,6 +434,14 @@ export function StopSearch({
           aria-expanded={open}
           aria-controls={open ? listId : undefined}
           aria-haspopup="listbox"
+          aria-keyshortcuts="meta+k control+k"
+          title={
+            lang === 'en'
+              ? 'Press Control K or Command K to focus search, Escape to leave'
+              : lang === 'sc'
+                ? '按 Control K 或 Command K 聚焦搜索，按 Escape 离开'
+                : '按 Control K 或 Command K 聚焦搜尋，按 Escape 離開'
+          }
           className={cn(
             'bg-surface-container-high text-on-surface w-full min-w-0 justify-start rounded-2xl border border-[var(--outline-variant)]/20 py-5 text-left shadow-sm',
             'hover:bg-surface-container hover:border-[var(--outline-variant)]/30',
@@ -431,6 +453,12 @@ export function StopSearch({
             {selectedLabel ||
               (lang === 'en' ? 'Search stop name...' : lang === 'sc' ? '搜尋車站…' : '搜尋車站…')}
           </span>
+          <kbd
+            aria-hidden="true"
+            className="text-on-surface-variant m3-label-md bg-surface-container ml-auto hidden shrink-0 rounded-md border border-[var(--outline-variant)]/20 px-1.5 py-0.5 sm:inline-block"
+          >
+            ⌘K
+          </kbd>
         </Button>
       </PopoverTrigger>
       <PopoverContent
@@ -439,6 +467,7 @@ export function StopSearch({
       >
         <Command shouldFilter={false} className="rounded-none bg-transparent">
           <CommandInput
+            ref={inputRef}
             placeholder={
               lang === 'en'
                 ? 'Type a stop name…'
@@ -451,6 +480,9 @@ export function StopSearch({
             }
             value={query}
             onValueChange={setQuery}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') e.currentTarget.blur()
+            }}
             className="m3-body-md border-b-0"
           />
           <CommandList

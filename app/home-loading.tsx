@@ -26,7 +26,6 @@ export function HomeLoading() {
               </CardContent>
             </Card>
             <Card className="bg-card/60 relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 shadow-sm">
-              <span className="bg-primary absolute top-0 right-0 left-0 h-[3px]" aria-hidden />
               <CardContent className="space-y-4 p-5 sm:p-6">
                 <div className="bg-muted h-7 w-48 animate-pulse rounded" />
                 <div className="bg-muted h-40 animate-pulse rounded-2xl" />

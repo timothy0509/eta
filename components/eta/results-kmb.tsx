@@ -6,6 +6,12 @@ import * as React from 'react'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { RouteBadge } from '@/components/eta/route-badge'
+import {
+  ApiStatusFooter,
+  EtaRealtimeBadge,
+  SortByTimeToggle,
+  etaNumeralClass,
+} from '@/components/eta/eta-card-parts'
 import { LivePulse, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import {
   Dialog,
@@ -17,11 +23,13 @@ import {
 } from '@/components/ui/dialog'
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
+import { resolveEtaBadge, sortBySoonestMinutes } from '@/lib/eta/eta-badges'
 import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
@@ -138,6 +146,16 @@ function getGroupRemark(items: KmbEtaEntryWithLeg[], lang: UiLanguage): string |
   return null
 }
 
+function isGroupDimmed(
+  items: KmbEtaEntryWithLeg[],
+  staleByStopId: Record<string, { stale: boolean; ageMs: number | null }> | undefined,
+  stale: boolean | undefined
+): boolean {
+  const stopId = items[0]?.stop ? String(items[0].stop).trim() : null
+  if (stopId && staleByStopId?.[stopId]) return staleByStopId[stopId].stale
+  return Boolean(stale)
+}
+
 function pickStopName(
   stop: { nameEn: string; nameTc: string; nameSc: string } | undefined,
   lang: UiLanguage
@@ -250,6 +268,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stopChips,
   expanded,
   onToggleExpand,
+  dimmed,
 }: {
   variantKey: string
   /** Base variant key without leg suffix (co|route|dir|service_type) for route info & fare lookup */
@@ -268,6 +287,8 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stopChips: StopChips
   expanded?: boolean
   onToggleExpand?: () => void
+  /** Dim the card when its data passed the stale threshold. */
+  dimmed?: boolean
 }) {
   const [co = 'kmb', route = ''] = variantKey.split('|')
   const first = items[0]
@@ -382,6 +403,17 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     : null
   const firstIsArriving = firstMinutes !== null && !Number.isNaN(firstMinutes) && firstMinutes <= 0
 
+  const firstBadge = first?.eta
+    ? resolveEtaBadge({
+        mode: 'kmb',
+        etaSeq: first.eta_seq,
+        rmk_tc: first.rmk_tc,
+        rmk_sc: first.rmk_sc,
+        rmk_en: first.rmk_en,
+        dataTimestamp: first.data_timestamp,
+        now,
+      })
+    : 'scheduled'
   const FirstEta = () =>
     firstIsArriving ? (
       <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
@@ -389,7 +421,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         {formatArrivingText(lang)}
       </span>
     ) : (
-      <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
+      <span className={etaNumeralClass(firstMinutes, firstBadge)}>
         {formatMinutesDisplay(firstMinutes)}
       </span>
     )
@@ -411,6 +443,11 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       <div className="flex shrink-0 items-center gap-1">
         {metaChips}
         {InfoButton}
+        {showEta && hasEta ? (
+          <>
+            <EtaRealtimeBadge badge={firstBadge} lang={lang} />
+          </>
+        ) : null}
         {showEta && hasEta ? <FirstEta /> : null}
         {expandable ? (
           isExpanded ? (
@@ -424,61 +461,76 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   )
 
   const etaPanel = (
-    <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
-      {items.map((entry, entryIdx) => {
-        const minutes = entry.eta
-          ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
-          : null
-        const remark = pickLang(
-          {
-            en: entry.rmk_en ?? '',
-            tc: entry.rmk_tc ?? '',
-            sc: entry.rmk_sc ?? '',
-          },
-          lang
-        )
-        const isFirst = entry.eta_seq === 1
-        const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
+    <div className="space-y-2">
+      <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
+        {items.map((entry, entryIdx) => {
+          const minutes = entry.eta
+            ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
+            : null
+          const remark = pickLang(
+            {
+              en: entry.rmk_en ?? '',
+              tc: entry.rmk_tc ?? '',
+              sc: entry.rmk_sc ?? '',
+            },
+            lang
+          )
+          const isFirst = entry.eta_seq === 1
+          const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
+          const entryBadge = resolveEtaBadge({
+            mode: 'kmb',
+            etaSeq: entry.eta_seq,
+            rmk_tc: entry.rmk_tc,
+            rmk_sc: entry.rmk_sc,
+            rmk_en: entry.rmk_en,
+            dataTimestamp: entry.data_timestamp,
+            now,
+          })
 
-        if (isFirst) {
+          if (isFirst) {
+            return (
+              <div
+                key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
+                className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+              >
+                <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
+                <div
+                  className={cn(
+                    'eta-numeral mt-0.5 flex items-center justify-center gap-1.5 text-white'
+                  )}
+                >
+                  {isArriving ? <LivePulse /> : null}
+                  {formatMinutesDisplay(minutes)}
+                </div>
+                {remark ? (
+                  <Marquee title={remark} className="m3-label-md mt-1 opacity-80">
+                    {remark}
+                  </Marquee>
+                ) : null}
+              </div>
+            )
+          }
+
           return (
             <div
               key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-              className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+              className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
             >
-              <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
-              <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
-                {isArriving ? <LivePulse /> : null}
+              <div className="text-on-surface-variant m3-label-md">
+                {formatEtaLabel(entry.eta_seq, lang)}
+              </div>
+              <div className={etaNumeralClass(minutes, entryBadge)}>
                 {formatMinutesDisplay(minutes)}
               </div>
               {remark ? (
-                <Marquee title={remark} className="m3-label-md mt-1 opacity-80">
+                <Marquee title={remark} className="text-on-surface-variant m3-label-md mt-0.5">
                   {remark}
                 </Marquee>
               ) : null}
             </div>
           )
-        }
-
-        return (
-          <div
-            key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-            className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
-          >
-            <div className="text-on-surface-variant m3-label-md">
-              {formatEtaLabel(entry.eta_seq, lang)}
-            </div>
-            <div className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg">
-              {formatMinutesDisplay(minutes)}
-            </div>
-            {remark ? (
-              <Marquee title={remark} className="text-on-surface-variant m3-label-md mt-0.5">
-                {remark}
-              </Marquee>
-            ) : null}
-          </div>
-        )
-      })}
+        })}
+      </div>
     </div>
   )
 
@@ -513,7 +565,8 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       <div
         className={cn(
           'bg-surface-container relative overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 py-3.5 pr-3 pl-0 shadow-sm',
-          staggerClass
+          staggerClass,
+          dimmed && 'opacity-60'
         )}
       >
         <span
@@ -531,7 +584,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       expanded={isExpanded}
       onToggle={onToggleExpand!}
       color={badgeStyle.bgColor}
-      className={staggerClass}
+      className={cn(staggerClass, dimmed && 'opacity-60')}
       panel={etaPanel}
       toggleLabel={`${route} ${label ?? ''}`.trim()}
     >
@@ -555,6 +608,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById,
   expandedKey,
   onToggleExpand,
+  dimmed,
 }: {
   stopId: string
   stopInfo?: StopInfo
@@ -569,6 +623,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById: Map<string, StopChips>
   expandedKey?: string | null
   onToggleExpand?: (key: string) => void
+  dimmed?: boolean
 }) {
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
   const parsed = parseKmbStopNameCached(stopName)
@@ -622,6 +677,7 @@ const StopSection = React.memo(function StopSection({
               }
               expanded={expandedKey === g.key}
               onToggleExpand={() => onToggleExpand?.(g.key)}
+              dimmed={dimmed}
             />
           ))}
         </div>
@@ -666,6 +722,22 @@ export const KmbResults = React.memo(function KmbResults({
   const onToggleExpand = React.useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
+
+  /** Sort-by-time toggle. Transient pane-store state, works in the desktop column and mobile list. */
+  const sortByTime = usePaneStore((s) => s.sortByTime)
+  const setSortByTime = usePaneStore((s) => s.setSortByTime)
+  const onToggleSort = React.useCallback(() => {
+    setSortByTime(!sortByTime)
+  }, [setSortByTime, sortByTime])
+
+  const groupSoonestMinutes = React.useCallback(
+    (group: EtaGroup) => {
+      const upcoming = group.items.find((entry) => entry.eta)
+      if (!upcoming?.eta) return null
+      return formatRelativeMinutesWithDrift(upcoming.eta, upcoming.data_timestamp, now)
+    },
+    [now]
+  )
 
   // Create a lookup map for stops by ID
   const stopLookup = React.useMemo(() => {
@@ -741,6 +813,18 @@ export const KmbResults = React.memo(function KmbResults({
     return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
+  const sortedFlat = React.useMemo(
+    () =>
+      precomputedFlat && sortByTime
+        ? sortBySoonestMinutes(precomputedFlat, groupSoonestMinutes)
+        : precomputedFlat,
+    [precomputedFlat, sortByTime, groupSoonestMinutes]
+  )
+  const sortedGrouped = React.useMemo(
+    () => (sortByTime ? sortBySoonestMinutes(grouped, groupSoonestMinutes) : grouped),
+    [grouped, sortByTime, groupSoonestMinutes]
+  )
+
   return (
     <div>
       <ResultsHeader
@@ -766,6 +850,7 @@ export const KmbResults = React.memo(function KmbResults({
         stale={stale || hasStaleStops}
         loading={loading}
         onRefresh={onRefresh}
+        sortControl={<SortByTimeToggle active={sortByTime} onToggle={onToggleSort} lang={lang} />}
       />
 
       <div className="space-y-2">
@@ -796,6 +881,7 @@ export const KmbResults = React.memo(function KmbResults({
                 stopChipsById={stopChipsById}
                 expandedKey={expandedKey}
                 onToggleExpand={onToggleExpand}
+                dimmed={staleByStopId?.[stopId]?.stale ?? stale ?? hasStaleStops}
               />
             ))}
 
@@ -817,9 +903,9 @@ export const KmbResults = React.memo(function KmbResults({
               </div>
             ) : null}
           </>
-        ) : precomputedFlat && !multipleStops ? (
+        ) : sortedFlat && !multipleStops ? (
           <StaggerContainer className="space-y-2" stagger={0.02}>
-            {precomputedFlat.map((g, idx) => {
+            {sortedFlat.map((g, idx) => {
               const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
               const stopChips = stopId
                 ? (stopChipsById.get(stopId) ??
@@ -851,19 +937,20 @@ export const KmbResults = React.memo(function KmbResults({
                     stopChips={stopChips}
                     expanded={expandedKey === g.key}
                     onToggleExpand={() => onToggleExpand(g.key)}
+                    dimmed={isGroupDimmed(g.items, staleByStopId, stale || hasStaleStops)}
                   />
                 </StaggerItem>
               )
             })}
           </StaggerContainer>
-        ) : grouped.length === 0 ? (
+        ) : sortedGrouped.length === 0 ? (
           <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
             <Info className="h-4 w-4" />
             {formatNoScheduledText(lang)}
           </div>
         ) : (
           <StaggerContainer className="space-y-2" stagger={0.02}>
-            {grouped.map((g, idx) => {
+            {sortedGrouped.map((g, idx) => {
               const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
               const stopChips = stopId
                 ? (stopChipsById.get(stopId) ??
@@ -895,6 +982,7 @@ export const KmbResults = React.memo(function KmbResults({
                     stopChips={stopChips}
                     expanded={expandedKey === g.key}
                     onToggleExpand={() => onToggleExpand(g.key)}
+                    dimmed={isGroupDimmed(g.items, staleByStopId, stale || hasStaleStops)}
                   />
                 </StaggerItem>
               )
@@ -902,6 +990,16 @@ export const KmbResults = React.memo(function KmbResults({
           </StaggerContainer>
         )}
       </div>
+      {hasQuery ? (
+        <div className="mt-4 space-y-3">
+          <ApiStatusFooter
+            lang={lang}
+            mode="kmb"
+            lastUpdatedAt={lastUpdatedAt}
+            stale={stale || hasStaleStops}
+          />
+        </div>
+      ) : null}
     </div>
   )
 })

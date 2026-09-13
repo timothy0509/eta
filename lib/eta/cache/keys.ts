@@ -22,3 +22,9 @@ export function lrtScheduleKey(params: {
 export function kmbRouteGeometryKey(variantKey: string): string {
   return `kmb-route-geometry:${variantKey}`
 }
+
+export function tdTrafficKey(lang: string): string {
+  return `td-traffic:${String(lang ?? '')
+    .trim()
+    .toLowerCase()}`
+}

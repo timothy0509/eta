@@ -36,6 +36,9 @@
   --color-mode-kmb: var(--mode-kmb);
   --color-mode-mtr: var(--mode-mtr);
   --color-mode-lrt: var(--mode-lrt);
+  --color-band-kmb: var(--band-kmb);
+  --color-band-mtr: var(--band-mtr);
+  --color-band-lrt: var(--band-lrt);
 
   /* Legacy shadcn compat, mapped onto Signal */
   --color-card: var(--platform);
@@ -138,6 +141,11 @@
   --mode-mtr: #0058a9;
   --mode-lrt: #0a7a62;
 
+  /* Header bands: deep mode color, white text safe in both themes */
+  --band-kmb: #a11c14;
+  --band-mtr: #00437f;
+  --band-lrt: #075c4a;
+
   /* Motion: one curve, three durations */
   --dur-quick: 140ms;
   --dur-cross: 220ms;
@@ -178,6 +186,10 @@
   --mode-mtr: #6eadf5;
   --mode-lrt: #45c9a8;
 
+  --band-kmb: #7c150f;
+  --band-mtr: #0a3054;
+  --band-lrt: #06392d;
+
   --background: var(--backdrop);
   --foreground: var(--ink);
   --border: var(--trackline);
@@ -203,6 +215,12 @@
 }
 
 /* Signal type scale: huge tabular numerals, CJK-safe body */
+.signal-display {
+  font-size: clamp(28px, 4vw, 40px);
+  line-height: 1.15;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
 .signal-eta-hero {
   font-size: 52px;
   line-height: 1.1;

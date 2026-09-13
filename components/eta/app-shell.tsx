@@ -80,7 +80,7 @@ const LANG_LABELS: Record<UiLanguage, string> = {
   sc: '简',
 }
 
-function ThemeToggle({ label }: { label: string }) {
+function ThemeToggle({ label, band }: { label: string; band?: boolean }) {
   const { theme, setTheme } = useTheme()
   const dark = theme === 'dark'
   return (
@@ -89,14 +89,26 @@ function ThemeToggle({ label }: { label: string }) {
       onClick={() => setTheme(dark ? 'light' : 'dark')}
       aria-label={label}
       title={label}
-      className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+      className={
+        band
+          ? 'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none'
+          : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none'
+      }
     >
       {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
     </button>
   )
 }
 
-function LanguageMenu({ lang, mode }: { lang: UiLanguage; mode: TransportMode }) {
+function LanguageMenu({
+  lang,
+  mode,
+  band,
+}: {
+  lang: UiLanguage
+  mode: TransportMode
+  band?: boolean
+}) {
   const setLang = useAppStore((s) => s.setLang)
   const scSupported = isLanguageSupported(mode, 'sc')
   const label = lang === 'en' ? 'Language' : lang === 'sc' ? '语言' : '語言'
@@ -107,7 +119,11 @@ function LanguageMenu({ lang, mode }: { lang: UiLanguage; mode: TransportMode })
           type="button"
           aria-label={label}
           title={label}
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-full px-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+          className={
+            band
+              ? 'flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-full px-2 text-white transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none'
+              : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-full px-2 transition-colors focus-visible:ring-2 focus-visible:outline-none'
+          }
         >
           <Globe className="h-5 w-5" />
           <span className="m3-label-md hidden font-semibold xl:inline">{LANG_LABELS[lang]}</span>
@@ -156,11 +172,11 @@ function TransitClock() {
     <div
       role="timer"
       aria-label={time}
-      className="text-ink text-on-surface-variant hidden items-center gap-2 tabular-nums sm:flex"
+      className="hidden items-center gap-2 text-white tabular-nums sm:flex"
     >
       <span className="relative inline-flex h-2 w-2" aria-hidden>
-        <span className="bg-primary absolute inline-flex h-full w-full rounded-full opacity-60 motion-safe:animate-ping motion-reduce:hidden" />
-        <span className="bg-primary relative inline-flex h-2 w-2 rounded-full" />
+        <span className="absolute inline-flex h-full w-full rounded-full bg-white opacity-60 motion-safe:animate-ping motion-reduce:hidden" />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
       </span>
       <span className="text-[13px] font-semibold tracking-wide">{time}</span>
     </div>
@@ -205,13 +221,13 @@ function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
   }
 
   return (
-    <div className="border-trackline border-t">
+    <div className="border-trackline bg-backdrop border-t">
       <nav aria-label="Transport mode" className="mx-auto max-w-[1280px] px-4 py-2 sm:px-6">
         <div
           role="tablist"
           aria-label="Transport mode"
           onKeyDown={onKeyDown}
-          className="border-trackline bg-platform relative mx-auto flex w-full max-w-xl items-center gap-1 rounded-full border p-1 shadow-sm"
+          className="border-trackline bg-platform relative mx-auto flex w-full max-w-xl items-center gap-1 rounded-2xl border p-1.5 shadow-sm"
         >
           {MODES.map((m, index) => {
             const Icon = m.icon
@@ -230,15 +246,22 @@ function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
                 tabIndex={active ? 0 : -1}
                 onClick={() => onModeChange(m.mode)}
                 className={cn(
-                  'focus-visible:ring-dispatch relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none sm:text-sm',
-                  active ? 'text-platform' : 'text-ink-soft hover:text-ink'
+                  'focus-visible:ring-dispatch relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl px-2 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none sm:text-sm',
+                  active ? 'text-white' : 'text-ink-soft hover:text-ink'
                 )}
               >
                 {active && (
                   <motion.span
                     layoutId="transit-mode-pill"
                     aria-hidden
-                    className="bg-ink absolute inset-0 -z-10 rounded-full shadow-sm"
+                    className={cn(
+                      'absolute inset-0 -z-10 rounded-xl shadow-sm',
+                      m.mode === 'mtr'
+                        ? 'bg-band-mtr'
+                        : m.mode === 'lrt'
+                          ? 'bg-band-lrt'
+                          : 'bg-band-kmb'
+                    )}
                     transition={
                       reduceMotion
                         ? { duration: 0 }
@@ -271,44 +294,47 @@ export function TopAppBar({ lang, mode, onModeChange, subView, onSubViewChange }
   const settingsActive = subView === 'settings'
 
   return (
-    <header className="bg-backdrop bg-surface/95 supports-[backdrop-filter]:bg-surface/80 border-trackline sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
-      <div className="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-2 px-4 sm:px-6">
-        <div className="flex min-w-0 shrink-0 items-center gap-2">
-          <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-lg text-[15px] font-bold shadow-sm">
-            T
+    <header className="sticky top-0 z-40 shadow-md">
+      <div
+        className={cn(
+          'text-white',
+          mode === 'mtr' ? 'bg-band-mtr' : mode === 'lrt' ? 'bg-band-lrt' : 'bg-band-kmb'
+        )}
+      >
+        <div className="mx-auto flex h-14 max-w-[1280px] items-center justify-between gap-2 px-4 sm:px-6">
+          <div className="flex min-w-0 shrink-0 items-center gap-2.5">
+            <div className="text-ink flex h-9 w-9 items-center justify-center rounded-xl bg-white font-sans text-[17px] font-extrabold shadow-sm">
+              T
+            </div>
+            <div className="leading-none">
+              <p className="text-[16px] font-bold tracking-tight text-white">TimoETA</p>
+              <p className="mt-1 hidden text-[10px] font-semibold tracking-[0.22em] text-white/70 sm:block">
+                HK TRANSIT
+              </p>
+            </div>
           </div>
-          <div className="leading-none">
-            <p className="text-ink text-on-surface text-[15px] font-semibold tracking-tight">
-              TimoETA
-            </p>
-            <p className="text-on-surface-variant mt-0.5 hidden text-[10px] font-medium tracking-[0.14em] sm:block">
-              HK TRANSIT
-            </p>
+
+          <TransitClock />
+
+          <div className="flex shrink-0 items-center gap-0.5">
+            {onSubViewChange && (
+              <button
+                type="button"
+                onClick={() => onSubViewChange('settings')}
+                aria-label={t('common.settings')}
+                aria-current={settingsActive ? 'page' : undefined}
+                title={t('common.settings')}
+                className={cn(
+                  'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none lg:hidden',
+                  settingsActive && 'bg-white/25'
+                )}
+              >
+                <Settings className="h-5 w-5" />
+              </button>
+            )}
+            <LanguageMenu lang={lang} mode={mode} band />
+            <ThemeToggle label={t('common.toggleTheme')} band />
           </div>
-        </div>
-
-        <TransitClock />
-
-        <div className="flex shrink-0 items-center">
-          {onSubViewChange && (
-            <button
-              type="button"
-              onClick={() => onSubViewChange('settings')}
-              aria-label={t('common.settings')}
-              aria-current={settingsActive ? 'page' : undefined}
-              title={t('common.settings')}
-              className={cn(
-                'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:ring-[var(--surface-tint)] focus-visible:outline-none lg:hidden',
-                settingsActive
-                  ? 'text-on-primary-container bg-primary-container'
-                  : 'text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface'
-              )}
-            >
-              <Settings className="h-5 w-5" />
-            </button>
-          )}
-          <LanguageMenu lang={lang} mode={mode} />
-          <ThemeToggle label={t('common.toggleTheme')} />
         </div>
       </div>
 
@@ -348,7 +374,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
           >
             {active && (
               <motion.span
-                layoutId="transit-journey-pill"
+                layoutId="transit-rail-pill"
                 aria-hidden
                 className="bg-primary-container absolute inset-0 rounded-2xl"
                 transition={

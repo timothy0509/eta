@@ -60,14 +60,19 @@ const MODE_SHORT_LABELS: Record<TransportMode, string> = {
 }
 
 const JOURNEY_VIEWS: Array<{
-  id: Exclude<SubView, 'settings'>
+  id: SubView
   icon: React.ComponentType<{ className?: string }>
 }> = [
   { id: 'routes', icon: Route },
   { id: 'stops', icon: MapPin },
   { id: 'nearby', icon: Navigation },
   { id: 'saved', icon: Heart },
+  { id: 'settings', icon: Settings },
 ]
+
+// Bottom floating pill stays compact: max 4 journey tabs. Settings lives
+// in the side rail on desktop and behind the top-bar gear on mobile.
+const MOBILE_JOURNEY_VIEWS = JOURNEY_VIEWS.filter((v) => v.id !== 'settings')
 
 const LANG_LABELS: Record<UiLanguage, string> = {
   en: 'EN',
@@ -276,47 +281,12 @@ function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
   )
 }
 
-type SectionTabsProps = {
-  lang: UiLanguage
-  subView: SubView
-  onSubViewChange: (subView: SubView) => void
-}
-
-export function SectionTabs({ lang, subView, onSubViewChange }: SectionTabsProps) {
-  const { t } = useTranslations(lang)
-  return (
-    <nav aria-label="Sections" className="mx-auto max-w-[1280px] px-4 sm:px-6">
-      <div className="-mx-1 flex items-center gap-1 overflow-x-auto px-1 py-2">
-        {JOURNEY_VIEWS.map((sv) => {
-          const Icon = sv.icon
-          const active = subView === sv.id
-          return (
-            <button
-              key={sv.id}
-              type="button"
-              onClick={() => onSubViewChange(sv.id)}
-              aria-current={active ? 'page' : undefined}
-              className={cn(
-                'focus-visible:ring-dispatch flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                active ? 'bg-ink text-platform shadow-sm' : 'text-ink-soft hover:text-ink'
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {t(`common.${sv.id}`)}
-            </button>
-          )
-        })}
-      </div>
-    </nav>
-  )
-}
-
 type TopAppBarProps = {
   lang: UiLanguage
   mode: TransportMode
   onModeChange: (mode: TransportMode) => void
-  subView: SubView
-  onSubViewChange: (subView: SubView) => void
+  subView?: SubView
+  onSubViewChange?: (subView: SubView) => void
 }
 
 export function TopAppBar({ lang, mode, onModeChange, subView, onSubViewChange }: TopAppBarProps) {
@@ -347,29 +317,128 @@ export function TopAppBar({ lang, mode, onModeChange, subView, onSubViewChange }
           <TransitClock />
 
           <div className="flex shrink-0 items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => onSubViewChange('settings')}
-              aria-label={t('common.settings')}
-              aria-current={settingsActive ? 'page' : undefined}
-              title={t('common.settings')}
-              className={cn(
-                'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none',
-                settingsActive && 'bg-white/25'
-              )}
-            >
-              <Settings className="h-5 w-5" />
-            </button>
+            {onSubViewChange && (
+              <button
+                type="button"
+                onClick={() => onSubViewChange('settings')}
+                aria-label={t('common.settings')}
+                aria-current={settingsActive ? 'page' : undefined}
+                title={t('common.settings')}
+                className={cn(
+                  'flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full text-white transition-colors hover:bg-white/15 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none lg:hidden',
+                  settingsActive && 'bg-white/25'
+                )}
+              >
+                <Settings className="h-5 w-5" />
+              </button>
+            )}
             <LanguageMenu lang={lang} mode={mode} band />
             <ThemeToggle label={t('common.toggleTheme')} band />
           </div>
         </div>
       </div>
 
-      <div className="border-trackline bg-backdrop border-b">
-        <SectionTabs lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
-      </div>
       <ModeTabs lang={lang} mode={mode} onModeChange={onModeChange} />
     </header>
+  )
+}
+
+type SideRailProps = {
+  lang: UiLanguage
+  subView: SubView
+  onSubViewChange: (subView: SubView) => void
+}
+
+export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
+  const { t } = useTranslations(lang)
+  const reduceMotion = useReducedMotion()
+
+  return (
+    <nav
+      aria-label="Sections"
+      className="bg-platform bg-surface-container-low border-trackline border-outline-variant/20 sticky top-[8.75rem] hidden h-fit w-[76px] shrink-0 flex-col items-center gap-1 rounded-3xl border px-1.5 py-3 shadow-sm lg:flex"
+    >
+      {JOURNEY_VIEWS.map((sv) => {
+        const Icon = sv.icon
+        const active = subView === sv.id
+        return (
+          <button
+            key={sv.id}
+            type="button"
+            onClick={() => onSubViewChange(sv.id)}
+            aria-current={active ? 'page' : undefined}
+            className={cn(
+              'relative flex min-h-[44px] w-full flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-[11px] font-medium transition-colors',
+              active ? 'text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'
+            )}
+          >
+            {active && (
+              <motion.span
+                layoutId="transit-rail-pill"
+                aria-hidden
+                className="bg-primary-container absolute inset-0 rounded-2xl"
+                transition={
+                  reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 32 }
+                }
+              />
+            )}
+            <Icon className="relative h-5 w-5" />
+            <span className="relative leading-none">{t(`common.${sv.id}`)}</span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+type BottomNavProps = {
+  lang: UiLanguage
+  subView: SubView
+  onSubViewChange: (subView: SubView) => void
+}
+
+export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
+  const { t } = useTranslations(lang)
+  const reduceMotion = useReducedMotion()
+
+  return (
+    <nav
+      aria-label="Sections"
+      className="bg-platform bg-surface-container-low/95 supports-[backdrop-filter]:bg-surface-container-low/85 border-trackline fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),26rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg backdrop-blur lg:hidden"
+    >
+      <div className="flex w-full items-center">
+        {MOBILE_JOURNEY_VIEWS.map((sv) => {
+          const Icon = sv.icon
+          const active = subView === sv.id
+          return (
+            <button
+              key={sv.id}
+              type="button"
+              onClick={() => onSubViewChange(sv.id)}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'relative flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 text-[11px] font-medium transition-colors',
+                active
+                  ? 'text-on-primary-container'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              )}
+            >
+              {active && (
+                <motion.span
+                  layoutId="transit-journey-pill"
+                  aria-hidden
+                  className="bg-primary-container absolute inset-0 rounded-full"
+                  transition={
+                    reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 32 }
+                  }
+                />
+              )}
+              <Icon className="relative h-[22px] w-[22px]" />
+              <span className="relative leading-none">{t(`common.${sv.id}`)}</span>
+            </button>
+          )
+        })}
+      </div>
+    </nav>
   )
 }

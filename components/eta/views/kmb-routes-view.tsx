@@ -456,7 +456,7 @@ export function KmbRoutesView({
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+      <div className="border-trackline bg-platform rounded-[20px] border p-4 shadow-sm">
         <div className="m3-title-md mb-3">{t('kmb.routes')}</div>
         <div className="relative">
           <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
@@ -562,7 +562,7 @@ export function KmbRoutesView({
 
       {currentVariant && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+          <div className="border-trackline bg-platform rounded-[20px] border p-4 shadow-sm">
             <div className="m3-title-md mb-3 flex items-center gap-2">
               <Clock className="h-5 w-5" />
               {t('kmb.routeStops')}
@@ -623,7 +623,7 @@ export function KmbRoutesView({
             )}
           </div>
 
-          <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+          <div className="border-trackline bg-platform rounded-[20px] border p-4 shadow-sm">
             <div className="m3-title-md mb-3">{t('common.map') ?? 'Map'}</div>
             <TransitMap
               center={mapCenter}

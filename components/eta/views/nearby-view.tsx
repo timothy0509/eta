@@ -263,7 +263,7 @@ function KmbNearbyView({
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+      <div className="border-trackline bg-platform rounded-[20px] border p-5 shadow-sm">
         <div className="m3-title-md mb-4 flex items-center justify-between gap-3">
           <span className="flex items-center gap-2">
             <Navigation className="h-5 w-5" />
@@ -388,7 +388,7 @@ function MtrNearbyView({ lang, onSelectMtrStation, t }: SharedViewProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+      <div className="border-trackline bg-platform rounded-[20px] border p-5 shadow-sm">
         <div className="m3-title-md mb-4 flex items-center gap-2">
           <Navigation className="h-5 w-5" />
           {t('common.nearby')}
@@ -442,7 +442,7 @@ function LrtNearbyView({ lang, onSelectLrtStation, t }: SharedViewProps) {
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 p-5 shadow-sm">
+      <div className="border-trackline bg-platform rounded-[20px] border p-5 shadow-sm">
         <div className="m3-title-md mb-4 flex items-center gap-2">
           <Navigation className="h-5 w-5" />
           {t('common.nearby')}

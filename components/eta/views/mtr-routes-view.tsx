@@ -165,7 +165,7 @@ export function MtrRoutesView({
   const lineColor = selectedLine ? getLineColor(selectedLine) : '#64748b'
 
   return (
-    <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+    <div className="border-trackline bg-platform rounded-[20px] border p-4 shadow-sm">
       <div className="m3-title-md text-on-surface mb-3 flex items-center gap-2">
         <TrainFront className="h-5 w-5" />
         {t('mtr.lines')}

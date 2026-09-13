@@ -187,9 +187,11 @@ type ModeTabsProps = {
   lang: UiLanguage
   mode: TransportMode
   onModeChange: (mode: TransportMode) => void
+  /** Render without the full-width backdrop wrapper, for use inside cards. */
+  bare?: boolean
 }
 
-function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
+export function ModeTabs({ lang, mode, onModeChange, bare }: ModeTabsProps) {
   const reduceMotion = useReducedMotion()
   const tabRefs = React.useRef<Array<HTMLButtonElement | null>>([])
   const activeIndex = MODES.findIndex((m) => m.mode === mode)
@@ -220,62 +222,66 @@ function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
     }
   }
 
+  const tabs = (
+    <div
+      role="tablist"
+      aria-label="Transport mode"
+      onKeyDown={onKeyDown}
+      className="border-trackline bg-platform relative mx-auto flex w-full max-w-xl items-center gap-1 rounded-2xl border p-1.5 shadow-sm"
+    >
+      {MODES.map((m, index) => {
+        const Icon = m.icon
+        const active = mode === m.mode
+        return (
+          <button
+            key={m.mode}
+            ref={(el) => {
+              tabRefs.current[index] = el
+            }}
+            type="button"
+            role="tab"
+            aria-selected={active}
+            aria-label={m.labels[lang]}
+            title={m.labels[lang]}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onModeChange(m.mode)}
+            className={cn(
+              'focus-visible:ring-dispatch relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl px-2 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none sm:text-sm',
+              active ? 'text-white' : 'text-ink-soft hover:text-ink'
+            )}
+          >
+            {active && (
+              <motion.span
+                layoutId="transit-mode-pill"
+                aria-hidden
+                className={cn(
+                  'absolute inset-0 -z-10 rounded-xl shadow-sm',
+                  m.mode === 'mtr'
+                    ? 'bg-band-mtr'
+                    : m.mode === 'lrt'
+                      ? 'bg-band-lrt'
+                      : 'bg-band-kmb'
+                )}
+                transition={
+                  reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 32 }
+                }
+              />
+            )}
+            <Icon className="h-4 w-4 shrink-0" />
+            <span className="hidden truncate sm:inline">{m.labels[lang]}</span>
+            <span className="truncate sm:hidden">{MODE_SHORT_LABELS[m.mode]}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+
+  if (bare) return tabs
+
   return (
     <div className="border-trackline bg-backdrop border-t">
       <nav aria-label="Transport mode" className="mx-auto max-w-[1280px] px-4 py-2 sm:px-6">
-        <div
-          role="tablist"
-          aria-label="Transport mode"
-          onKeyDown={onKeyDown}
-          className="border-trackline bg-platform relative mx-auto flex w-full max-w-xl items-center gap-1 rounded-2xl border p-1.5 shadow-sm"
-        >
-          {MODES.map((m, index) => {
-            const Icon = m.icon
-            const active = mode === m.mode
-            return (
-              <button
-                key={m.mode}
-                ref={(el) => {
-                  tabRefs.current[index] = el
-                }}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                aria-label={m.labels[lang]}
-                title={m.labels[lang]}
-                tabIndex={active ? 0 : -1}
-                onClick={() => onModeChange(m.mode)}
-                className={cn(
-                  'focus-visible:ring-dispatch relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-xl px-2 text-[13px] font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none sm:text-sm',
-                  active ? 'text-white' : 'text-ink-soft hover:text-ink'
-                )}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="transit-mode-pill"
-                    aria-hidden
-                    className={cn(
-                      'absolute inset-0 -z-10 rounded-xl shadow-sm',
-                      m.mode === 'mtr'
-                        ? 'bg-band-mtr'
-                        : m.mode === 'lrt'
-                          ? 'bg-band-lrt'
-                          : 'bg-band-kmb'
-                    )}
-                    transition={
-                      reduceMotion
-                        ? { duration: 0 }
-                        : { type: 'spring', stiffness: 380, damping: 32 }
-                    }
-                  />
-                )}
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="hidden truncate sm:inline">{m.labels[lang]}</span>
-                <span className="truncate sm:hidden">{MODE_SHORT_LABELS[m.mode]}</span>
-              </button>
-            )
-          })}
-        </div>
+        {tabs}
       </nav>
     </div>
   )
@@ -284,12 +290,11 @@ function ModeTabs({ lang, mode, onModeChange }: ModeTabsProps) {
 type TopAppBarProps = {
   lang: UiLanguage
   mode: TransportMode
-  onModeChange: (mode: TransportMode) => void
   subView?: SubView
   onSubViewChange?: (subView: SubView) => void
 }
 
-export function TopAppBar({ lang, mode, onModeChange, subView, onSubViewChange }: TopAppBarProps) {
+export function TopAppBar({ lang, mode, subView, onSubViewChange }: TopAppBarProps) {
   const { t } = useTranslations(lang)
   const settingsActive = subView === 'settings'
 
@@ -339,57 +344,81 @@ export function TopAppBar({ lang, mode, onModeChange, subView, onSubViewChange }
           </div>
         </div>
       </div>
-
-      <ModeTabs lang={lang} mode={mode} onModeChange={onModeChange} />
     </header>
   )
 }
 
-type SideRailProps = {
+type BoardTabsProps = {
   lang: UiLanguage
   subView: SubView
   onSubViewChange: (subView: SubView) => void
 }
 
-export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
+/** View tabs live inside the board deck: one panel, tabbed like a station sign. */
+export function BoardTabs({ lang, subView, onSubViewChange }: BoardTabsProps) {
   const { t } = useTranslations(lang)
-  const reduceMotion = useReducedMotion()
+  const tabRefs = React.useRef<Array<HTMLButtonElement | null>>([])
+  const ids = JOURNEY_VIEWS.map((v) => v.id)
+  const activeIndex = Math.max(0, ids.indexOf(subView))
+
+  const activateAt = React.useCallback(
+    (index: number) => {
+      const next = ids[(index + ids.length) % ids.length]
+      if (!next) return
+      tabRefs.current[index]?.focus()
+      if (next !== subView) onSubViewChange(next)
+    },
+    [ids, subView, onSubViewChange]
+  )
+
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      activateAt(activeIndex + 1)
+    } else if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      activateAt(activeIndex - 1)
+    } else if (event.key === 'Home') {
+      event.preventDefault()
+      activateAt(0)
+    } else if (event.key === 'End') {
+      event.preventDefault()
+      activateAt(ids.length - 1)
+    }
+  }
 
   return (
-    <nav
+    <div
+      role="tablist"
       aria-label="Sections"
-      className="bg-platform bg-surface-container-low border-trackline border-outline-variant/20 sticky top-[8.75rem] hidden h-fit w-[76px] shrink-0 flex-col items-center gap-1 rounded-3xl border px-1.5 py-3 shadow-sm lg:flex"
+      onKeyDown={onKeyDown}
+      className="flex scrollbar-none items-center gap-1 overflow-x-auto"
     >
-      {JOURNEY_VIEWS.map((sv) => {
+      {JOURNEY_VIEWS.map((sv, index) => {
         const Icon = sv.icon
         const active = subView === sv.id
         return (
           <button
             key={sv.id}
+            ref={(el) => {
+              tabRefs.current[index] = el
+            }}
             type="button"
+            role="tab"
+            aria-selected={active}
+            tabIndex={active ? 0 : -1}
             onClick={() => onSubViewChange(sv.id)}
-            aria-current={active ? 'page' : undefined}
             className={cn(
-              'relative flex min-h-[44px] w-full flex-col items-center gap-1 rounded-2xl px-1 py-2.5 text-[11px] font-medium transition-colors',
-              active ? 'text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'
+              'focus-visible:ring-dispatch flex min-h-[44px] shrink-0 items-center gap-2 rounded-full px-4 text-sm font-semibold transition-colors focus-visible:ring-2 focus-visible:outline-none',
+              active ? 'bg-ink text-backdrop shadow-sm' : 'text-ink-soft hover:text-ink'
             )}
           >
-            {active && (
-              <motion.span
-                layoutId="transit-rail-pill"
-                aria-hidden
-                className="bg-primary-container absolute inset-0 rounded-2xl"
-                transition={
-                  reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 32 }
-                }
-              />
-            )}
-            <Icon className="relative h-5 w-5" />
-            <span className="relative leading-none">{t(`common.${sv.id}`)}</span>
+            <Icon className="h-4 w-4 shrink-0" />
+            {t(`common.${sv.id}`)}
           </button>
         )
       })}
-    </nav>
+    </div>
   )
 }
 

@@ -12,7 +12,7 @@ class MemoryStorage implements Storage {
   }
 
   key(index: number): string | null {
-    return [...this.store.keys()][index] ?? null
+    return Array.from(this.store.keys())[index] ?? null
   }
 
   getItem(key: string): string | null {
@@ -32,24 +32,37 @@ class MemoryStorage implements Storage {
   }
 }
 
-function storageMissing(): boolean {
+function storageMissing(name: 'localStorage' | 'sessionStorage'): boolean {
   try {
-    return typeof window === 'undefined' || typeof window.localStorage === 'undefined'
+    if (typeof window === 'undefined') {
+      return true
+    }
+    const value = window[name]
+    return value === undefined || value === null
   } catch {
     return true
   }
 }
 
-if (storageMissing()) {
+function installStorage(name: 'localStorage' | 'sessionStorage'): void {
   const storage = new MemoryStorage()
-  Object.defineProperty(window, 'localStorage', {
+  Object.defineProperty(window, name, {
     value: storage,
     configurable: true,
     writable: true,
   })
-  Object.defineProperty(globalThis, 'localStorage', {
+  Object.defineProperty(globalThis, name, {
     value: storage,
     configurable: true,
     writable: true,
   })
+}
+
+if (typeof window !== 'undefined') {
+  if (storageMissing('localStorage')) {
+    installStorage('localStorage')
+  }
+  if (storageMissing('sessionStorage')) {
+    installStorage('sessionStorage')
+  }
 }

@@ -40,10 +40,9 @@ bun run build
 - If any step fails, fix it and rerun the full sequence. Report the four results at the end.
 - A green build does not mean a push will succeed. `git push` runs `.husky/pre-push`
   (`bun run lint` plus `bun run test`), so the gate that matters for pushing is lint plus test.
-- If the turn is expected to be pushed, verify the push path before ending:
-  `git push --dry-run -u origin HEAD`. A dry run still executes the pre-push hook, so it proves
-  the push is not blocked. New branches have no upstream, so plain `git push` fails before the
-  hook even runs.
+- If the turn is expected to be pushed, run `git push --dry-run origin HEAD` first. It runs
+  the pre-push hook so it proves lint plus test pass, but it does not set upstream. Follow
+  with the real `git push -u origin HEAD` to set upstream.
 - Never end a turn with a red check written off as pre-existing. Stash your changes and rerun the
   failing step on the clean tree. If it fails there too, state that explicitly and either fix it or
   ask for direction. Do not push with `--no-verify` to get past a red gate.

@@ -78,3 +78,12 @@ export function formatUiLanguageLabel(lang: UiLanguage) {
       return '简'
   }
 }
+
+/**
+ * Format a fare in HKD as a single spaced string like 'HK$ 5.2'.
+ * Returns null for non-finite input so callers can skip fare UI entirely.
+ */
+export function formatFareHkd(hkd: unknown): string | null {
+  if (typeof hkd !== 'number' || !Number.isFinite(hkd)) return null
+  return `HK$ ${hkd.toFixed(1)}`
+}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatFareHkd,
   formatRelativeMinutes,
   formatRelativeMinutesWithDrift,
   formatUiLanguageLabel,
@@ -55,5 +56,17 @@ describe('formatUiLanguageLabel', () => {
     expect(formatUiLanguageLabel('en')).toBe('EN')
     expect(formatUiLanguageLabel('tc')).toBe('繁')
     expect(formatUiLanguageLabel('sc')).toBe('简')
+  })
+})
+
+describe('formatFareHkd', () => {
+  it('formats finite fares with one decimal', () => {
+    expect(formatFareHkd(5.2)).toBe('HK$ 5.2')
+  })
+
+  it('returns null for missing or non-numeric fares', () => {
+    expect(formatFareHkd(undefined)).toBeNull()
+    expect(formatFareHkd('5.2')).toBeNull()
+    expect(formatFareHkd(NaN)).toBeNull()
   })
 })

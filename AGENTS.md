@@ -38,6 +38,17 @@ bun run build
 - `bun run test` must pass. If you changed fetch, cache, or URL state, the adjacent test file must cover it.
 - `bun run build` must pass for any code change. Docs-only edits can skip it, state that in your summary.
 - If any step fails, fix it and rerun the full sequence. Report the four results at the end.
+- A green build does not mean a push will succeed. `git push` runs `.husky/pre-push`
+  (`bun run lint` plus `bun run test`), so the gate that matters for pushing is lint plus test.
+- If the turn is expected to be pushed, run `git push --dry-run origin HEAD` first. It runs
+  the pre-push hook so it proves lint plus test pass, but it does not set upstream. Follow
+  with the real `git push -u origin HEAD` to set upstream.
+- Never end a turn with a red check written off as pre-existing. Stash your changes and rerun the
+  failing step on the clean tree. If it fails there too, state that explicitly and either fix it or
+  ask for direction. Do not push with `--no-verify` to get past a red gate.
+- This sandbox may run a different Node major than `.nvmrc` pins (22). If the suite fails here with
+  environment errors such as missing `localStorage` under jsdom, confirm against the pinned Node
+  before blaming your change.
 
 ## Layout
 

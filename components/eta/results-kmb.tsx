@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/dialog'
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
-import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
+import { formatFareHkd, formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import { ResultsHeader } from '@/components/eta/results-header'
@@ -31,19 +31,6 @@ function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLangua
   if (lang === 'sc') return fields.sc
   if (lang === 'en') return fields.en
   return fields.tc
-}
-
-function MetaChip({ children, widthClass }: { children?: React.ReactNode; widthClass: string }) {
-  return (
-    <span
-      className={cn(
-        'text-on-surface-variant m3-label-md truncate text-right font-mono',
-        widthClass
-      )}
-    >
-      {children}
-    </span>
-  )
 }
 
 function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
@@ -234,6 +221,24 @@ type Props = {
   visibleStopIds?: Set<string>
 }
 
+/** Shared details dialog shell: each call site passes its own trigger, content stays identical */
+function RouteDetailsDialog({
+  trigger,
+  children,
+}: {
+  trigger: React.ReactNode
+  children: React.ReactNode
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="bg-surface-container-low rounded-3xl border-0">
+        {children}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
 /** Render a single route departure row */
 const RouteDepartureRow = React.memo(function RouteDepartureRow({
   variantKey,
@@ -292,17 +297,67 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && Boolean(expanded)
 
-  const metaChips = (
-    <div className="hidden items-center gap-2 lg:flex">
-      <MetaChip widthClass="w-10">{stopChips.platform}</MetaChip>
-      <MetaChip widthClass="w-20">{fare ? `HK$ ${fare.hkd.toFixed(1)}` : null}</MetaChip>
-      <MetaChip widthClass="w-16">{stopChips.stopCode}</MetaChip>
-    </div>
+  const fareLabel = fare ? formatFareHkd(fare.hkd) : null
+  const codeLabel = [stopChips.platform, stopChips.stopCode].filter(Boolean).join(' · ') || null
+
+  const detailsContent = (
+    <>
+      <DialogHeader>
+        <DialogTitle className="m3-title-md text-on-surface">
+          {route} {destination ? `→ ${destination}` : label ? `→ ${label}` : ''}
+        </DialogTitle>
+        <DialogDescription className="sr-only">{t('common.routeAndStopDetails')}</DialogDescription>
+      </DialogHeader>
+
+      <div className="space-y-4">
+        <div className="space-y-1">
+          <div className="text-on-surface-variant m3-label-md">{t('common.stop')}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-on-surface m3-body-md min-w-0 flex-1 truncate font-medium">
+              {stopChips.name ?? t('common.unknown')}
+            </div>
+            {stopChips.platform ? (
+              <span className="text-on-surface-variant m3-label-md font-mono">
+                {stopChips.platform}
+              </span>
+            ) : null}
+            {stopChips.stopCode ? (
+              <span className="text-on-surface-variant m3-label-md font-mono">
+                {stopChips.stopCode}
+              </span>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <div className="text-on-surface-variant m3-label-md">{t('common.operator')}</div>
+          <div className="text-on-surface m3-body-md">
+            {formatOperatorLabel(first?.co ?? co, lang)}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <div className="text-on-surface-variant m3-label-md">{t('common.route')}</div>
+          <div className="text-on-surface m3-body-md">
+            {origin && destination
+              ? `${origin} → ${destination}`
+              : label || destination || t('common.unknown')}
+          </div>
+        </div>
+
+        {fareLabel ? (
+          <div className="space-y-1">
+            <div className="text-on-surface-variant m3-label-md">{t('common.fare')}</div>
+            <div className="text-on-surface m3-body-md font-medium">{fareLabel}</div>
+          </div>
+        ) : null}
+      </div>
+    </>
   )
 
-  const InfoButton = (
-    <Dialog>
-      <DialogTrigger asChild>
+  const InfoIconButton = (
+    <RouteDetailsDialog
+      trigger={
         <button
           type="button"
           onClick={(e) => e.stopPropagation()}
@@ -311,64 +366,27 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         >
           <Info className="h-4 w-4" />
         </button>
-      </DialogTrigger>
-      <DialogContent className="bg-surface-container-low rounded-3xl border-0">
-        <DialogHeader>
-          <DialogTitle className="m3-title-md text-on-surface">
-            {route} {destination ? `→ ${destination}` : label ? `→ ${label}` : ''}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            {t('common.routeAndStopDetails')}
-          </DialogDescription>
-        </DialogHeader>
+      }
+    >
+      {detailsContent}
+    </RouteDetailsDialog>
+  )
 
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <div className="text-on-surface-variant m3-label-md">{t('common.stop')}</div>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-on-surface m3-body-md min-w-0 flex-1 truncate font-medium">
-                {stopChips.name ?? t('common.unknown')}
-              </div>
-              {stopChips.platform ? (
-                <span className="text-on-surface-variant m3-label-md font-mono">
-                  {stopChips.platform}
-                </span>
-              ) : null}
-              {stopChips.stopCode ? (
-                <span className="text-on-surface-variant m3-label-md font-mono">
-                  {stopChips.stopCode}
-                </span>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-on-surface-variant m3-label-md">{t('common.operator')}</div>
-            <div className="text-on-surface m3-body-md">
-              {formatOperatorLabel(first?.co ?? co, lang)}
-            </div>
-          </div>
-
-          <div className="space-y-1">
-            <div className="text-on-surface-variant m3-label-md">{t('common.route')}</div>
-            <div className="text-on-surface m3-body-md">
-              {origin && destination
-                ? `${origin} → ${destination}`
-                : label || destination || t('common.unknown')}
-            </div>
-          </div>
-
-          {fare ? (
-            <div className="space-y-1">
-              <div className="text-on-surface-variant m3-label-md">{t('common.fare')}</div>
-              <div className="text-on-surface m3-body-md font-medium">
-                HK$ {fare.hkd.toFixed(1)}
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </DialogContent>
-    </Dialog>
+  const DetailsTextButton = (
+    <RouteDetailsDialog
+      trigger={
+        <button
+          type="button"
+          onClick={(e) => e.stopPropagation()}
+          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 pointer-events-auto inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+        >
+          <Info className="h-3.5 w-3.5" />
+          <span className="m3-label-md">{t('common.details')}</span>
+        </button>
+      }
+    >
+      {detailsContent}
+    </RouteDetailsDialog>
   )
 
   const formatMinutesDisplay = (minutes: number | null) => {
@@ -382,36 +400,51 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     : null
   const firstIsArriving = firstMinutes !== null && !Number.isNaN(firstMinutes) && firstMinutes <= 0
 
-  const FirstEta = () =>
-    firstIsArriving ? (
-      <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
-        <LivePulse />
-        {formatArrivingText(lang)}
-      </span>
-    ) : (
-      <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
-        {formatMinutesDisplay(firstMinutes)}
-      </span>
-    )
+  const firstEtaNode = firstIsArriving ? (
+    <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
+      <LivePulse />
+      {formatArrivingText(lang)}
+    </span>
+  ) : (
+    <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
+      {formatMinutesDisplay(firstMinutes)}
+    </span>
+  )
 
-  const routeHeader = (showEta: boolean) => (
+  const routeHeader = ({ showEta, showInfo }: { showEta: boolean; showInfo: boolean }) => (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RouteBadge route={route} company={co} size="lg" />
-        <span className="text-on-surface-variant m3-label-md hidden shrink-0 sm:inline">
-          {formatOperatorLabel(first?.co ?? co, lang)}
-        </span>
-        <Marquee
-          title={typeof label === 'string' ? label : undefined}
-          className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
-        >
-          {label || 'Route'}
-        </Marquee>
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="text-on-surface-variant m3-label-md hidden shrink-0 sm:inline">
+              {formatOperatorLabel(first?.co ?? co, lang)}
+            </span>
+            <Marquee
+              title={typeof label === 'string' ? label : undefined}
+              className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
+            >
+              {label || t('common.route')}
+            </Marquee>
+          </div>
+          {fareLabel || codeLabel ? (
+            <div className="text-on-surface-variant m3-label-sm mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden">
+              {fareLabel ? <span className="shrink-0 tabular-nums">{fareLabel}</span> : null}
+              {fareLabel && codeLabel ? (
+                <span aria-hidden="true" className="shrink-0 opacity-60">
+                  ·
+                </span>
+              ) : null}
+              {codeLabel ? (
+                <span className="min-w-0 flex-1 truncate font-mono">{codeLabel}</span>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
-      <div className="flex shrink-0 items-center gap-1">
-        {metaChips}
-        {InfoButton}
-        {showEta && hasEta ? <FirstEta /> : null}
+      <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+        {showEta && hasEta ? firstEtaNode : null}
+        {showInfo ? InfoIconButton : null}
         {expandable ? (
           isExpanded ? (
             <ChevronUp className="text-on-surface-variant h-4 w-4" />
@@ -424,61 +457,64 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   )
 
   const etaPanel = (
-    <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
-      {items.map((entry, entryIdx) => {
-        const minutes = entry.eta
-          ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
-          : null
-        const remark = pickLang(
-          {
-            en: entry.rmk_en ?? '',
-            tc: entry.rmk_tc ?? '',
-            sc: entry.rmk_sc ?? '',
-          },
-          lang
-        )
-        const isFirst = entry.eta_seq === 1
-        const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
+    <div className="space-y-2">
+      <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
+        {items.map((entry, entryIdx) => {
+          const minutes = entry.eta
+            ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
+            : null
+          const remark = pickLang(
+            {
+              en: entry.rmk_en ?? '',
+              tc: entry.rmk_tc ?? '',
+              sc: entry.rmk_sc ?? '',
+            },
+            lang
+          )
+          const isFirst = entry.eta_seq === 1
+          const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
 
-        if (isFirst) {
+          if (isFirst) {
+            return (
+              <div
+                key={`${variantKey}:${entry.eta_seq}:${entryIdx}`}
+                className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+              >
+                <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
+                <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
+                  {isArriving ? <LivePulse /> : null}
+                  {formatMinutesDisplay(minutes)}
+                </div>
+                {remark ? (
+                  <Marquee title={remark} className="m3-label-md mt-1 opacity-80">
+                    {remark}
+                  </Marquee>
+                ) : null}
+              </div>
+            )
+          }
+
           return (
             <div
-              key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-              className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+              key={`${variantKey}:${entry.eta_seq}:${entryIdx}`}
+              className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
             >
-              <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
-              <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
-                {isArriving ? <LivePulse /> : null}
+              <div className="text-on-surface-variant m3-label-md">
+                {formatEtaLabel(entry.eta_seq, lang)}
+              </div>
+              <div className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg">
                 {formatMinutesDisplay(minutes)}
               </div>
               {remark ? (
-                <Marquee title={remark} className="m3-label-md mt-1 opacity-80">
+                <Marquee title={remark} className="text-on-surface-variant m3-label-md mt-0.5">
                   {remark}
                 </Marquee>
               ) : null}
             </div>
           )
-        }
-
-        return (
-          <div
-            key={`${variantKey}:${entry.eta_seq}:${entry.eta ?? ''}:${entry.data_timestamp ?? ''}:${entryIdx}`}
-            className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
-          >
-            <div className="text-on-surface-variant m3-label-md">
-              {formatEtaLabel(entry.eta_seq, lang)}
-            </div>
-            <div className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg">
-              {formatMinutesDisplay(minutes)}
-            </div>
-            {remark ? (
-              <Marquee title={remark} className="text-on-surface-variant m3-label-md mt-0.5">
-                {remark}
-              </Marquee>
-            ) : null}
-          </div>
-        )
-      })}
+        })}
+      </div>
+      <div className="flex items-center justify-end">{DetailsTextButton}</div>
     </div>
   )
 
@@ -498,7 +534,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           aria-hidden
         />
         <div className="space-y-2.5 pl-4">
-          {routeHeader(false)}
+          {routeHeader({ showEta: false, showInfo: true })}
           <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
             <Info className="h-4 w-4 shrink-0" />
             {remark || formatNoScheduledText(lang)}
@@ -521,7 +557,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           style={{ backgroundColor: badgeStyle.bgColor }}
           aria-hidden
         />
-        <div className="space-y-2.5 pl-4">{routeHeader(true)}</div>
+        <div className="space-y-2.5 pl-4">{routeHeader({ showEta: true, showInfo: true })}</div>
       </div>
     )
   }
@@ -535,7 +571,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       panel={etaPanel}
       toggleLabel={`${route} ${label ?? ''}`.trim()}
     >
-      {routeHeader(!isExpanded)}
+      {routeHeader({ showEta: !isExpanded, showInfo: !isExpanded })}
     </ExpandableEtaRow>
   )
 })

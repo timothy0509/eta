@@ -65,8 +65,6 @@ const DEFAULTS = {
   autoRefreshSeconds: 15,
 }
 
-const AUTO_REFRESH_OPTIONS = new Set([0, 10, 15, 30, 60])
-
 function parseTransportMode(value: string | null): TransportMode | null {
   if (value === 'kmb' || value === 'mtr' || value === 'lrt') return value
   return null
@@ -77,22 +75,9 @@ function parseSubView(value: string | null): SubView | null {
   return null
 }
 
-function parseUiLanguage(value: string | null): UiLanguage | null {
-  if (value === 'en' || value === 'tc' || value === 'sc') return value
-  return null
-}
-
 function parseRouteFilterMode(value: string | null): RouteFilterMode | null {
   if (value === 'simple' || value === 'advanced') return value
   return null
-}
-
-function parseAutoRefreshSeconds(value: string | null): number | null {
-  if (!value) return null
-  const parsed = Number.parseInt(value, 10)
-  if (!Number.isFinite(parsed)) return null
-  if (!AUTO_REFRESH_OPTIONS.has(parsed)) return null
-  return parsed
 }
 
 function parseCommaList(value: string | null): string[] {
@@ -179,8 +164,6 @@ export function decodeUrlState(search: string): UrlDecodeResult {
   // saved lang, refresh, or filter. rfm below feeds the KMB selected item
   // only, never global state. Unknown keys are ignored, gaps fall back to
   // defaults at the call site.
-  void parseUiLanguage(params.get('l'))
-  void parseAutoRefreshSeconds(params.get('ar'))
   const routeFilterModeParam = parseRouteFilterMode(params.get('rfm'))
 
   const kmbMode = params.get('km')
@@ -250,7 +233,8 @@ export function encodeUrlState(input: UrlEncodeInput): string {
   if (input.subView !== DEFAULTS.subView) params.set('v', input.subView)
   // Nav-only by default. Prefs travel only on explicit Share so a shared
   // link never overwrites the recipient's saved lang, refresh, or filter.
-  // Legacy links carrying l, rfm, or ar still decode below.
+  // Legacy l and ar keys are ignored on decode; rfm still feeds the KMB
+  // selection below.
   if (input.includePrefs) {
     if (input.lang !== DEFAULTS.lang) params.set('l', input.lang)
     if (input.routeFilterMode !== DEFAULTS.routeFilterMode) {

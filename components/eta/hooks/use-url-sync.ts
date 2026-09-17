@@ -57,27 +57,62 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
 
   const didHydrateFromUrlRef = React.useRef(false)
   const lastEncodedRef = React.useRef<string>('')
+  const lastHydratedSearchRef = React.useRef<string | null>(null)
+  const pendingOwnWriteRef = React.useRef<string | null>(null)
 
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  React.useEffect(() => {
-    if (didHydrateFromUrlRef.current) return
+  const applyDecodedUrl = React.useCallback(
+    (search: string) => {
+      const decoded = decodeUrlState(search)
+      const nextMode = decoded.state.mode ?? decoded.selectedItem?.mode
+      if (nextMode) setMode(nextMode)
+      if (decoded.state.subView) setSubView(decoded.state.subView)
+      // decode never populates lang, routeFilterMode, or autoRefreshSeconds:
+      // hydrate applies nav only so a shared link never overwrites prefs.
+      // Decoded ids are deterministic, so re-hydrating the same URL keeps
+      // the existing selection object instead of churning pane restores.
+      setSelectedItem((prev) =>
+        prev?.id === decoded.selectedItem?.id ? prev : decoded.selectedItem
+      )
+      // Seed with the canonical nav-only encoding of the decoded state so
+      // the encode effect skips its first replace until pane snapshots load.
+      lastEncodedRef.current = encodeUrlState({
+        mode: decoded.state.mode ?? mode,
+        subView: decoded.state.subView ?? subView,
+        lang,
+        routeFilterMode,
+        autoRefreshSeconds,
+        kmb: null,
+        mtr: { sta: null },
+        lrt: { stationId: null },
+      })
+      didHydrateFromUrlRef.current = true
+    },
+    [autoRefreshSeconds, lang, mode, routeFilterMode, setMode, setSelectedItem, setSubView, subView]
+  )
 
+  React.useEffect(() => {
     const search = searchParams?.toString() ?? ''
-    const decoded = decodeUrlState(search)
-    if (decoded.state.mode) {
-      setMode(decoded.state.mode)
-    } else if (decoded.selectedItem) {
-      setMode(decoded.selectedItem.mode)
+    // Writes from our own router.replace land here: consume and skip so we
+    // never re-hydrate (and degrade) the selection we just encoded.
+    if (pendingOwnWriteRef.current !== null) {
+      if (search === pendingOwnWriteRef.current) {
+        pendingOwnWriteRef.current = null
+        lastHydratedSearchRef.current = search
+        didHydrateFromUrlRef.current = true
+        return
+      }
+      pendingOwnWriteRef.current = null
     }
-    if (decoded.state.subView) setSubView(decoded.state.subView)
-    // decode never populates lang, routeFilterMode, or autoRefreshSeconds:
-    // hydrate applies nav only so a shared link never overwrites prefs.
-    didHydrateFromUrlRef.current = true
-    lastEncodedRef.current = search
-  }, [searchParams, setMode, setSubView])
+    // Same URL (e.g. store updates re-running this effect): nothing to do.
+    // Anything else is external: initial load or back/forward navigation.
+    if (search === lastHydratedSearchRef.current) return
+    lastHydratedSearchRef.current = search
+    applyDecodedUrl(search)
+  }, [applyDecodedUrl, searchParams])
 
   React.useEffect(() => {
     if (!didHydrateFromUrlRef.current) return
@@ -100,6 +135,7 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
 
     if (query === lastEncodedRef.current) return
     lastEncodedRef.current = query
+    pendingOwnWriteRef.current = query
 
     const nextUrl = query ? `${pathname}?${query}` : pathname
     router.replace(nextUrl, { scroll: false })

@@ -46,7 +46,9 @@ export function useRefreshRegistry({ mode, subView, autoRefreshSeconds }: Params
       }, MAX_REFRESH_DURATION_MS)
 
       refresh()
-        .catch(() => {})
+        .catch((err) => {
+          console.debug('Auto-refresh failed:', err)
+        })
         .finally(() => {
           if (refreshTimeoutRef.current) {
             clearTimeout(refreshTimeoutRef.current)

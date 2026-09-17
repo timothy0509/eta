@@ -110,7 +110,6 @@ const useAppStoreActions = () =>
       setSubView: s.setSubView,
       setLang: s.setLang,
       setRouteFilterMode: s.setRouteFilterMode,
-      setAutoRefreshSeconds: s.setAutoRefreshSeconds,
       addFavorite: s.addFavorite,
       addRecent: s.addRecent,
     }))

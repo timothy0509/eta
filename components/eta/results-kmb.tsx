@@ -6,7 +6,8 @@ import * as React from 'react'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { RouteBadge } from '@/components/eta/route-badge'
-import { LivePulse, StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import { TickingKmbMinutes } from '@/components/eta/ticking-eta'
 import {
   Dialog,
   DialogContent,
@@ -17,15 +18,15 @@ import {
 } from '@/components/ui/dialog'
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
-import { formatFareHkd, formatRelativeMinutesWithDrift } from '@/lib/eta/format'
+import { formatFareHkd } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import { ResultsHeader } from '@/components/eta/results-header'
-import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
+import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
 
 function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
   if (lang === 'sc') return fields.sc
@@ -86,12 +87,6 @@ function formatRouteVariantLabel(
     lang
   )
   return dest
-}
-
-function formatArrivingText(lang: UiLanguage) {
-  if (lang === 'en') return 'Now'
-  if (lang === 'sc') return '即将到达'
-  return '即將到達'
 }
 
 function formatNoScheduledText(lang: UiLanguage) {
@@ -209,16 +204,12 @@ type Props = {
   etaByStopId?: Record<string, KmbEtaEntryWithLeg[]>
   /** Ordered list of stop IDs that have been loaded */
   loadedStopIds?: string[]
-  /** Sentinel ref for infinite scroll */
-  sentinelRef?: React.RefObject<HTMLDivElement | null>
   /** Whether there are more stops to load */
   hasMoreStops?: boolean
+  /** Stable callback to load the next page of stops */
+  onLoadMore?: () => void
   /** Precomputed render groups from pane (avoids recomputation during render) */
   precomputedGroups?: PrecomputedGroups
-  /** Register ref for stop sections (visible tracking) */
-  registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void
-  /** Currently visible stop IDs for virtualization */
-  visibleStopIds?: Set<string>
 }
 
 /** Shared details dialog shell: each call site passes its own trigger, content stays identical */
@@ -250,7 +241,6 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   routeInfos,
   faresByVariantKey,
   lang,
-  now,
   staggerClass,
   stopChips,
   expanded,
@@ -268,7 +258,6 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   routeInfos: Record<string, KmbRouteInfoLite>
   faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
   lang: UiLanguage
-  now: number
   staggerClass?: string
   stopChips: StopChips
   expanded?: boolean
@@ -389,25 +378,16 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     </RouteDetailsDialog>
   )
 
-  const formatMinutesDisplay = (minutes: number | null) => {
-    if (minutes === null || Number.isNaN(minutes)) return '—'
-    if (minutes <= 0) return formatArrivingText(lang)
-    return lang === 'en' ? `${minutes} min` : `${minutes} 分`
-  }
-
-  const firstMinutes = first?.eta
-    ? formatRelativeMinutesWithDrift(first.eta, first.data_timestamp, now)
-    : null
-  const firstIsArriving = firstMinutes !== null && !Number.isNaN(firstMinutes) && firstMinutes <= 0
-
-  const firstEtaNode = firstIsArriving ? (
-    <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
-      <LivePulse />
-      {formatArrivingText(lang)}
-    </span>
+  const firstEtaNode = first?.eta ? (
+    <TickingKmbMinutes
+      eta={first.eta}
+      dataTimestamp={first.data_timestamp}
+      lang={lang}
+      variant="header"
+    />
   ) : (
     <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
-      {formatMinutesDisplay(firstMinutes)}
+      —
     </span>
   )
 
@@ -460,9 +440,6 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     <div className="space-y-2">
       <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
         {items.map((entry, entryIdx) => {
-          const minutes = entry.eta
-            ? formatRelativeMinutesWithDrift(entry.eta, entry.data_timestamp, now)
-            : null
           const remark = pickLang(
             {
               en: entry.rmk_en ?? '',
@@ -472,7 +449,6 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
             lang
           )
           const isFirst = entry.eta_seq === 1
-          const isArriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
 
           if (isFirst) {
             return (
@@ -481,9 +457,13 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
                 className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
               >
                 <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
-                <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
-                  {isArriving ? <LivePulse /> : null}
-                  {formatMinutesDisplay(minutes)}
+                <div className="mt-0.5">
+                  <TickingKmbMinutes
+                    eta={entry.eta}
+                    dataTimestamp={entry.data_timestamp}
+                    lang={lang}
+                    variant="panel"
+                  />
                 </div>
                 {remark ? (
                   <Marquee title={remark} className="m3-label-md mt-1 opacity-80">
@@ -502,8 +482,14 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
               <div className="text-on-surface-variant m3-label-md">
                 {formatEtaLabel(entry.eta_seq, lang)}
               </div>
-              <div className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg">
-                {formatMinutesDisplay(minutes)}
+              <div className="mt-0.5">
+                <TickingKmbMinutes
+                  eta={entry.eta}
+                  dataTimestamp={entry.data_timestamp}
+                  lang={lang}
+                  variant="plain"
+                  className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg"
+                />
               </div>
               {remark ? (
                 <Marquee title={remark} className="text-on-surface-variant m3-label-md mt-0.5">
@@ -584,7 +570,6 @@ const StopSection = React.memo(function StopSection({
   routeInfos,
   faresByVariantKey,
   lang,
-  now,
   isFirst,
   stopLookup,
   registerStopRef,
@@ -598,7 +583,6 @@ const StopSection = React.memo(function StopSection({
   routeInfos: Record<string, KmbRouteInfoLite>
   faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
   lang: UiLanguage
-  now: number
   isFirst?: boolean
   stopLookup: Map<string, StopInfo>
   registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void
@@ -612,7 +596,10 @@ const StopSection = React.memo(function StopSection({
   const stopRef = registerStopRef ? registerStopRef(stopId) : undefined
 
   return (
-    <div ref={stopRef} className={cn(!isFirst && 'border-outline-variant mt-5 border-t pt-5')}>
+    <div
+      ref={stopRef}
+      className={cn('ui-cv-auto', !isFirst && 'border-outline-variant mt-5 border-t pt-5')}
+    >
       <div className="mb-2 flex items-center gap-2">
         <h3 className="text-on-surface m3-title-md min-w-0 truncate">{parsed.name}</h3>
         {stopCodeBadge ? (
@@ -641,7 +628,6 @@ const StopSection = React.memo(function StopSection({
               routeInfos={routeInfos}
               faresByVariantKey={faresByVariantKey}
               lang={lang}
-              now={now}
               stopChips={
                 stopChipsById.get(stopId) ?? getStopChips(g.items, stopLookup, stopChipsById, lang)
               }
@@ -686,14 +672,31 @@ export const KmbResults = React.memo(function KmbResults({
   isKeyphraseMode,
   etaByStopId,
   loadedStopIds,
-  sentinelRef,
   hasMoreStops,
+  onLoadMore,
   precomputedGroups,
-  registerStopRef,
-  visibleStopIds,
 }: Props) {
+  // Scroll and visibility state stays local so intersections never hit the store.
+  const sentinelRef = React.useRef<HTMLDivElement | null>(null)
+  const loadedForVisible = React.useMemo(() => loadedStopIds ?? [], [loadedStopIds])
+  const { visibleIds, registerRef } = useVisibleItems(loadedForVisible, { rootMargin: '200px' })
+  const visibleStopIds = visibleIds
+  const registerStopRef = registerRef
+
+  React.useEffect(() => {
+    if (!hasMoreStops || !onLoadMore) return
+    const sentinel = sentinelRef.current
+    if (!sentinel) return
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) onLoadMore()
+      },
+      { rootMargin: '400px', threshold: 0.1 }
+    )
+    observer.observe(sentinel)
+    return () => observer.disconnect()
+  }, [hasMoreStops, onLoadMore, loadedStopIds])
   const { t, tWithParams } = useTranslations(lang)
-  const now = useTickingNow(15_000)
   const hasStaleStops = Boolean(
     staleByStopId && Object.values(staleByStopId).some((entry) => entry.stale)
   )
@@ -825,7 +828,6 @@ export const KmbResults = React.memo(function KmbResults({
                 routeInfos={routeInfos}
                 faresByVariantKey={faresByVariantKey}
                 lang={lang}
-                now={now}
                 isFirst={idx === 0}
                 stopLookup={stopLookup}
                 registerStopRef={registerStopRef}
@@ -871,7 +873,7 @@ export const KmbResults = React.memo(function KmbResults({
                       : ''
 
               return (
-                <StaggerItem key={g.key}>
+                <StaggerItem key={g.key} className="ui-cv-row">
                   <RouteDepartureRow
                     variantKey={g.key}
                     baseKey={g.baseKey}
@@ -882,7 +884,6 @@ export const KmbResults = React.memo(function KmbResults({
                     routeInfos={routeInfos}
                     faresByVariantKey={faresByVariantKey}
                     lang={lang}
-                    now={now}
                     staggerClass={staggerClass}
                     stopChips={stopChips}
                     expanded={expandedKey === g.key}
@@ -915,7 +916,7 @@ export const KmbResults = React.memo(function KmbResults({
                       : ''
 
               return (
-                <StaggerItem key={g.key}>
+                <StaggerItem key={g.key} className="ui-cv-row">
                   <RouteDepartureRow
                     variantKey={g.key}
                     baseKey={g.baseKey}
@@ -926,7 +927,6 @@ export const KmbResults = React.memo(function KmbResults({
                     routeInfos={routeInfos}
                     faresByVariantKey={faresByVariantKey}
                     lang={lang}
-                    now={now}
                     staggerClass={staggerClass}
                     stopChips={stopChips}
                     expanded={expandedKey === g.key}

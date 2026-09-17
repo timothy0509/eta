@@ -119,4 +119,15 @@ describe('promisePool', () => {
     expect(results[2].status).toBe('fulfilled')
     expect(results[3].status).toBe('rejected')
   })
+
+  it('rejects without running workers when the signal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const worker = vi.fn(async (n: number) => n)
+
+    await expect(promisePool([1, 2], 2, worker, { signal: controller.signal })).rejects.toThrow(
+      expect.objectContaining({ name: 'AbortError' })
+    )
+    expect(worker).not.toHaveBeenCalled()
+  })
 })

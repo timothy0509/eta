@@ -77,13 +77,28 @@ function requestPosition(options: PositionOptions): Promise<GeoLocation> {
   })
 }
 
+type NetworkConnectionInfo = { saveData?: boolean; effectiveType?: string }
+
+function isWeakConnection(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const connection = (navigator as Navigator & { connection?: NetworkConnectionInfo }).connection
+  if (!connection) return false
+  if (connection.saveData === true) return true
+  return ['slow-2g', '2g', '3g'].includes(String(connection.effectiveType ?? '').toLowerCase())
+}
+
 async function requestWithRetry(): Promise<GeoLocation> {
+  // Single-shot fix only, no watch. Cheap mode first so a nearby open
+  // rarely spins up GPS; high accuracy is the fallback, not the default.
+  // Weak networks get a longer timeout since the fix may depend on
+  // network location, and a 60 s maximumAge lets repeat visits reuse.
+  const timeout = isWeakConnection() ? 12000 : 8000
   try {
-    return await requestPosition({ enableHighAccuracy: false, timeout: 10000, maximumAge: 30000 })
+    return await requestPosition({ enableHighAccuracy: false, timeout, maximumAge: 60000 })
   } catch (err) {
     const code = readGeolocationErrorCode(err)
     if (code !== 'timeout' && code !== 'unavailable') throw err
-    return await requestPosition({ enableHighAccuracy: true, timeout: 10000, maximumAge: 0 })
+    return await requestPosition({ enableHighAccuracy: true, timeout, maximumAge: 0 })
   }
 }
 

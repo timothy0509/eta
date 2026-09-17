@@ -1,6 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { FavoritesItem, FavoritesGroup } from './store'
+import { capFavorites, FAVORITES_LIMIT } from './store'
 
 // Create a test store without persist middleware
 type AppState = {
@@ -671,5 +672,46 @@ describe('store migration', () => {
     expect(migrated.favorites).toEqual([])
     expect(migrated.favoritesGroups).toEqual([])
     expect(migrated.recents).toEqual([])
+  })
+})
+
+describe('capFavorites', () => {
+  const makeItem = (id: string, pinned = false): FavoritesItem => ({
+    id,
+    mode: 'mtr',
+    title: `Station ${id}`,
+    line: 'TWL',
+    sta: id.toUpperCase(),
+    pinned,
+  })
+
+  it('keeps lists under the limit untouched', () => {
+    const favorites = [makeItem('fav-1'), makeItem('fav-2')]
+    expect(capFavorites(favorites)).toBe(favorites)
+  })
+
+  it('drops oldest unpinned entries first', () => {
+    const favorites: FavoritesItem[] = [makeItem('pinned-1', true)]
+    for (let i = 0; i < FAVORITES_LIMIT; i += 1) {
+      favorites.push(makeItem(`fav-${i}`))
+    }
+
+    const capped = capFavorites(favorites)
+    expect(capped).toHaveLength(FAVORITES_LIMIT)
+    // Pinned entry is newest-first at index 0, so it survives.
+    expect(capped.some((f) => f.id === 'pinned-1')).toBe(true)
+    // The oldest unpinned entry (last in the list) falls off.
+    expect(capped.some((f) => f.id === `fav-${FAVORITES_LIMIT - 1}`)).toBe(false)
+    expect(capped[0].id).toBe('pinned-1')
+  })
+
+  it('never exceeds the limit even when everything is pinned', () => {
+    const favorites: FavoritesItem[] = []
+    for (let i = 0; i < FAVORITES_LIMIT + 10; i += 1) {
+      favorites.push(makeItem(`pinned-${i}`, true))
+    }
+
+    const capped = capFavorites(favorites)
+    expect(capped).toHaveLength(FAVORITES_LIMIT)
   })
 })

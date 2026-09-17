@@ -1,53 +1,50 @@
 'use client'
 
-import { motion, type HTMLMotionProps } from 'framer-motion'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
 
-type FadeInProps = HTMLMotionProps<'div'> & {
+type FadeInProps = React.HTMLAttributes<HTMLDivElement> & {
   delay?: number
   duration?: number
 }
 
+/**
+ * CSS-only fade-in. Same API as the old framer-motion version so call
+ * sites stay untouched, but no JS animation library loads with the view.
+ */
 export const FadeIn = React.forwardRef<HTMLDivElement, FadeInProps>(
-  ({ children, className, delay = 0, duration = 0.25, ...props }, ref) => (
-    <motion.div
+  ({ children, className, delay = 0, duration = 0.22, style, ...props }, ref) => (
+    <div
       ref={ref}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration, delay, ease: [0.2, 0.8, 0.2, 1] }}
-      className={className}
+      className={cn('ui-animate-fade', className)}
+      style={{
+        ...style,
+        ...(delay ? { animationDelay: `${delay * 1000}ms` } : null),
+        ...(duration && duration !== 0.22 ? { animationDuration: `${duration * 1000}ms` } : null),
+      }}
       {...props}
     >
       {children}
-    </motion.div>
+    </div>
   )
 )
 FadeIn.displayName = 'FadeIn'
 
+/**
+ * CSS-only stagger container. Children animate via the `.ui-stagger`
+ * nth-child delays in globals.css, capped so long lists stay cheap.
+ */
 export function StaggerContainer({
   children,
   className,
-  stagger = 0.04,
+  stagger: _stagger = 0.04,
 }: {
   children: React.ReactNode
   className?: string
   stagger?: number
 }) {
-  return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={{
-        hidden: {},
-        visible: { transition: { staggerChildren: stagger } },
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
+  return <div className={cn('ui-stagger', className)}>{children}</div>
 }
 
 export function StaggerItem({
@@ -57,36 +54,23 @@ export function StaggerItem({
   children: React.ReactNode
   className?: string
 }) {
-  return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 8 },
-        visible: { opacity: 1, y: 0, transition: { duration: 0.22, ease: [0.2, 0.8, 0.2, 1] } },
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
+  return <div className={className}>{children}</div>
 }
 
-type MotionCardProps = Omit<HTMLMotionProps<'div'>, 'whileHover' | 'whileTap'> & {
+type MotionCardProps = React.HTMLAttributes<HTMLDivElement> & {
   hoverScale?: number
   tapScale?: number
 }
 
+/**
+ * CSS-only pressable card. hoverScale/tapScale are accepted for API
+ * compat and intentionally ignored; the ui-press class handles feedback.
+ */
 export const MotionCard = React.forwardRef<HTMLDivElement, MotionCardProps>(
-  ({ children, className, hoverScale = 1.01, tapScale = 0.99, ...props }, ref) => (
-    <motion.div
-      ref={ref}
-      whileHover={{ scale: hoverScale }}
-      whileTap={{ scale: tapScale }}
-      transition={{ duration: 0.14, ease: [0.2, 0.8, 0.2, 1] }}
-      className={className}
-      {...props}
-    >
+  ({ children, className, hoverScale: _hoverScale, tapScale: _tapScale, ...props }, ref) => (
+    <div ref={ref} className={cn('ui-press', className)} {...props}>
       {children}
-    </motion.div>
+    </div>
   )
 )
 MotionCard.displayName = 'MotionCard'

@@ -63,20 +63,31 @@ export function formatDistanceKm(km: number, lang: UiLanguage): string {
 /**
  * Computes nearby stops sorted by distance from the user's location.
  * Returns a new array augmented with `distanceKm`. An optional `limit` can be
- * applied to restrict the number of results.
+ * applied to restrict the number of results, and an optional `maxDistanceKm`
+ * prefilters by a rough bounding box before the haversine runs, so a 6k-stop
+ * list only pays for the few hundred stops actually in range.
  */
 export function computeNearbyStops<T extends GeoPoint>(
   user: GeoPoint,
   stops: T[],
-  limit?: number
+  limit?: number,
+  maxDistanceKm?: number
 ): Array<T & { distanceKm: number }> {
   if (!isValidGeoPoint(user)) return []
-  const withDistance = stops
-    .filter((stop) => isValidGeoPoint(stop))
-    .map((stop) => ({
-      ...stop,
-      distanceKm: haversineDistanceKm(user, stop),
-    }))
+  let candidates = stops.filter((stop) => isValidGeoPoint(stop))
+  if (maxDistanceKm && maxDistanceKm > 0) {
+    // 1 degree of latitude is about 111 km; longitude shrinks by cos(lat).
+    const latDelta = maxDistanceKm / 111
+    const lngDelta = maxDistanceKm / (111 * Math.max(0.2, Math.cos(toRad(user.lat))))
+    candidates = candidates.filter(
+      (stop) =>
+        Math.abs(stop.lat - user.lat) <= latDelta && Math.abs(stop.lng - user.lng) <= lngDelta
+    )
+  }
+  const withDistance = candidates.map((stop) => ({
+    ...stop,
+    distanceKm: haversineDistanceKm(user, stop),
+  }))
 
   withDistance.sort((a, b) => a.distanceKm - b.distanceKm)
 

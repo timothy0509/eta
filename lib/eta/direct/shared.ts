@@ -27,6 +27,33 @@ function getCaches<T>(policyKey: string, policy: CachePolicy): MemoryCaches<T> {
   return caches
 }
 
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
+}
+
+function awaitWithAbort<T>(promise: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return promise
+  throwIfAborted(signal)
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(new DOMException('The operation was aborted.', 'AbortError'))
+    }
+    signal.addEventListener('abort', onAbort, { once: true })
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort)
+        resolve(value)
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort)
+        reject(error)
+      }
+    )
+  })
+}
+
 export async function getCachedValue<T>(params: {
   key: string
   policyKey: string
@@ -34,8 +61,9 @@ export async function getCachedValue<T>(params: {
   fetcher: () => Promise<T>
   allowStale?: boolean
   staleMaxMs?: number
+  signal?: AbortSignal
 }): Promise<{ value: T; cached: boolean; stale: boolean; ageMs: number | null }> {
-  const { key, policyKey, policy, fetcher, allowStale = false } = params
+  const { key, policyKey, policy, fetcher, allowStale = false, signal } = params
   const caches = getCaches<T>(policyKey, policy)
   const now = Date.now()
   const staleMaxMs = params.staleMaxMs ?? policy.maxStaleMs ?? 0
@@ -53,7 +81,9 @@ export async function getCachedValue<T>(params: {
     }
   }
 
-  const stored = policy.persist ? await idbGet<T>(key) : null
+  throwIfAborted(signal)
+  const stored = policy.persist ? await awaitWithAbort(idbGet<T>(key), signal) : null
+  throwIfAborted(signal)
   if (stored && isFresh(stored, now)) {
     const remainingTtlMs = stored.expiresAt - now
     if (remainingTtlMs > 0) {
@@ -64,9 +94,11 @@ export async function getCachedValue<T>(params: {
 
   const inFlight = caches.inFlight.get(key)
   if (inFlight) {
-    const value = await inFlight
+    const value = await awaitWithAbort(inFlight, signal)
     return { value, cached: true, stale: false, ageMs: 0 }
   }
+
+  throwIfAborted(signal)
 
   const fetchPromise = fetcher()
     .then(async (value) => {
@@ -86,9 +118,11 @@ export async function getCachedValue<T>(params: {
   caches.inFlight.set(key, fetchPromise, 30_000)
 
   try {
-    const value = await fetchPromise
+    const value = await awaitWithAbort(fetchPromise, signal)
     return { value, cached: false, stale: false, ageMs: null }
   } catch (error) {
+    if (signal?.aborted) throw error
+    if (error instanceof DOMException && error.name === 'AbortError') throw error
     if (allowStale && staleMaxMs > 0) {
       const staleNow = Date.now()
       const candidates: Array<{ value: T; meta: { createdAt: number; expiresAt: number } }> = []

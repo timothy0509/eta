@@ -6,21 +6,20 @@ import dynamic from 'next/dynamic'
 import { BottomNav, SideRail, TopAppBar } from '@/components/eta/app-shell'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
-import { FadeIn } from '@/components/m3/motion'
-import { LRT_STATIONS } from '@/lib/data/lrt-stations'
-import { MTR_STATIONS } from '@/lib/data/mtr-stations'
 import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
 import type {
   LrtStationSearchItem,
   MtrStationSearchItem,
   SubView,
   TransportMode,
+  UiLanguage,
 } from '@/lib/eta/types'
 import { isLanguageSupported } from '@/lib/eta/types'
 import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
 import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
 import { getMtrLineName } from '@/lib/eta/line-colors'
-import { prefetchEtaDb } from '@/lib/eta/prefetch'
+import { initWebVitalsSampler } from '@/lib/eta/perf'
+import { registerServiceWorker } from '@/lib/eta/sw-register'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
@@ -116,6 +115,139 @@ const useAppStoreActions = () =>
     }))
   )
 
+function KmbResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
+  const data = usePaneStore(
+    useShallow((s) =>
+      !s.kmb
+        ? null
+        : {
+            lang: s.kmb.lang,
+            title: s.kmb.title,
+            stopCode: s.kmb.stopCode,
+            routes: s.kmb.routeFilter.routes,
+            eta: s.kmb.eta,
+            routeInfos: s.kmb.routeInfos,
+            faresByVariantKey: s.kmb.faresByVariantKey,
+            hasQuery: s.kmb.hasQuery,
+            error: s.kmb.error,
+            stale: s.kmb.stale,
+            staleByStopId: s.kmb.staleByStopId,
+            lastUpdatedAt: s.kmb.lastUpdatedAt,
+            loading: s.kmb.loading,
+            stops: s.kmb.stops,
+            multipleStops: s.kmb.multipleStops,
+            isKeyphraseMode: s.kmb.isKeyphraseMode,
+            etaByStopId: s.kmb.etaByStopId,
+            loadedStopIds: s.kmb.loadedStopIds,
+            hasMoreStops: s.kmb.hasMoreStops,
+            onLoadMore: s.kmb.onLoadMore,
+            precomputedGroups: s.kmb.precomputedGroups,
+            refresh: s.kmb.refresh,
+          }
+    )
+  )
+  const refreshFn = data?.refresh
+  const onRefresh = React.useCallback(() => void refreshFn?.({ toastOnError: true }), [refreshFn])
+  return (
+    <KmbResults
+      lang={data?.lang ?? fallbackLang}
+      title={data?.title ?? ''}
+      stopCode={data?.stopCode ?? null}
+      routesFilter={data?.routes ?? ''}
+      eta={data?.eta ?? []}
+      routeInfos={data?.routeInfos ?? {}}
+      faresByVariantKey={data?.faresByVariantKey ?? {}}
+      hasQuery={data?.hasQuery ?? false}
+      error={data?.error ?? null}
+      stale={data?.stale ?? false}
+      staleByStopId={data?.staleByStopId}
+      lastUpdatedAt={data?.lastUpdatedAt}
+      onRefresh={onRefresh}
+      loading={data?.loading}
+      stops={data?.stops ?? undefined}
+      multipleStops={data?.multipleStops}
+      isKeyphraseMode={data?.isKeyphraseMode}
+      etaByStopId={data?.etaByStopId}
+      loadedStopIds={data?.loadedStopIds}
+      hasMoreStops={data?.hasMoreStops}
+      onLoadMore={data?.onLoadMore}
+      precomputedGroups={data?.precomputedGroups}
+    />
+  )
+}
+
+function MtrResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
+  const data = usePaneStore(
+    useShallow((s) =>
+      !s.mtr
+        ? null
+        : {
+            title: s.mtr.title,
+            lang: s.mtr.lang,
+            schedule: s.mtr.schedule,
+            error: s.mtr.error,
+            stale: s.mtr.stale,
+            lastUpdatedAt: s.mtr.lastUpdatedAt,
+            loading: s.mtr.loading,
+            onRefresh: s.mtr.onRefresh,
+          }
+    )
+  )
+  const onRefreshFn = data?.onRefresh
+  const onRefresh = React.useCallback(() => {
+    onRefreshFn?.()
+  }, [onRefreshFn])
+  return (
+    <MtrResults
+      title={data?.title ?? ''}
+      lang={data?.lang ?? fallbackLang}
+      schedule={data?.schedule ?? null}
+      error={data?.error ?? null}
+      stale={data?.stale ?? false}
+      lastUpdatedAt={data?.lastUpdatedAt ?? null}
+      onRefresh={onRefresh}
+      loading={data?.loading}
+    />
+  )
+}
+
+function LrtResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
+  const data = usePaneStore(
+    useShallow((s) =>
+      !s.lrt
+        ? null
+        : {
+            title: s.lrt.title,
+            lang: s.lrt.lang,
+            schedule: s.lrt.schedule,
+            stationId: s.lrt.stationId,
+            error: s.lrt.error,
+            stale: s.lrt.stale,
+            lastUpdatedAt: s.lrt.lastUpdatedAt,
+            loading: s.lrt.loading,
+            onRefresh: s.lrt.onRefresh,
+          }
+    )
+  )
+  const onRefreshFn = data?.onRefresh
+  const onRefresh = React.useCallback(() => {
+    onRefreshFn?.()
+  }, [onRefreshFn])
+  return (
+    <LrtResults
+      title={data?.title ?? ''}
+      lang={data?.lang ?? fallbackLang}
+      schedule={data?.schedule ?? null}
+      hasStation={Boolean(data?.stationId)}
+      error={data?.error ?? null}
+      stale={data?.stale ?? false}
+      lastUpdatedAt={data?.lastUpdatedAt ?? null}
+      onRefresh={onRefresh}
+      loading={data?.loading}
+    />
+  )
+}
+
 export default function HomeClient() {
   const { mode, subView, lang, routeFilterMode, autoRefreshSeconds } = useAppStoreState()
   const {
@@ -148,99 +280,65 @@ export default function HomeClient() {
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const kmbPaneState = usePaneStore(
-    useShallow((s) =>
-      mode !== 'kmb' || !s.kmb
-        ? null
-        : {
-            lang: s.kmb.lang,
-            title: s.kmb.title,
-            stopCode: s.kmb.stopCode,
-            routeFilter: s.kmb.routeFilter,
-            eta: s.kmb.eta,
-            routeInfos: s.kmb.routeInfos,
-            faresByVariantKey: s.kmb.faresByVariantKey,
-            hasQuery: s.kmb.hasQuery,
-            error: s.kmb.error,
-            stale: s.kmb.stale,
-            lastUpdatedAt: s.kmb.lastUpdatedAt,
-            loading: s.kmb.loading,
-            stops: s.kmb.stops,
-            multipleStops: s.kmb.multipleStops,
-            isKeyphraseMode: s.kmb.isKeyphraseMode,
-            etaByStopId: s.kmb.etaByStopId,
-            loadedStopIds: s.kmb.loadedStopIds,
-            sentinelRef: s.kmb.sentinelRef,
-            hasMoreStops: s.kmb.hasMoreStops,
-            precomputedGroups: s.kmb.precomputedGroups,
-            querySummary: s.kmb.querySummary,
-            refresh: s.kmb.refresh,
-          }
-    )
-  )
-  const mtrPaneState = usePaneStore(
-    useShallow((s) =>
-      mode !== 'mtr' || !s.mtr
-        ? null
-        : {
-            title: s.mtr.title,
-            lang: s.mtr.lang,
-            schedule: s.mtr.schedule,
-            error: s.mtr.error,
-            stale: s.mtr.stale,
-            lastUpdatedAt: s.mtr.lastUpdatedAt,
-            loading: s.mtr.loading,
-            sta: s.mtr.sta,
-            onRefresh: s.mtr.onRefresh,
-          }
-    )
-  )
-  const lrtPaneState = usePaneStore(
-    useShallow((s) =>
-      mode !== 'lrt' || !s.lrt
-        ? null
-        : {
-            title: s.lrt.title,
-            lang: s.lrt.lang,
-            schedule: s.lrt.schedule,
-            stationId: s.lrt.stationId,
-            error: s.lrt.error,
-            stale: s.lrt.stale,
-            lastUpdatedAt: s.lrt.lastUpdatedAt,
-            loading: s.lrt.loading,
-            onRefresh: s.lrt.onRefresh,
-          }
-    )
-  )
+  // Narrow URL-only selectors so ETA map updates do not rerender the shell.
+  // Heavy ETA fields stay subscribed inside Kmb/Mtr/LrtResultsFromStore.
+  const kmbQuerySummary = usePaneStore((s) => s.kmb?.querySummary ?? null)
+  const kmbRouteFilter = usePaneStore((s) => s.kmb?.routeFilter ?? null)
+  const mtrSta = usePaneStore((s) => s.mtr?.sta ?? null)
+  const lrtStationId = usePaneStore((s) => s.lrt?.stationId ?? null)
 
-  const mtrStations: MtrStationSearchItem[] = React.useMemo(
-    () =>
-      MTR_STATIONS.map((s) => ({
-        labelId: s.sta,
-        sta: s.sta,
-        lines: [...s.lines],
-        nameEn: s.nameEn,
-        nameTc: s.nameTc,
-      })),
-    []
-  )
+  const [mtrStations, setMtrStations] = React.useState<MtrStationSearchItem[]>([])
+  const [lrtStations, setLrtStations] = React.useState<LrtStationSearchItem[]>([])
 
-  const lrtStations: LrtStationSearchItem[] = React.useMemo(
-    () =>
-      LRT_STATIONS.map((s) => ({
-        stationId: s.stationId,
-        nameEn: s.nameEn,
-        nameZh: s.nameZh,
-      })),
-    []
-  )
+  React.useEffect(() => {
+    if (mode !== 'mtr') return
+    let cancelled = false
+    import('@/lib/data/mtr-stations')
+      .then((mod) => {
+        if (cancelled) return
+        setMtrStations(
+          mod.MTR_STATIONS.map((s) => ({
+            labelId: s.sta,
+            sta: s.sta,
+            lines: [...s.lines],
+            nameEn: s.nameEn,
+            nameTc: s.nameTc,
+          }))
+        )
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
+
+  React.useEffect(() => {
+    if (mode !== 'lrt') return
+    let cancelled = false
+    import('@/lib/data/lrt-stations')
+      .then((mod) => {
+        if (cancelled) return
+        setLrtStations(
+          mod.LRT_STATIONS.map((s) => ({
+            stationId: s.stationId,
+            nameEn: s.nameEn,
+            nameZh: s.nameZh,
+          }))
+        )
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
 
   React.useEffect(() => {
     clearKmbStopNameCache()
   }, [lang])
 
   React.useEffect(() => {
-    prefetchEtaDb()
+    import('@/lib/eta/prefetch').then((mod) => mod.prefetchEtaDb()).catch(() => {})
+    registerServiceWorker()
   }, [])
 
   React.useEffect(() => {
@@ -280,32 +378,66 @@ export default function HomeClient() {
     []
   )
 
-  useAutoRefresh(
-    autoRefreshSeconds * 1000,
-    React.useCallback(() => {
-      if (subView !== 'stops') return
-      const refresh = refreshRef.current[mode]
-      if (!refresh) return
-      if (inFlightRefreshRef.current) return
+  // Mirrors so the auto-refresh timer only resets when the interval changes,
+  // not on every mode/subView render.
+  const modeRef = React.useRef(mode)
+  const subViewRef = React.useRef(subView)
+  React.useEffect(() => {
+    modeRef.current = mode
+  }, [mode])
+  React.useEffect(() => {
+    subViewRef.current = subView
+  }, [subView])
 
-      inFlightRefreshRef.current = true
-      refreshTimeoutRef.current = setTimeout(() => {
-        if (inFlightRefreshRef.current) {
-          console.warn('Auto-refresh timeout - forcing unlock')
-          inFlightRefreshRef.current = false
+  // Sample LCP/INP/CLS once per page load (10%, skips saveData). Reads mode
+  // through refs so tab switches never resubscribe the observers.
+  React.useEffect(() => {
+    const cleanup = initWebVitalsSampler({
+      mode: modeRef.current,
+      subView: subViewRef.current,
+    })
+    return cleanup
+  }, [])
+
+  const autoRefreshCallback = React.useCallback(() => {
+    if (subViewRef.current !== 'stops') return
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
+    const refresh = refreshRef.current[modeRef.current]
+    if (!refresh) return
+    if (inFlightRefreshRef.current) return
+
+    inFlightRefreshRef.current = true
+    refreshTimeoutRef.current = setTimeout(() => {
+      if (inFlightRefreshRef.current) {
+        console.warn('Auto-refresh timeout - forcing unlock')
+        inFlightRefreshRef.current = false
+      }
+    }, MAX_REFRESH_DURATION_MS)
+
+    refresh()
+      .catch(() => {})
+      .finally(() => {
+        if (refreshTimeoutRef.current) {
+          clearTimeout(refreshTimeoutRef.current)
+          refreshTimeoutRef.current = null
         }
-      }, MAX_REFRESH_DURATION_MS)
+        inFlightRefreshRef.current = false
+      })
+  }, [])
 
-      refresh()
-        .catch(() => {})
-        .finally(() => {
-          if (refreshTimeoutRef.current) {
-            clearTimeout(refreshTimeoutRef.current)
-            refreshTimeoutRef.current = null
-          }
-          inFlightRefreshRef.current = false
-        })
-    }, [mode, subView])
+  useAutoRefresh(autoRefreshSeconds * 1000, autoRefreshCallback)
+
+  const onRegisterKmbRefresh = React.useCallback(
+    (refresh: () => Promise<void>) => onRegisterRefresh('kmb', refresh),
+    [onRegisterRefresh]
+  )
+  const onRegisterMtrRefresh = React.useCallback(
+    (refresh: () => Promise<void>) => onRegisterRefresh('mtr', refresh),
+    [onRegisterRefresh]
+  )
+  const onRegisterLrtRefresh = React.useCallback(
+    (refresh: () => Promise<void>) => onRegisterRefresh('lrt', refresh),
+    [onRegisterRefresh]
   )
 
   React.useEffect(() => {
@@ -415,52 +547,50 @@ export default function HomeClient() {
   React.useEffect(() => {
     if (!didHydrateFromUrlRef.current) return
 
-    const kmbQuery = kmbPaneState?.querySummary ?? null
-    const query = encodeUrlState({
-      mode,
-      subView,
-      lang,
-      routeFilterMode,
-      autoRefreshSeconds,
-      kmb: kmbQuery
-        ? {
-            query: kmbQuery,
-            routeFilter: kmbPaneState?.routeFilter ?? null,
-          }
-        : null,
-      mtr: { sta: mtrPaneState?.sta ?? null },
-      lrt: { stationId: lrtPaneState?.stationId ?? null },
-    })
+    // Debounce URL writes by 400ms so rapid pane updates do not churn history.
+    const id = setTimeout(() => {
+      const query = encodeUrlState({
+        mode,
+        subView,
+        lang,
+        routeFilterMode,
+        autoRefreshSeconds,
+        kmb: kmbQuerySummary
+          ? {
+              query: kmbQuerySummary,
+              routeFilter: kmbRouteFilter,
+            }
+          : null,
+        mtr: { sta: mtrSta },
+        lrt: { stationId: lrtStationId },
+      })
 
-    if (query === lastEncodedRef.current) return
-    lastEncodedRef.current = query
+      if (query === lastEncodedRef.current) return
+      lastEncodedRef.current = query
 
-    const nextUrl = query ? `${pathname}?${query}` : pathname
-    router.replace(nextUrl, { scroll: false })
+      const nextUrl = query ? `${pathname}?${query}` : pathname
+      // Same-path query updates stay in history API to avoid router churn.
+      // Cross-path deep links still go through Next router.
+      if (typeof window !== 'undefined' && window.location.pathname === pathname) {
+        window.history.replaceState(null, '', nextUrl)
+      } else {
+        router.replace(nextUrl, { scroll: false })
+      }
+    }, 400)
+    return () => clearTimeout(id)
   }, [
     autoRefreshSeconds,
-    kmbPaneState?.querySummary,
-    kmbPaneState?.routeFilter,
+    kmbQuerySummary,
+    kmbRouteFilter,
     lang,
-    lrtPaneState?.stationId,
+    lrtStationId,
     mode,
-    mtrPaneState?.sta,
+    mtrSta,
     pathname,
     routeFilterMode,
     router,
     subView,
   ])
-
-  const kmbOnRefresh = React.useCallback(
-    () => void kmbPaneState?.refresh({ toastOnError: true }),
-    [kmbPaneState]
-  )
-  const mtrOnRefresh = React.useCallback(() => {
-    mtrPaneState?.onRefresh?.()
-  }, [mtrPaneState])
-  const lrtOnRefresh = React.useCallback(() => {
-    lrtPaneState?.onRefresh?.()
-  }, [lrtPaneState])
 
   const controls = (
     <div className="space-y-4">
@@ -473,7 +603,7 @@ export default function HomeClient() {
           onAddFavorite={addFavorite}
           canFavoriteRef={canFavoriteRef}
           selectedItem={selectedItem}
-          onRegisterRefresh={(refresh) => onRegisterRefresh('kmb', refresh)}
+          onRegisterRefresh={onRegisterKmbRefresh}
           onStopsChange={setKmbStops}
         />
       )}
@@ -484,7 +614,7 @@ export default function HomeClient() {
           onAddRecent={addRecent}
           onAddFavorite={addFavorite}
           canFavoriteRef={canFavoriteRef}
-          onRegisterRefresh={(refresh) => onRegisterRefresh('mtr', refresh)}
+          onRegisterRefresh={onRegisterMtrRefresh}
           selectedItem={selectedItem}
         />
       )}
@@ -495,7 +625,7 @@ export default function HomeClient() {
           onAddRecent={addRecent}
           onAddFavorite={addFavorite}
           canFavoriteRef={canFavoriteRef}
-          onRegisterRefresh={(refresh) => onRegisterRefresh('lrt', refresh)}
+          onRegisterRefresh={onRegisterLrtRefresh}
           selectedItem={selectedItem}
         />
       )}
@@ -504,73 +634,26 @@ export default function HomeClient() {
 
   const results = (
     <>
-      {mode === 'kmb' && (
-        <KmbResults
-          lang={kmbPaneState?.lang ?? lang}
-          title={kmbPaneState?.title ?? ''}
-          stopCode={kmbPaneState?.stopCode ?? null}
-          routesFilter={kmbPaneState?.routeFilter.routes ?? ''}
-          eta={kmbPaneState?.eta ?? []}
-          routeInfos={kmbPaneState?.routeInfos ?? {}}
-          faresByVariantKey={kmbPaneState?.faresByVariantKey ?? {}}
-          hasQuery={kmbPaneState?.hasQuery ?? false}
-          error={kmbPaneState?.error ?? null}
-          stale={kmbPaneState?.stale ?? false}
-          lastUpdatedAt={kmbPaneState?.lastUpdatedAt}
-          onRefresh={kmbOnRefresh}
-          loading={kmbPaneState?.loading}
-          stops={kmbPaneState?.stops ?? undefined}
-          multipleStops={kmbPaneState?.multipleStops}
-          isKeyphraseMode={kmbPaneState?.isKeyphraseMode}
-          etaByStopId={kmbPaneState?.etaByStopId}
-          loadedStopIds={kmbPaneState?.loadedStopIds}
-          sentinelRef={kmbPaneState?.sentinelRef}
-          hasMoreStops={kmbPaneState?.hasMoreStops}
-          precomputedGroups={kmbPaneState?.precomputedGroups}
-        />
-      )}
-      {mode === 'mtr' && (
-        <MtrResults
-          title={mtrPaneState?.title ?? ''}
-          lang={mtrPaneState?.lang ?? lang}
-          schedule={mtrPaneState?.schedule ?? null}
-          error={mtrPaneState?.error ?? null}
-          stale={mtrPaneState?.stale ?? false}
-          lastUpdatedAt={mtrPaneState?.lastUpdatedAt ?? null}
-          onRefresh={mtrOnRefresh}
-          loading={mtrPaneState?.loading}
-        />
-      )}
-      {mode === 'lrt' && (
-        <LrtResults
-          title={lrtPaneState?.title ?? ''}
-          lang={lrtPaneState?.lang ?? lang}
-          schedule={lrtPaneState?.schedule ?? null}
-          hasStation={Boolean(lrtPaneState?.stationId)}
-          error={lrtPaneState?.error ?? null}
-          stale={lrtPaneState?.stale ?? false}
-          lastUpdatedAt={lrtPaneState?.lastUpdatedAt ?? null}
-          onRefresh={lrtOnRefresh}
-          loading={lrtPaneState?.loading}
-        />
-      )}
+      {mode === 'kmb' && <KmbResultsFromStore fallbackLang={lang} />}
+      {mode === 'mtr' && <MtrResultsFromStore fallbackLang={lang} />}
+      {mode === 'lrt' && <LrtResultsFromStore fallbackLang={lang} />}
     </>
   )
 
   const renderStops = () => {
     return (
-      <FadeIn className="mx-auto max-w-[1280px] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
+      <div className="ui-animate-fade mx-auto max-w-[1280px] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
         <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
           <div className="card-m3 p-4 sm:p-5 lg:p-5">{controls}</div>
         </div>
 
-        <FadeIn className="relative mt-4 lg:mt-0" delay={0.05}>
+        <div className="ui-animate-fade ui-stagger-1 relative mt-4 lg:mt-0">
           <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-6">
             <span className="bg-primary absolute top-0 right-0 left-0 h-[3px]" aria-hidden />
             {results}
           </div>
-        </FadeIn>
-      </FadeIn>
+        </div>
+      </div>
     )
   }
 
@@ -606,9 +689,9 @@ export default function HomeClient() {
         )
       case 'saved':
         return (
-          <FadeIn>
+          <div className="ui-animate-fade">
             <FavoritesAndRecents lang={lang} onSelect={onSelectFromLists} />
-          </FadeIn>
+          </div>
         )
       case 'settings':
         return <SettingsView lang={lang} />

@@ -1,5 +1,21 @@
-import { describe, expect, it, vi } from 'vitest'
-import { fetchJson, ApiError, UpstreamTimeoutError } from './http'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  fetchJson,
+  ApiError,
+  UpstreamTimeoutError,
+  getAdaptiveConcurrency,
+  isWeakNetworkConnection,
+  resolveTimeoutMs,
+} from './http'
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+function setConnection(connection: unknown): void {
+  vi.stubGlobal('navigator', { connection })
+}
 
 describe('fetchJson', () => {
   it('successfully fetches and parses JSON', async () => {
@@ -123,7 +139,7 @@ describe('fetchJson', () => {
   })
 
   it('uses default timeout when not specified', async () => {
-    // Verify default timeout is set (12s) by checking it doesn't immediately timeout
+    // Verify default timeout is set by checking it doesn't immediately timeout
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }))
 
     await expect(fetchJson('/api/test')).resolves.toEqual({})
@@ -136,5 +152,61 @@ describe('fetchJson', () => {
     )
 
     await expect(fetchJson('/api/test', { timeoutMs: 1000 })).resolves.toEqual(mockResponse)
+  })
+
+  it('retries once on 5xx then succeeds', async () => {
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('boom', { status: 503 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ ok: true }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      )
+
+    const result = await fetchJson<{ ok: boolean }>('/api/flaky', { retryDelayMs: 1 })
+
+    expect(result).toEqual({ ok: true })
+    expect(spy).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not retry on 4xx', async () => {
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(new Response('nope', { status: 404 }))
+
+    await expect(fetchJson('/api/missing', { retryDelayMs: 1 })).rejects.toThrow(ApiError)
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not retry when the caller aborts', async () => {
+    const controller = new AbortController()
+    const spy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new DOMException('Aborted', 'AbortError'))
+
+    controller.abort()
+    await expect(
+      fetchJson('/api/abort', { signal: controller.signal, retryDelayMs: 1 })
+    ).rejects.toThrow()
+    expect(spy).not.toHaveBeenCalled()
+  })
+
+  it('resolves network-aware timeouts and concurrency', () => {
+    setConnection({ saveData: false, effectiveType: '4g' })
+    expect(isWeakNetworkConnection()).toBe(false)
+    expect(resolveTimeoutMs('live')).toBe(8_000)
+    expect(getAdaptiveConcurrency(5, 3, 2)).toBe(5)
+
+    setConnection({ saveData: false, effectiveType: '2g' })
+    expect(isWeakNetworkConnection()).toBe(true)
+    expect(resolveTimeoutMs('live')).toBe(15_000)
+    expect(resolveTimeoutMs('route')).toBe(8_000)
+    expect(getAdaptiveConcurrency(5, 3, 2)).toBe(2)
+
+    setConnection({ saveData: true, effectiveType: '4g' })
+    expect(isWeakNetworkConnection()).toBe(true)
+    expect(getAdaptiveConcurrency(5, 3, 2)).toBe(2)
   })
 })

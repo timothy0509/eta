@@ -158,6 +158,10 @@ type AppState = {
 
 const RECENTS_LIMIT = 12
 
+// Cap persisted favorites so localStorage stays small and the favorites
+// list renders fast. Newest saves win; the oldest unpinned entries fall off.
+export const FAVORITES_LIMIT = 200
+
 const createId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
@@ -170,6 +174,16 @@ const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
   pinned: item.pinned ?? false,
   groupId: item.groupId ?? null,
 })
+
+// Newest saves win. Drop oldest unpinned entries first, then oldest entries
+// overall, so a huge list never fills storage or slows the favorites view.
+export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
+  if (favorites.length <= FAVORITES_LIMIT) return favorites
+  const pinned = favorites.filter((f) => f.pinned)
+  const unpinned = favorites.filter((f) => !f.pinned)
+  const keptUnpinned = unpinned.slice(0, Math.max(0, FAVORITES_LIMIT - pinned.length))
+  return [...pinned, ...keptUnpinned].slice(0, FAVORITES_LIMIT)
+}
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -193,7 +207,7 @@ export const useAppStore = create<AppState>()(
       addFavorite: (item) =>
         set((state) => {
           if (state.favorites.some((f) => f.id === item.id)) return state
-          return { favorites: [withFavoriteMeta(item), ...state.favorites] }
+          return { favorites: capFavorites([withFavoriteMeta(item), ...state.favorites]) }
         }),
 
       removeFavorite: (id) =>
@@ -304,7 +318,9 @@ export const useAppStore = create<AppState>()(
       storage: createJSONStorage(() => createDebouncedLocalStorage(300)),
       migrate: (persistedState) => {
         const state = persistedState as Partial<AppState> | undefined
-        const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
+        const favorites = capFavorites(
+          (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
+        )
 
         return {
           mode: state?.mode ?? 'kmb',

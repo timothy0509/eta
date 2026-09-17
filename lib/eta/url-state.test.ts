@@ -267,4 +267,64 @@ describe('decodeUrlState', () => {
     expect(decoded.selectedItem?.mode).toBe('kmb')
     expect(decoded.selectedItem).toHaveProperty('stopId', '1234')
   })
+
+  it('round-trips KMB advanced route filter with entries', () => {
+    const input: UrlEncodeInput = {
+      mode: 'kmb',
+      subView: 'stops',
+      lang: 'en',
+      routeFilterMode: 'advanced',
+      autoRefreshSeconds: 30,
+      kmb: {
+        query: { mode: 'stops', stopIds: ['1', '2'] },
+        routeFilter: { entries: [{ variantKey: 'kmb|1A|O|1' }] },
+      },
+    }
+    const encoded = encodeUrlState(input)
+    expect(encoded).toContain('ke=')
+    const decoded = decodeUrlState(encoded)
+    expect(decoded.state.mode).toBe('kmb')
+    expect(decoded.state.routeFilterMode).toBe('advanced')
+    expect(decoded.selectedItem).toHaveProperty('stopIds', ['1', '2'])
+  })
+
+  it('decodes legacy links without route filter params', () => {
+    // Old share links encoded before ke/kr existed.
+    const result = decodeUrlState('km=stop&ks=HO07')
+    expect(result.state.mode).toBe('kmb')
+    expect(result.state.routeFilterMode).toBeUndefined()
+    expect(result.selectedItem).toHaveProperty('stopId', 'HO07')
+  })
+
+  it('decodes legacy MTR deep links', () => {
+    const result = decodeUrlState('m=mtr&ms=ADM')
+    expect(result.state.mode).toBe('mtr')
+    expect(result.selectedItem).toHaveProperty('sta', 'ADM')
+  })
+
+  it('decodes legacy links with only language set', () => {
+    const result = decodeUrlState('l=sc')
+    expect(result.state.lang).toBe('sc')
+    expect(result.state.mode).toBeUndefined()
+    expect(result.selectedItem).toBeNull()
+  })
+
+  it('round-trips full non-default state', () => {
+    const input: UrlEncodeInput = {
+      mode: 'lrt',
+      subView: 'nearby',
+      lang: 'en',
+      routeFilterMode: 'simple',
+      autoRefreshSeconds: 0,
+      lrt: { stationId: '120' },
+    }
+    const decoded = decodeUrlState(encodeUrlState(input))
+    expect(decoded.state).toMatchObject({
+      mode: 'lrt',
+      subView: 'nearby',
+      lang: 'en',
+      autoRefreshSeconds: 0,
+    })
+    expect(decoded.selectedItem).toHaveProperty('stationId', '120')
+  })
 })

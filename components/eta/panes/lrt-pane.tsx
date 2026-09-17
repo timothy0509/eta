@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import type { LrtStationSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useLrtSchedule } from '@/lib/eta/use-lrt-schedule'
 import type { FavoritesItem } from '@/lib/store'
-import { usePaneStore } from '@/lib/eta/pane-store'
+import { setLrtPaneState } from '@/lib/eta/pane-store'
 
 export type LrtPaneState = {
   title: string
@@ -56,9 +56,17 @@ export function LrtPane({
     lang,
   })
 
+  const refreshRef = React.useRef(refresh)
   React.useEffect(() => {
-    onRegisterRefresh(refresh)
-  }, [onRegisterRefresh, refresh])
+    refreshRef.current = refresh
+  }, [refresh])
+  const stableOnRefresh = React.useCallback(() => {
+    void refreshRef.current({ toastOnError: true })
+  }, [])
+
+  React.useEffect(() => {
+    onRegisterRefresh(() => refreshRef.current({ toastOnError: false }))
+  }, [onRegisterRefresh])
 
   const paneState = React.useMemo<LrtPaneState>(
     () => ({
@@ -70,13 +78,13 @@ export function LrtPane({
       error,
       stale,
       lastUpdatedAt,
-      onRefresh: () => void refresh({ toastOnError: true }),
+      onRefresh: stableOnRefresh,
     }),
-    [error, lang, lastUpdatedAt, loading, refresh, schedule, stale, stationId, title]
+    [error, lang, lastUpdatedAt, loading, stableOnRefresh, schedule, stale, stationId, title]
   )
 
   React.useEffect(() => {
-    usePaneStore.setState({ lrt: paneState })
+    setLrtPaneState(paneState)
   }, [paneState])
 
   React.useEffect(() => {

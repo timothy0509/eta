@@ -1,15 +1,19 @@
 'use client'
 
-import * as L from 'leaflet'
-import 'leaflet/dist/leaflet.css'
+import type * as L from 'leaflet'
 import * as React from 'react'
 
+import 'leaflet/dist/leaflet.css'
+
+import { markPerf, measurePerf } from '@/lib/eta/perf'
 import { cn } from '@/lib/utils'
+
+type LeafletMod = typeof import('leaflet')
 
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const TILE_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-const TILE_MAX_ZOOM = 19
+const TILE_MAX_ZOOM = 17
 
 const DEFAULT_CENTER = { lat: 22.3193, lng: 114.1694 }
 
@@ -42,8 +46,8 @@ type Props = {
   userLocation?: { lat: number; lng: number } | null
 }
 
-function createStopIcon(): L.DivIcon {
-  return L.divIcon({
+function createStopIcon(Lmod: LeafletMod): L.DivIcon {
+  return Lmod.divIcon({
     className: 'transit-map-stop-icon',
     html: [
       '<span style="display:block;width:26px;height:26px">',
@@ -75,9 +79,11 @@ export function TransitMap({
 }: Props) {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const mapRef = React.useRef<L.Map | null>(null)
+  const leafletRef = React.useRef<LeafletMod | null>(null)
   const markerLayerRef = React.useRef<L.LayerGroup | null>(null)
   const polylineLayerRef = React.useRef<L.LayerGroup | null>(null)
   const userLocationLayerRef = React.useRef<L.LayerGroup | null>(null)
+  const [mapReady, setMapReady] = React.useState(false)
 
   const initialCenterRef = React.useRef(center)
   const initialZoomRef = React.useRef(zoom)
@@ -85,39 +91,75 @@ export function TransitMap({
   const lastAppliedZoomRef = React.useRef<number | null>(null)
 
   React.useEffect(() => {
-    const container = containerRef.current
-    if (!container || mapRef.current) return
+    let cancelled = false
+    let map: L.Map | null = null
+    let resizeObserver: ResizeObserver | null = null
+    let raf = 0
+    markPerf('map:mount-start')
 
-    const map = L.map(container, {
-      center: [initialCenterRef.current.lat, initialCenterRef.current.lng],
-      zoom: initialZoomRef.current,
-      zoomControl: false,
-      attributionControl: true,
-    })
-    mapRef.current = map
+    async function init() {
+      if (!containerRef.current || mapRef.current) return
+      let mod: LeafletMod
+      try {
+        mod = await import('leaflet')
+      } catch {
+        return
+      }
+      const container = containerRef.current
+      if (cancelled || !container || mapRef.current) return
+      leafletRef.current = mod
 
-    L.tileLayer(TILE_URL, { maxZoom: TILE_MAX_ZOOM, attribution: TILE_ATTRIBUTION }).addTo(map)
+      map = mod.map(container, {
+        center: [initialCenterRef.current.lat, initialCenterRef.current.lng],
+        zoom: initialZoomRef.current,
+        zoomControl: false,
+        attributionControl: true,
+        preferCanvas: true,
+      })
+      mapRef.current = map
 
-    markerLayerRef.current = L.layerGroup().addTo(map)
-    polylineLayerRef.current = L.layerGroup().addTo(map)
-    userLocationLayerRef.current = L.layerGroup().addTo(map)
+      mod
+        .tileLayer(TILE_URL, {
+          maxZoom: TILE_MAX_ZOOM,
+          attribution: TILE_ATTRIBUTION,
+          keepBuffer: 2,
+          updateWhenIdle: true,
+        })
+        .addTo(map)
 
-    lastAppliedCenterRef.current = initialCenterRef.current
-    lastAppliedZoomRef.current = initialZoomRef.current
+      markerLayerRef.current = mod.layerGroup().addTo(map)
+      polylineLayerRef.current = mod.layerGroup().addTo(map)
+      userLocationLayerRef.current = mod.layerGroup().addTo(map)
 
-    const raf = requestAnimationFrame(() => map.invalidateSize())
-    const resizeObserver =
-      typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => map.invalidateSize()) : null
-    resizeObserver?.observe(container)
+      lastAppliedCenterRef.current = initialCenterRef.current
+      lastAppliedZoomRef.current = initialZoomRef.current
+
+      raf = requestAnimationFrame(() => map?.invalidateSize())
+      resizeObserver =
+        typeof ResizeObserver !== 'undefined'
+          ? new ResizeObserver(() => map?.invalidateSize())
+          : null
+      resizeObserver?.observe(container)
+
+      if (!cancelled) {
+        setMapReady(true)
+        measurePerf('map:mount', 'map:mount-start')
+      }
+    }
+
+    void init()
 
     return () => {
+      cancelled = true
       cancelAnimationFrame(raf)
       resizeObserver?.disconnect()
       markerLayerRef.current = null
       polylineLayerRef.current = null
       userLocationLayerRef.current = null
-      map.remove()
+      map?.remove()
       mapRef.current = null
+      leafletRef.current = null
+      setMapReady(false)
     }
   }, [])
 
@@ -134,32 +176,35 @@ export function TransitMap({
 
   React.useEffect(() => {
     const layer = markerLayerRef.current
-    if (!layer) return
+    const Lmod = leafletRef.current
+    if (!layer || !Lmod) return
     layer.clearLayers()
-    const icon = createStopIcon()
+    const icon = createStopIcon(Lmod)
     for (const marker of markers) {
-      L.marker([marker.lat, marker.lng], { icon, title: marker.title ?? '' }).addTo(layer)
+      Lmod.marker([marker.lat, marker.lng], { icon, title: marker.title ?? '' }).addTo(layer)
     }
-  }, [markers])
+  }, [markers, mapReady])
 
   React.useEffect(() => {
     const layer = polylineLayerRef.current
-    if (!layer) return
+    const Lmod = leafletRef.current
+    if (!layer || !Lmod) return
     layer.clearLayers()
     for (const line of polylines) {
-      L.polyline(
+      Lmod.polyline(
         line.path.map((p) => [p.lat, p.lng] as [number, number]),
         { color: line.color ?? POLYLINE_DEFAULT_COLOR, weight: 4, opacity: 0.9 }
       ).addTo(layer)
     }
-  }, [polylines])
+  }, [polylines, mapReady])
 
   React.useEffect(() => {
     const layer = userLocationLayerRef.current
-    if (!layer) return
+    const Lmod = leafletRef.current
+    if (!layer || !Lmod) return
     layer.clearLayers()
     if (userLocation) {
-      L.circleMarker([userLocation.lat, userLocation.lng], {
+      Lmod.circleMarker([userLocation.lat, userLocation.lng], {
         radius: 8,
         color: '#ffffff',
         weight: 2,
@@ -167,7 +212,7 @@ export function TransitMap({
         fillOpacity: 1,
       }).addTo(layer)
     }
-  }, [userLocation])
+  }, [userLocation, mapReady])
 
   return (
     <div className={cn('relative z-0 overflow-hidden rounded-2xl', className)}>

@@ -81,7 +81,7 @@ export function RouteStopRow({
 }) {
   const clickable = Boolean(onClick)
   return (
-    <StaggerItem>
+    <StaggerItem className="ui-cv-row">
       <div
         className={cn(
           'relative flex items-center gap-4 py-2',

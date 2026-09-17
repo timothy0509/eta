@@ -45,11 +45,13 @@ const nextConfig: NextConfig = {
       'cmdk',
       'sonner',
       'zustand',
-      'leaflet',
       'fuse.js',
     ],
   },
   reactCompiler: true,
+  compiler: {
+    removeConsole: true,
+  },
 
   // Optimize images
   images: {

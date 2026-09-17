@@ -63,6 +63,20 @@ describe('computeNearbyStops', () => {
     expect(result.map((s) => s.name)).toEqual(['near', 'mid', 'far'])
   })
 
+  it('prefilters by bounding box when maxDistanceKm is given', () => {
+    const user = { lat: 22.3, lng: 114.1 }
+    const stops = [
+      { id: 'near', lat: 22.301, lng: 114.101 },
+      { id: 'far', lat: 23.3, lng: 115.1 },
+    ]
+
+    const result = computeNearbyStops(user, stops, undefined, 3)
+
+    expect(result.map((s) => s.id)).toEqual(['near'])
+    // Without the bbox both stops come back, sorted by distance.
+    expect(computeNearbyStops(user, stops).map((s) => s.id)).toEqual(['near', 'far'])
+  })
+
   it('drops stops with invalid coords and returns [] for an invalid user', () => {
     const user = { lat: 22.3, lng: 114.1 }
     const stops = [

@@ -22,7 +22,7 @@ import {
   type KmbStopSearchItem,
   type SerializedEtaDbIndexes,
 } from '@/lib/eta/eta-db-index'
-import { fetchJson } from '@/lib/eta/http'
+import { fetchJson, getAdaptiveConcurrency } from '@/lib/eta/http'
 import { promisePool } from '@/lib/eta/promise-pool'
 import { lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -258,7 +258,9 @@ export type KmbEta = Eta & {
   rmk_en?: string
 }
 
-const NON_KMB_ETA_CONCURRENCY = 5
+const NON_KMB_CONCURRENCY_FAST = 5
+const NON_KMB_CONCURRENCY_MEDIUM = 3
+const NON_KMB_CONCURRENCY_SLOW = 2
 
 function etaDedupeKey(eta: {
   co: Company | string
@@ -312,14 +314,16 @@ function mapOfficialStopEtaRows(
 
 export type FetchKmbEtasForStopDeps = {
   getIndexes: () => Promise<EtaDbIndexes>
-  fetchOfficialStopEta: (stopId: string) => Promise<OfficialStopEtaResponse>
+  fetchOfficialStopEta: (stopId: string, signal?: AbortSignal) => Promise<OfficialStopEtaResponse>
   fetchVariantEtas: typeof fetchEtas
 }
 
 const defaultFetchKmbEtasForStopDeps: FetchKmbEtasForStopDeps = {
   getIndexes: getEtaDbIndexes,
-  fetchOfficialStopEta: (stopId) =>
-    fetchJson<OfficialStopEtaResponse>(`${KMB_STOP_ETA_URL}/${encodeURIComponent(stopId)}`),
+  fetchOfficialStopEta: (stopId, signal) =>
+    fetchJson<OfficialStopEtaResponse>(`${KMB_STOP_ETA_URL}/${encodeURIComponent(stopId)}`, {
+      signal,
+    }),
   fetchVariantEtas: fetchEtas,
 }
 
@@ -333,9 +337,13 @@ export async function fetchKmbEtasForStop(
     route?: string
     serviceType?: string
     language: UiLanguage
+    signal?: AbortSignal
   },
   deps: FetchKmbEtasForStopDeps = defaultFetchKmbEtasForStopDeps
 ): Promise<KmbEta[]> {
+  if (params.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
   const stopId = normalizeStopId(params.stopId)
   if (!stopId) return [] as KmbEta[]
 
@@ -373,33 +381,46 @@ export async function fetchKmbEtasForStop(
   const nonKmb = candidates.filter((c) => c.co !== 'kmb')
 
   const results: KmbEta[] = []
+  const signal = params.signal
 
   const fetchNonKmb = () =>
-    promisePool(nonKmb, NON_KMB_ETA_CONCURRENCY, async ({ entry, co, stopIndex }) => {
-      const etas = await deps.fetchVariantEtas({
-        ...entry,
-        co: [co],
-        seq: stopIndex,
-        language,
-      })
-      return etas.map((eta, idx) => ({
-        ...eta,
-        co: eta.co ?? co,
-        route: entry.route,
-        dir: normalizeBound(entry.bound[co]),
-        serviceType: entry.serviceType,
-        seq: stopIndex + 1,
-        etaSeq: idx + 1,
-      })) as KmbEta[]
-    })
+    promisePool(
+      nonKmb,
+      getAdaptiveConcurrency(
+        NON_KMB_CONCURRENCY_FAST,
+        NON_KMB_CONCURRENCY_MEDIUM,
+        NON_KMB_CONCURRENCY_SLOW
+      ),
+      async ({ entry, co, stopIndex }) => {
+        const etas = await deps.fetchVariantEtas({
+          ...entry,
+          co: [co],
+          seq: stopIndex,
+          language,
+        })
+        return etas.map((eta, idx) => ({
+          ...eta,
+          co: eta.co ?? co,
+          route: entry.route,
+          dir: normalizeBound(entry.bound[co]),
+          serviceType: entry.serviceType,
+          seq: stopIndex + 1,
+          etaSeq: idx + 1,
+        })) as KmbEta[]
+      },
+      { signal }
+    )
 
   if (hasKmb && nonKmb.length > 0) {
-    const [payload, pooled] = await Promise.all([deps.fetchOfficialStopEta(stopId), fetchNonKmb()])
+    const [payload, pooled] = await Promise.all([
+      deps.fetchOfficialStopEta(stopId, signal),
+      fetchNonKmb(),
+    ])
     const rows = Array.isArray(payload.data) ? payload.data : []
     results.push(...mapOfficialStopEtaRows(rows, { routeFilter, serviceType }))
     for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
   } else if (hasKmb) {
-    const payload = await deps.fetchOfficialStopEta(stopId)
+    const payload = await deps.fetchOfficialStopEta(stopId, signal)
     const rows = Array.isArray(payload.data) ? payload.data : []
     results.push(...mapOfficialStopEtaRows(rows, { routeFilter, serviceType }))
   } else if (nonKmb.length > 0) {

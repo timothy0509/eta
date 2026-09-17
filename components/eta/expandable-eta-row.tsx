@@ -1,4 +1,3 @@
-import { AnimatePresence, motion } from 'framer-motion'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -27,8 +26,7 @@ export function ExpandableEtaRow({
   const panelId = React.useId()
 
   return (
-    <motion.div
-      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+    <div
       className={cn(
         'bg-surface-container relative overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm',
         'hover:bg-surface-container-high focus-within:ring-primary/30 focus-within:ring-2 focus-within:outline-none hover:shadow',
@@ -56,20 +54,18 @@ export function ExpandableEtaRow({
         {children}
       </div>
 
-      <AnimatePresence initial={false}>
-        {expanded ? (
-          <motion.div
-            id={panelId}
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="overflow-hidden"
-          >
-            <div className="pointer-events-none relative z-10 pr-3 pb-3 pl-4">{panel}</div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </motion.div>
+      <div
+        id={panelId}
+        className={cn(
+          'grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none',
+          expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+        )}
+        aria-hidden={!expanded}
+      >
+        <div className="min-h-0 overflow-hidden">
+          <div className="pointer-events-none relative z-10 pr-3 pb-3 pl-4">{panel}</div>
+        </div>
+      </div>
+    </div>
   )
 }

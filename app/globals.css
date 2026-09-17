@@ -1,6 +1,5 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
-@import '@fontsource/geist-mono/latin-400.css';
 
 @custom-variant dark (&:is(.dark *));
 
@@ -8,9 +7,10 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans:
-    var(--font-inter), var(--font-noto-sans-hk), var(--font-noto-sans-sc), ui-sans-serif, system-ui,
-    sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
+    var(--font-inter), var(--font-noto-sans-hk), 'PingFang HK', 'PingFang SC', 'Microsoft JhengHei',
+    'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   --font-numbers: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -259,8 +259,8 @@
   body {
     @apply bg-background text-foreground;
     font-family:
-      var(--font-inter), var(--font-noto-sans-hk), var(--font-noto-sans-sc), ui-sans-serif,
-      system-ui, sans-serif;
+      var(--font-inter), var(--font-noto-sans-hk), 'PingFang HK', 'PingFang SC',
+      'Microsoft JhengHei', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
   }
 }
 
@@ -453,6 +453,32 @@
     animation-delay: 120ms;
   }
 
+  /* Container stagger: first children fade up in sequence, rest appear at
+     once so long lists stay cheap. Replaces framer-motion stagger. */
+  .ui-stagger > * {
+    animation: ui-fade-up var(--ui-dur-md) var(--ui-ease-out) both;
+  }
+
+  .ui-stagger > *:nth-child(2) {
+    animation-delay: 40ms;
+  }
+
+  .ui-stagger > *:nth-child(3) {
+    animation-delay: 80ms;
+  }
+
+  .ui-stagger > *:nth-child(4) {
+    animation-delay: 120ms;
+  }
+
+  .ui-stagger > *:nth-child(5) {
+    animation-delay: 160ms;
+  }
+
+  .ui-stagger > *:nth-child(n + 6) {
+    animation: ui-fade var(--ui-dur-md) var(--ui-ease-out) both;
+  }
+
   .ui-lift {
     transition-property: transform;
     transition-duration: var(--ui-dur-fast);
@@ -491,6 +517,20 @@
     animation: live-pulse 1.6s var(--ui-ease-in-out) infinite;
   }
 
+  /* Offscreen groups skip layout/paint until scrolled near. Intrinsic size
+     keeps the scrollbar stable while content is skipped. */
+  .ui-cv-auto {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 12rem;
+  }
+
+  /* Offscreen list rows skip layout/paint until scrolled near. Smaller
+     intrinsic size than groups since a row is roughly one card tall. */
+  .ui-cv-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 5rem;
+  }
+
   /* Shared M3 card: surface, radius, outline, shadow. Padding stays in markup. */
   .card-m3 {
     background-color: var(--color-surface-container-low);
@@ -526,7 +566,8 @@
   .ui-pop,
   .ui-spin,
   .live-pulse,
-  .marquee-track {
+  .marquee-track,
+  .ui-stagger > * {
     animation: none !important;
   }
 

@@ -1,12 +1,16 @@
-import { fetchJson } from '@/lib/eta/http'
+import { fetchJson, getAdaptiveConcurrency, resolveTimeoutMs } from '@/lib/eta/http'
 import { mtrScheduleKey } from '@/lib/eta/cache/keys'
 import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import { promisePool } from '@/lib/eta/promise-pool'
 import { getCachedValue } from '@/lib/eta/direct/shared'
 
 const MTR_BASE_URL = 'https://rt.data.gov.hk'
-const MTR_CONCURRENCY = 3
-const BACKOFF_DURATION_MS = 15_000
+const MTR_CONCURRENCY_FAST = 3
+const MTR_CONCURRENCY_MEDIUM = 2
+const MTR_CONCURRENCY_SLOW = 1
+const BACKOFF_BASE_MS = 15_000
+const BACKOFF_MAX_MS = 60_000
+const BACKOFF_FAILURES_KEY = 'timoeta:mtr-backoff-failures'
 const BACKOFF_STORAGE_KEY = 'timoeta:mtr-backoff-until'
 const BACKOFF_CHANNEL_NAME = 'timoeta:mtr-backoff'
 
@@ -29,6 +33,51 @@ function setBackoffUntil(timestamp: number): void {
   if (typeof window === 'undefined') return
   try {
     sessionStorage.setItem(BACKOFF_STORAGE_KEY, String(timestamp))
+  } catch {
+    // sessionStorage may be unavailable in some environments
+  }
+}
+
+function getBackoffFailures(): number {
+  if (typeof window === 'undefined') return 0
+  try {
+    const stored = sessionStorage.getItem(BACKOFF_FAILURES_KEY)
+    const count = Number(stored ?? 0)
+    return Number.isFinite(count) && count > 0 ? Math.floor(count) : 0
+  } catch {
+    return 0
+  }
+}
+
+function setBackoffFailures(count: number): void {
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.setItem(BACKOFF_FAILURES_KEY, String(Math.max(0, Math.floor(count))))
+  } catch {
+    // sessionStorage may be unavailable in some environments
+  }
+}
+
+function nextBackoffDurationMs(): number {
+  const failures = getBackoffFailures()
+  const duration = BACKOFF_BASE_MS * 2 ** Math.min(failures, 2)
+  return Math.min(duration, BACKOFF_MAX_MS)
+}
+
+function recordBackoffHit(): number {
+  const duration = nextBackoffDurationMs()
+  const until = Date.now() + duration
+  setBackoffUntil(until)
+  setBackoffFailures(getBackoffFailures() + 1)
+  broadcastBackoff(until)
+  return until
+}
+
+function clearBackoff(): void {
+  setBackoffFailures(0)
+  if (typeof window === 'undefined') return
+  try {
+    sessionStorage.removeItem(BACKOFF_STORAGE_KEY)
   } catch {
     // sessionStorage may be unavailable in some environments
   }
@@ -93,6 +142,7 @@ export async function getMtrSchedule(params: {
   line: string
   sta: string
   lang: MtrLang
+  signal?: AbortSignal
 }): Promise<MtrScheduleResponse> {
   const url = new URL(`${MTR_BASE_URL}/v1/transport/mtr/getSchedule.php`)
   url.searchParams.set('line', params.line)
@@ -101,7 +151,9 @@ export async function getMtrSchedule(params: {
 
   return await fetchJson<MtrScheduleResponse>(url.toString(), {
     cache: 'no-store',
-    timeoutMs: 10_000,
+    timeoutMs: resolveTimeoutMs('live'),
+    signal: params.signal,
+    retries: 0,
   })
 }
 
@@ -114,8 +166,13 @@ export type MtrSchedulesResponse = {
 }
 
 export async function fetchMtrSchedules(
-  queries: Array<{ line: string; sta: string; lang: MtrLang }>
+  queries: Array<{ line: string; sta: string; lang: MtrLang }>,
+  options?: { signal?: AbortSignal }
 ): Promise<MtrSchedulesResponse> {
+  if (options?.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
+  const signal = options?.signal
   const uniqueQueries = new Map<string, { line: string; sta: string; lang: MtrLang }>()
   for (const q of queries) {
     const key = `${q.line}-${q.sta}-${q.lang}`
@@ -134,40 +191,46 @@ export async function fetchMtrSchedules(
   let fetched = 0
   let sawRateLimit = false
 
-  const results = await promisePool(uniqueList, MTR_CONCURRENCY, async (q) => {
-    const resultKey = `${q.line}-${q.sta}-${q.lang}`
-    const cacheKey = mtrScheduleKey({ line: q.line, sta: q.sta, lang: q.lang })
+  const results = await promisePool(
+    uniqueList,
+    getAdaptiveConcurrency(MTR_CONCURRENCY_FAST, MTR_CONCURRENCY_MEDIUM, MTR_CONCURRENCY_SLOW),
+    async (q) => {
+      const resultKey = `${q.line}-${q.sta}-${q.lang}`
+      const cacheKey = mtrScheduleKey({ line: q.line, sta: q.sta, lang: q.lang })
 
-    const cachedValue = await getCachedValue<MtrScheduleResponse>({
-      key: cacheKey,
-      policyKey: 'mtrSchedule',
-      policy: CACHE_POLICIES.mtrSchedule,
-      allowStale: true,
-      fetcher: async () => {
-        if (inBackoff) {
-          throw new Error('Rate limited - in backoff')
-        }
-        return await getMtrSchedule(q)
-      },
-    })
+      const cachedValue = await getCachedValue<MtrScheduleResponse>({
+        key: cacheKey,
+        policyKey: 'mtrSchedule',
+        policy: CACHE_POLICIES.mtrSchedule,
+        allowStale: true,
+        signal,
+        fetcher: async () => {
+          if (inBackoff) {
+            throw new Error('Rate limited - in backoff')
+          }
+          return await getMtrSchedule({ ...q, signal })
+        },
+      })
 
-    if (cachedValue.cached) cached += 1
-    if (!cachedValue.cached) fetched += 1
+      if (cachedValue.cached) cached += 1
+      if (!cachedValue.cached) fetched += 1
 
-    return { key: resultKey, schedule: cachedValue.value }
-  })
+      return { key: resultKey, schedule: cachedValue.value }
+    },
+    { signal }
+  )
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i]
+    if (!result) continue
     const query = uniqueList[i]
     const key = `${query.line}-${query.sta}-${query.lang}`
 
     if (result.status === 'rejected') {
       const reason = result.reason as { status?: number } | undefined
-      if (reason && typeof reason.status === 'number' && reason.status === 429) {
-        const newBackoffUntil = Date.now() + BACKOFF_DURATION_MS
-        setBackoffUntil(newBackoffUntil)
-        broadcastBackoff(newBackoffUntil)
+      const rateLimited = reason && typeof reason.status === 'number' && reason.status === 429
+      if (rateLimited) {
+        recordBackoffHit()
         sawRateLimit = true
       }
       errors.push(key)
@@ -175,6 +238,10 @@ export async function fetchMtrSchedules(
     }
 
     byKey[result.value.key] = result.value.schedule
+  }
+
+  if (errors.length === 0 && fetched > 0) {
+    clearBackoff()
   }
 
   return {

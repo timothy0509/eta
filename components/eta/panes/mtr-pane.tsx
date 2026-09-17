@@ -9,7 +9,7 @@ import { pickLangZh } from '@/lib/eta/pick-lang'
 import { getMtrLineName } from '@/lib/eta/line-colors'
 import { useMtrSchedule } from '@/lib/eta/use-mtr-schedule'
 import type { FavoritesItem } from '@/lib/store'
-import { usePaneStore } from '@/lib/eta/pane-store'
+import { setMtrPaneState } from '@/lib/eta/pane-store'
 
 export type MtrPaneState = {
   title: string
@@ -77,6 +77,14 @@ export function MtrPane({
     onAddRecent(item)
   }
 
+  const refreshRef = React.useRef(refresh)
+  React.useEffect(() => {
+    refreshRef.current = refresh
+  }, [refresh])
+  const stableOnRefresh = React.useCallback(() => {
+    void refreshRef.current({ toastOnError: true })
+  }, [])
+
   const paneState = React.useMemo<MtrPaneState>(
     () => ({
       title,
@@ -87,17 +95,17 @@ export function MtrPane({
       error,
       stale,
       lastUpdatedAt,
-      onRefresh: () => void refresh({ toastOnError: true }),
+      onRefresh: stableOnRefresh,
     }),
-    [error, lang, lastUpdatedAt, loading, refresh, schedule, sta, stale, title]
+    [error, lang, lastUpdatedAt, loading, stableOnRefresh, schedule, sta, stale, title]
   )
 
   React.useEffect(() => {
-    onRegisterRefresh(refresh)
-  }, [onRegisterRefresh, refresh])
+    onRegisterRefresh(() => refreshRef.current({ toastOnError: false }))
+  }, [onRegisterRefresh])
 
   React.useEffect(() => {
-    usePaneStore.setState({ mtr: paneState })
+    setMtrPaneState(paneState)
   }, [paneState])
 
   return (

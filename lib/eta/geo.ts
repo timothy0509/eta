@@ -63,20 +63,35 @@ export function formatDistanceKm(km: number, lang: UiLanguage): string {
 /**
  * Computes nearby stops sorted by distance from the user's location.
  * Returns a new array augmented with `distanceKm`. An optional `limit` can be
- * applied to restrict the number of results.
+ * applied to restrict the number of results, and an optional `maxDistanceKm`
+ * prefilters by a rough bounding box before the haversine runs, so a 6k-stop
+ * list only pays for the few hundred stops actually in range.
  */
 export function computeNearbyStops<T extends GeoPoint>(
   user: GeoPoint,
   stops: T[],
-  limit?: number
+  limit?: number,
+  maxDistanceKm?: number
 ): Array<T & { distanceKm: number }> {
   if (!isValidGeoPoint(user)) return []
-  const withDistance = stops
-    .filter((stop) => isValidGeoPoint(stop))
-    .map((stop) => ({
-      ...stop,
-      distanceKm: haversineDistanceKm(user, stop),
-    }))
+  const validStops = stops.filter((stop) => isValidGeoPoint(stop))
+  let candidates = validStops
+  if (maxDistanceKm && maxDistanceKm > 0) {
+    // 1 degree of latitude is about 111 km; longitude shrinks by cos(lat).
+    const latDelta = maxDistanceKm / 111
+    const lngDelta = maxDistanceKm / (111 * Math.max(0.2, Math.cos(toRad(user.lat))))
+    const boxed = validStops.filter(
+      (stop) =>
+        Math.abs(stop.lat - user.lat) <= latDelta && Math.abs(stop.lng - user.lng) <= lngDelta
+    )
+    // In sparse areas the box can hold fewer stops than requested. Fall back
+    // to the full list so the nearest stops still show instead of an empty state.
+    candidates = limit && limit > 0 && boxed.length < limit ? validStops : boxed
+  }
+  const withDistance = candidates.map((stop) => ({
+    ...stop,
+    distanceKm: haversineDistanceKm(user, stop),
+  }))
 
   withDistance.sort((a, b) => a.distanceKm - b.distanceKm)
 

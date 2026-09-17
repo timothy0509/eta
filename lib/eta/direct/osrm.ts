@@ -1,9 +1,9 @@
-import { fetchJson } from '@/lib/eta/http'
+import { fetchJson, resolveTimeoutMs } from '@/lib/eta/http'
 import type { GeoPoint } from '@/lib/eta/geo'
 
 export const OSRM_BASE_URL = 'https://router.project-osrm.org'
-export const OSRM_ROUTE_TIMEOUT_MS = 25_000
 export const OSRM_MAX_WAYPOINTS = 100
+const OSRM_SIMPLIFIED_THRESHOLD = 30
 
 export class OsrmRouteError extends Error {
   readonly code?: string
@@ -39,10 +39,10 @@ export function dedupeConsecutive(points: GeoPoint[]): GeoPoint[] {
   return result
 }
 
-export function buildOsrmRouteUrl(points: GeoPoint[]): string {
+export function buildOsrmRouteUrl(points: GeoPoint[], simplified = false): string {
   const coords = points.map(toLngLat).join(';')
   const params = new URLSearchParams({
-    overview: 'full',
+    overview: simplified ? 'simplified' : 'full',
     geometries: 'geojson',
     steps: 'false',
     alternatives: 'false',
@@ -77,7 +77,7 @@ export function parseOsrmRouteResponse(json: unknown): GeoPoint[] | null {
 
 export async function fetchOsrmRouteGeometry(
   points: GeoPoint[],
-  options?: { signal?: AbortSignal; timeoutMs?: number }
+  options?: { signal?: AbortSignal; timeoutMs?: number; simplified?: boolean }
 ): Promise<GeoPoint[]> {
   const deduped = dedupeConsecutive(points)
   if (deduped.length < 2) {
@@ -85,11 +85,13 @@ export async function fetchOsrmRouteGeometry(
   }
 
   const waypoints = deduped.slice(0, OSRM_MAX_WAYPOINTS)
-  const url = buildOsrmRouteUrl(waypoints)
+  const simplified = options?.simplified ?? waypoints.length > OSRM_SIMPLIFIED_THRESHOLD
+  const url = buildOsrmRouteUrl(waypoints, simplified)
   const json = await fetchJson<unknown>(url, {
-    timeoutMs: options?.timeoutMs ?? OSRM_ROUTE_TIMEOUT_MS,
+    timeoutMs: options?.timeoutMs ?? resolveTimeoutMs('route'),
     cache: 'no-store',
     signal: options?.signal,
+    retries: 0,
   })
 
   const parsed = parseOsrmRouteResponse(json)

@@ -3,8 +3,8 @@
 import { MapPin } from 'lucide-react'
 import * as React from 'react'
 
-import { LivePulse } from '@/components/m3/motion'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
+import { LivePulse } from '@/components/m3/motion'
 import { useTranslations } from '@/lib/eta/i18n'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -61,7 +61,7 @@ export function RouteStopTimeline({
         style={{ backgroundColor: lineColor }}
       />
       {React.Children.map(children, (child, idx) => (
-        <div className={staggerClassForIndex(idx)}>{child}</div>
+        <div className={cn('ui-cv-row', staggerClassForIndex(idx))}>{child}</div>
       ))}
     </div>
   )
@@ -84,7 +84,7 @@ export function RouteStopRow({
   return (
     <div
       className={cn(
-        'relative flex items-center gap-4 py-2',
+        'ui-cv-row relative flex items-center gap-4 py-2',
         clickable &&
           'hover:bg-surface-container-high/50 cursor-pointer rounded-2xl transition-colors'
       )}

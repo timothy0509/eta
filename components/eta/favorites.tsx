@@ -19,7 +19,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { motion, Reorder, useDragControls } from 'framer-motion'
+import { Reorder, useDragControls } from 'framer-motion'
 import * as React from 'react'
 import { useShallow } from 'zustand/shallow'
 
@@ -373,7 +373,7 @@ function FavoriteRow({
   // override framer's drag transform. The stagger delay alone is a no-op there.
   const rowClass = cn(
     'bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5',
-    !draggable && 'ui-animate-in',
+    !draggable && 'ui-animate-in ui-cv-row',
     staggerClass
   )
 
@@ -418,7 +418,7 @@ function RecentRow({ item, lang, maps, dateFormatter, onSelect, staggerClass }: 
     <button
       type="button"
       className={cn(
-        'bg-surface-container-low hover:bg-surface-container border-outline-variant/50 ui-animate-in flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors',
+        'bg-surface-container-low hover:bg-surface-container border-outline-variant/50 ui-animate-in ui-press ui-cv-row flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors',
         staggerClass
       )}
       onClick={() => onSelect(item)}
@@ -496,13 +496,7 @@ function GroupsEditor({
         />
       </button>
       {open && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-          className="space-y-3 overflow-hidden pt-3"
-        >
+        <div className="ui-animate-fade space-y-3 overflow-hidden pt-3">
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={newGroupName}
@@ -587,7 +581,7 @@ function GroupsEditor({
               ))}
             </div>
           )}
-        </motion.div>
+        </div>
       )}
     </div>
   )
@@ -832,7 +826,7 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
             ) : (
               <div className="space-y-4">
                 {pinnedItems.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="ui-cv-auto space-y-2">
                     <div className="text-on-surface-variant m3-label-md px-1">
                       {t('favorites.pinned')}
                     </div>
@@ -870,7 +864,7 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                 )}
 
                 {unpinnedItems.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="ui-cv-auto space-y-2">
                     <div className="text-on-surface-variant m3-label-md px-1">
                       {t('favorites.unpinned')}
                     </div>

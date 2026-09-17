@@ -9,7 +9,8 @@ import { useTranslations } from '@/lib/eta/i18n'
 import type { MtrStationSearchItem, UiLanguage } from '@/lib/eta/types'
 import { pickLangZh, pickSecondaryName } from '@/lib/eta/pick-lang'
 import { getMtrLineName } from '@/lib/eta/line-colors'
-import Fuse from 'fuse.js'
+
+type MtrFuseInstance = import('fuse.js').default<MtrStationSearchItem>
 
 type Props = {
   lang: UiLanguage
@@ -54,17 +55,34 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
     return stationsById.get(selectedSta)
   }, [selectedSta, stationsById])
 
-  const fuse = React.useMemo(() => {
-    return new Fuse(stations, {
-      threshold: 0.35,
-      ignoreLocation: true,
-      minMatchCharLength: 2,
-      keys: [
-        { name: 'nameEn', weight: 0.55 },
-        { name: 'nameTc', weight: 0.45 },
-      ],
+  // Fuse loads only when the popover opens so the index stays out of the
+  // initial bundle. Code prefix matches stay synchronous.
+  const [fuse, setFuse] = React.useState<MtrFuseInstance | null>(null)
+  React.useEffect(() => {
+    if (!open || fuse) return
+    let cancelled = false
+    void import('fuse.js').then((mod) => {
+      if (cancelled) return
+      setFuse(
+        new mod.default(stations, {
+          threshold: 0.35,
+          ignoreLocation: true,
+          minMatchCharLength: 2,
+          keys: [
+            { name: 'nameEn', weight: 0.55 },
+            { name: 'nameTc', weight: 0.45 },
+          ],
+        })
+      )
     })
-  }, [stations])
+    return () => {
+      cancelled = true
+    }
+  }, [open, fuse, stations])
+  React.useEffect(() => {
+    if (!open || !fuse) return
+    fuse.setCollection(stations)
+  }, [open, fuse, stations])
 
   const results = React.useMemo(() => {
     if (!trimmedQuery) return [] as MtrStationSearchItem[]
@@ -74,6 +92,12 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
         .filter((s) => s.sta.toUpperCase().startsWith(trimmedQuery.toUpperCase()))
         .slice(0, 40)
     }
+
+    const needle = trimmedQuery.toLowerCase()
+    const prefix = stations
+      .filter((s) => s.nameEn.toLowerCase().startsWith(needle) || s.nameTc.startsWith(trimmedQuery))
+      .slice(0, 40)
+    if (prefix.length >= 20 || !fuse) return prefix
 
     const hits = fuse.search(trimmedQuery).slice(0, 40)
     return hits.map((h: { item: MtrStationSearchItem }) => h.item)

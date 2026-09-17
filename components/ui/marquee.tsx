@@ -23,8 +23,11 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
   const [needsMarquee, setNeedsMarquee] = React.useState(false)
   const [animDuration, setAnimDuration] = React.useState(5)
   const [scrollDistance, setScrollDistance] = React.useState(0)
+  const lastMeasureRef = React.useRef({ overflowing: false, distance: 0, duration: 5 })
 
-  // Check if content overflows and calculate animation duration
+  // Check if content overflows and calculate animation duration.
+  // Cached so repeated observer fires and parent rerenders do not
+  // force state updates when the measured widths are unchanged.
   React.useLayoutEffect(() => {
     const container = containerRef.current
     if (!container) return
@@ -36,17 +39,34 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
 
       const containerW = container.clientWidth
       const contentW = measureSpan.scrollWidth
+      if (!containerW || !contentW) return
       const isOverflowing = contentW > containerW
 
-      setNeedsMarquee(isOverflowing)
-
-      if (isOverflowing && speed > 0) {
-        // Distance to scroll = one copy width + gap
-        const gap = 32 // 2rem = 32px
-        const distance = contentW + gap
-        setScrollDistance(distance)
-        setAnimDuration(distance / speed)
+      if (!isOverflowing) {
+        if (lastMeasureRef.current.overflowing) {
+          lastMeasureRef.current = { overflowing: false, distance: 0, duration: 5 }
+          setNeedsMarquee(false)
+        }
+        return
       }
+
+      if (speed <= 0) return
+      // Distance to scroll = one copy width + gap
+      const gap = 32 // 2rem = 32px
+      const distance = contentW + gap
+      const duration = distance / speed
+      const last = lastMeasureRef.current
+      if (
+        last.overflowing &&
+        last.distance === distance &&
+        Math.abs(last.duration - duration) < 0.01
+      ) {
+        return
+      }
+      lastMeasureRef.current = { overflowing: true, distance, duration }
+      setNeedsMarquee(true)
+      setScrollDistance(distance)
+      setAnimDuration(duration)
     }
 
     // Small delay to ensure DOM is ready

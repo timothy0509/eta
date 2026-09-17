@@ -13,7 +13,6 @@ import {
   TrainFront,
   TramFront,
 } from 'lucide-react'
-import { motion } from 'framer-motion'
 import { useTheme } from 'next-themes'
 import * as React from 'react'
 
@@ -70,6 +69,16 @@ const SUB_VIEWS: Array<{
   { id: 'settings', icon: Settings },
 ]
 
+// Preload the Leaflet map chunk on hover/focus of the nearby tab so the
+// chunk arrives before the tap, without paying for it on startup.
+let mapPreloadStarted = false
+function preloadTransitMap(): void {
+  if (mapPreloadStarted) return
+  mapPreloadStarted = true
+  import('@/components/eta/transit-map').catch(() => {
+    mapPreloadStarted = false
+  })
+}
 function ThemeToggle({ label }: { label: string }) {
   const { resolvedTheme, setTheme } = useTheme()
   const dark = resolvedTheme === 'dark'
@@ -170,10 +179,9 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   )}
                 >
                   {active && (
-                    <motion.div
-                      layoutId="top-mode-pill"
+                    <span
+                      aria-hidden
                       className="bg-secondary-container absolute inset-0 -z-10 rounded-full shadow-sm"
-                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                     />
                   )}
                   <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
@@ -211,22 +219,30 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
       {SUB_VIEWS.map((sv) => {
         const Icon = sv.icon
         const active = subView === sv.id
+        const preloadProps =
+          sv.id === 'nearby'
+            ? {
+                onMouseEnter: preloadTransitMap,
+                onFocus: preloadTransitMap,
+                onTouchStart: preloadTransitMap,
+              }
+            : {}
         return (
           <button
             key={sv.id}
             type="button"
             onClick={() => onSubViewChange(sv.id)}
             aria-current={active ? 'page' : undefined}
+            {...preloadProps}
             className={cn(
               'relative flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-colors',
               active ? 'text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'
             )}
           >
             {active && (
-              <motion.div
-                layoutId="side-rail-pill"
+              <span
+                aria-hidden
                 className="bg-primary-container absolute inset-0 -z-10 rounded-2xl"
-                transition={{ type: 'spring', stiffness: 380, damping: 30 }}
               />
             )}
             <Icon className="h-5 w-5" />
@@ -256,12 +272,21 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
         {SUB_VIEWS.map((sv) => {
           const Icon = sv.icon
           const active = subView === sv.id
+          const preloadProps =
+            sv.id === 'nearby'
+              ? {
+                  onMouseEnter: preloadTransitMap,
+                  onFocus: preloadTransitMap,
+                  onTouchStart: preloadTransitMap,
+                }
+              : {}
           return (
             <button
               key={sv.id}
               type="button"
               onClick={() => onSubViewChange(sv.id)}
               aria-current={active ? 'page' : undefined}
+              {...preloadProps}
               className={cn(
                 'relative flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 text-[11px] font-medium transition-colors',
                 active
@@ -270,10 +295,9 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
               )}
             >
               {active && (
-                <motion.div
-                  layoutId="bottom-nav-pill"
+                <span
+                  aria-hidden
                   className="bg-primary-container absolute inset-0 -z-10 rounded-full"
-                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                 />
               )}
               <Icon className="h-[22px] w-[22px]" />

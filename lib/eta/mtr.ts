@@ -1,4 +1,4 @@
-import { fetchJson } from '@/lib/eta/http'
+import { fetchJson, resolveTimeoutMs } from '@/lib/eta/http'
 
 const MTR_BASE_URL = 'https://rt.data.gov.hk'
 
@@ -34,6 +34,7 @@ export async function getMtrSchedule(params: {
   line: string
   sta: string
   lang: MtrLang
+  signal?: AbortSignal
 }): Promise<MtrScheduleResponse> {
   const url = new URL(`${MTR_BASE_URL}/v1/transport/mtr/getSchedule.php`)
   url.searchParams.set('line', params.line)
@@ -42,6 +43,7 @@ export async function getMtrSchedule(params: {
 
   return await fetchJson<MtrScheduleResponse>(url.toString(), {
     cache: 'no-store',
-    timeoutMs: 10_000,
+    timeoutMs: resolveTimeoutMs('live'),
+    signal: params.signal,
   })
 }

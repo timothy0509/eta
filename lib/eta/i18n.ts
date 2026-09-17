@@ -73,6 +73,7 @@ const common: Record<string, TranslationEntry> = {
   details: { en: 'Details', tc: '詳情', sc: '详情' },
   now: { en: 'Now', tc: '即將到達', sc: '即将到达' },
   arriving: { en: 'Arriving', tc: '即將到達', sc: '即将到达' },
+  minutes: { en: '{count} min', tc: '{count} 分', sc: '{count} 分' },
   back: { en: 'Back', tc: '返回', sc: '返回' },
   map: { en: 'Map', tc: '地圖', sc: '地图' },
   desc: {

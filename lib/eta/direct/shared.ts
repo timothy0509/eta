@@ -102,10 +102,12 @@ export async function getCachedValue<T>(params: {
 
   const fetchPromise = fetcher()
     .then(async (value) => {
-      caches.fresh.set(key, value, policy.ttlMs)
-      if (policy.persist) {
-        const meta = createMetaForPolicy(policy)
-        await idbSet(key, { value, ...meta })
+      if (!signal?.aborted) {
+        caches.fresh.set(key, value, policy.ttlMs)
+        if (policy.persist) {
+          const meta = createMetaForPolicy(policy)
+          await idbSet(key, { value, ...meta })
+        }
       }
       caches.inFlight.delete(key)
       return value

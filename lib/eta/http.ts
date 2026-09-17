@@ -84,7 +84,7 @@ export type TimeoutKind = 'live' | 'prefetch' | 'route'
 const TIMEOUT_DEFAULTS_MS: Record<TimeoutKind, { fast: number; weak: number }> = {
   live: { fast: 8_000, weak: 15_000 },
   prefetch: { fast: 6_000, weak: 6_000 },
-  route: { fast: 12_000, weak: 8_000 },
+  route: { fast: 12_000, weak: 15_000 },
 }
 
 export function resolveTimeoutMs(kind: TimeoutKind = 'live'): number {

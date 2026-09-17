@@ -13,7 +13,7 @@ type LeafletMod = typeof import('leaflet')
 const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 const TILE_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-const TILE_MAX_ZOOM = 17
+const TILE_MAX_ZOOM = 19
 
 const DEFAULT_CENTER = { lat: 22.3193, lng: 114.1694 }
 

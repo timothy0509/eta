@@ -74,15 +74,19 @@ export function computeNearbyStops<T extends GeoPoint>(
   maxDistanceKm?: number
 ): Array<T & { distanceKm: number }> {
   if (!isValidGeoPoint(user)) return []
-  let candidates = stops.filter((stop) => isValidGeoPoint(stop))
+  const validStops = stops.filter((stop) => isValidGeoPoint(stop))
+  let candidates = validStops
   if (maxDistanceKm && maxDistanceKm > 0) {
     // 1 degree of latitude is about 111 km; longitude shrinks by cos(lat).
     const latDelta = maxDistanceKm / 111
     const lngDelta = maxDistanceKm / (111 * Math.max(0.2, Math.cos(toRad(user.lat))))
-    candidates = candidates.filter(
+    const boxed = validStops.filter(
       (stop) =>
         Math.abs(stop.lat - user.lat) <= latDelta && Math.abs(stop.lng - user.lng) <= lngDelta
     )
+    // In sparse areas the box can hold fewer stops than requested. Fall back
+    // to the full list so the nearest stops still show instead of an empty state.
+    candidates = limit && limit > 0 && boxed.length < limit ? validStops : boxed
   }
   const withDistance = candidates.map((stop) => ({
     ...stop,

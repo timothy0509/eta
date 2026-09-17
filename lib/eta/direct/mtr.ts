@@ -153,6 +153,7 @@ export async function getMtrSchedule(params: {
     cache: 'no-store',
     timeoutMs: resolveTimeoutMs('live'),
     signal: params.signal,
+    retries: 0,
   })
 }
 
@@ -221,15 +222,13 @@ export async function fetchMtrSchedules(
 
   for (let i = 0; i < results.length; i++) {
     const result = results[i]
+    if (!result) continue
     const query = uniqueList[i]
     const key = `${query.line}-${query.sta}-${query.lang}`
 
     if (result.status === 'rejected') {
       const reason = result.reason as { status?: number } | undefined
-      const rateLimited =
-        reason &&
-        typeof reason.status === 'number' &&
-        (reason.status === 429 || reason.status >= 500)
+      const rateLimited = reason && typeof reason.status === 'number' && reason.status === 429
       if (rateLimited) {
         recordBackoffHit()
         sawRateLimit = true

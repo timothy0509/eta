@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Noto_Sans_HK } from 'next/font/google'
+import { Geist_Mono, Inter, Noto_Sans_HK } from 'next/font/google'
 
 import { DynamicToaster } from '@/components/dynamic-toaster'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -23,9 +23,16 @@ const notoSansHK = Noto_Sans_HK({
   preload: false,
 })
 
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
+  subsets: ['latin'],
+  weight: ['400', '500'],
+  display: 'swap',
+  preload: false,
+})
+
 /* Noto Sans SC removed: Noto Sans HK covers both tc and sc glyphs well
-   enough for ETA text, with PingFang/Microsoft YaHei as system fallback.
-   Geist Mono removed: ETA numerals use the system mono stack instead. */
+   enough for ETA text, with PingFang/Microsoft YaHei as system fallback. */
 
 const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL)
 
@@ -97,8 +104,6 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         <link rel="preconnect" href="https://data.etabus.gov.hk" />
         <link rel="preconnect" href="https://rt.data.gov.hk" />
         <link rel="preconnect" href="https://data.hkbus.app" />
@@ -111,7 +116,9 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
         <link rel="dns-prefetch" href="https://router.project-osrm.org" />
       </head>
-      <body className={`${inter.variable} ${notoSansHK.variable} min-h-dvh antialiased`}>
+      <body
+        className={`${inter.variable} ${notoSansHK.variable} ${geistMono.variable} min-h-dvh antialiased`}
+      >
         <ThemeProvider
           attribute="class"
           defaultTheme="system"

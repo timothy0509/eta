@@ -197,16 +197,27 @@ describe('fetchJson', () => {
     setConnection({ saveData: false, effectiveType: '4g' })
     expect(isWeakNetworkConnection()).toBe(false)
     expect(resolveTimeoutMs('live')).toBe(8_000)
+    expect(resolveTimeoutMs('route')).toBe(12_000)
     expect(getAdaptiveConcurrency(5, 3, 2)).toBe(5)
 
     setConnection({ saveData: false, effectiveType: '2g' })
     expect(isWeakNetworkConnection()).toBe(true)
     expect(resolveTimeoutMs('live')).toBe(15_000)
-    expect(resolveTimeoutMs('route')).toBe(8_000)
+    expect(resolveTimeoutMs('route')).toBe(15_000)
     expect(getAdaptiveConcurrency(5, 3, 2)).toBe(2)
 
     setConnection({ saveData: true, effectiveType: '4g' })
     expect(isWeakNetworkConnection()).toBe(true)
     expect(getAdaptiveConcurrency(5, 3, 2)).toBe(2)
+  })
+
+  it('gives weak networks at least as much route time as fast networks', () => {
+    setConnection({ saveData: false, effectiveType: '4g' })
+    const fast = resolveTimeoutMs('route')
+
+    setConnection({ saveData: false, effectiveType: '2g' })
+    const weak = resolveTimeoutMs('route')
+
+    expect(weak).toBeGreaterThanOrEqual(fast)
   })
 })

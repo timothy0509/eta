@@ -335,6 +335,7 @@ export async function fetchKmbStopEtas(
 
   for (let i = 0; i < results.length; i += 1) {
     const result = results[i]
+    if (!result) continue
     if (result.status === 'rejected') {
       const stopId = uniqueStopIds[i]
       if (stopId) {
@@ -447,6 +448,7 @@ export async function fetchKmbStopEtas(
     })
 
     for (const result of fareResults) {
+      if (!result) continue
       if (result.status === 'fulfilled' && result.value.fare) {
         faresByVariantKey[result.value.vKey] = result.value.fare
       }
@@ -527,6 +529,7 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
   const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> =
     {}
   for (const result of results) {
+    if (!result) continue
     if (result.status === 'fulfilled' && result.value.fare) {
       faresByVariantKey[result.value.vKey] = result.value.fare
     }

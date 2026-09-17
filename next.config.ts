@@ -50,7 +50,9 @@ const nextConfig: NextConfig = {
   },
   reactCompiler: true,
   compiler: {
-    removeConsole: true,
+    removeConsole: {
+      exclude: ['warn', 'error'],
+    },
   },
 
   // Optimize images

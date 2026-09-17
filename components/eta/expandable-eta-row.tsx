@@ -59,9 +59,7 @@ export function ExpandableEtaRow({
         aria-hidden={!expanded}
       >
         <div className="min-h-0 overflow-hidden">
-          {expanded ? (
-            <div className="pointer-events-none relative z-10 pr-3 pb-3 pl-4">{panel}</div>
-          ) : null}
+          <div className="pointer-events-none relative z-10 pr-3 pb-3 pl-4">{panel}</div>
         </div>
       </div>
     </div>

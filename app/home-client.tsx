@@ -6,7 +6,7 @@ import dynamic from 'next/dynamic'
 import { BottomNav, SideRail, TopAppBar } from '@/components/eta/app-shell'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
-import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
+import { decodeUrlState, encodeUrlState, type UrlEncodeInput } from '@/lib/eta/url-state'
 import type {
   LrtStationSearchItem,
   MtrStationSearchItem,
@@ -544,53 +544,90 @@ export default function HomeClient() {
     [lang, lrtStations, setMode, setSubView]
   )
 
+  const urlInput: UrlEncodeInput = React.useMemo(
+    () => ({
+      mode,
+      subView,
+      lang,
+      routeFilterMode,
+      autoRefreshSeconds,
+      kmb: kmbQuerySummary
+        ? {
+            query: kmbQuerySummary,
+            routeFilter: kmbRouteFilter,
+          }
+        : null,
+      mtr: { sta: mtrSta },
+      lrt: { stationId: lrtStationId },
+    }),
+    [
+      autoRefreshSeconds,
+      kmbQuerySummary,
+      kmbRouteFilter,
+      lang,
+      lrtStationId,
+      mode,
+      mtrSta,
+      routeFilterMode,
+      subView,
+    ]
+  )
+
+  const pendingQueryRef = React.useRef<string | null>(null)
+
   React.useEffect(() => {
     if (!didHydrateFromUrlRef.current) return
 
     // Debounce URL writes by 400ms so rapid pane updates do not churn history.
+    pendingQueryRef.current = encodeUrlState(urlInput)
     const id = setTimeout(() => {
-      const query = encodeUrlState({
-        mode,
-        subView,
-        lang,
-        routeFilterMode,
-        autoRefreshSeconds,
-        kmb: kmbQuerySummary
-          ? {
-              query: kmbQuerySummary,
-              routeFilter: kmbRouteFilter,
-            }
-          : null,
-        mtr: { sta: mtrSta },
-        lrt: { stationId: lrtStationId },
-      })
-
-      if (query === lastEncodedRef.current) return
+      const query = pendingQueryRef.current
+      pendingQueryRef.current = null
+      if (query === null || query === lastEncodedRef.current) return
       lastEncodedRef.current = query
 
-      const nextUrl = query ? `${pathname}?${query}` : pathname
-      // Same-path query updates stay in history API to avoid router churn.
-      // Cross-path deep links still go through Next router.
-      if (typeof window !== 'undefined' && window.location.pathname === pathname) {
-        window.history.replaceState(null, '', nextUrl)
-      } else {
-        router.replace(nextUrl, { scroll: false })
-      }
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
     }, 400)
     return () => clearTimeout(id)
-  }, [
-    autoRefreshSeconds,
-    kmbQuerySummary,
-    kmbRouteFilter,
-    lang,
-    lrtStationId,
-    mode,
-    mtrSta,
-    pathname,
-    routeFilterMode,
-    router,
-    subView,
-  ])
+  }, [urlInput, pathname, router])
+
+  // Flush a pending debounced URL write on fast close so it is not dropped.
+  // history.replaceState is synchronous; router.replace may not finish on pagehide.
+  React.useEffect(() => {
+    const flush = () => {
+      const pending = pendingQueryRef.current
+      if (pending === null || pending === lastEncodedRef.current) return
+      lastEncodedRef.current = pending
+      const base = window.location.pathname
+      window.history.replaceState(null, '', pending ? `${base}?${pending}` : base)
+    }
+    window.addEventListener('pagehide', flush)
+    return () => window.removeEventListener('pagehide', flush)
+  }, [])
+
+  // Back/forward changes the URL without touching store state, so sync the
+  // shareable fields back in. router.replace writes never fire popstate, so
+  // this cannot loop with the debounced writer above.
+  React.useEffect(() => {
+    const onPopState = () => {
+      const search = window.location.search.startsWith('?')
+        ? window.location.search.slice(1)
+        : window.location.search
+      lastEncodedRef.current = search
+      pendingQueryRef.current = null
+      const decoded = decodeUrlState(search)
+      if (decoded.state.mode) setMode(decoded.state.mode)
+      if (decoded.state.subView) setSubView(decoded.state.subView)
+      if (decoded.state.lang) setLang(decoded.state.lang)
+      if (decoded.state.routeFilterMode) setRouteFilterMode(decoded.state.routeFilterMode)
+      if (decoded.state.autoRefreshSeconds !== undefined) {
+        setAutoRefreshSeconds(decoded.state.autoRefreshSeconds)
+      }
+      setSelectedItem(decoded.selectedItem ?? null)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode, setSubView])
 
   const controls = (
     <div className="space-y-4">

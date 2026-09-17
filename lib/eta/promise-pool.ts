@@ -30,6 +30,18 @@ export async function promisePool<T, R>(
     }
   })
 
-  await Promise.all(runners)
+  await Promise.all(runners).catch((error) => {
+    const reason =
+      error instanceof DOMException && error.name === 'AbortError'
+        ? error
+        : new DOMException('The operation was aborted.', 'AbortError')
+    for (let i = 0; i < results.length; i += 1) {
+      const slot: PromisePoolResult<R> | undefined = results[i]
+      if (slot === undefined) {
+        results[i] = { status: 'rejected', reason }
+      }
+    }
+    throw error
+  })
   return results
 }

@@ -25,12 +25,15 @@ export const usePaneStore = create<PaneStore>()((set) => ({
   setKmbStops: (stops) =>
     set((prev) => {
       const prevStops = prev.kmbStops
-      if (
-        prevStops.length === stops.length &&
-        prevStops[0]?.stopId === stops[0]?.stopId &&
-        prevStops[prevStops.length - 1]?.stopId === stops[stops.length - 1]?.stopId
-      ) {
-        return prev
+      if (prevStops.length === stops.length) {
+        let same = true
+        for (let i = 0; i < prevStops.length; i++) {
+          if (prevStops[i].stopId !== stops[i].stopId) {
+            same = false
+            break
+          }
+        }
+        if (same) return prev
       }
       return { kmbStops: stops }
     }),

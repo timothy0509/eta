@@ -7,11 +7,8 @@ import * as React from 'react'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import {
-  RouteStopRow,
-  RouteStopTimeline,
-  SoonestEtaPill,
-} from '@/components/eta/route-stop-timeline'
+import { RouteStopRow, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
+import { TickingSoonestPill } from '@/components/eta/ticking-eta'
 import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import {
   fetchKmbRouteStops,
@@ -22,13 +19,11 @@ import {
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
 } from '@/lib/eta/client'
-import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import type { GeoPoint } from '@/lib/eta/geo'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import { getRoutedGeometry } from '@/lib/eta/routing'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
-import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
@@ -452,8 +447,6 @@ export function KmbRoutesView({
     addFavorite(item)
   }
 
-  const now = useTickingNow(15_000)
-
   return (
     <div className="space-y-4">
       <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
@@ -580,10 +573,6 @@ export function KmbRoutesView({
                 {variantStops.map((rs) => {
                   const stop = stopsById.get(rs.stopId)
                   const stopEtas = etas[rs.stopId] ?? []
-                  const firstEta = stopEtas[0]
-                  const minutes = firstEta?.eta
-                    ? formatRelativeMinutesWithDrift(firstEta.eta, firstEta.data_timestamp, now)
-                    : null
                   const fullName = stop
                     ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
                     : rs.stopId
@@ -595,17 +584,7 @@ export function KmbRoutesView({
                       name={<span className="font-medium">{parsed.name}</span>}
                       subtitle={parsed.stopCode}
                       ariaLabel={parsed.name}
-                      eta={
-                        firstEta ? (
-                          <SoonestEtaPill
-                            minutes={minutes}
-                            arriving={minutes !== null && minutes <= 0}
-                            lang={lang}
-                          />
-                        ) : (
-                          <SoonestEtaPill minutes={null} lang={lang} />
-                        )
-                      }
+                      eta={<TickingSoonestPill etas={stopEtas} lang={lang} />}
                       onClick={
                         onSelectStopGroup && group
                           ? () =>

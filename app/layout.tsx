@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Noto_Sans_HK, Noto_Sans_SC } from 'next/font/google'
+import { Geist_Mono, Inter, Noto_Sans_HK } from 'next/font/google'
 
 import { DynamicToaster } from '@/components/dynamic-toaster'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -10,25 +10,29 @@ import './globals.css'
 const inter = Inter({
   variable: '--font-inter',
   subsets: ['latin'],
-  weight: ['400', '500', '600', '700'],
+  weight: ['400', '500', '700'],
   display: 'swap',
+  preload: true,
 })
 
 const notoSansHK = Noto_Sans_HK({
   variable: '--font-noto-sans-hk',
   subsets: ['latin'],
-  weight: ['400', '700'],
+  weight: ['400', '500'],
   display: 'swap',
+  preload: false,
 })
 
-const notoSansSC = Noto_Sans_SC({
-  variable: '--font-noto-sans-sc',
+const geistMono = Geist_Mono({
+  variable: '--font-geist-mono',
   subsets: ['latin'],
-  weight: ['400', '700'],
+  weight: ['400', '500'],
   display: 'swap',
+  preload: false,
 })
 
-// Geist Mono is loaded via @fontsource in globals.css
+/* Noto Sans SC removed: Noto Sans HK covers both tc and sc glyphs well
+   enough for ETA text, with PingFang/Microsoft YaHei as system fallback. */
 
 const siteUrl = new URL(env.NEXT_PUBLIC_SITE_URL)
 
@@ -101,14 +105,19 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://data.etabus.gov.hk" />
-        <link rel="preconnect" href="https://opendata.mtr.com.hk" />
-        <link rel="preconnect" href="https://www.lrtetas.hk" />
+        <link rel="preconnect" href="https://rt.data.gov.hk" />
+        <link rel="preconnect" href="https://data.hkbus.app" />
         <link rel="dns-prefetch" href="https://data.etabus.gov.hk" />
+        <link rel="dns-prefetch" href="https://rt.data.gov.hk" />
+        <link rel="dns-prefetch" href="https://data.hkbus.app" />
+        <link rel="dns-prefetch" href="https://hkbus.github.io" />
         <link rel="dns-prefetch" href="https://opendata.mtr.com.hk" />
         <link rel="dns-prefetch" href="https://www.lrtetas.hk" />
+        <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
+        <link rel="dns-prefetch" href="https://router.project-osrm.org" />
       </head>
       <body
-        className={`${inter.variable} ${notoSansHK.variable} ${notoSansSC.variable} min-h-dvh antialiased`}
+        className={`${inter.variable} ${notoSansHK.variable} ${geistMono.variable} min-h-dvh antialiased`}
       >
         <ThemeProvider
           attribute="class"

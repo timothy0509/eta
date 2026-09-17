@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button'
 import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import { useGeolocation, type GeolocationErrorCode } from '@/components/eta/use-geolocation'
 import { fetchKmbStops } from '@/lib/eta/client'
-import { computeNearbyStops, formatDistanceKm } from '@/lib/eta/geo'
+import { computeNearbyStops, formatDistanceKm, haversineDistanceKm } from '@/lib/eta/geo'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
 import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
@@ -44,36 +45,61 @@ type KmbNearbyStop = {
   distanceKm: number
 }
 
+const NEARBY_CACHE_MS = 60_000
+const NEARBY_HYSTERESIS_KM = 0.05
+const NEARBY_BBOX_KM = 3
+
 function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
+  // Reuse the stops the KMB pane already loaded so nearby never refetches
+  // the full list when the user already visited the stops tab.
+  const cachedStops = usePaneStore((s) => s.kmbStops)
   const [result, setResult] = React.useState<{
     key: string
+    at: number
     stops: KmbNearbyStop[]
     error: string | null
   } | null>(null)
-  const key = userLocation ? `${userLocation.lat.toFixed(5)},${userLocation.lng.toFixed(5)}` : null
+  const lastLocationRef = React.useRef<{ lat: number; lng: number } | null>(null)
+  // Quantize to 4 decimals (~11 m) so GPS jitter does not retrigger the
+  // full 6k-stop distance sort on every fix.
+  const key = userLocation ? `${userLocation.lat.toFixed(4)},${userLocation.lng.toFixed(4)}` : null
 
   React.useEffect(() => {
     if (!userLocation || !key) return
-    if (result?.key === key) return
+    const last = lastLocationRef.current
+    if (last && haversineDistanceKm(last, userLocation) < NEARBY_HYSTERESIS_KM) return
+    if (result?.key === key && Date.now() - result.at < NEARBY_CACHE_MS) {
+      lastLocationRef.current = userLocation
+      return
+    }
     let cancelled = false
-    fetchKmbStops()
-      .then((data) => {
+    const load = async () => {
+      try {
+        const data = cachedStops.length ? cachedStops : await fetchKmbStops()
         if (cancelled) return
-        setResult({ key, stops: computeNearbyStops(userLocation, data, 15), error: null })
-      })
-      .catch((err) => {
+        lastLocationRef.current = userLocation
+        setResult({
+          key,
+          at: Date.now(),
+          stops: computeNearbyStops(userLocation, data, 15, NEARBY_BBOX_KM),
+          error: null,
+        })
+      } catch (err) {
         if (!cancelled) {
           setResult({
             key,
+            at: Date.now(),
             stops: [],
             error: err instanceof Error ? err.message : 'Failed to load stops',
           })
         }
-      })
+      }
+    }
+    void load()
     return () => {
       cancelled = true
     }
-  }, [key, result?.key, userLocation])
+  }, [key, result?.key, result?.at, userLocation, cachedStops])
 
   if (!key) return { stops: [], loading: false, error: null }
   if (!result || result.key !== key)
@@ -342,7 +368,7 @@ function KmbNearbyView({
                 )
                 const parsed = parseKmbStopNameCached(fullName)
                 return (
-                  <StaggerItem key={stop.stopId}>
+                  <StaggerItem key={stop.stopId} className="ui-cv-row">
                     <button
                       type="button"
                       onClick={() =>
@@ -402,7 +428,7 @@ function MtrNearbyView({ lang, onSelectMtrStation, t }: SharedViewProps) {
         <StaggerContainer className="space-y-3" stagger={0.04}>
           {lines.map(({ line, stations }) => (
             <StaggerItem key={line}>
-              <div className="bg-surface-container rounded-2xl p-3">
+              <div className="bg-surface-container ui-cv-auto rounded-2xl p-3">
                 <div className="m3-label-lg mb-2 flex items-center gap-2">
                   <span
                     className="inline-block h-3 w-3 rounded-full"
@@ -470,7 +496,7 @@ function LrtNearbyView({ lang, onSelectLrtStation, t }: SharedViewProps) {
             <StaggerContainer className="space-y-3" stagger={0.04}>
               {routeGroups.map((group) => (
                 <StaggerItem key={group.route}>
-                  <div className="bg-surface-container rounded-2xl p-3">
+                  <div className="bg-surface-container ui-cv-auto rounded-2xl p-3">
                     <div className="m3-label-lg mb-2 flex items-center gap-2">
                       <span
                         className="inline-block h-3 w-3 rounded-full"

@@ -16,7 +16,6 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
-import Fuse from 'fuse.js'
 
 export type StopSearchSelection =
   | { type: 'stop'; stopId: string }
@@ -51,6 +50,8 @@ type StopComputed = {
 
   stop: KmbStopSearchItem
 }
+
+type FuseInstance = import('fuse.js').default<StopComputed>
 
 // --- Utility functions for stop name/code parsing ---
 
@@ -320,23 +321,62 @@ export function StopSearch({
     })
   }, [stops, lang])
 
-  const fuse = React.useMemo(() => {
-    return new Fuse(stopComputed, {
-      // Lower threshold = stricter matching = higher precision.
-      // We also explicitly boost exact/prefix matches in post-processing.
-      threshold: 0.28,
-      ignoreLocation: true,
-      minMatchCharLength: 2,
-      includeScore: true,
-      shouldSort: true,
-      keys: [
-        { name: 'searchCode', weight: 0.55 },
-        { name: 'searchName', weight: 0.3 },
-        { name: 'searchSecondary', weight: 0.1 },
-        { name: 'normalized', weight: 0.05 },
-      ],
+  // Fuse loads only when the popover opens so the fuzzy index stays out
+  // of the initial bundle and idle CPU. Prefix matches stay synchronous.
+  const [fuse, setFuse] = React.useState<FuseInstance | null>(null)
+  React.useEffect(() => {
+    if (!isOpen || fuse) return
+    let cancelled = false
+    void import('fuse.js').then((mod) => {
+      if (cancelled) return
+      const FuseClass = mod.default
+      setFuse(
+        new FuseClass(stopComputed, {
+          // Lower threshold = stricter matching = higher precision.
+          // We also explicitly boost exact/prefix matches in post-processing.
+          threshold: 0.28,
+          ignoreLocation: true,
+          minMatchCharLength: 2,
+          includeScore: true,
+          shouldSort: true,
+          keys: [
+            { name: 'searchCode', weight: 0.55 },
+            { name: 'searchName', weight: 0.3 },
+            { name: 'searchSecondary', weight: 0.1 },
+            { name: 'normalized', weight: 0.05 },
+          ],
+        })
+      )
     })
-  }, [stopComputed])
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, fuse, stopComputed])
+  // Rebuild the index when the underlying stops change after first open.
+  React.useEffect(() => {
+    if (!isOpen || !fuse) return
+    fuse.setCollection(stopComputed)
+  }, [isOpen, fuse, stopComputed])
+
+  const prefixMatches = React.useCallback(
+    (needle: string): StopComputed[] => {
+      const out: StopComputed[] = []
+      for (const item of stopComputed) {
+        if (
+          (item.searchCode && item.searchCode.startsWith(needle)) ||
+          item.searchName.startsWith(needle) ||
+          item.searchSecondary.startsWith(needle) ||
+          item.searchCode === needle ||
+          item.searchName === needle
+        ) {
+          out.push(item)
+          if (out.length >= 60) break
+        }
+      }
+      return out
+    },
+    [stopComputed]
+  )
 
   // Search and group results (only when popover is open to save CPU)
   const groupedResults = React.useMemo(() => {
@@ -350,7 +390,13 @@ export function StopSearch({
 
     const needle = debouncedQuery.trim().toLowerCase()
 
-    const hits = fuse.search(needle).slice(0, 80)
+    // Fast path: exact and prefix matches run without Fuse so short
+    // queries stay instant while the fuzzy index loads.
+    const fast = prefixMatches(needle)
+    const hits =
+      fast.length >= 20 || !fuse
+        ? fast.map((item) => ({ item, score: 0 }))
+        : fuse.search(needle).slice(0, 80)
 
     // Prefer exact/prefix matches (stop code or name) over generic fuzzy score.
     // This improves accuracy for common user behavior:
@@ -394,7 +440,7 @@ export function StopSearch({
       .slice(0, 60)
 
     return groupStopsByName(scored.map((s: ScoredStop) => s.item)).slice(0, 20)
-  }, [fuse, debouncedQuery, stopComputed, isOpen])
+  }, [fuse, debouncedQuery, stopComputed, isOpen, prefixMatches])
 
   const trimmedQuery = query.trim()
   const canSearchContains = trimmedQuery.length >= 3

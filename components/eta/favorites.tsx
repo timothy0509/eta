@@ -17,7 +17,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { motion, Reorder, useDragControls } from 'framer-motion'
+import { Reorder, useDragControls } from 'framer-motion'
 import * as React from 'react'
 import { useShallow } from 'zustand/shallow'
 
@@ -217,37 +217,11 @@ function StaggerContainer({
   children: React.ReactNode
   className?: string
 }) {
-  return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={{
-        visible: {
-          transition: {
-            staggerChildren: 0.04,
-          },
-        },
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
+  return <div className={cn('ui-stagger', className)}>{children}</div>
 }
 
 function StaggerItem({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 8 },
-        visible: { opacity: 1, y: 0 },
-      }}
-      transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
+  return <div className={className}>{children}</div>
 }
 
 function FavoriteActions({
@@ -396,7 +370,7 @@ function FavoriteRow({
   }
 
   return (
-    <StaggerItem className="bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5">
+    <StaggerItem className="bg-surface-container-low border-outline-variant/50 ui-cv-row rounded-2xl border px-3 py-2.5">
       {content}
     </StaggerItem>
   )
@@ -412,12 +386,10 @@ type RecentRowProps = {
 
 function RecentRow({ item, lang, maps, dateFormatter, onSelect }: RecentRowProps) {
   return (
-    <StaggerItem>
-      <motion.button
+    <StaggerItem className="ui-cv-row">
+      <button
         type="button"
-        whileHover={{ scale: 1.005 }}
-        whileTap={{ scale: 0.995 }}
-        className="bg-surface-container-low hover:bg-surface-container border-outline-variant/50 flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors"
+        className="bg-surface-container-low hover:bg-surface-container border-outline-variant/50 ui-press flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors"
         onClick={() => onSelect(item)}
       >
         <div className="bg-surface-container-high flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
@@ -432,7 +404,7 @@ function RecentRow({ item, lang, maps, dateFormatter, onSelect }: RecentRowProps
             <span>{dateFormatter.format(new Date(item.at))}</span>
           </div>
         </div>
-      </motion.button>
+      </button>
     </StaggerItem>
   )
 }
@@ -494,13 +466,7 @@ function GroupsEditor({
         />
       </button>
       {open && (
-        <motion.div
-          initial={{ opacity: 0, height: 0 }}
-          animate={{ opacity: 1, height: 'auto' }}
-          exit={{ opacity: 0, height: 0 }}
-          transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-          className="space-y-3 overflow-hidden pt-3"
-        >
+        <div className="ui-animate-fade space-y-3 overflow-hidden pt-3">
           <div className="flex flex-wrap items-center gap-2">
             <Input
               value={newGroupName}
@@ -585,7 +551,7 @@ function GroupsEditor({
               ))}
             </div>
           )}
-        </motion.div>
+        </div>
       )}
     </div>
   )
@@ -828,7 +794,7 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
             ) : (
               <div className="space-y-4">
                 {pinnedItems.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="ui-cv-auto space-y-2">
                     <div className="text-on-surface-variant m3-label-md px-1">
                       {t('favorites.pinned')}
                     </div>
@@ -861,7 +827,7 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                 )}
 
                 {unpinnedItems.length > 0 && (
-                  <div className="space-y-2">
+                  <div className="ui-cv-auto space-y-2">
                     <div className="text-on-surface-variant m3-label-md px-1">
                       {t('favorites.unpinned')}
                     </div>

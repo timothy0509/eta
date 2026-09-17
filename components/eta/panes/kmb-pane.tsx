@@ -25,7 +25,7 @@ import { isStaleByFlagOrAge } from '@/lib/eta/stale'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
-import { useInfiniteScroll, useVisibleItems } from '@/lib/eta/use-infinite-scroll'
+import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 import { precomputeRenderGroups, type PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { initialEtaState, etaReducer } from '@/components/eta/panes/kmb-reducer'
@@ -43,7 +43,7 @@ import {
   type StopSearchIndex,
 } from '@/components/eta/panes/kmb-stop-search'
 import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
-import { usePaneStore } from '@/lib/eta/pane-store'
+import { setKmbPaneState } from '@/lib/eta/pane-store'
 
 // ============================================================================
 // Types and Helpers
@@ -122,17 +122,19 @@ export type KmbPaneState = {
   title: string
   stopCode: string | null
   stops: KmbStopSearchItem[]
-  refresh: (options?: { toastOnError?: boolean }) => Promise<void>
-  /** Sentinel ref for infinite scroll */
-  sentinelRef: React.RefObject<HTMLDivElement | null>
+  refresh: (options?: {
+    toastOnError?: boolean
+    isInitialLoad?: boolean
+    isAutoRefresh?: boolean
+  }) => Promise<void>
   /** Whether there are more stops to load */
   hasMoreStops: boolean
+  /** All stop IDs matching the current query (results owns the scroll window) */
+  allStopIds: string[]
+  /** Stable callback to load the next page of stops */
+  onLoadMore: () => void
   /** Precomputed render groups to avoid recomputation during render */
   precomputedGroups: PrecomputedGroups
-  /** Currently visible stop IDs in the list */
-  visibleStopIds: Set<string>
-  /** Register ref for stop sections (visible tracking) */
-  registerStopRef?: (stopId: string) => (el: HTMLElement | null) => void
 }
 
 export function KmbPane({
@@ -223,22 +225,16 @@ export function KmbPane({
     return []
   }, [kmbQuery, kmbStops, stopSearchIndex])
 
-  // Infinite scroll hook for keyphrase mode
-  const infiniteScroll = useInfiniteScroll({
-    totalItems: allStopIds.length,
-    initialPageSize: STOPS_PER_PAGE,
-    pageSize: STOPS_PER_PAGE,
-    rootMargin: '300px',
-  })
-  const infiniteScrollResetRef = React.useRef(infiniteScroll.reset)
+  // Visibility tracking stays local so scroll intersections never write to the global
+  // store. Results owns its own scroll window and sentinel for rendering; the pane
+  // keeps a local copy only to limit auto-refresh to visible stops.
+  const { visibleIds } = useVisibleItems(loadedStopIds, { rootMargin: '200px' })
+  const visibleStopIdsRef = React.useRef(visibleIds)
   React.useEffect(() => {
-    infiniteScrollResetRef.current = infiniteScroll.reset
-  }, [infiniteScroll.reset])
+    visibleStopIdsRef.current = visibleIds
+  }, [visibleIds])
 
-  const { visibleIds: visibleStopIds, registerRef: registerStopRef } = useVisibleItems(
-    loadedStopIds,
-    { rootMargin: '200px' }
-  )
+  const hasMoreStops = loadedStopIds.length < allStopIds.length
 
   // Derived flat eta array for backwards compatibility
   const kmbEta = React.useMemo(() => {
@@ -616,8 +612,9 @@ export function KmbPane({
       const shouldLimitToVisible =
         Boolean(options?.isAutoRefresh) && !isNewQuery && loadedStopIds.length > STOPS_PER_PAGE
 
+      const visibleNow = visibleStopIdsRef.current
       const visibleStopIdsList = shouldLimitToVisible
-        ? loadedStopIds.filter((stopId) => visibleStopIds.has(stopId))
+        ? loadedStopIds.filter((stopId) => visibleNow.has(stopId))
         : []
 
       const refreshStopIds =
@@ -708,7 +705,6 @@ export function KmbPane({
       kmbStops,
       stopSearchIndex,
       routeStopIndex,
-      visibleStopIds,
     ]
   )
 
@@ -754,18 +750,13 @@ export function KmbPane({
     }
   }, [kmbQuery, kmbEtaLoading, loadedStopIds, allStopIds, getRouteFilterString, fetchStopEtas])
 
-  // Watch infinite scroll visibleCount and load more when needed
-  const prevVisibleCountRef = React.useRef(infiniteScroll.visibleCount)
+  const loadMoreStopsRef = React.useRef(loadMoreStops)
   React.useEffect(() => {
-    const prev = prevVisibleCountRef.current
-    const curr = infiniteScroll.visibleCount
-    prevVisibleCountRef.current = curr
-
-    // Only load more if visibleCount increased and we have more stops to load
-    if (curr > prev && curr > loadedStopIds.length && infiniteScroll.hasMore) {
-      void loadMoreStops()
-    }
-  }, [infiniteScroll.visibleCount, infiniteScroll.hasMore, loadedStopIds.length, loadMoreStops])
+    loadMoreStopsRef.current = loadMoreStops
+  }, [loadMoreStops])
+  const stableOnLoadMore = React.useCallback(() => {
+    void loadMoreStopsRef.current()
+  }, [])
 
   // Cleanup abort controller and pending refresh on unmount
   React.useEffect(() => {
@@ -783,13 +774,25 @@ export function KmbPane({
   React.useEffect(() => {
     refreshKmbEtaRef.current = refreshKmbEta
   }, [refreshKmbEta])
+  const kmbQueryRef = React.useRef(kmbQuery)
+  React.useEffect(() => {
+    kmbQueryRef.current = kmbQuery
+  }, [kmbQuery])
+  const stableRefresh = React.useCallback(
+    (options?: { toastOnError?: boolean; isInitialLoad?: boolean; isAutoRefresh?: boolean }) =>
+      refreshKmbEtaRef.current(kmbQueryRef.current, options),
+    []
+  )
+  const stableAutoRefresh = React.useCallback(
+    () =>
+      refreshKmbEtaRef.current(kmbQueryRef.current, { toastOnError: false, isAutoRefresh: true }),
+    []
+  )
 
   React.useEffect(() => {
     if (!onRegisterRefresh) return
-    onRegisterRefresh(() =>
-      refreshKmbEtaRef.current(kmbQuery, { toastOnError: false, isAutoRefresh: true })
-    )
-  }, [kmbQuery, onRegisterRefresh])
+    onRegisterRefresh(stableAutoRefresh)
+  }, [onRegisterRefresh, stableAutoRefresh])
 
   const lastSelectedIdRef = React.useRef<string | null>(null)
   React.useEffect(() => {
@@ -832,7 +835,6 @@ export function KmbPane({
       }
       setKmbQuery(null)
       dispatchEta({ type: 'RESET' })
-      infiniteScrollResetRef.current()
       lastSelectedIdRef.current = selectedItem.id
     })
 
@@ -859,7 +861,6 @@ export function KmbPane({
     const nextQuery = buildKmbQueryFromDraft(kmbDraftStopSelection, routeFilter, routeFilterMode)
 
     dispatchEta({ type: 'RESET' })
-    infiniteScrollResetRef.current()
 
     setKmbQuery(nextQuery)
     void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
@@ -942,6 +943,11 @@ export function KmbPane({
     return precomputeRenderGroups(kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey)
   }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey])
 
+  const hasQuery = Boolean(kmbQuery)
+  const multipleStops = kmbQuery?.mode === 'stops' || kmbQuery?.mode === 'contains'
+  const title = kmbResultsInfo.title
+  const stopCode = kmbResultsInfo.code
+
   const paneState = React.useMemo<KmbPaneState>(
     () => ({
       lang,
@@ -957,18 +963,17 @@ export function KmbPane({
       stale: kmbEtaStale,
       staleByStopId: kmbEtaStaleByStopId,
       lastUpdatedAt: kmbEtaLastUpdatedAt ?? undefined,
-      hasQuery: Boolean(kmbQuery),
-      multipleStops: kmbQuery?.mode === 'stops' || kmbQuery?.mode === 'contains',
+      hasQuery,
+      multipleStops,
       isKeyphraseMode: isKeyphraseMode ?? false,
-      title: kmbResultsInfo.title,
-      stopCode: kmbResultsInfo.code,
+      title,
+      stopCode,
       stops: kmbStops,
-      refresh: (options) => refreshKmbEta(kmbQuery, options),
-      sentinelRef: infiniteScroll.sentinelRef,
-      hasMoreStops: infiniteScroll.hasMore,
+      refresh: stableRefresh,
+      hasMoreStops,
+      allStopIds,
+      onLoadMore: stableOnLoadMore,
       precomputedGroups,
-      visibleStopIds,
-      registerStopRef,
     }),
     [
       kmbEta,
@@ -980,26 +985,26 @@ export function KmbPane({
       kmbEtaLastUpdatedAt,
       kmbEtaStale,
       kmbEtaStaleByStopId,
-      kmbQuery,
-      kmbResultsInfo.code,
-      kmbResultsInfo.title,
+      hasQuery,
+      multipleStops,
+      title,
+      stopCode,
       kmbRouteInfos,
       kmbStops,
       lang,
       querySummary,
-      refreshKmbEta,
+      stableRefresh,
       routeFilter,
       isKeyphraseMode,
-      infiniteScroll.sentinelRef,
-      infiniteScroll.hasMore,
+      hasMoreStops,
+      allStopIds,
+      stableOnLoadMore,
       precomputedGroups,
-      visibleStopIds,
-      registerStopRef,
     ]
   )
 
   React.useEffect(() => {
-    usePaneStore.setState({ kmb: paneState })
+    setKmbPaneState(paneState)
   }, [paneState])
 
   return (

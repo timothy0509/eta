@@ -15,6 +15,7 @@ import {
 import { computeEtaLeg, getCachedKmbVariantStops, getStopToTerminusFare } from '@/lib/eta/kmb-fares'
 import { promisePool } from '@/lib/eta/promise-pool'
 
+import { getAdaptiveConcurrency } from '@/lib/eta/http'
 import { getCachedValue, normalizeDirection } from '@/lib/eta/direct/shared'
 
 export type KmbStop = {
@@ -233,7 +234,9 @@ export async function getKmbRouteInfo(params: {
   }
 }
 
-const KMB_CONCURRENCY = 10
+const KMB_CONCURRENCY_FAST = 5
+const KMB_CONCURRENCY_MEDIUM = 3
+const KMB_CONCURRENCY_SLOW = 2
 const MAX_ETAS_PER_VARIANT = 3
 
 export type KmbStopEtasResponse = {
@@ -248,8 +251,11 @@ export type KmbStopEtasResponse = {
 
 export async function fetchKmbStopEtas(
   stopIds: string[],
-  options?: { routeFilter?: string; includeFares?: boolean }
+  options?: { routeFilter?: string; includeFares?: boolean; signal?: AbortSignal }
 ): Promise<KmbStopEtasResponse> {
+  if (options?.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
   const dedupedStopIds = Array.from(new Set(stopIds))
   const uniqueStopIds = dedupedStopIds.slice(0, 100)
   const truncatedStopIds = dedupedStopIds.length > 100 ? dedupedStopIds.slice(100) : []
@@ -283,40 +289,53 @@ export async function fetchKmbStopEtas(
   let cached = 0
   let fetched = 0
 
-  const results = await promisePool(uniqueStopIds, KMB_CONCURRENCY, async (stopId) => {
-    const cacheKey = kmbStopEtaKey(stopId)
+  const concurrency = getAdaptiveConcurrency(
+    KMB_CONCURRENCY_FAST,
+    KMB_CONCURRENCY_MEDIUM,
+    KMB_CONCURRENCY_SLOW
+  )
+  const signal = options?.signal
+  const results = await promisePool(
+    uniqueStopIds,
+    concurrency,
+    async (stopId) => {
+      const cacheKey = kmbStopEtaKey(stopId)
 
-    const cachedValue = await getCachedValue<KmbEtaEntryWithLeg[]>({
-      key: cacheKey,
-      policyKey: 'kmbStopEta',
-      policy: CACHE_POLICIES.kmbStopEta,
-      allowStale: true,
-      staleMaxMs: CACHE_POLICIES.kmbStopEta.maxStaleMs,
-      fetcher: async () => {
-        const results = await fetchKmbEtasForStop({ stopId, language: 'tc' })
-        return results.map((entry, idx) => ({
-          ...mapKmbEtaEntry(entry, stopId),
-          eta_seq: entry.etaSeq ?? idx + 1,
-          leg: null,
-        }))
-      },
-    })
+      const cachedValue = await getCachedValue<KmbEtaEntryWithLeg[]>({
+        key: cacheKey,
+        policyKey: 'kmbStopEta',
+        policy: CACHE_POLICIES.kmbStopEta,
+        allowStale: true,
+        staleMaxMs: CACHE_POLICIES.kmbStopEta.maxStaleMs,
+        signal,
+        fetcher: async () => {
+          const results = await fetchKmbEtasForStop({ stopId, language: 'tc', signal })
+          return results.map((entry, idx) => ({
+            ...mapKmbEtaEntry(entry, stopId),
+            eta_seq: entry.etaSeq ?? idx + 1,
+            leg: null,
+          }))
+        },
+      })
 
-    if (cachedValue.cached) cached += 1
-    if (!cachedValue.cached) fetched += 1
-    if (cachedValue.stale) {
-      // stale entry served from cache
-    }
-    staleByStopId[stopId] = {
-      stale: cachedValue.stale,
-      ageMs: cachedValue.ageMs,
-    }
+      if (cachedValue.cached) cached += 1
+      if (!cachedValue.cached) fetched += 1
+      if (cachedValue.stale) {
+        // stale entry served from cache
+      }
+      staleByStopId[stopId] = {
+        stale: cachedValue.stale,
+        ageMs: cachedValue.ageMs,
+      }
 
-    return { stopId, eta: cachedValue.value }
-  })
+      return { stopId, eta: cachedValue.value }
+    },
+    { signal }
+  )
 
   for (let i = 0; i < results.length; i += 1) {
     const result = results[i]
+    if (!result) continue
     if (result.status === 'rejected') {
       const stopId = uniqueStopIds[i]
       if (stopId) {
@@ -429,6 +448,7 @@ export async function fetchKmbStopEtas(
     })
 
     for (const result of fareResults) {
+      if (!result) continue
       if (result.status === 'fulfilled' && result.value.fare) {
         faresByVariantKey[result.value.vKey] = result.value.fare
       }
@@ -509,6 +529,7 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
   const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> =
     {}
   for (const result of results) {
+    if (!result) continue
     if (result.status === 'fulfilled' && result.value.fare) {
       faresByVariantKey[result.value.vKey] = result.value.fare
     }

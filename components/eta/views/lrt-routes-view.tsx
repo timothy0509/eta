@@ -3,11 +3,8 @@
 import { ChevronLeft, MapPin, TramFront } from 'lucide-react'
 import * as React from 'react'
 
-import {
-  RouteStopRow,
-  RouteStopTimeline,
-  SoonestEtaPill,
-} from '@/components/eta/route-stop-timeline'
+import { RouteStopRow, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
+import { TickingSoonestPill } from '@/components/eta/ticking-eta'
 import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
 import { fetchLrtEtasForStop } from '@/lib/eta/client'
@@ -15,10 +12,8 @@ import { listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
-import { pickSoonestIsoEta } from '@/lib/eta/pick-soonest-eta'
 import { promisePool } from '@/lib/eta/promise-pool'
 import type { UiLanguage } from '@/lib/eta/types'
-import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 import type { Eta, RouteListEntry } from 'hk-bus-eta'
@@ -55,7 +50,6 @@ export function LrtRoutesView({
   onSelectStation?: (stationId: string, name: string) => void
 }) {
   const { t } = useTranslations(lang)
-  const now = useTickingNow(15_000)
   const [routes, setRoutes] = React.useState<RouteListEntry[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -255,7 +249,6 @@ export function LrtRoutesView({
             <RouteStopTimeline lineColor={lineColor}>
               {stationIds.map((stationId, idx) => {
                 const etas = stopEtas[stationId] ?? []
-                const soonest = pickSoonestIsoEta(etas.map(mapEtaForPick), now)
                 const name = getLrtStationName(stationId, lang)
                 return (
                   <RouteStopRow
@@ -263,13 +256,7 @@ export function LrtRoutesView({
                     name={name}
                     subtitle={<span className="hidden sm:inline">{stationId}</span>}
                     ariaLabel={name}
-                    eta={
-                      <SoonestEtaPill
-                        minutes={soonest.minutes}
-                        arriving={soonest.arriving}
-                        lang={lang}
-                      />
-                    }
+                    eta={<TickingSoonestPill etas={etas.map(mapEtaForPick)} lang={lang} />}
                     onClick={() => onSelectStation?.(stationId, name)}
                   />
                 )

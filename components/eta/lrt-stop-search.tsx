@@ -13,8 +13,9 @@ import { Button } from '@/components/ui/button'
 import type { LrtStationSearchItem, UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import * as React from 'react'
-import Fuse from 'fuse.js'
 import { Search, TramFront } from 'lucide-react'
+
+type LrtFuseInstance = import('fuse.js').default<LrtStationSearchItem>
 
 type Props = {
   lang: UiLanguage
@@ -60,17 +61,34 @@ export function LrtStationSearch({ lang, stations, selectedStationId, onSelect }
     return stationsById.get(selectedStationId)
   }, [selectedStationId, stationsById])
 
-  const fuse = React.useMemo(() => {
-    return new Fuse(stations, {
-      threshold: 0.35,
-      ignoreLocation: true,
-      minMatchCharLength: 2,
-      keys: [
-        { name: 'nameEn', weight: 0.55 },
-        { name: 'nameZh', weight: 0.45 },
-      ],
+  // Fuse loads only when the popover opens so the index stays out of the
+  // initial bundle. ID prefix matches stay synchronous.
+  const [fuse, setFuse] = React.useState<LrtFuseInstance | null>(null)
+  React.useEffect(() => {
+    if (!open || fuse) return
+    let cancelled = false
+    void import('fuse.js').then((mod) => {
+      if (cancelled) return
+      setFuse(
+        new mod.default(stations, {
+          threshold: 0.35,
+          ignoreLocation: true,
+          minMatchCharLength: 2,
+          keys: [
+            { name: 'nameEn', weight: 0.55 },
+            { name: 'nameZh', weight: 0.45 },
+          ],
+        })
+      )
     })
-  }, [stations])
+    return () => {
+      cancelled = true
+    }
+  }, [open, fuse, stations])
+  React.useEffect(() => {
+    if (!open || !fuse) return
+    fuse.setCollection(stations)
+  }, [open, fuse, stations])
 
   const results = React.useMemo(() => {
     if (!trimmedQuery) return [] as LrtStationSearchItem[]
@@ -78,6 +96,12 @@ export function LrtStationSearch({ lang, stations, selectedStationId, onSelect }
     if (showStationId) {
       return stations.filter((s) => s.stationId.startsWith(trimmedQuery)).slice(0, 40)
     }
+
+    const needle = trimmedQuery.toLowerCase()
+    const prefix = stations
+      .filter((s) => s.nameEn.toLowerCase().startsWith(needle) || s.nameZh.startsWith(trimmedQuery))
+      .slice(0, 40)
+    if (prefix.length >= 20 || !fuse) return prefix
 
     const hits = fuse.search(trimmedQuery).slice(0, 40)
     return hits.map((h: { item: LrtStationSearchItem }) => h.item)

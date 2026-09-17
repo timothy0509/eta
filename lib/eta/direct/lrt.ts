@@ -2,6 +2,7 @@ import { lrtScheduleKey } from '@/lib/eta/cache/keys'
 import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import { fetchLrtEtasForStop, listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { getCachedValue } from '@/lib/eta/direct/shared'
+import { getAdaptiveConcurrency } from '@/lib/eta/http'
 import { lrtStopIdToStationId, lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 import { promisePool } from '@/lib/eta/promise-pool'
 
@@ -93,7 +94,13 @@ function mapEtaToRouteEntry(params: {
   }
 }
 
-async function loadLrtSchedule(stationId: string): Promise<LrtScheduleResponse> {
+async function loadLrtSchedule(
+  stationId: string,
+  signal?: AbortSignal
+): Promise<LrtScheduleResponse> {
+  if (signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
   const routes = await listLrtRoutes()
   const stopId = stationIdToLrtStopId(stationId)
   if (!stopId) {
@@ -118,44 +125,49 @@ async function loadLrtSchedule(stationId: string): Promise<LrtScheduleResponse> 
 
   const platformMap = new Map<number, LrtRouteEntry[]>()
 
-  const results = await promisePool(variants, 5, async (entry) => {
-    const bound = entry.bound.lightRail ?? ''
-    const stop = entry.stops.lightRail?.find((id) => lrtStopIdsEqual(id, stopId)) ?? stopId
-    const stationIdForEta = lrtStopIdToStationId(stop) ?? stationId
-    const etas = await fetchLrtEtasForStop({
-      route: entry.route,
-      bound,
-      serviceType: entry.serviceType,
-      stationId: stationIdForEta,
-      language: 'tc',
-    })
+  const results = await promisePool(
+    variants,
+    getAdaptiveConcurrency(5, 3, 2),
+    async (entry) => {
+      const bound = entry.bound.lightRail ?? ''
+      const stop = entry.stops.lightRail?.find((id) => lrtStopIdsEqual(id, stopId)) ?? stopId
+      const stationIdForEta = lrtStopIdToStationId(stop) ?? stationId
+      const etas = await fetchLrtEtasForStop({
+        route: entry.route,
+        bound,
+        serviceType: entry.serviceType,
+        stationId: stationIdForEta,
+        language: 'tc',
+      })
 
-    return etas.flatMap((eta) => {
-      const hasEta = Boolean(eta.eta)
-      const hasDest = Boolean(
-        (eta as { dest?: { en?: string; zh?: string } }).dest?.en ||
-        (eta as { dest?: { en?: string; zh?: string } }).dest?.zh
-      )
-      if (!hasEta && !hasDest) {
-        return [] as LrtRouteEntry[]
-      }
-      const remark = eta.remark?.en ?? eta.remark?.zh ?? ''
-      const platformMatch = remark.match(/Platform\s+(\d+)/i) || remark.match(/(\d+)\s*號月台/)
-      const platformId = platformMatch?.[1] ? Number(platformMatch[1]) : 0
-      return [
-        mapEtaToRouteEntry({
-          eta: eta as {
-            eta: string
-            remark: { en: string; zh: string }
-            dest?: { en?: string; zh?: string }
-          },
-          route: entry.route,
-          dest: destByRoute.get(entry.route.toUpperCase()) ?? entry.dest,
-          platformId,
-        }),
-      ]
-    })
-  })
+      return etas.flatMap((eta) => {
+        const hasEta = Boolean(eta.eta)
+        const hasDest = Boolean(
+          (eta as { dest?: { en?: string; zh?: string } }).dest?.en ||
+          (eta as { dest?: { en?: string; zh?: string } }).dest?.zh
+        )
+        if (!hasEta && !hasDest) {
+          return [] as LrtRouteEntry[]
+        }
+        const remark = eta.remark?.en ?? eta.remark?.zh ?? ''
+        const platformMatch = remark.match(/Platform\s+(\d+)/i) || remark.match(/(\d+)\s*號月台/)
+        const platformId = platformMatch?.[1] ? Number(platformMatch[1]) : 0
+        return [
+          mapEtaToRouteEntry({
+            eta: eta as {
+              eta: string
+              remark: { en: string; zh: string }
+              dest?: { en?: string; zh?: string }
+            },
+            route: entry.route,
+            dest: destByRoute.get(entry.route.toUpperCase()) ?? entry.dest,
+            platformId,
+          }),
+        ]
+      })
+    },
+    { signal }
+  )
 
   for (const result of results) {
     if (result.status !== 'fulfilled') continue
@@ -180,13 +192,18 @@ async function loadLrtSchedule(stationId: string): Promise<LrtScheduleResponse> 
   }
 }
 
-export async function getLrtSchedule(params: { stationId: string }): Promise<LrtScheduleResponse> {
+export async function getLrtSchedule(params: {
+  stationId: string
+  signal?: AbortSignal
+}): Promise<LrtScheduleResponse> {
   const cacheKey = lrtScheduleKey({ route: 'all', stationId: params.stationId, lang: 'tc' })
   const cachedValue = await getCachedValue<LrtScheduleResponse>({
     key: cacheKey,
     policyKey: 'lrtSchedule',
     policy: CACHE_POLICIES.lrtSchedule,
-    fetcher: async () => loadLrtSchedule(params.stationId),
+    allowStale: true,
+    signal: params.signal,
+    fetcher: async () => loadLrtSchedule(params.stationId, params.signal),
   })
 
   return cachedValue.value

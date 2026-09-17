@@ -119,4 +119,51 @@ describe('promisePool', () => {
     expect(results[2].status).toBe('fulfilled')
     expect(results[3].status).toBe('rejected')
   })
+
+  it('rejects without running workers when the signal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const worker = vi.fn(async (n: number) => n)
+
+    await expect(promisePool([1, 2], 2, worker, { signal: controller.signal })).rejects.toThrow(
+      expect.objectContaining({ name: 'AbortError' })
+    )
+    expect(worker).not.toHaveBeenCalled()
+  })
+
+  it('stops workers and rejects with AbortError on mid-flight abort', async () => {
+    const controller = new AbortController()
+    let active = 0
+    let maxActive = 0
+    let started = 0
+    const worker = vi.fn(async (n: number) => {
+      started += 1
+      active += 1
+      maxActive = Math.max(maxActive, active)
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 50))
+        if (controller.signal.aborted) {
+          throw new DOMException('The operation was aborted.', 'AbortError')
+        }
+        return n
+      } finally {
+        active -= 1
+      }
+    })
+
+    const pending = promisePool([1, 2, 3, 4], 2, worker, { signal: controller.signal })
+    await new Promise((resolve) => setTimeout(resolve, 10))
+    controller.abort()
+
+    await expect(pending).rejects.toThrow(expect.objectContaining({ name: 'AbortError' }))
+    expect(started).toBeLessThan(4)
+    expect(maxActive).toBeLessThanOrEqual(2)
+    // Promise.all rejects when the first runner throws, so the other
+    // worker may still be settling; wait for all started workers to drain.
+    const deadline = Date.now() + 1000
+    while (active > 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+    expect(active).toBe(0)
+  })
 })

@@ -158,6 +158,10 @@ type AppState = {
 
 const RECENTS_LIMIT = 12
 
+// Cap persisted favorites so localStorage stays small and the favorites
+// list renders fast. Newest saves win; the oldest unpinned entries fall off.
+export const FAVORITES_LIMIT = 200
+
 const createId = () => {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
     return crypto.randomUUID()
@@ -170,6 +174,22 @@ const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
   pinned: item.pinned ?? false,
   groupId: item.groupId ?? null,
 })
+
+// Newest saves win. The list is newest-first (addFavorite prepends), so the
+// overflow is dropped from the end: oldest unpinned entries first, then
+// oldest pinned. Input order is always preserved.
+export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
+  if (favorites.length <= FAVORITES_LIMIT) return favorites
+  const overflow = favorites.length - FAVORITES_LIMIT
+  const drop = new Set<number>()
+  for (let i = favorites.length - 1; i >= 0 && drop.size < overflow; i -= 1) {
+    if (!favorites[i].pinned) drop.add(i)
+  }
+  for (let i = favorites.length - 1; i >= 0 && drop.size < overflow; i -= 1) {
+    drop.add(i)
+  }
+  return favorites.filter((_, i) => !drop.has(i))
+}
 
 export const useAppStore = create<AppState>()(
   persist(
@@ -193,7 +213,7 @@ export const useAppStore = create<AppState>()(
       addFavorite: (item) =>
         set((state) => {
           if (state.favorites.some((f) => f.id === item.id)) return state
-          return { favorites: [withFavoriteMeta(item), ...state.favorites] }
+          return { favorites: capFavorites([withFavoriteMeta(item), ...state.favorites]) }
         }),
 
       removeFavorite: (id) =>
@@ -304,7 +324,9 @@ export const useAppStore = create<AppState>()(
       storage: createJSONStorage(() => createDebouncedLocalStorage(300)),
       migrate: (persistedState) => {
         const state = persistedState as Partial<AppState> | undefined
-        const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
+        const favorites = capFavorites(
+          (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
+        )
 
         return {
           mode: state?.mode ?? 'kmb',

@@ -252,6 +252,7 @@ export async function fetchKmbStopEtas(
       fetchKmbStopEtasDirect(stopIds, {
         routeFilter: options?.routeFilter,
         includeFares: options?.includeFares ?? false,
+        signal: options?.signal,
       }),
     { signal: options?.signal }
   )
@@ -305,9 +306,13 @@ export async function fetchMtrSchedules(
   const body = { queries }
   const key = `mtr:schedules:${JSON.stringify(body)}`
 
-  return await fetchJsonDedupe(key, async () => fetchMtrSchedulesDirect(queries), {
-    signal: options?.signal,
-  })
+  return await fetchJsonDedupe(
+    key,
+    async () => fetchMtrSchedulesDirect(queries, { signal: options?.signal }),
+    {
+      signal: options?.signal,
+    }
+  )
 }
 
 export async function fetchLrtSchedule(
@@ -316,9 +321,13 @@ export async function fetchLrtSchedule(
 ): Promise<LrtScheduleResponse> {
   const stationId = lrtStopIdToStationId(params.stationId) ?? params.stationId
   const key = `lrt:schedule:${stationId}`
-  return await fetchJsonDedupe(key, async () => getLrtSchedule({ stationId }), {
-    signal: options?.signal,
-  })
+  return await fetchJsonDedupe(
+    key,
+    async () => getLrtSchedule({ stationId, signal: options?.signal }),
+    {
+      signal: options?.signal,
+    }
+  )
 }
 
 export async function listMtrRoutes(options?: { signal?: AbortSignal }): Promise<RouteListEntry[]> {

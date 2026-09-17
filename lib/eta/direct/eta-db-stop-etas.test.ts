@@ -113,7 +113,7 @@ describe('fetchKmbEtasForStop hybrid', () => {
     const result = await fetchKmbEtasForStop({ stopId: 'STOP1', language: 'tc' }, deps)
 
     expect(fetchOfficialStopEta).toHaveBeenCalledTimes(1)
-    expect(fetchOfficialStopEta).toHaveBeenCalledWith('STOP1')
+    expect(fetchOfficialStopEta).toHaveBeenCalledWith('STOP1', undefined)
     expect(fetchVariantEtas).not.toHaveBeenCalled()
     expect(result).toHaveLength(1)
     expect(result[0]?.co).toBe('kmb')
@@ -251,5 +251,52 @@ describe('fetchKmbEtasForStop hybrid', () => {
     expect(result).toEqual([])
     expect(fetchOfficialStopEta).not.toHaveBeenCalled()
     expect(fetchVariantEtas).not.toHaveBeenCalled()
+  })
+
+  it('rejects without fetching when the signal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const fetchOfficialStopEta = vi.fn()
+    const fetchVariantEtas = vi.fn()
+
+    await expect(
+      fetchKmbEtasForStop(
+        { stopId: 'STOP1', language: 'tc', signal: controller.signal },
+        {
+          getIndexes: async () => emptyIndexes(),
+          fetchOfficialStopEta,
+          fetchVariantEtas,
+        }
+      )
+    ).rejects.toThrow(expect.objectContaining({ name: 'AbortError' }))
+    expect(fetchOfficialStopEta).not.toHaveBeenCalled()
+    expect(fetchVariantEtas).not.toHaveBeenCalled()
+  })
+
+  it('forwards the signal to the official stop-eta fetch', async () => {
+    const kmbEntry = makeRouteEntry({
+      route: '1A',
+      co: ['kmb'],
+      bound: { kmb: 'O' },
+      stops: { kmb: ['STOP1'] },
+    })
+    const indexes = emptyIndexes()
+    indexes.stopRoutesIndex.set('STOP1', [
+      { stopId: 'STOP1', co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 0 },
+    ])
+    indexes.routeVariantIndex.set('kmb|1A|O|1', kmbEntry)
+    const fetchOfficialStopEta = vi.fn().mockResolvedValue({ data: [] })
+    const controller = new AbortController()
+
+    await fetchKmbEtasForStop(
+      { stopId: 'STOP1', language: 'tc', signal: controller.signal },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta,
+        fetchVariantEtas: vi.fn(),
+      }
+    )
+
+    expect(fetchOfficialStopEta).toHaveBeenCalledWith('STOP1', controller.signal)
   })
 })

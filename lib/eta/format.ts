@@ -1,3 +1,4 @@
+import { LANG_LABELS } from '@/lib/eta/i18n'
 import type { UiLanguage } from '@/lib/eta/types'
 
 export function formatRelativeMinutes(targetIso: string, now: number | Date = new Date()) {
@@ -69,14 +70,7 @@ export function formatUiTime(date: Date, lang: UiLanguage) {
 }
 
 export function formatUiLanguageLabel(lang: UiLanguage) {
-  switch (lang) {
-    case 'en':
-      return 'EN'
-    case 'tc':
-      return '繁'
-    case 'sc':
-      return '简'
-  }
+  return LANG_LABELS[lang]
 }
 
 /**

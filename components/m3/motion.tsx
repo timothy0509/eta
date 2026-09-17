@@ -1,6 +1,6 @@
 'use client'
 
-import { motion, type HTMLMotionProps } from 'framer-motion'
+import { motion, useReducedMotion, type HTMLMotionProps } from 'framer-motion'
 import * as React from 'react'
 
 import { cn } from '@/lib/utils'
@@ -11,18 +11,23 @@ type FadeInProps = HTMLMotionProps<'div'> & {
 }
 
 export const FadeIn = React.forwardRef<HTMLDivElement, FadeInProps>(
-  ({ children, className, delay = 0, duration = 0.25, ...props }, ref) => (
-    <motion.div
-      ref={ref}
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration, delay, ease: [0.2, 0.8, 0.2, 1] }}
-      className={className}
-      {...props}
-    >
-      {children}
-    </motion.div>
-  )
+  ({ children, className, delay = 0, duration = 0.25, ...props }, ref) => {
+    const reduceMotion = useReducedMotion()
+    return (
+      <motion.div
+        ref={ref}
+        initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={
+          reduceMotion ? { duration: 0, delay: 0 } : { duration, delay, ease: [0.2, 0.8, 0.2, 1] }
+        }
+        className={className}
+        {...props}
+      >
+        {children}
+      </motion.div>
+    )
+  }
 )
 FadeIn.displayName = 'FadeIn'
 

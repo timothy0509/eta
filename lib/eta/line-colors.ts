@@ -50,7 +50,10 @@ export const LRT_ROUTE_COLORS: Record<string, string> = {
   '761P': '#6f2b91', // Dark Purple
 }
 
-export function getLineColor(code: string | null | undefined, fallback = '#64748b') {
+/** Fallback line color for unknown lines. Single source so views never hardcode it. */
+export const LINE_COLOR_FALLBACK = '#64748b'
+
+export function getLineColor(code: string | null | undefined, fallback = LINE_COLOR_FALLBACK) {
   if (!code) return fallback
   return MTR_LINE_COLORS[code] ?? LRT_ROUTE_COLORS[code] ?? fallback
 }

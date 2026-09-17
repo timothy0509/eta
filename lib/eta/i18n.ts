@@ -26,7 +26,30 @@ const common: Record<string, TranslationEntry> = {
   themeSystem: { en: 'System', tc: '系統', sc: '系统' },
   off: { en: 'Off', tc: '關閉', sc: '关闭' },
   toggleTheme: { en: 'Toggle theme', tc: '切換主題', sc: '切换主题' },
-  refresh: { en: 'Refresh', tc: '重新整理', sc: '重新整理' },
+  refresh: { en: 'Refresh', tc: '重新整理', sc: '刷新' },
+  transportMode: { en: 'Transport mode', tc: '交通工具', sc: '交通工具' },
+  sections: { en: 'Sections', tc: '分頁', sc: '分页' },
+  modeBus: { en: 'Bus', tc: '巴士', sc: '巴士' },
+  modeMtr: { en: 'MTR', tc: '港鐵', sc: '港铁' },
+  modeLrt: { en: 'Light Rail', tc: '輕鐵', sc: '轻铁' },
+  inbound: { en: 'Inbound', tc: '去程', sc: '去程' },
+  outbound: { en: 'Outbound', tc: '回程', sc: '回程' },
+  sharedSearch: { en: 'Shared search', tc: '分享的搜尋', sc: '分享的搜索' },
+  noResults: { en: 'No results.', tc: '沒有結果。', sc: '没有结果。' },
+  tryAgain: { en: 'Try again', tc: '再試一次', sc: '再试一次' },
+  backHome: { en: 'Back to home', tc: '返回主頁', sc: '返回主页' },
+  wentWrong: { en: 'Something went wrong', tc: '發生錯誤', sc: '发生错误' },
+  wentWrongHint: {
+    en: 'The page hit an unexpected error. Try again, or refresh the page if the issue persists.',
+    tc: '頁面發生未預期的錯誤。請再試一次，若問題持續請重新整理頁面。',
+    sc: '页面发生未预期的错误。请再试一次，若问题持续请刷新页面。',
+  },
+  pageNotFound: { en: 'Page not found', tc: '找不到頁面', sc: '找不到页面' },
+  pageNotFoundHint: {
+    en: 'We could not find the page you are looking for.',
+    tc: '找不到你要的頁面。',
+    sc: '找不到你要的页面。',
+  },
   save: { en: 'Save', tc: '收藏', sc: '收藏' },
   selectStop: {
     en: 'Select a stop to load ETAs.',
@@ -113,6 +136,46 @@ const common: Record<string, TranslationEntry> = {
     tc: '更新失敗。顯示上次結果。({error})',
     sc: '更新失败。显示上次结果。({error})',
   },
+  searchStopTrigger: { en: 'Search stop name...', tc: '搜尋車站…', sc: '搜索车站…' },
+  searchStopInput: { en: 'Type a stop name…', tc: '輸入車站名稱…', sc: '输入车站名称…' },
+  searchStopAria: { en: 'Search stop name', tc: '搜尋車站', sc: '搜索车站' },
+  searchStationTrigger: { en: 'Search station name…', tc: '搜尋車站…', sc: '搜索车站…' },
+  searchStationInput: { en: 'Type a station name…', tc: '輸入車站名稱…', sc: '输入车站名称…' },
+  searchStationAria: { en: 'Search station name', tc: '搜尋車站', sc: '搜索车站' },
+  searchLrtTrigger: { en: 'Search LRT stop…', tc: '搜尋輕鐵站…', sc: '搜索轻铁站…' },
+  searchLrtInput: { en: 'Type a stop name…', tc: '輸入車站名稱…', sc: '输入车站名称…' },
+  searchLrtAria: { en: 'Search LRT stop', tc: '搜尋輕鐵站', sc: '搜索轻铁站' },
+  searchGroupStops: { en: 'Stops', tc: '車站', sc: '车站' },
+  searchGroupStations: { en: 'Stations', tc: '車站', sc: '车站' },
+  searchContainsPrefix: { en: 'Contains: ', tc: '包含：', sc: '包含：' },
+  searchContainsHint: {
+    en: 'Search all stops whose name contains this text',
+    tc: '搜尋所有名稱包含此文本的車站',
+    sc: '搜索所有名称包含此文本的车站',
+  },
+  searchContainsHelp: {
+    en: 'Type 3+ characters for "contains" search.',
+    tc: '輸入 3 個以上字符以進行「包含」搜尋。',
+    sc: '输入 3 个以上字符以进行“包含”搜索。',
+  },
+  stationCode: { en: 'Code', tc: '代號', sc: '代号' },
+  stationLines: { en: 'Lines', tc: '路線', sc: '线路' },
+  minutesUnit: { en: 'min', tc: '分', sc: '分钟' },
+  pickStopForRoutes: {
+    en: 'Pick a stop to see available routes.',
+    tc: '請選擇車站以查看可用路線。',
+    sc: '请选择车站以查看可用路线。',
+  },
+  scNotSupported: {
+    en: 'Simplified Chinese is not supported for this mode',
+    tc: '此模式不支援簡體中文',
+    sc: '此模式不支持简体中文',
+  },
+  justNow: { en: 'just now', tc: '剛剛', sc: '刚刚' },
+  minutesAgo: { en: '{minutes} min ago', tc: '{minutes} 分鐘前', sc: '{minutes} 分钟前' },
+  hourAgo: { en: '{hours} hr ago', tc: '{hours} 小時前', sc: '{hours} 小时前' },
+  hoursAgo: { en: '{hours} hrs ago', tc: '{hours} 小時前', sc: '{hours} 小时前' },
+  stationWithId: { en: 'Station {id}', tc: '車站 {id}', sc: '车站 {id}' },
 }
 
 const kmb: Record<string, TranslationEntry> = {
@@ -137,12 +200,18 @@ const kmb: Record<string, TranslationEntry> = {
   },
   updated: { en: 'Updated {time}', tc: '更新 {time}', sc: '更新 {time}' },
   routeFilter: { en: 'Route Filter', tc: '路線篩選', sc: '路线筛选' },
+  searchRouteNumber: { en: 'Search route number…', tc: '搜尋路線編號…', sc: '搜索路线编号…' },
   stops: { en: 'stops', tc: '個車站', sc: '个车站' },
   routeStops: { en: 'route-stops', tc: '個路線車站', sc: '个路线车站' },
   selectedStops: { en: 'Selected stops', tc: '已選車站', sc: '已选车站' },
   bus: { en: 'Bus', tc: '巴士', sc: '巴士' },
   routes: { en: 'routes', tc: '條路線', sc: '条路线' },
   routeSingular: { en: 'route', tc: '條路線', sc: '条路线' },
+  containsStops: {
+    en: 'Stops containing "{query}"',
+    tc: '包含「{query}」的車站',
+    sc: '包含“{query}”的车站',
+  },
 }
 
 const mtr: Record<string, TranslationEntry> = {
@@ -165,6 +234,11 @@ const mtr: Record<string, TranslationEntry> = {
     sc: '暂无班次信息。',
   },
   viaRacecourse: { en: ' · Via Racecourse', tc: ' · 經馬場', sc: ' · 经马场' },
+  viewDetailsHint: {
+    en: 'View details (opens in new tab)',
+    tc: '查看詳情（在新分頁開啟）',
+    sc: '查看详情（在新分页开启）',
+  },
 }
 
 const lrt: Record<string, TranslationEntry> = {
@@ -187,6 +261,11 @@ const lrt: Record<string, TranslationEntry> = {
     tc: '載入班次中…',
     sc: '载入班次中…',
   },
+  platform: { en: 'Platform {id}', tc: '{id}號月台', sc: '{id}号月台' },
+  stopped: { en: 'Stopped', tc: '暫停服務', sc: '暂停服务' },
+  trainCars: { en: '{count}-car', tc: '{count}卡', sc: '{count}卡' },
+  arrivingLabel: { en: 'Arriving', tc: '到達', sc: '到达' },
+  departingLabel: { en: 'Departing', tc: '離開', sc: '离开' },
 }
 
 const favorites: Record<string, TranslationEntry> = {
@@ -247,6 +326,12 @@ export const translations = {
   lrt,
   favorites,
   errors,
+}
+
+export const LANG_LABELS: Record<UiLanguage, string> = {
+  en: 'EN',
+  tc: '繁',
+  sc: '简',
 }
 
 // ============================================================================

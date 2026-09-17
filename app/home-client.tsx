@@ -3,13 +3,14 @@
 import * as React from 'react'
 import dynamic from 'next/dynamic'
 
-import { BottomNav, SideRail, TopAppBar } from '@/components/eta/app-shell'
+import { HomeLayout, StopsLayout } from '@/components/eta/home-layout'
+import { useRefreshRegistry } from '@/components/eta/hooks/use-refresh-registry'
+import { useUrlSync } from '@/components/eta/hooks/use-url-sync'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { FadeIn } from '@/components/m3/motion'
 import { LRT_STATIONS } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS } from '@/lib/data/mtr-stations'
-import { decodeUrlState, encodeUrlState } from '@/lib/eta/url-state'
 import type {
   LrtStationSearchItem,
   MtrStationSearchItem,
@@ -17,13 +18,12 @@ import type {
   TransportMode,
 } from '@/lib/eta/types'
 import { isLanguageSupported } from '@/lib/eta/types'
-import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
 import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
 import { getMtrLineName } from '@/lib/eta/line-colors'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import { prefetchEtaDb } from '@/lib/eta/prefetch'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
 
 const KmbPane = dynamic(
@@ -118,35 +118,12 @@ const useAppStoreActions = () =>
 
 export default function HomeClient() {
   const { mode, subView, lang, routeFilterMode, autoRefreshSeconds } = useAppStoreState()
-  const {
-    setMode,
-    setSubView,
-    setLang,
-    setRouteFilterMode,
-    setAutoRefreshSeconds,
-    addFavorite,
-    addRecent,
-  } = useAppStoreActions()
+  const { setMode, setSubView, setLang, setRouteFilterMode, addFavorite, addRecent } =
+    useAppStoreActions()
 
   const setKmbStops = usePaneStore((s) => s.setKmbStops)
 
-  const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(() => {
-    if (typeof window === 'undefined') return null
-    try {
-      const decoded = decodeUrlState(window.location.search.slice(1))
-      return decoded.selectedItem ?? null
-    } catch {
-      return null
-    }
-  })
-
   const canFavoriteRef = React.useRef(false)
-  const didHydrateFromUrlRef = React.useRef(false)
-  const lastEncodedRef = React.useRef<string>('')
-
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
 
   const kmbPaneState = usePaneStore(
     useShallow((s) =>
@@ -213,6 +190,17 @@ export default function HomeClient() {
     )
   )
 
+  // Pane-store snapshots are read-only here. Panes write their own
+  // snapshots, and the URL hook below only reads them for encoding.
+  const { selectedItem, setSelectedItem } = useUrlSync({
+    kmbQuery: kmbPaneState?.querySummary ?? null,
+    kmbRouteFilter: kmbPaneState?.routeFilter ?? null,
+    mtrSta: mtrPaneState?.sta,
+    lrtStationId: lrtPaneState?.stationId,
+  })
+
+  const { onRegisterRefresh } = useRefreshRegistry({ mode, subView, autoRefreshSeconds })
+
   const mtrStations: MtrStationSearchItem[] = React.useMemo(
     () =>
       MTR_STATIONS.map((s) => ({
@@ -248,72 +236,6 @@ export default function HomeClient() {
     setLang('tc')
   }, [lang, mode, setLang])
 
-  React.useEffect(() => {
-    if (didHydrateFromUrlRef.current) return
-
-    const search = searchParams?.toString() ?? ''
-    const decoded = decodeUrlState(search)
-    if (decoded.state.mode) {
-      setMode(decoded.state.mode)
-    } else if (decoded.selectedItem) {
-      setMode(decoded.selectedItem.mode)
-    }
-    if (decoded.state.subView) setSubView(decoded.state.subView)
-    if (decoded.state.lang) setLang(decoded.state.lang)
-    if (decoded.state.routeFilterMode) setRouteFilterMode(decoded.state.routeFilterMode)
-    if (decoded.state.autoRefreshSeconds !== undefined) {
-      setAutoRefreshSeconds(decoded.state.autoRefreshSeconds)
-    }
-    didHydrateFromUrlRef.current = true
-    lastEncodedRef.current = search
-  }, [searchParams, setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode, setSubView])
-
-  const refreshRef = React.useRef<Partial<Record<TransportMode, () => Promise<void>>>>({})
-  const inFlightRefreshRef = React.useRef(false)
-  const refreshTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const MAX_REFRESH_DURATION_MS = 30_000
-
-  const onRegisterRefresh = React.useCallback(
-    (transportMode: TransportMode, refresh: () => Promise<void>) => {
-      refreshRef.current[transportMode] = refresh
-    },
-    []
-  )
-
-  useAutoRefresh(
-    autoRefreshSeconds * 1000,
-    React.useCallback(() => {
-      if (subView !== 'stops') return
-      const refresh = refreshRef.current[mode]
-      if (!refresh) return
-      if (inFlightRefreshRef.current) return
-
-      inFlightRefreshRef.current = true
-      refreshTimeoutRef.current = setTimeout(() => {
-        if (inFlightRefreshRef.current) {
-          console.warn('Auto-refresh timeout - forcing unlock')
-          inFlightRefreshRef.current = false
-        }
-      }, MAX_REFRESH_DURATION_MS)
-
-      refresh()
-        .catch(() => {})
-        .finally(() => {
-          if (refreshTimeoutRef.current) {
-            clearTimeout(refreshTimeoutRef.current)
-            refreshTimeoutRef.current = null
-          }
-          inFlightRefreshRef.current = false
-        })
-    }, [mode, subView])
-  )
-
-  React.useEffect(() => {
-    return () => {
-      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
-    }
-  }, [])
-
   const onModeChange = React.useCallback(
     (nextMode: TransportMode) => {
       setMode(nextMode)
@@ -341,7 +263,7 @@ export default function HomeClient() {
         setSubView('stops')
       }
     },
-    [setMode, setRouteFilterMode, setSubView]
+    [setMode, setRouteFilterMode, setSelectedItem, setSubView]
   )
 
   const kmbRouteInitialSelection = React.useMemo(() => {
@@ -370,14 +292,14 @@ export default function HomeClient() {
       setMode('kmb')
       setSubView('stops')
     },
-    [setMode, setSubView]
+    [setMode, setSelectedItem, setSubView]
   )
 
   const onSelectMtrStationFromRoute = React.useCallback(
     (sta: string, line: string, name: string) => {
       const station = mtrStations.find((s) => s.sta === sta)
       const title = station
-        ? `${lang === 'en' ? station.nameEn : station.nameTc} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`
+        ? `${pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang)} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`
         : `${name} · ${line}/${sta}`
       const item: FavoritesItem = {
         id: `mtr:${sta}`,
@@ -390,14 +312,14 @@ export default function HomeClient() {
       setMode('mtr')
       setSubView('stops')
     },
-    [lang, mtrStations, setMode, setSubView]
+    [lang, mtrStations, setMode, setSelectedItem, setSubView]
   )
 
   const onSelectLrtStationFromRoute = React.useCallback(
     (stationId: string, name: string) => {
       const station = lrtStations.find((s) => s.stationId === stationId)
       const title = station
-        ? `${lang === 'en' ? station.nameEn : station.nameZh} · ${station.stationId}`
+        ? `${pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang)} · ${station.stationId}`
         : `${name} · ${stationId}`
       const item: FavoritesItem = {
         id: `lrt:${stationId}`,
@@ -409,47 +331,8 @@ export default function HomeClient() {
       setMode('lrt')
       setSubView('stops')
     },
-    [lang, lrtStations, setMode, setSubView]
+    [lang, lrtStations, setMode, setSelectedItem, setSubView]
   )
-
-  React.useEffect(() => {
-    if (!didHydrateFromUrlRef.current) return
-
-    const kmbQuery = kmbPaneState?.querySummary ?? null
-    const query = encodeUrlState({
-      mode,
-      subView,
-      lang,
-      routeFilterMode,
-      autoRefreshSeconds,
-      kmb: kmbQuery
-        ? {
-            query: kmbQuery,
-            routeFilter: kmbPaneState?.routeFilter ?? null,
-          }
-        : null,
-      mtr: { sta: mtrPaneState?.sta ?? null },
-      lrt: { stationId: lrtPaneState?.stationId ?? null },
-    })
-
-    if (query === lastEncodedRef.current) return
-    lastEncodedRef.current = query
-
-    const nextUrl = query ? `${pathname}?${query}` : pathname
-    router.replace(nextUrl, { scroll: false })
-  }, [
-    autoRefreshSeconds,
-    kmbPaneState?.querySummary,
-    kmbPaneState?.routeFilter,
-    lang,
-    lrtPaneState?.stationId,
-    mode,
-    mtrPaneState?.sta,
-    pathname,
-    routeFilterMode,
-    router,
-    subView,
-  ])
 
   const kmbOnRefresh = React.useCallback(
     () => void kmbPaneState?.refresh({ toastOnError: true }),
@@ -558,20 +441,7 @@ export default function HomeClient() {
   )
 
   const renderStops = () => {
-    return (
-      <FadeIn className="mx-auto max-w-[1280px] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
-        <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
-          <div className="card-m3 p-4 sm:p-5 lg:p-5">{controls}</div>
-        </div>
-
-        <FadeIn className="relative mt-4 lg:mt-0" delay={0.05}>
-          <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-6">
-            <span className="bg-primary absolute top-0 right-0 left-0 h-[3px]" aria-hidden />
-            {results}
-          </div>
-        </FadeIn>
-      </FadeIn>
-    )
+    return <StopsLayout controls={controls} results={results} />
   }
 
   const renderRoutes = () => {
@@ -618,18 +488,14 @@ export default function HomeClient() {
   }
 
   return (
-    <div className="bg-surface min-h-dvh overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
-      <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
-
-      <div className="mx-auto flex max-w-[1280px] gap-6 px-4 py-4 sm:px-6 sm:py-6">
-        <SideRail lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
-
-        <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-[1100px]">{renderContent()}</div>
-        </div>
-      </div>
-
-      <BottomNav lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
-    </div>
+    <HomeLayout
+      lang={lang}
+      mode={mode}
+      subView={subView}
+      onModeChange={onModeChange}
+      onSubViewChange={onSubViewChange}
+    >
+      {renderContent()}
+    </HomeLayout>
   )
 }

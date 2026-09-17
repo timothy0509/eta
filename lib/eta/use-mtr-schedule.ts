@@ -3,7 +3,9 @@
 import * as React from 'react'
 
 import { fetchMtrSchedules } from '@/lib/eta/client'
+import { translations } from '@/lib/eta/i18n'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import type { MtrStationSearchItem, UiLanguage } from '@/lib/eta/types'
 
 export function useMtrSchedule(params: { lang: UiLanguage; stations: MtrStationSearchItem[] }) {
@@ -120,9 +122,11 @@ export function useMtrSchedule(params: { lang: UiLanguage; stations: MtrStationS
   }, [refresh, sta])
 
   const title = React.useMemo(() => {
-    if (!sta) return 'MTR'
+    if (!sta) return translations.mtr.title[lang]
     const station = stationsById.get(sta)
-    return station ? (lang === 'en' ? station.nameEn : station.nameTc) : `Station ${sta}`
+    return station
+      ? pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang)
+      : translations.common.stationWithId[lang].replace('{id}', sta)
   }, [lang, sta, stationsById])
 
   return {

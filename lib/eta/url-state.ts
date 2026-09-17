@@ -23,6 +23,11 @@ export type UrlEncodeInput = {
   lang: UiLanguage
   routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
+  // Prefs (lang, routeFilterMode, autoRefreshSeconds) are nav-only by
+  // default: encode omits them unless an explicit Share passes
+  // includePrefs. Hydrate must apply nav without writing into prefs so a
+  // shared link never overwrites saved lang, refresh, or filter.
+  includePrefs?: boolean
   kmb?: {
     query: KmbQuerySummary | null
     routeFilter?: {
@@ -42,6 +47,9 @@ export type UrlDecodeResult = {
   state: {
     mode?: TransportMode
     subView?: SubView
+    // Legacy prefs fields stay on the type so existing consumers compile
+    // unchanged, but decode never populates them: hydrate applies nav only
+    // so a shared link never overwrites saved lang, refresh, or filter.
     lang?: UiLanguage
     routeFilterMode?: RouteFilterMode
     autoRefreshSeconds?: number
@@ -166,9 +174,14 @@ export function decodeUrlState(search: string): UrlDecodeResult {
 
   const explicitMode = parseTransportMode(params.get('m'))
   const subView = parseSubView(params.get('v'))
-  const lang = parseUiLanguage(params.get('l'))
+  // Legacy prefs keys (l, ar, and rfm as a global) are intentionally not
+  // applied: hydrate applies nav only so a shared link never overwrites
+  // saved lang, refresh, or filter. rfm below feeds the KMB selected item
+  // only, never global state. Unknown keys are ignored, gaps fall back to
+  // defaults at the call site.
+  void parseUiLanguage(params.get('l'))
+  void parseAutoRefreshSeconds(params.get('ar'))
   const routeFilterModeParam = parseRouteFilterMode(params.get('rfm'))
-  const autoRefreshSeconds = parseAutoRefreshSeconds(params.get('ar'))
 
   const kmbMode = params.get('km')
   const kmbRoute = params.get('kr')
@@ -197,11 +210,8 @@ export function decodeUrlState(search: string): UrlDecodeResult {
   const state: UrlDecodeResult['state'] = {}
   if (inferredMode) state.mode = inferredMode
   if (subView) state.subView = subView
-  if (lang) state.lang = lang
-  if (autoRefreshSeconds !== null) state.autoRefreshSeconds = autoRefreshSeconds
 
   const derivedRouteFilterMode = routeFilterModeParam ?? (kmbEntries.length ? 'advanced' : null)
-  if (derivedRouteFilterMode) state.routeFilterMode = derivedRouteFilterMode
 
   let selectedItem: FavoritesItem | null = null
 
@@ -238,12 +248,17 @@ export function encodeUrlState(input: UrlEncodeInput): string {
 
   if (input.mode !== DEFAULTS.mode) params.set('m', input.mode)
   if (input.subView !== DEFAULTS.subView) params.set('v', input.subView)
-  if (input.lang !== DEFAULTS.lang) params.set('l', input.lang)
-  if (input.routeFilterMode !== DEFAULTS.routeFilterMode) {
-    params.set('rfm', input.routeFilterMode)
-  }
-  if (input.autoRefreshSeconds !== DEFAULTS.autoRefreshSeconds) {
-    params.set('ar', String(input.autoRefreshSeconds))
+  // Nav-only by default. Prefs travel only on explicit Share so a shared
+  // link never overwrites the recipient's saved lang, refresh, or filter.
+  // Legacy links carrying l, rfm, or ar still decode below.
+  if (input.includePrefs) {
+    if (input.lang !== DEFAULTS.lang) params.set('l', input.lang)
+    if (input.routeFilterMode !== DEFAULTS.routeFilterMode) {
+      params.set('rfm', input.routeFilterMode)
+    }
+    if (input.autoRefreshSeconds !== DEFAULTS.autoRefreshSeconds) {
+      params.set('ar', String(input.autoRefreshSeconds))
+    }
   }
 
   if (input.mode === 'kmb' && input.kmb?.query) {

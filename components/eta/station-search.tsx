@@ -1,21 +1,14 @@
 'use client'
 
-import { Search, TrainFront } from 'lucide-react'
+import { TrainFront } from 'lucide-react'
 import * as React from 'react'
 
-import { Button } from '@/components/ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { CommandItem } from '@/components/ui/command'
+import { StationSearchCombobox } from '@/components/eta/station-search-combobox'
+import { useTranslations } from '@/lib/eta/i18n'
 import type { MtrStationSearchItem, UiLanguage } from '@/lib/eta/types'
+import { pickLangZh, pickSecondaryName } from '@/lib/eta/pick-lang'
 import { getMtrLineName } from '@/lib/eta/line-colors'
-import { cn } from '@/lib/utils'
 import Fuse from 'fuse.js'
 
 type Props = {
@@ -26,13 +19,11 @@ type Props = {
 }
 
 function formatStationName(station: MtrStationSearchItem, lang: UiLanguage) {
-  if (lang === 'tc') return station.nameTc
-  return station.nameEn
+  return pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang)
 }
 
 function formatStationSecondary(station: MtrStationSearchItem, lang: UiLanguage) {
-  if (lang === 'en') return station.nameTc
-  return station.nameEn
+  return pickSecondaryName({ en: station.nameEn, tc: station.nameTc }, lang)
 }
 
 function isStationCodeQuery(query: string) {
@@ -44,6 +35,7 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
   const [query, setQuery] = React.useState('')
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const listId = React.useId()
+  const { t } = useTranslations(lang)
 
   React.useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 150)
@@ -92,91 +84,44 @@ export function MtrStationSearch({ lang, stations, selectedSta, onSelect }: Prop
   }, [results, stations, trimmedQuery])
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={open ? listId : undefined}
-          aria-haspopup="listbox"
-          className={cn(
-            'bg-surface-container-high text-on-surface w-full min-w-0 justify-start rounded-2xl border border-[var(--outline-variant)]/20 py-5 text-left shadow-sm',
-            'hover:bg-surface-container hover:border-[var(--outline-variant)]/30',
-            !selectedStation && 'text-on-surface-variant'
-          )}
+    <StationSearchCombobox
+      open={open}
+      onOpenChange={setOpen}
+      listId={listId}
+      triggerLabel={selectedStation ? formatStationName(selectedStation, lang) : null}
+      triggerPlaceholder={t('common.searchStationTrigger')}
+      inputPlaceholder={t('common.searchStationInput')}
+      inputAriaLabel={t('common.searchStationAria')}
+      query={query}
+      onQueryChange={setQuery}
+      emptyText={t('common.noResults')}
+      groupHeading={t('common.searchGroupStations')}
+    >
+      {displayResults.map((station: MtrStationSearchItem) => (
+        <CommandItem
+          key={station.labelId}
+          value={station.labelId}
+          onSelect={() => {
+            onSelect(station)
+            setOpen(false)
+          }}
+          className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
         >
-          <Search className="text-on-surface-variant mr-2 h-4 w-4" />
-          <span className="m3-body-md truncate">
-            {selectedStation
-              ? formatStationName(selectedStation, lang)
-              : lang === 'en'
-                ? 'Search station name…'
-                : lang === 'sc'
-                  ? '搜索车站…'
-                  : '搜尋車站…'}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="bg-surface-container-low w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl p-0"
-        align="start"
-      >
-        <Command shouldFilter={false} className="rounded-none bg-transparent">
-          <CommandInput
-            placeholder={
-              lang === 'en'
-                ? 'Type a station name…'
-                : lang === 'sc'
-                  ? '输入车站名称…'
-                  : '輸入車站名稱…'
-            }
-            aria-label={
-              lang === 'en' ? 'Search station name' : lang === 'sc' ? '搜索车站' : '搜尋車站'
-            }
-            value={query}
-            onValueChange={setQuery}
-            className="m3-body-md border-b-0"
-          />
-          <CommandList id={listId} className="max-h-[400px] py-2">
-            <CommandEmpty className="text-on-surface-variant m3-body-md py-8 text-center">
-              {lang === 'en' ? 'No results.' : '無結果。'}
-            </CommandEmpty>
-            <CommandGroup
-              heading={lang === 'en' ? 'Stations' : lang === 'sc' ? '车站' : '車站'}
-              className="text-on-surface-variant m3-label-md px-3 pt-0 pb-2"
-            >
-              {displayResults.map((station: MtrStationSearchItem) => (
-                <CommandItem
-                  key={station.labelId}
-                  value={station.labelId}
-                  onSelect={() => {
-                    onSelect(station)
-                    setOpen(false)
-                  }}
-                  className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
-                >
-                  <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-                    <TrainFront className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-on-surface truncate font-medium">
-                      {formatStationName(station, lang)}
-                    </div>
-                    <div className="text-on-surface-variant m3-label-md truncate">
-                      {formatStationSecondary(station, lang)}
-                      {` · ${lang === 'en' ? 'Lines' : lang === 'sc' ? '线路' : '路線'}: ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}`}
-                      {showStationCode
-                        ? ` · ${lang === 'en' ? 'Code' : lang === 'sc' ? '代号' : '代號'}: ${station.sta}`
-                        : null}
-                    </div>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+          <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+            <TrainFront className="h-4 w-4" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-on-surface truncate font-medium">
+              {formatStationName(station, lang)}
+            </div>
+            <div className="text-on-surface-variant m3-label-md truncate">
+              {formatStationSecondary(station, lang)}
+              {` · ${t('common.stationLines')}: ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}`}
+              {showStationCode ? ` · ${t('common.stationCode')}: ${station.sta}` : null}
+            </div>
+          </div>
+        </CommandItem>
+      ))}
+    </StationSearchCombobox>
   )
 }

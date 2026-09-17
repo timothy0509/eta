@@ -3,19 +3,12 @@
 import { MapPin, Search } from 'lucide-react'
 import * as React from 'react'
 
-import { Button } from '@/components/ui/button'
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { CommandItem } from '@/components/ui/command'
+import { StationSearchCombobox } from '@/components/eta/station-search-combobox'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { useTranslations } from '@/lib/eta/i18n'
+import { pickLang, pickSecondaryName } from '@/lib/eta/pick-lang'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
-import { cn } from '@/lib/utils'
 import Fuse from 'fuse.js'
 
 export type StopSearchSelection =
@@ -55,14 +48,11 @@ type StopComputed = {
 // --- Utility functions for stop name/code parsing ---
 
 function formatStopName(stop: KmbStopSearchItem, lang: UiLanguage) {
-  if (lang === 'sc') return stop.nameSc
-  if (lang === 'en') return stop.nameEn
-  return stop.nameTc
+  return pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
 }
 
 function formatStopSecondary(stop: KmbStopSearchItem, lang: UiLanguage) {
-  if (lang === 'en') return stop.nameTc
-  return stop.nameEn
+  return pickSecondaryName({ en: stop.nameEn, tc: stop.nameTc }, lang)
 }
 
 /**
@@ -230,6 +220,7 @@ export function StopSearch({
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
   const listId = React.useId()
+  const { t } = useTranslations(lang)
 
   // Debounce the search query (150ms) to reduce Fuse.js invocations
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
@@ -282,10 +273,10 @@ export function StopSearch({
       return baseName
     }
     if (value.type === 'contains') {
-      return (lang === 'en' ? 'Contains: ' : lang === 'sc' ? '包含: ' : '包含: ') + value.query
+      return t('common.searchContainsPrefix') + value.query
     }
     return null
-  }, [value, stopById, lang])
+  }, [value, stopById, lang, t])
 
   const stopComputed = React.useMemo<StopComputed[]>(() => {
     return stops.map((stop) => {
@@ -412,124 +403,71 @@ export function StopSearch({
   )
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          aria-controls={open ? listId : undefined}
-          aria-haspopup="listbox"
-          className={cn(
-            'bg-surface-container-high text-on-surface w-full min-w-0 justify-start rounded-2xl border border-[var(--outline-variant)]/20 py-5 text-left shadow-sm',
-            'hover:bg-surface-container hover:border-[var(--outline-variant)]/30',
-            !selectedLabel && 'text-on-surface-variant'
-          )}
+    <StationSearchCombobox
+      open={open}
+      onOpenChange={setOpen}
+      listId={listId}
+      triggerLabel={selectedLabel}
+      triggerPlaceholder={t('common.searchStopTrigger')}
+      inputPlaceholder={t('common.searchStopInput')}
+      inputAriaLabel={t('common.searchStopAria')}
+      query={query}
+      onQueryChange={setQuery}
+      emptyText={t('common.noResults')}
+      groupHeading={t('common.searchGroupStops')}
+      listClassName={isSearching ? 'opacity-60 transition-opacity' : undefined}
+    >
+      {canSearchContains ? (
+        <CommandItem
+          key={`contains:${trimmedQuery}`}
+          value={`contains:${trimmedQuery}`}
+          onSelect={() => {
+            onSelectContains(trimmedQuery)
+            setOpen(false)
+          }}
+          className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
         >
-          <Search className="text-on-surface-variant mr-2 h-4 w-4 shrink-0" />
-          <span className="m3-body-md truncate">
-            {selectedLabel ||
-              (lang === 'en' ? 'Search stop name...' : lang === 'sc' ? '搜尋車站…' : '搜尋車站…')}
-          </span>
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent
-        className="bg-surface-container-low w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[var(--outline-variant)]/20 p-0 shadow-lg"
-        align="start"
-      >
-        <Command shouldFilter={false} className="rounded-none bg-transparent">
-          <CommandInput
-            placeholder={
-              lang === 'en'
-                ? 'Type a stop name…'
-                : lang === 'sc'
-                  ? '輸入車站名稱…'
-                  : '輸入車站名稱…'
-            }
-            aria-label={
-              lang === 'en' ? 'Search stop name' : lang === 'sc' ? '搜索车站' : '搜尋車站'
-            }
-            value={query}
-            onValueChange={setQuery}
-            className="m3-body-md border-b-0"
-          />
-          <CommandList
-            id={listId}
-            className={cn('max-h-[400px] py-2', isSearching && 'opacity-60 transition-opacity')}
-          >
-            <CommandEmpty className="text-on-surface-variant m3-body-md py-8 text-center">
-              {lang === 'en' ? 'No results.' : '無結果。'}
-            </CommandEmpty>
-            <CommandGroup
-              heading={lang === 'en' ? 'Stops' : lang === 'sc' ? '车站' : '車站'}
-              className="text-on-surface-variant m3-label-md px-3 pt-0 pb-2"
-            >
-              {canSearchContains ? (
-                <CommandItem
-                  key={`contains:${trimmedQuery}`}
-                  value={`contains:${trimmedQuery}`}
-                  onSelect={() => {
-                    onSelectContains(trimmedQuery)
-                    setOpen(false)
-                  }}
-                  className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
-                >
-                  <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-                    <Search className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-on-surface truncate font-medium">
-                      {(lang === 'en' ? 'Contains: ' : lang === 'sc' ? '包含：' : '包含：') +
-                        trimmedQuery}
-                    </div>
-                    <div className="text-on-surface-variant m3-label-md truncate">
-                      {lang === 'en'
-                        ? 'Search all stops whose name contains this text'
-                        : lang === 'sc'
-                          ? '搜索所有名称包含此文本的车站'
-                          : '搜尋所有名稱包含此文本的車站'}
-                    </div>
-                  </div>
-                </CommandItem>
-              ) : trimmedQuery.length ? (
-                <div className="text-on-surface-variant m3-label-md px-3 py-1">
-                  {lang === 'en'
-                    ? 'Type 3+ characters for "contains" search.'
-                    : lang === 'sc'
-                      ? '输入 3 个以上字符以进行“包含”搜索。'
-                      : '輸入 3 個以上字符以進行「包含」搜尋。'}
-                </div>
-              ) : null}
+          <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+            <Search className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-on-surface truncate font-medium">
+              {t('common.searchContainsPrefix') + trimmedQuery}
+            </div>
+            <div className="text-on-surface-variant m3-label-md truncate">
+              {t('common.searchContainsHint')}
+            </div>
+          </div>
+        </CommandItem>
+      ) : trimmedQuery.length ? (
+        <div className="text-on-surface-variant m3-label-md px-3 py-1">
+          {t('common.searchContainsHelp')}
+        </div>
+      ) : null}
 
-              {groupedResults.map((group) => (
-                <CommandItem
-                  key={group.id}
-                  value={group.id}
-                  onSelect={() => handleSelectGroup(group)}
-                  className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
-                >
-                  <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-                    <MapPin className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-on-surface truncate font-medium">
-                      {group.displayName}{' '}
-                      {group.displayCodes ? (
-                        <span className="text-on-surface-variant font-normal">
-                          {group.displayCodes}
-                        </span>
-                      ) : null}
-                    </div>
-                    <div className="text-on-surface-variant m3-label-md truncate">
-                      {group.displaySecondary}
-                    </div>
-                  </div>
-                </CommandItem>
-              ))}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
+      {groupedResults.map((group) => (
+        <CommandItem
+          key={group.id}
+          value={group.id}
+          onSelect={() => handleSelectGroup(group)}
+          className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
+        >
+          <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+            <MapPin className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <div className="text-on-surface truncate font-medium">
+              {group.displayName}{' '}
+              {group.displayCodes ? (
+                <span className="text-on-surface-variant font-normal">{group.displayCodes}</span>
+              ) : null}
+            </div>
+            <div className="text-on-surface-variant m3-label-md truncate">
+              {group.displaySecondary}
+            </div>
+          </div>
+        </CommandItem>
+      ))}
+    </StationSearchCombobox>
   )
 }

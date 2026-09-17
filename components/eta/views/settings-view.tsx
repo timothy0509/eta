@@ -5,7 +5,7 @@ import { useTheme } from 'next-themes'
 import * as React from 'react'
 
 import { FadeIn } from '@/components/m3/motion'
-import { useTranslations } from '@/lib/eta/i18n'
+import { LANG_LABELS, useTranslations } from '@/lib/eta/i18n'
 import { isLanguageSupported } from '@/lib/eta/types'
 import type { UiLanguage } from '@/lib/eta/types'
 import { useAppStore } from '@/lib/store'
@@ -85,17 +85,9 @@ export function SettingsView({ lang }: Props) {
                       : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
                     disabled && 'cursor-not-allowed opacity-40'
                   )}
-                  title={
-                    disabled
-                      ? lang === 'en'
-                        ? 'Simplified Chinese is not supported for this mode'
-                        : lang === 'sc'
-                          ? '此模式不支持简体中文'
-                          : '此模式不支援簡體中文'
-                      : undefined
-                  }
+                  title={disabled ? t('common.scNotSupported') : undefined}
                 >
-                  {l === 'en' ? 'EN' : l === 'tc' ? '繁' : '简'}
+                  {LANG_LABELS[l]}
                 </button>
               )
             })}

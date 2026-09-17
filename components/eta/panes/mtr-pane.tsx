@@ -1,11 +1,11 @@
 'use client'
 
-import { Heart } from 'lucide-react'
 import * as React from 'react'
 
 import { MtrStationSearch } from '@/components/eta/station-search'
-import { Button } from '@/components/ui/button'
+import { StationPane } from '@/components/eta/station-pane'
 import type { MtrStationSearchItem, UiLanguage } from '@/lib/eta/types'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import { getMtrLineName } from '@/lib/eta/line-colors'
 import { useMtrSchedule } from '@/lib/eta/use-mtr-schedule'
 import type { FavoritesItem } from '@/lib/store'
@@ -60,7 +60,7 @@ export function MtrPane({
   const onSave = () => {
     if (!sta) return
     const station = stations.find((s) => s.sta === sta)
-    const name = station ? (lang === 'en' ? station.nameEn : station.nameTc) : ''
+    const name = station ? pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang) : ''
     const title = station
       ? `${name} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`
       : `MTR · ${sta}`
@@ -101,31 +101,29 @@ export function MtrPane({
   }, [paneState])
 
   return (
-    <div className="space-y-4">
-      <MtrStationSearch
-        lang={lang}
-        stations={stations}
-        selectedSta={sta}
-        onSelect={(station) => {
-          setSta(station.sta)
-          const item: FavoritesItem = {
-            id: `mtr:${station.sta}`,
-            mode: 'mtr',
-            title: `${lang === 'en' ? station.nameEn : station.nameTc} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`,
-            line: station.lines[0] ?? '',
-            sta: station.sta,
-          }
-          onAddRecent(item)
-          void refresh({ toastOnError: false })
-        }}
-      />
-
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <Button size="sm" className="rounded-full" onClick={() => void onSave()} disabled={!sta}>
-          <Heart className="mr-1.5 h-4 w-4" />
-          {lang === 'en' ? 'Save' : '收藏'}
-        </Button>
-      </div>
-    </div>
+    <StationPane
+      lang={lang}
+      hasSelection={Boolean(sta)}
+      onSave={onSave}
+      search={
+        <MtrStationSearch
+          lang={lang}
+          stations={stations}
+          selectedSta={sta}
+          onSelect={(station) => {
+            setSta(station.sta)
+            const item: FavoritesItem = {
+              id: `mtr:${station.sta}`,
+              mode: 'mtr',
+              title: `${pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang)} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`,
+              line: station.lines[0] ?? '',
+              sta: station.sta,
+            }
+            onAddRecent(item)
+            void refresh({ toastOnError: false })
+          }}
+        />
+      }
+    />
   )
 }

@@ -2,7 +2,9 @@
 
 import {
   Bus,
+  ChevronDown,
   ChevronRight,
+  ChevronUp,
   FolderPlus,
   GripVertical,
   Heart,
@@ -22,9 +24,9 @@ import * as React from 'react'
 import { useShallow } from 'zustand/shallow'
 
 import { RouteBadge } from '@/components/eta/route-badge'
+import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
 
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -41,6 +43,7 @@ import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { pickLang, pickLangZh } from '@/lib/eta/pick-lang'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
@@ -53,9 +56,11 @@ type Props = {
 }
 
 function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
-  if (lang === 'en') return stop.nameEn
-  if (lang === 'sc') return stop.nameSc
-  return stop.nameTc
+  return pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+}
+
+function formatRouteCount(count: number, t: (key: string) => string) {
+  return ` · ${count} ${count === 1 ? t('kmb.routeSingular') : t('kmb.routes')}`
 }
 
 type DisplayMaps = {
@@ -72,10 +77,12 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
   item,
   lang,
   maps,
+  t,
 }: {
   item: FavoritesItem
   lang: UiLanguage
   maps: DisplayMaps
+  t: (key: string) => string
 }) {
   const { kmbStopsById, kmbStopIndexById, mtrStationsBySta, lrtStationsById } = maps
 
@@ -83,7 +90,7 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
     const station = mtrStationsBySta.get(item.sta)
     if (!station) return <span>{item.title}</span>
 
-    const name = lang === 'en' ? station.nameEn : station.nameTc
+    const name = pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang)
     return (
       <span className="flex items-center gap-1.5">
         <span className="truncate">{name}</span>
@@ -109,7 +116,7 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
     const station = lrtStationsById.get(item.stationId)
     if (!station) return <span>{item.title}</span>
 
-    const name = lang === 'en' ? station.nameEn : station.nameZh
+    const name = pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang)
     return <span className="truncate">{name}</span>
   }
 
@@ -117,13 +124,7 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
   if (item.mode === 'kmb') {
     // Saved KMB route
     if ('type' in item && item.type === 'route') {
-      const destination = item.destination
-        ? lang === 'en'
-          ? item.destination.en
-          : lang === 'sc'
-            ? item.destination.sc
-            : item.destination.tc
-        : item.title
+      const destination = item.destination ? pickLang(item.destination, lang) : item.title
 
       return (
         <span className="flex items-center gap-2">
@@ -148,8 +149,7 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
         // Build suffix from saved data
         let suffix = ''
         if (item.routeFilterMode === 'advanced' && item.entries?.length) {
-          const count = item.entries.length
-          suffix = ` · ${count} ${lang === 'en' ? (count === 1 ? 'route' : 'routes') : '條路線'}`
+          suffix = formatRouteCount(item.entries.length, t)
         } else if (item.route) {
           suffix = ` · ${item.route}`
         }
@@ -184,8 +184,7 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
         // Build suffix from saved data
         let suffix = ''
         if (item.routeFilterMode === 'advanced' && item.entries?.length) {
-          const count = item.entries.length
-          suffix = ` · ${count} ${lang === 'en' ? (count === 1 ? 'route' : 'routes') : '條路線'}`
+          suffix = formatRouteCount(item.entries.length, t)
         } else if (item.route) {
           suffix = ` · ${item.route}`
         }
@@ -208,46 +207,6 @@ function ModeIcon({ mode, className }: { mode: FavoritesItem['mode']; className?
   if (mode === 'kmb') return <Bus className={className} aria-hidden="true" />
   if (mode === 'mtr') return <TrainFront className={className} aria-hidden="true" />
   return <TramFront className={className} aria-hidden="true" />
-}
-
-function StaggerContainer({
-  children,
-  className,
-}: {
-  children: React.ReactNode
-  className?: string
-}) {
-  return (
-    <motion.div
-      initial="hidden"
-      animate="visible"
-      variants={{
-        visible: {
-          transition: {
-            staggerChildren: 0.04,
-          },
-        },
-      }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
-}
-
-function StaggerItem({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <motion.div
-      variants={{
-        hidden: { opacity: 0, y: 8 },
-        visible: { opacity: 1, y: 0 },
-      }}
-      transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
-      className={className}
-    >
-      {children}
-    </motion.div>
-  )
 }
 
 function FavoriteActions({
@@ -320,6 +279,11 @@ type FavoriteRowProps = {
   onAssignGroup: (favoriteId: string, groupId: string | null) => void
   onDelete: (id: string) => void
   draggable?: boolean
+  staggerClass?: string
+  onMoveUp?: () => void
+  onMoveDown?: () => void
+  disableMoveUp?: boolean
+  disableMoveDown?: boolean
 }
 
 function FavoriteRow({
@@ -334,33 +298,60 @@ function FavoriteRow({
   onAssignGroup,
   onDelete,
   draggable = false,
+  staggerClass,
+  onMoveUp,
+  onMoveDown,
+  disableMoveUp,
+  disableMoveDown,
 }: FavoriteRowProps) {
   const dragControls = useDragControls()
 
   const content = (
     <div className="flex items-center gap-3">
       {draggable && (
-        <div
-          className="text-on-surface-variant hover:text-on-surface cursor-grab rounded-full p-1 active:cursor-grabbing"
-          aria-label={t('favorites.drag')}
-          onPointerDown={(event) => dragControls.start(event)}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-            }
-          }}
-        >
-          <GripVertical className="h-4 w-4" />
-        </div>
+        <>
+          <div className="flex flex-col">
+            <button
+              type="button"
+              className="text-on-surface-variant hover:text-on-surface flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+              aria-label={t('favorites.moveUp')}
+              onClick={onMoveUp}
+              disabled={disableMoveUp}
+            >
+              <ChevronUp className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              className="text-on-surface-variant hover:text-on-surface flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full focus-visible:ring-2 focus-visible:outline-none disabled:opacity-30"
+              aria-label={t('favorites.moveDown')}
+              onClick={onMoveDown}
+              disabled={disableMoveDown}
+            >
+              <ChevronDown className="h-4 w-4" />
+            </button>
+          </div>
+          <div
+            className="text-on-surface-variant hover:text-on-surface cursor-grab rounded-full p-1 active:cursor-grabbing"
+            aria-label={t('favorites.drag')}
+            onPointerDown={(event) => dragControls.start(event)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault()
+              }
+            }}
+          >
+            <GripVertical className="h-4 w-4" />
+          </div>
+        </>
       )}
       <div className="bg-surface-container-high flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
         <ModeIcon mode={item.mode} className="text-on-surface-variant h-4 w-4" />
       </div>
       <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onSelect(item)}>
         <div className="m3-body-md text-on-surface truncate font-medium">
-          <FavoriteItemDisplay item={item} lang={lang} maps={maps} />
+          <FavoriteItemDisplay item={item} lang={lang} maps={maps} t={t} />
         </div>
         <div className="text-on-surface-variant m3-body-md truncate">
           {item.pinned ? `${t('favorites.pinned')} · ` : ''}
@@ -378,6 +369,14 @@ function FavoriteRow({
     </div>
   )
 
+  // Draggable rows skip the CSS entrance: its fill-mode transform would
+  // override framer's drag transform. The stagger delay alone is a no-op there.
+  const rowClass = cn(
+    'bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5',
+    !draggable && 'ui-animate-in',
+    staggerClass
+  )
+
   if (draggable) {
     return (
       <Reorder.Item
@@ -388,18 +387,14 @@ function FavoriteRow({
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.2, ease: [0.2, 0.8, 0.2, 1] }}
         whileDrag={{ scale: 1.02, boxShadow: '0 8px 24px rgba(0,0,0,0.12)' }}
-        className="bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5"
+        className={rowClass}
       >
         {content}
       </Reorder.Item>
     )
   }
 
-  return (
-    <StaggerItem className="bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5">
-      {content}
-    </StaggerItem>
-  )
+  return <div className={rowClass}>{content}</div>
 }
 
 type RecentRowProps = {
@@ -408,32 +403,39 @@ type RecentRowProps = {
   maps: DisplayMaps
   dateFormatter: Intl.DateTimeFormat
   onSelect: (item: FavoritesItem) => void
+  staggerClass?: string
 }
 
-function RecentRow({ item, lang, maps, dateFormatter, onSelect }: RecentRowProps) {
+function modeLabel(mode: RecentItem['mode'], t: (key: string) => string) {
+  if (mode === 'kmb') return t('common.modeBus')
+  if (mode === 'mtr') return t('common.modeMtr')
+  return t('common.modeLrt')
+}
+
+function RecentRow({ item, lang, maps, dateFormatter, onSelect, staggerClass }: RecentRowProps) {
+  const { t } = useTranslations(lang)
   return (
-    <StaggerItem>
-      <motion.button
-        type="button"
-        whileHover={{ scale: 1.005 }}
-        whileTap={{ scale: 0.995 }}
-        className="bg-surface-container-low hover:bg-surface-container border-outline-variant/50 flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors"
-        onClick={() => onSelect(item)}
-      >
-        <div className="bg-surface-container-high flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
-          <ModeIcon mode={item.mode} className="text-on-surface-variant h-4 w-4" />
+    <button
+      type="button"
+      className={cn(
+        'bg-surface-container-low hover:bg-surface-container border-outline-variant/50 ui-animate-in flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors',
+        staggerClass
+      )}
+      onClick={() => onSelect(item)}
+    >
+      <div className="bg-surface-container-high flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
+        <ModeIcon mode={item.mode} className="text-on-surface-variant h-4 w-4" />
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="m3-body-md text-on-surface truncate font-medium">
+          <FavoriteItemDisplay item={item} lang={lang} maps={maps} t={t} />
         </div>
-        <div className="min-w-0 flex-1">
-          <div className="m3-body-md text-on-surface truncate font-medium">
-            <FavoriteItemDisplay item={item} lang={lang} maps={maps} />
-          </div>
-          <div className="text-on-surface-variant m3-body-md mt-0.5 flex items-center justify-between gap-2">
-            <span>{item.mode.toUpperCase()}</span>
-            <span>{dateFormatter.format(new Date(item.at))}</span>
-          </div>
+        <div className="text-on-surface-variant m3-body-md mt-0.5 flex items-center justify-between gap-2">
+          <span>{modeLabel(item.mode, t)}</span>
+          <span>{dateFormatter.format(new Date(item.at))}</span>
         </div>
-      </motion.button>
-    </StaggerItem>
+      </div>
+    </button>
   )
 }
 
@@ -602,6 +604,7 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
   )
   const removeFavorite = useAppStore((s) => s.removeFavorite)
   const toggleFavoritePin = useAppStore((s) => s.toggleFavoritePin)
+  const moveFavorite = useAppStore((s) => s.moveFavorite)
   const reorderFavorites = useAppStore((s) => s.reorderFavorites)
   const addFavoriteGroup = useAppStore((s) => s.addFavoriteGroup)
   const renameFavoriteGroup = useAppStore((s) => s.renameFavoriteGroup)
@@ -713,9 +716,9 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
   )
 
   return (
-    <Card className="bg-surface-container-low rounded-3xl border border-[var(--outline-variant)]/15 shadow-sm">
-      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b border-[var(--outline-variant)]/10 pb-4">
-        <CardTitle className="m3-title-md">{t('favorites.saved')}</CardTitle>
+    <section className="card-m3 p-4 sm:p-5">
+      <div className="flex flex-row items-center justify-between gap-3 border-b border-[var(--outline-variant)]/10 pb-4">
+        <h2 className="m3-title-md text-on-surface">{t('favorites.saved')}</h2>
         <div className="bg-surface-container-high inline-flex items-center rounded-full p-1">
           <button
             type="button"
@@ -744,11 +747,11 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
             {t('favorites.recent')}
           </button>
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="p-0">
+      <div>
         {activeTab === 'favorites' ? (
-          <div className="space-y-4 p-6 pt-0">
+          <div className="space-y-4 pt-4">
             <div className="relative">
               <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
               <Input
@@ -808,8 +811,8 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                 {t('errors.noResults')}
               </div>
             ) : isFiltering ? (
-              <StaggerContainer className="space-y-2">
-                {filteredFavorites.map((f) => (
+              <StaggerList>
+                {filteredFavorites.map((f, idx) => (
                   <FavoriteRow
                     key={f.id}
                     item={f}
@@ -822,9 +825,10 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                     onTogglePin={toggleFavoritePin}
                     onAssignGroup={assignFavoriteGroup}
                     onDelete={removeFavorite}
+                    staggerClass={staggerClassForIndex(idx)}
                   />
                 ))}
-              </StaggerContainer>
+              </StaggerList>
             ) : (
               <div className="space-y-4">
                 {pinnedItems.length > 0 && (
@@ -838,7 +842,7 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                       onReorder={handleReorderPinned}
                       className="space-y-2"
                     >
-                      {pinnedItems.map((f) => (
+                      {pinnedItems.map((f, idx) => (
                         <FavoriteRow
                           key={f.id}
                           item={f}
@@ -854,6 +858,11 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                           onAssignGroup={assignFavoriteGroup}
                           onDelete={removeFavorite}
                           draggable
+                          staggerClass={staggerClassForIndex(idx)}
+                          onMoveUp={() => moveFavorite(f.id, 'up')}
+                          onMoveDown={() => moveFavorite(f.id, 'down')}
+                          disableMoveUp={idx === 0}
+                          disableMoveDown={idx === pinnedItems.length - 1}
                         />
                       ))}
                     </Reorder.Group>
@@ -871,7 +880,7 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                       onReorder={handleReorderUnpinned}
                       className="space-y-2"
                     >
-                      {unpinnedItems.map((f) => (
+                      {unpinnedItems.map((f, idx) => (
                         <FavoriteRow
                           key={f.id}
                           item={f}
@@ -887,6 +896,11 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                           onAssignGroup={assignFavoriteGroup}
                           onDelete={removeFavorite}
                           draggable
+                          staggerClass={staggerClassForIndex(idx)}
+                          onMoveUp={() => moveFavorite(f.id, 'up')}
+                          onMoveDown={() => moveFavorite(f.id, 'down')}
+                          disableMoveUp={idx === 0}
+                          disableMoveDown={idx === unpinnedItems.length - 1}
                         />
                       ))}
                     </Reorder.Group>
@@ -896,7 +910,7 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
             )}
           </div>
         ) : (
-          <div className="space-y-4 p-6 pt-0">
+          <div className="space-y-4 pt-4">
             <div className="flex items-center justify-between gap-2">
               <div className="text-on-surface-variant m3-body-md">{t('favorites.tip')}</div>
               <Button
@@ -925,8 +939,8 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                 {groupedRecents.map((group) => (
                   <div key={group.label} className="space-y-2">
                     <div className="text-on-surface-variant m3-label-md px-1">{group.label}</div>
-                    <StaggerContainer className="space-y-2">
-                      {group.items.map((r) => (
+                    <StaggerList>
+                      {group.items.map((r, idx) => (
                         <RecentRow
                           key={`${r.id}-${r.at}`}
                           item={r}
@@ -934,16 +948,17 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
                           maps={maps}
                           dateFormatter={dateFormatter}
                           onSelect={onSelect}
+                          staggerClass={staggerClassForIndex(idx)}
                         />
                       ))}
-                    </StaggerContainer>
+                    </StaggerList>
                   </div>
                 ))}
               </div>
             )}
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </section>
   )
 }

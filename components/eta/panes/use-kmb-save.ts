@@ -1,6 +1,8 @@
 import * as React from 'react'
 
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { translations } from '@/lib/eta/i18n'
+import { pickLang } from '@/lib/eta/pick-lang'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 import type { RouteFilterState } from '@/components/eta/route-filter'
@@ -14,12 +16,6 @@ type StopSearchSelection =
   | { type: 'stop'; stopId: string }
   | { type: 'stops'; stopIds: string[] }
   | { type: 'contains'; query: string }
-
-function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
-  if (lang === 'en') return stop.nameEn
-  if (lang === 'sc') return stop.nameSc
-  return stop.nameTc
-}
 
 type UseKmbSaveOptions = {
   lang: UiLanguage
@@ -59,7 +55,7 @@ export function useKmbSave({
     const routeCount = isAdvanced ? (routeFilter.entries?.length ?? 0) : 0
     const routeSuffix =
       isAdvanced && routeCount > 0
-        ? ` \u00b7 ${routeCount} ${lang === 'en' ? (routeCount === 1 ? 'route' : 'routes') : '\u689d\u8def\u7dda'}`
+        ? ` \u00b7 ${routeCount} ${routeCount === 1 ? translations.kmb.routeSingular[lang] : translations.kmb.routes[lang]}`
         : route
           ? ` \u00b7 ${route}`
           : ''
@@ -89,7 +85,9 @@ export function useKmbSave({
 
     if (stopId) {
       const stop = kmbStopsById.get(stopId)
-      const fullName = stop ? pickKmbStopTitle(stop, lang) : lang === 'en' ? 'Bus' : '\u5df4\u58eb'
+      const fullName = stop
+        ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+        : translations.kmb.bus[lang]
       const { name } = parseKmbStopNameCached(fullName)
       const title = `${name}${routeSuffix}`
 
@@ -106,7 +104,9 @@ export function useKmbSave({
       }
     } else if (stopIds && stopIds.length > 0) {
       const firstStop = stopIds.map((stopId) => kmbStopsById.get(stopId)).find(Boolean)
-      const fullName = firstStop ? pickKmbStopTitle(firstStop, lang) : 'Selected Stops'
+      const fullName = firstStop
+        ? pickLang({ en: firstStop.nameEn, tc: firstStop.nameTc, sc: firstStop.nameSc }, lang)
+        : translations.kmb.selectedStops[lang]
       const { name } = parseKmbStopNameCached(fullName)
       const title = `${name}${routeSuffix}`
 
@@ -121,7 +121,7 @@ export function useKmbSave({
         entries: entriesForSave,
       }
     } else if (containsQuery.length >= 3) {
-      const title = `Contains: ${containsQuery}${routeSuffix}`
+      const title = `${translations.common.searchContainsPrefix[lang]}${containsQuery}${routeSuffix}`
 
       const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? '__all__')
       item = {

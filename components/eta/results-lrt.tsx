@@ -1,28 +1,31 @@
 'use client'
 
 import * as React from 'react'
-import { Info, RefreshCw, TramFront } from 'lucide-react'
+import { RefreshCw, TramFront, TriangleAlert } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
+import { EmptyState } from '@/components/eta/empty-state'
+import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { Badge } from '@/components/ui/badge'
 import { Marquee } from '@/components/ui/marquee'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 
-function formatTrainLength(length: number, lang: UiLanguage) {
-  if (lang === 'en') return `${length}-car`
-  return `${length}卡`
+function formatTrainLength(
+  length: number,
+  tWithParams: (key: string, params: Record<string, string | number>) => string
+) {
+  return tWithParams('lrt.trainCars', { count: length })
 }
 
-function formatArrivalDeparture(code: string, lang: UiLanguage) {
-  if (lang === 'en') return code === 'A' ? 'Arriving' : 'Departing'
-  if (lang === 'sc') return code === 'A' ? '到达' : '离开'
-  return code === 'A' ? '到達' : '離開'
+function formatArrivalDeparture(code: string, t: (key: string) => string) {
+  return code === 'A' ? t('lrt.arrivingLabel') : t('lrt.departingLabel')
 }
 
 function isArrivingTime(time: string | number | null | undefined) {
@@ -78,7 +81,20 @@ export const LrtResults = React.memo(function LrtResults({
 
       <div className="space-y-4">
         {error ? (
-          <p className="text-error m3-body-md">{tWithParams('common.updateFailed', { error })}</p>
+          <EmptyState
+            icon={TriangleAlert}
+            title={t('errors.updateFailedGeneric')}
+            hint={error}
+            action={
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {t('common.tryAgain')}
+              </button>
+            }
+          />
         ) : null}
         {loading && !schedule ? (
           <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
@@ -87,10 +103,7 @@ export const LrtResults = React.memo(function LrtResults({
           </div>
         ) : !schedule ? (
           !hasStation ? (
-            <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
-              <Info className="h-4 w-4" />
-              {t('lrt.selectStation')}
-            </div>
+            <EmptyState title={t('lrt.selectStation')} />
           ) : !error ? (
             <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
               <RefreshCw className="h-4 w-4 animate-spin" />
@@ -98,10 +111,7 @@ export const LrtResults = React.memo(function LrtResults({
             </div>
           ) : null
         ) : (schedule.platform_list ?? []).length === 0 ? (
-          <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
-            <Info className="h-4 w-4" />
-            {t('lrt.emptyPlatform')}
-          </div>
+          <EmptyState title={t('lrt.emptyPlatform')} />
         ) : (
           <>
             <div className="text-on-surface-variant m3-label-md flex items-center justify-between gap-2">
@@ -111,14 +121,7 @@ export const LrtResults = React.memo(function LrtResults({
 
             <div className="space-y-4">
               {(schedule.platform_list ?? []).map((p, idx) => {
-                const staggerClass =
-                  idx === 0
-                    ? 'ui-stagger-1'
-                    : idx === 1
-                      ? 'ui-stagger-2'
-                      : idx === 2
-                        ? 'ui-stagger-3'
-                        : ''
+                const staggerClass = staggerClassForIndex(idx)
 
                 return (
                   <div
@@ -131,17 +134,20 @@ export const LrtResults = React.memo(function LrtResults({
                     <div className="mb-2 flex items-center gap-2">
                       <span className="bg-primary h-2 w-2 shrink-0 rounded-full" aria-hidden />
                       <span className="text-on-surface m3-title-md">
-                        {lang === 'en' ? `Platform ${p.platform_id}` : `${p.platform_id}號月台`}
+                        {tWithParams('lrt.platform', { id: p.platform_id })}
                       </span>
                       <span className="text-on-surface-variant m3-label-md">
-                        {(p.route_list ?? []).length} {lang === 'en' ? 'routes' : '條路線'}
+                        {(p.route_list ?? []).length} {t('lrt.routes')}
                       </span>
                     </div>
 
                     <div className="space-y-1">
                       {(p.route_list ?? []).map((r, routeIdx) => {
                         const routeColor = getLineColor(String(r.route_no ?? ''))
-                        const timeText = String(lang === 'en' ? r.time_en : (r.time_ch ?? ''))
+                        const timeText = pickLangZh(
+                          { en: String(r.time_en ?? ''), zh: String(r.time_ch ?? '') },
+                          lang
+                        )
                         const arriving = r.arrival_departure === 'A' || isArrivingTime(timeText)
 
                         return (
@@ -161,14 +167,14 @@ export const LrtResults = React.memo(function LrtResults({
                               </Badge>
                               <div className="min-w-0 flex-1">
                                 <Marquee
-                                  title={lang === 'en' ? r.dest_en : r.dest_ch}
+                                  title={pickLangZh({ en: r.dest_en, zh: r.dest_ch }, lang)}
                                   className="text-on-surface m3-body-md font-medium"
                                 >
-                                  {lang === 'en' ? r.dest_en : r.dest_ch}
+                                  {pickLangZh({ en: r.dest_en, zh: r.dest_ch }, lang)}
                                 </Marquee>
                                 <div className="text-on-surface-variant m3-label-md">
-                                  {formatArrivalDeparture(r.arrival_departure, lang)} ·{' '}
-                                  {formatTrainLength(r.train_length, lang)}
+                                  {formatArrivalDeparture(r.arrival_departure, t)} ·{' '}
+                                  {formatTrainLength(r.train_length, tWithParams)}
                                 </div>
                               </div>
                             </div>
@@ -185,7 +191,7 @@ export const LrtResults = React.memo(function LrtResults({
                               )}
                               {r.stop ? (
                                 <div className="text-error m3-label-md" aria-live="polite">
-                                  {lang === 'en' ? 'Stopped' : '暫停服務'}
+                                  {t('lrt.stopped')}
                                 </div>
                               ) : null}
                             </div>

@@ -12,19 +12,6 @@
     sans-serif;
   --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
   --font-numbers: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -79,6 +66,7 @@
   --color-on-tertiary: var(--on-tertiary);
   --color-tertiary-container: var(--tertiary-container);
   --color-on-tertiary-container: var(--on-tertiary-container);
+  --color-error: var(--error);
   --color-error-container: var(--error-container);
   --color-on-error-container: var(--on-error-container);
   --color-on-error: var(--on-error);
@@ -97,6 +85,15 @@
 }
 
 :root {
+  --app-max: 80rem;
+
+  /* UI motion primitives */
+  --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ui-dur-fast: 140ms;
+  --ui-dur-md: 220ms;
+  --ui-dur-slow: 360ms;
+
   /* Material 3 baseline radius */
   --radius: 0.75rem;
 
@@ -175,21 +172,6 @@
   --border: var(--outline-variant);
   --input: var(--surface-variant);
   --ring: var(--surface-tint);
-
-  --chart-1: #00478d;
-  --chart-2: #565e71;
-  --chart-3: #583f5b;
-  --chart-4: #ba1a1a;
-  --chart-5: #715674;
-
-  --sidebar: var(--surface-container-low);
-  --sidebar-foreground: var(--on-surface);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--on-primary);
-  --sidebar-accent: var(--surface-container-high);
-  --sidebar-accent-foreground: var(--on-surface);
-  --sidebar-border: var(--outline-variant);
-  --sidebar-ring: var(--surface-tint);
 }
 
 .dark {
@@ -268,21 +250,6 @@
   --border: var(--outline-variant);
   --input: var(--surface-variant);
   --ring: var(--surface-tint);
-
-  --chart-1: #a9c7ff;
-  --chart-2: #bec6dc;
-  --chart-3: #ddbcdf;
-  --chart-4: #ffb4ab;
-  --chart-5: #f1cff2;
-
-  --sidebar: var(--surface-container-low);
-  --sidebar-foreground: var(--on-surface);
-  --sidebar-primary: var(--primary);
-  --sidebar-primary-foreground: var(--on-primary);
-  --sidebar-accent: var(--surface-container-high);
-  --sidebar-accent-foreground: var(--on-surface);
-  --sidebar-border: var(--outline-variant);
-  --sidebar-ring: var(--surface-tint);
 }
 
 @layer base {
@@ -292,7 +259,8 @@
   body {
     @apply bg-background text-foreground;
     font-family:
-      var(--font-inter), 'Noto Sans HK', 'Noto Sans SC', ui-sans-serif, system-ui, sans-serif;
+      var(--font-inter), var(--font-noto-sans-hk), var(--font-noto-sans-sc), ui-sans-serif,
+      system-ui, sans-serif;
   }
 }
 
@@ -410,15 +378,8 @@
 
 /* -----------------------------
  * UI motion primitives
+ * (tokens live in the merged :root above)
  * ----------------------------- */
-
-:root {
-  --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --ui-dur-fast: 140ms;
-  --ui-dur-md: 220ms;
-  --ui-dur-slow: 360ms;
-}
 
 @keyframes ui-fade-up {
   0% {
@@ -564,8 +525,15 @@
   .ui-animate-fade,
   .ui-pop,
   .ui-spin,
-  .live-pulse {
+  .live-pulse,
+  .marquee-track {
     animation: none !important;
+  }
+
+  .ui-stagger-1,
+  .ui-stagger-2,
+  .ui-stagger-3 {
+    animation-delay: 0ms !important;
   }
 
   .ui-lift,

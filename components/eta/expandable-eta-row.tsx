@@ -8,6 +8,7 @@ type Props = {
   onToggle: () => void
   color?: string
   className?: string
+  flush?: boolean
   children: React.ReactNode
   panel: React.ReactNode
   toggleLabel: string
@@ -18,6 +19,7 @@ export function ExpandableEtaRow({
   onToggle,
   color,
   className,
+  flush,
   children,
   panel,
   toggleLabel,
@@ -50,7 +52,9 @@ export function ExpandableEtaRow({
         className="absolute inset-0 z-0 cursor-pointer"
       />
 
-      <div className="pointer-events-none relative z-10 py-3 pr-3 pl-4">{children}</div>
+      <div className={cn('pointer-events-none relative z-10', flush ? 'p-0' : 'py-3 pr-3 pl-4')}>
+        {children}
+      </div>
 
       <AnimatePresence initial={false}>
         {expanded ? (

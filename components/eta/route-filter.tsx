@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
+import { useTranslations } from '@/lib/eta/i18n'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import type { RouteFilterMode } from '@/lib/store'
@@ -121,17 +122,13 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
     [optsFingerprint]
   )
 
+  const { t: translate } = useTranslations(lang)
   const t = {
-    routes: lang === 'en' ? 'Routes' : '路線',
-    noOptions:
-      lang === 'en'
-        ? 'Pick a stop to see available routes.'
-        : lang === 'sc'
-          ? '请选择车站以查看可用路线。'
-          : '請選擇車站以查看可用路線。',
-    clear: lang === 'en' ? 'Clear' : '清除',
-    inbound: lang === 'en' ? 'Inbound' : '往',
-    outbound: lang === 'en' ? 'Outbound' : '往',
+    routes: translate('common.routes'),
+    noOptions: translate('common.pickStopForRoutes'),
+    clear: translate('favorites.clear'),
+    inbound: translate('common.inbound'),
+    outbound: translate('common.outbound'),
   }
 
   const selectedKeys = React.useMemo(() => {

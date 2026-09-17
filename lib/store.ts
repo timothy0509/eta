@@ -2,43 +2,8 @@
 
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { create } from 'zustand'
-import { persist, createJSONStorage, type StateStorage } from 'zustand/middleware'
-
-function createDebouncedLocalStorage(delayMs = 300): StateStorage {
-  let timer: ReturnType<typeof setTimeout> | null = null
-  let pendingKey: string | null = null
-  let pendingValue: string | null = null
-
-  const flush = () => {
-    if (pendingKey !== null && pendingValue !== null) {
-      localStorage.setItem(pendingKey, pendingValue)
-      pendingKey = null
-      pendingValue = null
-    }
-    timer = null
-  }
-
-  if (typeof window !== 'undefined') {
-    window.addEventListener('beforeunload', flush)
-  }
-
-  return {
-    getItem: (name) => localStorage.getItem(name),
-    setItem: (name, value) => {
-      pendingKey = name
-      pendingValue = value
-      if (timer !== null) clearTimeout(timer)
-      timer = setTimeout(flush, delayMs)
-    },
-    removeItem: (name) => {
-      if (timer !== null) clearTimeout(timer)
-      timer = null
-      pendingKey = null
-      pendingValue = null
-      localStorage.removeItem(name)
-    },
-  }
-}
+import type { StateCreator } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
 
 export type RouteFilterMode = 'simple' | 'advanced'
 
@@ -126,9 +91,20 @@ export type FavoritesGroup = {
   name: string
 }
 
-type AppState = {
+// Ephemeral nav slice: current mode plus subView. Never persisted, so a
+// shared link can only reach it through URL hydrate, never through storage.
+type NavSlice = {
   mode: TransportMode
   subView: SubView
+
+  setMode: (mode: TransportMode) => void
+  setSubView: (subView: SubView) => void
+}
+
+// Persisted prefs slice: language, filter defaults, refresh interval plus
+// favorites, groups and recents. Field names stay backward compatible so
+// old favorites still decode after the v4 to v5 bump.
+type PrefsSlice = {
   lang: UiLanguage
   routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
@@ -137,8 +113,6 @@ type AppState = {
   favoritesGroups: FavoritesGroup[]
   recents: RecentItem[]
 
-  setMode: (mode: TransportMode) => void
-  setSubView: (subView: SubView) => void
   setLang: (lang: UiLanguage) => void
   setRouteFilterMode: (mode: RouteFilterMode) => void
   setAutoRefreshSeconds: (seconds: number) => void
@@ -156,6 +130,8 @@ type AppState = {
   clearRecents: () => void
 }
 
+type AppState = NavSlice & PrefsSlice
+
 const RECENTS_LIMIT = 12
 
 const createId = () => {
@@ -171,141 +147,158 @@ const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
   groupId: item.groupId ?? null,
 })
 
+const createNavSlice: StateCreator<AppState, [], [], NavSlice> = (set) => ({
+  mode: 'kmb',
+  subView: 'stops',
+
+  setMode: (mode) => set({ mode }),
+  setSubView: (subView) => set({ subView }),
+})
+
+const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
+  lang: 'tc',
+  routeFilterMode: 'simple',
+  autoRefreshSeconds: 15,
+
+  favorites: [],
+  favoritesGroups: [],
+  recents: [],
+
+  setLang: (lang) => set({ lang }),
+  setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
+  setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
+
+  addFavorite: (item) =>
+    set((state) => {
+      if (state.favorites.some((f) => f.id === item.id)) return state
+      return { favorites: [withFavoriteMeta(item), ...state.favorites] }
+    }),
+
+  removeFavorite: (id) =>
+    set((state) => ({
+      favorites: state.favorites.filter((f) => f.id !== id),
+    })),
+
+  toggleFavoritePin: (id) =>
+    set((state) => {
+      const favorites = [...state.favorites]
+      const index = favorites.findIndex((f) => f.id === id)
+      if (index === -1) return state
+
+      const current = favorites[index]
+      const nextPinned = !current.pinned
+      const updated = { ...current, pinned: nextPinned }
+      favorites.splice(index, 1)
+
+      if (nextPinned) {
+        favorites.unshift(updated)
+      } else {
+        let insertIndex = 0
+        while (insertIndex < favorites.length && favorites[insertIndex].pinned) {
+          insertIndex += 1
+        }
+        favorites.splice(insertIndex, 0, updated)
+      }
+
+      return { favorites }
+    }),
+
+  moveFavorite: (id, direction) =>
+    set((state) => {
+      const favorites = [...state.favorites]
+      const index = favorites.findIndex((f) => f.id === id)
+      if (index === -1) return state
+
+      const targetIndex = direction === 'up' ? index - 1 : index + 1
+      if (targetIndex < 0 || targetIndex >= favorites.length) return state
+      if (Boolean(favorites[index].pinned) !== Boolean(favorites[targetIndex].pinned)) {
+        return state
+      }
+
+      const [moved] = favorites.splice(index, 1)
+      favorites.splice(targetIndex, 0, moved)
+      return { favorites }
+    }),
+
+  reorderFavorites: (newOrder) =>
+    set(() => {
+      const pinned = newOrder.filter((f) => f.pinned)
+      const unpinned = newOrder.filter((f) => !f.pinned)
+      return { favorites: [...pinned, ...unpinned] }
+    }),
+
+  addFavoriteGroup: (name) =>
+    set((state) => {
+      const trimmed = name.trim()
+      if (!trimmed) return state
+      const group: FavoritesGroup = { id: createId(), name: trimmed }
+      return { favoritesGroups: [...state.favoritesGroups, group] }
+    }),
+
+  renameFavoriteGroup: (id, name) =>
+    set((state) => {
+      const trimmed = name.trim()
+      if (!trimmed) return state
+      return {
+        favoritesGroups: state.favoritesGroups.map((group) =>
+          group.id === id ? { ...group, name: trimmed } : group
+        ),
+      }
+    }),
+
+  deleteFavoriteGroup: (id) =>
+    set((state) => ({
+      favorites: state.favorites.map((favorite) =>
+        favorite.groupId === id ? { ...favorite, groupId: null } : favorite
+      ),
+      favoritesGroups: state.favoritesGroups.filter((group) => group.id !== id),
+    })),
+
+  assignFavoriteGroup: (favoriteId, groupId) =>
+    set((state) => ({
+      favorites: state.favorites.map((favorite) =>
+        favorite.id === favoriteId ? { ...favorite, groupId: groupId ?? null } : favorite
+      ),
+    })),
+
+  addRecent: (item) =>
+    set((state) => {
+      const now = Date.now()
+      const recent: RecentItem = { ...item, at: now }
+
+      const updated = [recent, ...state.recents.filter((r) => r.id !== item.id)].slice(
+        0,
+        RECENTS_LIMIT
+      )
+
+      return { recents: updated }
+    }),
+
+  clearRecents: () => set({ recents: [] }),
+})
+
 export const useAppStore = create<AppState>()(
   persist(
-    (set) => ({
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
-
-      favorites: [],
-      favoritesGroups: [],
-      recents: [],
-
-      setMode: (mode) => set({ mode }),
-      setSubView: (subView) => set({ subView }),
-      setLang: (lang) => set({ lang }),
-      setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
-      setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
-
-      addFavorite: (item) =>
-        set((state) => {
-          if (state.favorites.some((f) => f.id === item.id)) return state
-          return { favorites: [withFavoriteMeta(item), ...state.favorites] }
-        }),
-
-      removeFavorite: (id) =>
-        set((state) => ({
-          favorites: state.favorites.filter((f) => f.id !== id),
-        })),
-
-      toggleFavoritePin: (id) =>
-        set((state) => {
-          const favorites = [...state.favorites]
-          const index = favorites.findIndex((f) => f.id === id)
-          if (index === -1) return state
-
-          const current = favorites[index]
-          const nextPinned = !current.pinned
-          const updated = { ...current, pinned: nextPinned }
-          favorites.splice(index, 1)
-
-          if (nextPinned) {
-            favorites.unshift(updated)
-          } else {
-            let insertIndex = 0
-            while (insertIndex < favorites.length && favorites[insertIndex].pinned) {
-              insertIndex += 1
-            }
-            favorites.splice(insertIndex, 0, updated)
-          }
-
-          return { favorites }
-        }),
-
-      moveFavorite: (id, direction) =>
-        set((state) => {
-          const favorites = [...state.favorites]
-          const index = favorites.findIndex((f) => f.id === id)
-          if (index === -1) return state
-
-          const targetIndex = direction === 'up' ? index - 1 : index + 1
-          if (targetIndex < 0 || targetIndex >= favorites.length) return state
-          if (Boolean(favorites[index].pinned) !== Boolean(favorites[targetIndex].pinned)) {
-            return state
-          }
-
-          const [moved] = favorites.splice(index, 1)
-          favorites.splice(targetIndex, 0, moved)
-          return { favorites }
-        }),
-
-      reorderFavorites: (newOrder) =>
-        set(() => {
-          const pinned = newOrder.filter((f) => f.pinned)
-          const unpinned = newOrder.filter((f) => !f.pinned)
-          return { favorites: [...pinned, ...unpinned] }
-        }),
-
-      addFavoriteGroup: (name) =>
-        set((state) => {
-          const trimmed = name.trim()
-          if (!trimmed) return state
-          const group: FavoritesGroup = { id: createId(), name: trimmed }
-          return { favoritesGroups: [...state.favoritesGroups, group] }
-        }),
-
-      renameFavoriteGroup: (id, name) =>
-        set((state) => {
-          const trimmed = name.trim()
-          if (!trimmed) return state
-          return {
-            favoritesGroups: state.favoritesGroups.map((group) =>
-              group.id === id ? { ...group, name: trimmed } : group
-            ),
-          }
-        }),
-
-      deleteFavoriteGroup: (id) =>
-        set((state) => ({
-          favorites: state.favorites.map((favorite) =>
-            favorite.groupId === id ? { ...favorite, groupId: null } : favorite
-          ),
-          favoritesGroups: state.favoritesGroups.filter((group) => group.id !== id),
-        })),
-
-      assignFavoriteGroup: (favoriteId, groupId) =>
-        set((state) => ({
-          favorites: state.favorites.map((favorite) =>
-            favorite.id === favoriteId ? { ...favorite, groupId: groupId ?? null } : favorite
-          ),
-        })),
-
-      addRecent: (item) =>
-        set((state) => {
-          const now = Date.now()
-          const recent: RecentItem = { ...item, at: now }
-
-          const updated = [recent, ...state.recents.filter((r) => r.id !== item.id)].slice(
-            0,
-            RECENTS_LIMIT
-          )
-
-          return { recents: updated }
-        }),
-
-      clearRecents: () => set({ recents: [] }),
+    (set, get, api) => ({
+      ...createNavSlice(set, get, api),
+      ...createPrefsSlice(set, get, api),
     }),
     {
       name: 'hk-eta',
-      version: 4,
-      storage: createJSONStorage(() => createDebouncedLocalStorage(300)),
-      migrate: (persistedState) => {
+      version: 5,
+      // Direct persist write. The previous 300 ms debounced localStorage
+      // wrapper plus beforeunload flush could lose the last write on
+      // mobile, where beforeunload often never fires. Zustand now writes
+      // synchronously on every set, which mobile browsers persist
+      // reliably without a flush hook.
+      storage: createJSONStorage(() => localStorage),
+      migrate: (persistedState, _fromVersion) => {
         const state = persistedState as Partial<AppState> | undefined
         const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
 
+        // v4 persisted nav (mode, subView) alongside prefs. Carry those
+        // forward once so the upgrade keeps the current view, then v5
+        // writes omit nav through partialize below.
         return {
           mode: state?.mode ?? 'kmb',
           subView: state?.subView ?? 'stops',
@@ -318,8 +311,6 @@ export const useAppStore = create<AppState>()(
         }
       },
       partialize: (state) => ({
-        mode: state.mode,
-        subView: state.subView,
         lang: state.lang,
         routeFilterMode: state.routeFilterMode,
         autoRefreshSeconds: state.autoRefreshSeconds,

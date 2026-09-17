@@ -1,25 +1,19 @@
-import Link from 'next/link'
+'use client'
 
-import { Button } from '@/components/ui/button'
+import { ErrorShell } from '@/components/eta/error-shell'
+import { useTranslations } from '@/lib/eta/i18n'
+import { useAppStore } from '@/lib/store'
 
 export default function NotFound() {
-  return (
-    <div className="bg-surface relative min-h-dvh">
-      <div className="pointer-events-none absolute inset-0 opacity-40 [background:radial-gradient(80%_40%_at_50%_0%,hsl(var(--primary)/0.18),transparent_70%)]" />
+  const lang = useAppStore((s) => s.lang)
+  const { t } = useTranslations(lang)
 
-      <div className="mx-auto w-full max-w-[1280px] px-4 py-8 sm:px-6 sm:py-12">
-        <div className="flex min-h-[60vh] flex-col justify-center">
-          <div className="max-w-2xl space-y-4">
-            <h1 className="text-2xl font-semibold">Page not found</h1>
-            <p className="text-muted-foreground text-sm">
-              We could not find the page you are looking for.
-            </p>
-            <Button asChild>
-              <Link href="/">Back to home</Link>
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
+  return (
+    <ErrorShell
+      title={t('common.pageNotFound')}
+      hint={t('common.pageNotFoundHint')}
+      actionLabel={t('common.backHome')}
+      actionHref="/"
+    />
   )
 }

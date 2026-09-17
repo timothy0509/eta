@@ -1,11 +1,11 @@
 'use client'
 
-import { Heart } from 'lucide-react'
 import * as React from 'react'
 
 import { LrtStationSearch } from '@/components/eta/lrt-stop-search'
-import { Button } from '@/components/ui/button'
+import { StationPane } from '@/components/eta/station-pane'
 import type { LrtStationSearchItem, UiLanguage } from '@/lib/eta/types'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import { useLrtSchedule } from '@/lib/eta/use-lrt-schedule'
 import type { FavoritesItem } from '@/lib/store'
 import { usePaneStore } from '@/lib/eta/pane-store'
@@ -91,7 +91,7 @@ export function LrtPane({
   const onSave = () => {
     if (!stationId) return
     const station = stations.find((s) => s.stationId === stationId)
-    const name = station ? (lang === 'en' ? station.nameEn : station.nameZh) : ''
+    const name = station ? pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang) : ''
     const title = station ? `${name} · ${station.stationId}` : `LRT · ${stationId}`
 
     const item: FavoritesItem = {
@@ -106,34 +106,27 @@ export function LrtPane({
   }
 
   return (
-    <div className="space-y-4">
-      <LrtStationSearch
-        lang={lang}
-        stations={stations}
-        selectedStationId={stationId}
-        onSelect={(station) => {
-          setStationId(station.stationId)
-          onAddRecent({
-            id: `lrt:${station.stationId}`,
-            mode: 'lrt',
-            title: `${lang === 'en' ? station.nameEn : station.nameZh} · ${station.stationId}`,
-            stationId: station.stationId,
-          })
-          void refresh({ toastOnError: false, stationId: station.stationId })
-        }}
-      />
-
-      <div className="flex items-center justify-between gap-3 pt-1">
-        <Button
-          size="sm"
-          className="rounded-full"
-          onClick={() => void onSave()}
-          disabled={!stationId}
-        >
-          <Heart className="mr-1.5 h-4 w-4" />
-          {lang === 'en' ? 'Save' : '收藏'}
-        </Button>
-      </div>
-    </div>
+    <StationPane
+      lang={lang}
+      hasSelection={Boolean(stationId)}
+      onSave={onSave}
+      search={
+        <LrtStationSearch
+          lang={lang}
+          stations={stations}
+          selectedStationId={stationId}
+          onSelect={(station) => {
+            setStationId(station.stationId)
+            onAddRecent({
+              id: `lrt:${station.stationId}`,
+              mode: 'lrt',
+              title: `${pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang)} · ${station.stationId}`,
+              stationId: station.stationId,
+            })
+            void refresh({ toastOnError: false, stationId: station.stationId })
+          }}
+        />
+      }
+    />
   )
 }

@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { isLanguageSupported } from '@/lib/eta/types'
-import { useTranslations } from '@/lib/eta/i18n'
+import { LANG_LABELS, useTranslations } from '@/lib/eta/i18n'
 import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
@@ -70,15 +70,9 @@ const SUB_VIEWS: Array<{
   { id: 'settings', icon: Settings },
 ]
 
-const LANG_LABELS: Record<UiLanguage, string> = {
-  en: 'EN',
-  tc: '繁',
-  sc: '简',
-}
-
 function ThemeToggle({ label }: { label: string }) {
-  const { theme, setTheme } = useTheme()
-  const dark = theme === 'dark'
+  const { resolvedTheme, setTheme } = useTheme()
+  const dark = resolvedTheme === 'dark'
   return (
     <button
       type="button"
@@ -95,7 +89,8 @@ function ThemeToggle({ label }: { label: string }) {
 function LanguageMenu({ lang, mode }: { lang: UiLanguage; mode: TransportMode }) {
   const setLang = useAppStore((s) => s.setLang)
   const scSupported = isLanguageSupported(mode, 'sc')
-  const label = lang === 'en' ? 'Language' : lang === 'sc' ? '语言' : '語言'
+  const { t } = useTranslations(lang)
+  const label = t('common.language')
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -140,7 +135,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
 
   return (
     <header className="bg-surface-container-low/90 supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
-      <div className="mx-auto flex h-[3.5rem] max-w-[1280px] items-center justify-between gap-2 px-4 sm:h-14 sm:gap-3 sm:px-6">
+      <div className="mx-auto flex h-[3.5rem] max-w-[var(--app-max)] items-center justify-between gap-2 px-4 sm:h-14 sm:gap-3 sm:px-6">
         <div className="flex shrink-0 items-center gap-2">
           <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-xl text-[15px] font-bold shadow-sm sm:h-9 sm:w-9 sm:text-lg">
             T
@@ -154,7 +149,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
         >
           <div
             role="group"
-            aria-label="Transport mode"
+            aria-label={t('common.transportMode')}
             className="bg-surface-container-high/70 relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
           >
             {MODES.map((m) => {
@@ -211,7 +206,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
 
   return (
     <nav
-      aria-label="Sections"
+      aria-label={t('common.sections')}
       className="bg-surface-container-low border-outline-variant/20 sticky top-20 hidden h-fit shrink-0 flex-col items-center gap-1 rounded-[28px] border px-2 py-3 shadow-sm lg:flex"
     >
       {SUB_VIEWS.map((sv) => {
@@ -255,7 +250,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
 
   return (
     <nav
-      aria-label="Sections"
+      aria-label={t('common.sections')}
       className="bg-surface-container-low fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),28rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg lg:hidden"
     >
       <div className="flex w-full items-center">

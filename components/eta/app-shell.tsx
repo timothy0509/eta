@@ -135,18 +135,17 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
 
   return (
     <header className="bg-surface-container-low/90 supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
-      <div className="mx-auto flex h-[3.5rem] max-w-[var(--app-max)] items-center justify-between gap-2 px-4 sm:h-14 sm:gap-3 sm:px-6">
+      <div className="mx-auto flex h-[3.5rem] max-w-[var(--app-max)] items-center justify-between gap-2 px-3 sm:h-14 sm:gap-3 sm:px-6">
         <div className="flex shrink-0 items-center gap-2">
           <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-xl text-[15px] font-bold shadow-sm sm:h-9 sm:w-9 sm:text-lg">
             T
           </div>
-          <span className="text-[15px] font-semibold tracking-tight sm:text-[17px]">TimoETA</span>
+          <span className="hidden text-[15px] font-semibold tracking-tight min-[500px]:inline sm:text-[17px]">
+            TimoETA
+          </span>
         </div>
 
-        <nav
-          className="flex min-w-0 flex-1 justify-center px-1 sm:px-6"
-          aria-label={t('common.routes')}
-        >
+        <nav className="flex min-w-0 flex-1 justify-center sm:px-6" aria-label={t('common.routes')}>
           <div
             role="group"
             aria-label={t('common.transportMode')}
@@ -164,7 +163,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   aria-label={m.labels[lang]}
                   title={m.labels[lang]}
                   className={cn(
-                    'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1.5 rounded-full px-2 text-[13px] font-medium transition-colors sm:py-2 sm:text-sm',
+                    'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1 rounded-full px-1 text-xs font-medium transition-colors min-[500px]:gap-1.5 min-[500px]:px-2 min-[500px]:text-[13px] sm:py-2 sm:text-sm',
                     active
                       ? 'text-on-secondary-container'
                       : 'text-on-surface-variant hover:text-on-surface'

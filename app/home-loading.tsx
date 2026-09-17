@@ -18,8 +18,8 @@ export function HomeLoading() {
         aria-hidden
         className="bg-surface-container-low/90 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15"
       >
-        <div className="mx-auto flex h-[3.5rem] max-w-[var(--app-max)] items-center justify-between gap-2 px-4 sm:h-14 sm:gap-3 sm:px-6">
-          <div className="bg-muted/50 h-8 w-24 animate-pulse rounded-xl sm:h-9" />
+        <div className="mx-auto flex h-[3.5rem] max-w-[var(--app-max)] items-center justify-between gap-2 px-3 sm:h-14 sm:gap-3 sm:px-6">
+          <div className="bg-muted/50 h-8 w-8 animate-pulse rounded-xl min-[500px]:w-24 sm:h-9" />
           <div className="bg-muted/50 h-9 w-full max-w-[420px] animate-pulse rounded-full" />
           <div className="flex items-center gap-2">
             <div className="bg-muted/50 h-11 w-11 animate-pulse rounded-full" />

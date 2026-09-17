@@ -45,7 +45,14 @@ function shallowPaneEqual<T extends Record<string, unknown>>(prev: T | null, nex
   const nextKeys = Object.keys(next)
   if (prevKeys.length !== nextKeys.length) return false
   for (const key of nextKeys) {
-    if (!Object.is(prev[key], next[key])) return false
+    const prevValue = prev[key]
+    const nextValue = next[key]
+    // Pane callbacks (refresh/onRefresh/onLoadMore) are stabilized through
+    // refs in the panes and always call the latest implementation, so their
+    // identity carries no meaning. Skipping them lets the guard actually
+    // fire instead of missing on every render.
+    if (typeof prevValue === 'function' && typeof nextValue === 'function') continue
+    if (!Object.is(prevValue, nextValue)) return false
   }
   return true
 }

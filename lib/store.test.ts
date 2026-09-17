@@ -714,4 +714,25 @@ describe('capFavorites', () => {
     const capped = capFavorites(favorites)
     expect(capped).toHaveLength(FAVORITES_LIMIT)
   })
+
+  it('preserves input order when trimming interleaved pins', () => {
+    const favorites: FavoritesItem[] = [
+      makeItem('new-unpinned'),
+      makeItem('old-pinned', true),
+      makeItem('mid-unpinned'),
+    ]
+    for (let i = 0; i < FAVORITES_LIMIT; i += 1) {
+      favorites.push(makeItem(`tail-${i}`))
+    }
+
+    const capped = capFavorites(favorites)
+    expect(capped).toHaveLength(FAVORITES_LIMIT)
+    // Order is untouched: the pinned entry stays where the user put it.
+    expect(capped[0].id).toBe('new-unpinned')
+    expect(capped[1].id).toBe('old-pinned')
+    expect(capped[1].pinned).toBe(true)
+    expect(capped[2].id).toBe('mid-unpinned')
+    // Oldest unpinned entries fall off first; the pinned one survives.
+    expect(capped.some((f) => f.id === 'old-pinned')).toBe(true)
+  })
 })

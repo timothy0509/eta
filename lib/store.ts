@@ -175,14 +175,20 @@ const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
   groupId: item.groupId ?? null,
 })
 
-// Newest saves win. Drop oldest unpinned entries first, then oldest entries
-// overall, so a huge list never fills storage or slows the favorites view.
+// Newest saves win. The list is newest-first (addFavorite prepends), so the
+// overflow is dropped from the end: oldest unpinned entries first, then
+// oldest pinned. Input order is always preserved.
 export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
   if (favorites.length <= FAVORITES_LIMIT) return favorites
-  const pinned = favorites.filter((f) => f.pinned)
-  const unpinned = favorites.filter((f) => !f.pinned)
-  const keptUnpinned = unpinned.slice(0, Math.max(0, FAVORITES_LIMIT - pinned.length))
-  return [...pinned, ...keptUnpinned].slice(0, FAVORITES_LIMIT)
+  const overflow = favorites.length - FAVORITES_LIMIT
+  const drop = new Set<number>()
+  for (let i = favorites.length - 1; i >= 0 && drop.size < overflow; i -= 1) {
+    if (!favorites[i].pinned) drop.add(i)
+  }
+  for (let i = favorites.length - 1; i >= 0 && drop.size < overflow; i -= 1) {
+    drop.add(i)
+  }
+  return favorites.filter((_, i) => !drop.has(i))
 }
 
 export const useAppStore = create<AppState>()(

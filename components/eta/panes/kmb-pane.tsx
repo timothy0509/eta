@@ -44,6 +44,8 @@ import {
 } from '@/components/eta/panes/kmb-stop-search'
 import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
 import { setKmbPaneState } from '@/lib/eta/pane-store'
+import { pickLang } from '@/lib/eta/pick-lang'
+import { useTranslations } from '@/lib/eta/i18n'
 
 // ============================================================================
 // Types and Helpers
@@ -148,6 +150,7 @@ export function KmbPane({
   onRegisterRefresh,
   onStopsChange,
 }: Props) {
+  const { t, tWithParams } = useTranslations(lang)
   const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([])
   const [loadingStops, setLoadingStops] = React.useState(false)
   const [stopsError, setStopsError] = React.useState<string | null>(null)
@@ -311,14 +314,8 @@ export function KmbPane({
   const pickRouteVariantLabel = React.useCallback(
     (info: KmbRouteInfoLite | undefined) => {
       if (!info) return ''
-      const origin =
-        lang === 'en' ? info.origin.en : lang === 'sc' ? info.origin.sc : info.origin.tc
-      const destination =
-        lang === 'en'
-          ? info.destination.en
-          : lang === 'sc'
-            ? info.destination.sc
-            : info.destination.tc
+      const origin = pickLang(info.origin, lang)
+      const destination = pickLang(info.destination, lang)
       if (!origin || !destination) return ''
       return `${origin} → ${destination}`
     },
@@ -875,7 +872,7 @@ export function KmbPane({
   const kmbResultsInfo = React.useMemo(() => {
     if (!kmbQuery) {
       return {
-        title: lang === 'en' ? 'Bus ETAs' : lang === 'sc' ? '巴士到站预报' : '巴士到站預報',
+        title: t('kmb.title'),
         code: null,
       }
     }
@@ -895,16 +892,13 @@ export function KmbPane({
         const parsed = parseKmbStopNameCached(fullName)
         return { title: parsed.name, code: null }
       }
-      return { title: lang === 'en' ? 'Selected stops' : '已選車站', code: null }
+      return { title: t('kmb.selectedStops'), code: null }
     }
     return {
-      title:
-        lang === 'en'
-          ? `Stops containing "${kmbQuery.query.trim()}"`
-          : `包含「${kmbQuery.query.trim()}」的車站`,
+      title: tWithParams('kmb.containsStops', { query: kmbQuery.query.trim() }),
       code: null,
     }
-  }, [kmbQuery, kmbStopsById, lang])
+  }, [kmbQuery, kmbStopsById, lang, t, tWithParams])
 
   const canFavorite =
     (kmbQuery?.mode === 'stop' && kmbQuery.stopId) ||
@@ -1055,7 +1049,7 @@ export function KmbPane({
       {stopsError ? <p className="text-error m3-body-md">{stopsError}</p> : null}
       {routeStopsError ? <p className="text-error m3-body-md">{routeStopsError}</p> : null}
 
-      <div className="border-outline-variant/15 -mx-4 mt-2 flex items-center justify-between gap-3 border-t px-4 pt-3 sm:-mx-5 sm:px-5">
+      <div className="border-outline-variant/15 mt-2 flex items-center justify-between gap-3 border-t pt-3">
         <Button
           size="sm"
           className="rounded-full shadow-sm"
@@ -1063,23 +1057,22 @@ export function KmbPane({
           onClick={onSave}
         >
           <Heart className="mr-1 h-4 w-4" />
-          {lang === 'en' ? 'Save' : '收藏'}
+          {t('common.save')}
         </Button>
         <span className="text-on-surface-variant m3-label-sm text-right">
           {loadingStops || loadingRouteStops ? (
             <span className="inline-flex items-center gap-1.5">
               <Loader2 className="h-3 w-3 animate-spin" />
-              {lang === 'en' ? 'Loading…' : lang === 'sc' ? '载入中…' : '載入中…'}
+              {t('common.loading')}
             </span>
           ) : (
             <>
               <span className="hidden sm:inline">
-                {kmbStops.length.toLocaleString()} {lang === 'en' ? 'stops' : '個車站'} ·{' '}
-                {kmbRouteStops.length.toLocaleString()}{' '}
-                {lang === 'en' ? 'route-stops' : '個路線車站'}
+                {kmbStops.length.toLocaleString()} {t('kmb.stops')} ·{' '}
+                {kmbRouteStops.length.toLocaleString()} {t('kmb.routeStops')}
               </span>
               <span className="sm:hidden">
-                {kmbStops.length.toLocaleString()} {lang === 'en' ? 'stops' : '站'}
+                {kmbStops.length.toLocaleString()} {t('kmb.stops')}
               </span>
             </>
           )}

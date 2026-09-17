@@ -3,10 +3,11 @@
 import * as React from 'react'
 import dynamic from 'next/dynamic'
 
-import { BottomNav, SideRail, TopAppBar } from '@/components/eta/app-shell'
+import { HomeLayout, StopsLayout } from '@/components/eta/home-layout'
+import { useRefreshRegistry } from '@/components/eta/hooks/use-refresh-registry'
+import { useUrlSync } from '@/components/eta/hooks/use-url-sync'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
-import { decodeUrlState, encodeUrlState, type UrlEncodeInput } from '@/lib/eta/url-state'
 import type {
   LrtStationSearchItem,
   MtrStationSearchItem,
@@ -15,14 +16,13 @@ import type {
   UiLanguage,
 } from '@/lib/eta/types'
 import { isLanguageSupported } from '@/lib/eta/types'
-import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
 import { clearKmbStopNameCache } from '@/lib/eta/kmb-stop-name'
 import { getMtrLineName } from '@/lib/eta/line-colors'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import { initWebVitalsSampler } from '@/lib/eta/perf'
 import { registerServiceWorker } from '@/lib/eta/sw-register'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
-import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
 
 const KmbPane = dynamic(
@@ -109,7 +109,6 @@ const useAppStoreActions = () =>
       setSubView: s.setSubView,
       setLang: s.setLang,
       setRouteFilterMode: s.setRouteFilterMode,
-      setAutoRefreshSeconds: s.setAutoRefreshSeconds,
       addFavorite: s.addFavorite,
       addRecent: s.addRecent,
     }))
@@ -250,35 +249,12 @@ function LrtResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
 
 export default function HomeClient() {
   const { mode, subView, lang, routeFilterMode, autoRefreshSeconds } = useAppStoreState()
-  const {
-    setMode,
-    setSubView,
-    setLang,
-    setRouteFilterMode,
-    setAutoRefreshSeconds,
-    addFavorite,
-    addRecent,
-  } = useAppStoreActions()
+  const { setMode, setSubView, setLang, setRouteFilterMode, addFavorite, addRecent } =
+    useAppStoreActions()
 
   const setKmbStops = usePaneStore((s) => s.setKmbStops)
 
-  const [selectedItem, setSelectedItem] = React.useState<FavoritesItem | null>(() => {
-    if (typeof window === 'undefined') return null
-    try {
-      const decoded = decodeUrlState(window.location.search.slice(1))
-      return decoded.selectedItem ?? null
-    } catch {
-      return null
-    }
-  })
-
   const canFavoriteRef = React.useRef(false)
-  const didHydrateFromUrlRef = React.useRef(false)
-  const lastEncodedRef = React.useRef<string>('')
-
-  const router = useRouter()
-  const pathname = usePathname()
-  const searchParams = useSearchParams()
 
   // Narrow URL-only selectors so ETA map updates do not rerender the shell.
   // Heavy ETA fields stay subscribed inside Kmb/Mtr/LrtResultsFromStore.
@@ -286,6 +262,19 @@ export default function HomeClient() {
   const kmbRouteFilter = usePaneStore((s) => s.kmb?.routeFilter ?? null)
   const mtrSta = usePaneStore((s) => s.mtr?.sta ?? null)
   const lrtStationId = usePaneStore((s) => s.lrt?.stationId ?? null)
+
+  // Pane-store snapshots are read-only here. Panes write their own
+  // snapshots, and the URL hook below only reads them for encoding.
+  // The hook hydrates nav-only state so shared links never overwrite
+  // recipient lang, refresh interval, or filter mode.
+  const { selectedItem, setSelectedItem } = useUrlSync({
+    kmbQuery: kmbQuerySummary,
+    kmbRouteFilter,
+    mtrSta,
+    lrtStationId,
+  })
+
+  const { onRegisterRefresh } = useRefreshRegistry({ mode, subView, autoRefreshSeconds })
 
   const [mtrStations, setMtrStations] = React.useState<MtrStationSearchItem[]>([])
   const [lrtStations, setLrtStations] = React.useState<LrtStationSearchItem[]>([])
@@ -346,40 +335,8 @@ export default function HomeClient() {
     setLang('tc')
   }, [lang, mode, setLang])
 
-  React.useEffect(() => {
-    if (didHydrateFromUrlRef.current) return
-
-    const search = searchParams?.toString() ?? ''
-    const decoded = decodeUrlState(search)
-    if (decoded.state.mode) {
-      setMode(decoded.state.mode)
-    } else if (decoded.selectedItem) {
-      setMode(decoded.selectedItem.mode)
-    }
-    if (decoded.state.subView) setSubView(decoded.state.subView)
-    if (decoded.state.lang) setLang(decoded.state.lang)
-    if (decoded.state.routeFilterMode) setRouteFilterMode(decoded.state.routeFilterMode)
-    if (decoded.state.autoRefreshSeconds !== undefined) {
-      setAutoRefreshSeconds(decoded.state.autoRefreshSeconds)
-    }
-    didHydrateFromUrlRef.current = true
-    lastEncodedRef.current = search
-  }, [searchParams, setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode, setSubView])
-
-  const refreshRef = React.useRef<Partial<Record<TransportMode, () => Promise<void>>>>({})
-  const inFlightRefreshRef = React.useRef(false)
-  const refreshTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null)
-  const MAX_REFRESH_DURATION_MS = 30_000
-
-  const onRegisterRefresh = React.useCallback(
-    (transportMode: TransportMode, refresh: () => Promise<void>) => {
-      refreshRef.current[transportMode] = refresh
-    },
-    []
-  )
-
-  // Mirrors so the auto-refresh timer only resets when the interval changes,
-  // not on every mode/subView render.
+  // Mirrors so the web-vitals sampler reads the active tab without
+  // resubscribing its observers on every mode/subView render.
   const modeRef = React.useRef(mode)
   const subViewRef = React.useRef(subView)
   React.useEffect(() => {
@@ -399,34 +356,6 @@ export default function HomeClient() {
     return cleanup
   }, [])
 
-  const autoRefreshCallback = React.useCallback(() => {
-    if (subViewRef.current !== 'stops') return
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) return
-    const refresh = refreshRef.current[modeRef.current]
-    if (!refresh) return
-    if (inFlightRefreshRef.current) return
-
-    inFlightRefreshRef.current = true
-    refreshTimeoutRef.current = setTimeout(() => {
-      if (inFlightRefreshRef.current) {
-        console.warn('Auto-refresh timeout - forcing unlock')
-        inFlightRefreshRef.current = false
-      }
-    }, MAX_REFRESH_DURATION_MS)
-
-    refresh()
-      .catch(() => {})
-      .finally(() => {
-        if (refreshTimeoutRef.current) {
-          clearTimeout(refreshTimeoutRef.current)
-          refreshTimeoutRef.current = null
-        }
-        inFlightRefreshRef.current = false
-      })
-  }, [])
-
-  useAutoRefresh(autoRefreshSeconds * 1000, autoRefreshCallback)
-
   const onRegisterKmbRefresh = React.useCallback(
     (refresh: () => Promise<void>) => onRegisterRefresh('kmb', refresh),
     [onRegisterRefresh]
@@ -439,12 +368,6 @@ export default function HomeClient() {
     (refresh: () => Promise<void>) => onRegisterRefresh('lrt', refresh),
     [onRegisterRefresh]
   )
-
-  React.useEffect(() => {
-    return () => {
-      if (refreshTimeoutRef.current) clearTimeout(refreshTimeoutRef.current)
-    }
-  }, [])
 
   const onModeChange = React.useCallback(
     (nextMode: TransportMode) => {
@@ -473,7 +396,7 @@ export default function HomeClient() {
         setSubView('stops')
       }
     },
-    [setMode, setRouteFilterMode, setSubView]
+    [setMode, setRouteFilterMode, setSelectedItem, setSubView]
   )
 
   const kmbRouteInitialSelection = React.useMemo(() => {
@@ -502,14 +425,14 @@ export default function HomeClient() {
       setMode('kmb')
       setSubView('stops')
     },
-    [setMode, setSubView]
+    [setMode, setSelectedItem, setSubView]
   )
 
   const onSelectMtrStationFromRoute = React.useCallback(
     (sta: string, line: string, name: string) => {
       const station = mtrStations.find((s) => s.sta === sta)
       const title = station
-        ? `${lang === 'en' ? station.nameEn : station.nameTc} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`
+        ? `${pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang)} · ${station.lines.map((l) => getMtrLineName(l, lang)).join('/')}/${station.sta}`
         : `${name} · ${line}/${sta}`
       const item: FavoritesItem = {
         id: `mtr:${sta}`,
@@ -522,14 +445,14 @@ export default function HomeClient() {
       setMode('mtr')
       setSubView('stops')
     },
-    [lang, mtrStations, setMode, setSubView]
+    [lang, mtrStations, setMode, setSelectedItem, setSubView]
   )
 
   const onSelectLrtStationFromRoute = React.useCallback(
     (stationId: string, name: string) => {
       const station = lrtStations.find((s) => s.stationId === stationId)
       const title = station
-        ? `${lang === 'en' ? station.nameEn : station.nameZh} · ${station.stationId}`
+        ? `${pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang)} · ${station.stationId}`
         : `${name} · ${stationId}`
       const item: FavoritesItem = {
         id: `lrt:${stationId}`,
@@ -541,93 +464,8 @@ export default function HomeClient() {
       setMode('lrt')
       setSubView('stops')
     },
-    [lang, lrtStations, setMode, setSubView]
+    [lang, lrtStations, setMode, setSelectedItem, setSubView]
   )
-
-  const urlInput: UrlEncodeInput = React.useMemo(
-    () => ({
-      mode,
-      subView,
-      lang,
-      routeFilterMode,
-      autoRefreshSeconds,
-      kmb: kmbQuerySummary
-        ? {
-            query: kmbQuerySummary,
-            routeFilter: kmbRouteFilter,
-          }
-        : null,
-      mtr: { sta: mtrSta },
-      lrt: { stationId: lrtStationId },
-    }),
-    [
-      autoRefreshSeconds,
-      kmbQuerySummary,
-      kmbRouteFilter,
-      lang,
-      lrtStationId,
-      mode,
-      mtrSta,
-      routeFilterMode,
-      subView,
-    ]
-  )
-
-  const pendingQueryRef = React.useRef<string | null>(null)
-
-  React.useEffect(() => {
-    if (!didHydrateFromUrlRef.current) return
-
-    // Debounce URL writes by 400ms so rapid pane updates do not churn history.
-    pendingQueryRef.current = encodeUrlState(urlInput)
-    const id = setTimeout(() => {
-      const query = pendingQueryRef.current
-      pendingQueryRef.current = null
-      if (query === null || query === lastEncodedRef.current) return
-      lastEncodedRef.current = query
-
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
-    }, 400)
-    return () => clearTimeout(id)
-  }, [urlInput, pathname, router])
-
-  // Flush a pending debounced URL write on fast close so it is not dropped.
-  // history.replaceState is synchronous; router.replace may not finish on pagehide.
-  React.useEffect(() => {
-    const flush = () => {
-      const pending = pendingQueryRef.current
-      if (pending === null || pending === lastEncodedRef.current) return
-      lastEncodedRef.current = pending
-      const base = window.location.pathname
-      window.history.replaceState(null, '', pending ? `${base}?${pending}` : base)
-    }
-    window.addEventListener('pagehide', flush)
-    return () => window.removeEventListener('pagehide', flush)
-  }, [])
-
-  // Back/forward changes the URL without touching store state, so sync the
-  // shareable fields back in. router.replace writes never fire popstate, so
-  // this cannot loop with the debounced writer above.
-  React.useEffect(() => {
-    const onPopState = () => {
-      const search = window.location.search.startsWith('?')
-        ? window.location.search.slice(1)
-        : window.location.search
-      lastEncodedRef.current = search
-      pendingQueryRef.current = null
-      const decoded = decodeUrlState(search)
-      if (decoded.state.mode) setMode(decoded.state.mode)
-      if (decoded.state.subView) setSubView(decoded.state.subView)
-      if (decoded.state.lang) setLang(decoded.state.lang)
-      if (decoded.state.routeFilterMode) setRouteFilterMode(decoded.state.routeFilterMode)
-      if (decoded.state.autoRefreshSeconds !== undefined) {
-        setAutoRefreshSeconds(decoded.state.autoRefreshSeconds)
-      }
-      setSelectedItem(decoded.selectedItem ?? null)
-    }
-    window.addEventListener('popstate', onPopState)
-    return () => window.removeEventListener('popstate', onPopState)
-  }, [setAutoRefreshSeconds, setLang, setMode, setRouteFilterMode, setSubView])
 
   const controls = (
     <div className="space-y-4">
@@ -678,20 +516,7 @@ export default function HomeClient() {
   )
 
   const renderStops = () => {
-    return (
-      <div className="ui-animate-fade mx-auto max-w-[1280px] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
-        <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
-          <div className="card-m3 p-4 sm:p-5 lg:p-5">{controls}</div>
-        </div>
-
-        <div className="ui-animate-fade ui-stagger-1 relative mt-4 lg:mt-0">
-          <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-6">
-            <span className="bg-primary absolute top-0 right-0 left-0 h-[3px]" aria-hidden />
-            {results}
-          </div>
-        </div>
-      </div>
-    )
+    return <StopsLayout controls={controls} results={results} />
   }
 
   const renderRoutes = () => {
@@ -738,18 +563,14 @@ export default function HomeClient() {
   }
 
   return (
-    <div className="bg-surface min-h-dvh overflow-x-clip pb-[calc(5.5rem+env(safe-area-inset-bottom,0px))] lg:pb-0">
-      <TopAppBar lang={lang} mode={mode} onModeChange={onModeChange} />
-
-      <div className="mx-auto flex max-w-[1280px] gap-6 px-4 py-4 sm:px-6 sm:py-6">
-        <SideRail lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
-
-        <div className="min-w-0 flex-1">
-          <div className="mx-auto max-w-[1100px]">{renderContent()}</div>
-        </div>
-      </div>
-
-      <BottomNav lang={lang} subView={subView} onSubViewChange={onSubViewChange} />
-    </div>
+    <HomeLayout
+      lang={lang}
+      mode={mode}
+      subView={subView}
+      onModeChange={onModeChange}
+      onSubViewChange={onSubViewChange}
+    >
+      {renderContent()}
+    </HomeLayout>
   )
 }

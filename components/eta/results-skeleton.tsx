@@ -1,8 +1,13 @@
-import * as React from 'react'
+'use client'
+
+import { useTranslations } from '@/lib/eta/i18n'
+import { useAppStore } from '@/lib/store'
 
 export function ResultsSkeleton() {
+  const lang = useAppStore((s) => s.lang)
+  const { t } = useTranslations(lang)
   return (
-    <div className="space-y-4" role="status" aria-busy>
+    <div className="space-y-4" role="status" aria-busy aria-label={t('common.loading')}>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-2">
           <div className="bg-muted/50 h-6 w-40 animate-pulse rounded" />
@@ -15,6 +20,7 @@ export function ResultsSkeleton() {
           <div key={i} className="bg-muted/50 h-24 animate-pulse rounded-2xl" />
         ))}
       </div>
+      <span className="sr-only">{t('common.loading')}</span>
     </div>
   )
 }

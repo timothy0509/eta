@@ -6,7 +6,8 @@ import * as React from 'react'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { RouteBadge } from '@/components/eta/route-badge'
-import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import { EmptyState } from '@/components/eta/empty-state'
+import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes } from '@/components/eta/ticking-eta'
 import {
   Dialog,
@@ -20,6 +21,7 @@ import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { pickLang } from '@/lib/eta/pick-lang'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import { ResultsHeader } from '@/components/eta/results-header'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -27,12 +29,6 @@ import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
-
-function pickLang(fields: { en: string; tc: string; sc: string }, lang: UiLanguage) {
-  if (lang === 'sc') return fields.sc
-  if (lang === 'en') return fields.en
-  return fields.tc
-}
 
 function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
   const key = String(co ?? 'kmb').toLowerCase()
@@ -89,10 +85,8 @@ function formatRouteVariantLabel(
   return dest
 }
 
-function formatNoScheduledText(lang: UiLanguage) {
-  if (lang === 'en') return 'No scheduled buses'
-  if (lang === 'sc') return '暂时没有预定班次'
-  return '暫時沒有預定班次'
+function formatNoScheduledText(t: (key: string) => string) {
+  return t('common.noScheduledBuses')
 }
 
 function formatEtaLabel(seq: number, lang: UiLanguage) {
@@ -102,7 +96,7 @@ function formatEtaLabel(seq: number, lang: UiLanguage) {
     if (seq === 3) return '3rd'
     return `${seq}th`
   }
-  return `第${seq}${lang === 'sc' ? '班' : '班'}`
+  return `第${seq}班`
 }
 
 function getGroupRemark(items: KmbEtaEntryWithLeg[], lang: UiLanguage): string | null {
@@ -125,9 +119,7 @@ function pickStopName(
   lang: UiLanguage
 ): string {
   if (!stop) return ''
-  if (lang === 'sc') return stop.nameSc
-  if (lang === 'en') return stop.nameEn
-  return stop.nameTc
+  return pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
 }
 
 type StopChips = {
@@ -409,7 +401,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           </div>
           {fareLabel || codeLabel ? (
             <div className="text-on-surface-variant m3-label-sm mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden">
-              {fareLabel ? <span className="shrink-0 tabular-nums">{fareLabel}</span> : null}
+              {fareLabel ? <span className="font-tabular shrink-0">{fareLabel}</span> : null}
               {fareLabel && codeLabel ? (
                 <span aria-hidden="true" className="shrink-0 opacity-60">
                   ·
@@ -523,7 +515,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           {routeHeader({ showEta: false, showInfo: true })}
           <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
             <Info className="h-4 w-4 shrink-0" />
-            {remark || formatNoScheduledText(lang)}
+            {remark || formatNoScheduledText(t)}
           </div>
         </div>
       </div>
@@ -590,6 +582,7 @@ const StopSection = React.memo(function StopSection({
   expandedKey?: string | null
   onToggleExpand?: (key: string) => void
 }) {
+  const { t } = useTranslations(lang)
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
   const parsed = parseKmbStopNameCached(stopName)
   const stopCodeBadge = parsed.platform ?? parsed.stopCode ?? null
@@ -610,10 +603,7 @@ const StopSection = React.memo(function StopSection({
       </div>
 
       {groups.length === 0 ? (
-        <div className="text-on-surface-variant m3-body-md flex items-center gap-2 py-2">
-          <Info className="h-4 w-4" />
-          {formatNoScheduledText(lang)}
-        </div>
+        <EmptyState title={formatNoScheduledText(t)} className="py-2" />
       ) : (
         <div className="space-y-2">
           {groups.map((g, idx) => (
@@ -631,17 +621,7 @@ const StopSection = React.memo(function StopSection({
               stopChips={
                 stopChipsById.get(stopId) ?? getStopChips(g.items, stopLookup, stopChipsById, lang)
               }
-              staggerClass={
-                isFirst
-                  ? idx === 0
-                    ? 'ui-stagger-1'
-                    : idx === 1
-                      ? 'ui-stagger-2'
-                      : idx === 2
-                        ? 'ui-stagger-3'
-                        : ''
-                  : ''
-              }
+              staggerClass={isFirst ? staggerClassForIndex(idx) : ''}
               expanded={expandedKey === g.key}
               onToggleExpand={() => onToggleExpand?.(g.key)}
             />
@@ -809,13 +789,12 @@ export const KmbResults = React.memo(function KmbResults({
 
       <div className="space-y-2">
         {error ? (
-          <p className="text-error m3-body-md">{tWithParams('kmb.updateFailed', { error })}</p>
+          <p className="text-error m3-body-md" aria-live="polite">
+            {tWithParams('kmb.updateFailed', { error })}
+          </p>
         ) : null}
         {!hasQuery ? (
-          <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
-            <Info className="h-4 w-4" />
-            {t('common.selectStop')}
-          </div>
+          <EmptyState title={t('common.selectStop')} />
         ) : useStopSections ? (
           // Keyphrase mode: sectioned by stop with virtualization
           <>
@@ -856,86 +835,67 @@ export const KmbResults = React.memo(function KmbResults({
             ) : null}
           </>
         ) : precomputedFlat && !multipleStops ? (
-          <StaggerContainer className="space-y-2" stagger={0.02}>
+          <StaggerList>
             {precomputedFlat.map((g, idx) => {
               const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
               const stopChips = stopId
                 ? (stopChipsById.get(stopId) ??
                   getStopChips(g.items, stopLookup, stopChipsById, lang))
                 : getStopChips(g.items, stopLookup, stopChipsById, lang)
-              const staggerClass =
-                idx === 0
-                  ? 'ui-stagger-1'
-                  : idx === 1
-                    ? 'ui-stagger-2'
-                    : idx === 2
-                      ? 'ui-stagger-3'
-                      : ''
+              const staggerClass = staggerClassForIndex(idx)
 
               return (
-                <StaggerItem key={g.key} className="ui-cv-row">
-                  <RouteDepartureRow
-                    variantKey={g.key}
-                    baseKey={g.baseKey}
-                    items={g.items}
-                    hasEta={g.hasEta}
-                    hasFare={g.hasFare}
-                    isArrivingLeg={g.isArrivingLeg}
-                    routeInfos={routeInfos}
-                    faresByVariantKey={faresByVariantKey}
-                    lang={lang}
-                    staggerClass={staggerClass}
-                    stopChips={stopChips}
-                    expanded={expandedKey === g.key}
-                    onToggleExpand={() => onToggleExpand(g.key)}
-                  />
-                </StaggerItem>
+                <RouteDepartureRow
+                  key={g.key}
+                  variantKey={g.key}
+                  baseKey={g.baseKey}
+                  items={g.items}
+                  hasEta={g.hasEta}
+                  hasFare={g.hasFare}
+                  isArrivingLeg={g.isArrivingLeg}
+                  routeInfos={routeInfos}
+                  faresByVariantKey={faresByVariantKey}
+                  lang={lang}
+                  staggerClass={cn('ui-cv-row', staggerClass)}
+                  stopChips={stopChips}
+                  expanded={expandedKey === g.key}
+                  onToggleExpand={() => onToggleExpand(g.key)}
+                />
               )
             })}
-          </StaggerContainer>
+          </StaggerList>
         ) : grouped.length === 0 ? (
-          <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
-            <Info className="h-4 w-4" />
-            {formatNoScheduledText(lang)}
-          </div>
+          <EmptyState title={formatNoScheduledText(t)} />
         ) : (
-          <StaggerContainer className="space-y-2" stagger={0.02}>
+          <StaggerList>
             {grouped.map((g, idx) => {
               const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
               const stopChips = stopId
                 ? (stopChipsById.get(stopId) ??
                   getStopChips(g.items, stopLookup, stopChipsById, lang))
                 : getStopChips(g.items, stopLookup, stopChipsById, lang)
-              const staggerClass =
-                idx === 0
-                  ? 'ui-stagger-1'
-                  : idx === 1
-                    ? 'ui-stagger-2'
-                    : idx === 2
-                      ? 'ui-stagger-3'
-                      : ''
+              const staggerClass = staggerClassForIndex(idx)
 
               return (
-                <StaggerItem key={g.key} className="ui-cv-row">
-                  <RouteDepartureRow
-                    variantKey={g.key}
-                    baseKey={g.baseKey}
-                    items={g.items}
-                    hasEta={g.hasEta}
-                    hasFare={g.hasFare}
-                    isArrivingLeg={g.isArrivingLeg}
-                    routeInfos={routeInfos}
-                    faresByVariantKey={faresByVariantKey}
-                    lang={lang}
-                    staggerClass={staggerClass}
-                    stopChips={stopChips}
-                    expanded={expandedKey === g.key}
-                    onToggleExpand={() => onToggleExpand(g.key)}
-                  />
-                </StaggerItem>
+                <RouteDepartureRow
+                  key={g.key}
+                  variantKey={g.key}
+                  baseKey={g.baseKey}
+                  items={g.items}
+                  hasEta={g.hasEta}
+                  hasFare={g.hasFare}
+                  isArrivingLeg={g.isArrivingLeg}
+                  routeInfos={routeInfos}
+                  faresByVariantKey={faresByVariantKey}
+                  lang={lang}
+                  staggerClass={cn('ui-cv-row', staggerClass)}
+                  stopChips={stopChips}
+                  expanded={expandedKey === g.key}
+                  onToggleExpand={() => onToggleExpand(g.key)}
+                />
               )
             })}
-          </StaggerContainer>
+          </StaggerList>
         )}
       </div>
     </div>

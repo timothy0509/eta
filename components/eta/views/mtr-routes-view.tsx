@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronLeft, MapPin, TrainFront } from 'lucide-react'
+import { MapPin, TrainFront } from 'lucide-react'
 import * as React from 'react'
 
 import {
@@ -8,11 +8,15 @@ import {
   RouteStopTimeline,
   SoonestEtaPill,
 } from '@/components/eta/route-stop-timeline'
-import { FadeIn, MotionCard, StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
+import { EmptyState } from '@/components/eta/empty-state'
+import { ResultsSkeleton } from '@/components/eta/results-skeleton'
+import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { findMtrStationBySta, formatMtrStationName, type MtrLang } from '@/lib/data/mtr-stations'
 import { fetchMtrRouteSchedules, listMtrRoutes } from '@/lib/eta/client'
-import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
+import { LINE_COLOR_FALLBACK, getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import { pickSoonestMtrTrain } from '@/lib/eta/pick-soonest-eta'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -36,7 +40,7 @@ function sortLines(a: string, b: string): number {
 }
 
 function getRouteDestination(dest: { en: string; zh: string }, lang: UiLanguage): string {
-  return lang === 'en' ? dest.en : dest.zh
+  return pickLangZh(dest, lang)
 }
 
 function variantKey(entry: RouteListEntry): string {
@@ -54,6 +58,8 @@ export function MtrRoutesView({
   const [selectedLine, setSelectedLine] = React.useState<string | null>(null)
   const [mtrRoutes, setMtrRoutes] = React.useState<RouteListEntry[]>([])
   const [routesLoading, setRoutesLoading] = React.useState(true)
+  const [routesError, setRoutesError] = React.useState<string | null>(null)
+  const [retryKey, setRetryKey] = React.useState(0)
   const [selectedVariant, setSelectedVariant] = React.useState<RouteListEntry | null>(null)
   const [schedulesBySta, setSchedulesBySta] = React.useState<Record<string, MtrScheduleResponse>>(
     {}
@@ -63,16 +69,22 @@ export function MtrRoutesView({
     let cancelled = false
     listMtrRoutes()
       .then((data) => {
-        if (!cancelled) setMtrRoutes(data)
+        if (cancelled) return
+        setMtrRoutes(data)
+        setRoutesError(null)
       })
-      .catch(() => {})
+      .catch((err) => {
+        if (!cancelled) {
+          setRoutesError(err instanceof Error ? err.message : t('errors.updateFailedGeneric'))
+        }
+      })
       .finally(() => {
         if (!cancelled) setRoutesLoading(false)
       })
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [retryKey, t])
 
   const lines = React.useMemo(() => {
     const set = new Set<string>()
@@ -162,10 +174,16 @@ export function MtrRoutesView({
     }
   }, [selectedLine, stationStas, lang])
 
-  const lineColor = selectedLine ? getLineColor(selectedLine) : '#64748b'
+  const lineColor = selectedLine ? getLineColor(selectedLine) : LINE_COLOR_FALLBACK
+
+  const handleRetryRoutes = React.useCallback(() => {
+    setRoutesError(null)
+    setRoutesLoading(true)
+    setRetryKey((k) => k + 1)
+  }, [])
 
   return (
-    <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+    <div className="card-m3 p-4">
       <div className="m3-title-md text-on-surface mb-3 flex items-center gap-2">
         <TrainFront className="h-5 w-5" />
         {t('mtr.lines')}
@@ -173,58 +191,58 @@ export function MtrRoutesView({
 
       {!selectedLine ? (
         routesLoading ? (
-          <div className="text-on-surface-variant m3-body-md py-8 text-center">
-            {t('common.refresh')}…
-          </div>
+          <ResultsSkeleton />
+        ) : routesError && mtrRoutes.length === 0 ? (
+          <EmptyState
+            title={t('common.wentWrong')}
+            hint={routesError}
+            action={
+              <button
+                type="button"
+                onClick={handleRetryRoutes}
+                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {t('common.tryAgain')}
+              </button>
+            }
+          />
         ) : (
-          <StaggerContainer className="grid grid-cols-2 gap-3 sm:grid-cols-3" stagger={0.03}>
-            {lines.map((line) => {
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {lines.map((line, idx) => {
               const color = getLineColor(line)
               const fg = getReadableForeground(color)
               return (
-                <StaggerItem key={line}>
-                  <MotionCard
-                    hoverScale={1.02}
-                    tapScale={0.98}
-                    className={cn(
-                      'rounded-2xl p-4 shadow-sm transition-shadow hover:shadow-md',
-                      fg
-                    )}
-                    style={{ backgroundColor: color }}
-                    onClick={() => {
-                      setSchedulesBySta({})
-                      setSelectedVariant(null)
-                      setSelectedLine(line)
-                    }}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') setSelectedLine(line)
-                    }}
-                  >
-                    <div className="m3-title-lg">{getMtrLineName(line, lang)}</div>
-                    <div className="m3-label-lg opacity-90">{t('common.route')}</div>
-                  </MotionCard>
-                </StaggerItem>
+                <button
+                  key={line}
+                  type="button"
+                  onClick={() => {
+                    setSchedulesBySta({})
+                    setSelectedVariant(null)
+                    setSelectedLine(line)
+                  }}
+                  style={{ backgroundColor: color }}
+                  className={cn(
+                    'ui-press rounded-2xl p-4 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:outline-none',
+                    staggerClassForIndex(idx),
+                    fg
+                  )}
+                >
+                  <div className="m3-title-lg">{getMtrLineName(line, lang)}</div>
+                  <div className="m3-label-lg opacity-90">{t('common.route')}</div>
+                </button>
               )
             })}
-          </StaggerContainer>
+          </div>
         )
       ) : (
-        <FadeIn className="space-y-4">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setSchedulesBySta({})
-                setSelectedLine(null)
-                setSelectedVariant(null)
-              }}
-              className="bg-secondary-container text-on-secondary-container m3-label-lg inline-flex items-center gap-1 rounded-full px-4 py-2 transition-colors hover:opacity-90"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              {t('common.back')}
-            </button>
+        <RouteDrilldown
+          lang={lang}
+          onBack={() => {
+            setSchedulesBySta({})
+            setSelectedLine(null)
+            setSelectedVariant(null)
+          }}
+          title={
             <span
               className="m3-title-md rounded-full px-4 py-2"
               style={{
@@ -234,8 +252,8 @@ export function MtrRoutesView({
             >
               {getMtrLineName(selectedLine, lang)}
             </span>
-          </div>
-
+          }
+        >
           {variantsForLine.length > 1 && (
             <div className="flex flex-wrap gap-2">
               {variantsForLine.map((variant) => (
@@ -301,7 +319,7 @@ export function MtrRoutesView({
               })}
             </RouteStopTimeline>
           </div>
-        </FadeIn>
+        </RouteDrilldown>
       )}
     </div>
   )

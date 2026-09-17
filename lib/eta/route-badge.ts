@@ -50,13 +50,13 @@ function getKmbRouteBadgeStyle(route: string): RouteBadgeStyle {
   const numMatch = r.match(RE_KMB_NUM)
   if (numMatch) {
     const num = parseInt(numMatch[1], 10)
-    // 1XX, 3XX or 6XX: Cross harbour (red)
+    // 1XX, 3XX or 6XX: Cross harbour (red, shared with Citybus)
     if ((num >= 100 && num < 200) || (num >= 300 && num < 400) || (num >= 600 && num < 700)) {
       return { textColor: '#FFFFFF', bgColor: '#DC2626' }
     }
-    // 9XX: Western harbour crossing (green)
+    // 9XX: Western harbour crossing (green, shared with Citybus)
     if (num >= 900 && num < 1000) {
-      return { textColor: '#FFFFFF', bgColor: '#008000' }
+      return { textColor: '#FFFFFF', bgColor: '#009140' }
     }
   }
 
@@ -125,7 +125,7 @@ function getCitybusRouteBadgeStyle(route: string): RouteBadgeStyle {
 
   if (num !== null) {
     if ((num >= 100 && num < 200) || (num >= 600 && num < 700)) {
-      return { textColor: '#FFFFFF', bgColor: '#FF0000' }
+      return { textColor: '#FFFFFF', bgColor: '#DC2626' }
     }
   }
 

@@ -1,14 +1,17 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, Info, TrainFront } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, TrainFront, TriangleAlert } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
+import { EmptyState } from '@/components/eta/empty-state'
+import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { Marquee } from '@/components/ui/marquee'
 import { findMtrStationBySta } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
@@ -64,29 +67,33 @@ function formatDest(dest: unknown, lang: UiLanguage) {
   if (!raw) return ''
   const station = findMtrStationBySta(raw)
   if (!station) return raw
-  return lang === 'en' ? station.nameEn : station.nameTc
+  return pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang)
 }
 
-function formatDestWithRacecourse(dest: unknown, lang: UiLanguage, showViaRacecourse: boolean) {
+function formatDestWithRacecourse(
+  dest: unknown,
+  lang: UiLanguage,
+  viaRacecourseSuffix: string,
+  showViaRacecourse: boolean
+) {
   const destName = formatDest(dest, lang)
   if (!showViaRacecourse) return destName
 
-  const suffix = lang === 'en' ? ' · Via Racecourse' : ' · 經馬場'
-  return `${destName}${suffix}`
+  return `${destName}${viaRacecourseSuffix}`
 }
 
-function formatMinutes(ttnt: unknown, lang: UiLanguage) {
+function formatMinutes(ttnt: unknown, arrivingText: string, minutesUnit: string) {
   const raw = String(ttnt ?? '').trim()
   if (!raw) return { text: '—', arriving: false }
   const minutes = Number(raw)
   if (Number.isNaN(minutes)) return { text: raw, arriving: false }
   if (minutes <= 0)
     return {
-      text: lang === 'en' ? 'Arriving' : '即將到達',
+      text: arrivingText,
       arriving: true,
     }
   return {
-    text: lang === 'en' ? `${minutes} min` : `${minutes} 分`,
+    text: `${minutes} ${minutesUnit}`,
     arriving: false,
   }
 }
@@ -108,6 +115,9 @@ type MtrLineCardProps = {
   lineColor?: string
   upLabel: string
   downLabel: string
+  viaRacecourseSuffix: string
+  arrivingText: string
+  minutesUnit: string
   expanded: boolean
   onToggle: () => void
   staggerClass?: string
@@ -121,6 +131,9 @@ function MtrLineCard({
   lineColor,
   upLabel,
   downLabel,
+  viaRacecourseSuffix,
+  arrivingText,
+  minutesUnit,
   expanded,
   onToggle,
   staggerClass,
@@ -142,9 +155,14 @@ function MtrLineCard({
             dir,
             route: route || undefined,
           })
-          const dest = formatDestWithRacecourse(train.dest, lang, showViaRacecourse)
+          const dest = formatDestWithRacecourse(
+            train.dest,
+            lang,
+            viaRacecourseSuffix,
+            showViaRacecourse
+          )
           const platform = formatPlatform(train.plat)
-          const eta = formatMinutes(train.ttnt, lang)
+          const eta = formatMinutes(train.ttnt, arrivingText, minutesUnit)
           return { dest, platform, eta, key: `${dest}-${route}` }
         })
         .filter((item) => {
@@ -153,7 +171,7 @@ function MtrLineCard({
           return true
         })
     },
-    [line, sta, lang]
+    [line, sta, lang, viaRacecourseSuffix, arrivingText, minutesUnit]
   )
 
   const collapsedItems = [
@@ -205,9 +223,14 @@ function MtrLineCard({
       dir,
       route: route || undefined,
     })
-    const destText = formatDestWithRacecourse(train.dest, lang, showViaRacecourse)
+    const destText = formatDestWithRacecourse(
+      train.dest,
+      lang,
+      viaRacecourseSuffix,
+      showViaRacecourse
+    )
     const platform = formatPlatform(train.plat)
-    const eta = formatMinutes(train.ttnt, lang)
+    const eta = formatMinutes(train.ttnt, arrivingText, minutesUnit)
 
     return (
       <div key={`${dir}-${trainIdx}`} className="flex items-center justify-between gap-3 py-1.5">
@@ -297,11 +320,12 @@ function MtrLineCard({
       expanded={expanded}
       onToggle={onToggle}
       className="ui-lift"
+      flush
       panel={expandedPanel}
       toggleLabel={line ? getMtrLineName(line, lang) : 'MTR'}
     >
-      <div className="-mt-3 -mr-3 -ml-4">{header(true)}</div>
-      {expanded ? null : <div className="pt-2">{collapsedSummary}</div>}
+      {header(true)}
+      {expanded ? null : <div className="p-4">{collapsedSummary}</div>}
     </ExpandableEtaRow>
   )
 }
@@ -316,7 +340,7 @@ export const MtrResults = React.memo(function MtrResults({
   onRefresh,
   loading,
 }: Props) {
-  const { t, tWithParams } = useTranslations(lang)
+  const { t } = useTranslations(lang)
 
   const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
   const onToggleExpand = React.useCallback((key: string) => {
@@ -339,13 +363,23 @@ export const MtrResults = React.memo(function MtrResults({
 
       <div className="space-y-4">
         {error ? (
-          <p className="text-error m3-body-md">{tWithParams('common.updateFailed', { error })}</p>
+          <EmptyState
+            icon={TriangleAlert}
+            title={t('errors.updateFailedGeneric')}
+            hint={error}
+            action={
+              <button
+                type="button"
+                onClick={onRefresh}
+                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {t('common.tryAgain')}
+              </button>
+            }
+          />
         ) : null}
         {!schedule ? (
-          <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
-            <Info className="h-4 w-4" />
-            {t('mtr.selectStation')}
-          </div>
+          <EmptyState title={t('mtr.selectStation')} />
         ) : schedule.status === 0 ? (
           <div className="bg-surface-container rounded-2xl p-4">
             <div className="text-on-surface m3-title-md">{t('mtr.serviceMessage')}</div>
@@ -358,9 +392,7 @@ export const MtrResults = React.memo(function MtrResults({
                 href={schedule.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label={
-                  lang === 'en' ? 'View details (opens in new tab)' : '查看詳情（在新分頁開啟）'
-                }
+                aria-label={t('mtr.viewDetailsHint')}
               >
                 {t('mtr.viewDetails')} <ExternalLink className="h-4 w-4" />
               </a>
@@ -371,14 +403,7 @@ export const MtrResults = React.memo(function MtrResults({
             const [line, sta] = key.split('-')
             const lineColor = line ? getLineColor(line) : undefined
 
-            const staggerClass =
-              idx === 0
-                ? 'ui-stagger-1'
-                : idx === 1
-                  ? 'ui-stagger-2'
-                  : idx === 2
-                    ? 'ui-stagger-3'
-                    : ''
+            const staggerClass = staggerClassForIndex(idx)
 
             return (
               <MtrLineCard
@@ -390,6 +415,9 @@ export const MtrResults = React.memo(function MtrResults({
                 lineColor={lineColor}
                 upLabel={t('mtr.up')}
                 downLabel={t('mtr.down')}
+                viaRacecourseSuffix={t('mtr.viaRacecourse')}
+                arrivingText={t('common.now')}
+                minutesUnit={t('common.minutesUnit')}
                 expanded={expandedKey === key}
                 onToggle={() => onToggleExpand(key)}
                 staggerClass={staggerClass}

@@ -1,15 +1,18 @@
 'use client'
 
-import { AlertCircle, Clock, Heart, Search } from 'lucide-react'
+import { Clock, Heart, Search } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
+import { EmptyState } from '@/components/eta/empty-state'
+import { ResultsSkeleton } from '@/components/eta/results-skeleton'
+import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RouteStopRow, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
 import { TickingSoonestPill } from '@/components/eta/ticking-eta'
-import { StaggerContainer, StaggerItem } from '@/components/m3/motion'
+import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
 import {
   fetchKmbRouteStops,
   fetchKmbRoutes,
@@ -21,6 +24,8 @@ import {
 } from '@/lib/eta/client'
 import type { GeoPoint } from '@/lib/eta/geo'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { LINE_COLOR_FALLBACK } from '@/lib/eta/line-colors'
+import { pickLang } from '@/lib/eta/pick-lang'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import { getRoutedGeometry } from '@/lib/eta/routing'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -35,12 +40,6 @@ const TransitMap = dynamic(
     loading: () => <div className="bg-surface-container h-56 animate-pulse rounded-2xl" />,
   }
 )
-
-function pickLang<T>(record: { en: T; tc: T; sc: T }, lang: UiLanguage): T {
-  if (lang === 'sc') return record.sc
-  if (lang === 'en') return record.en
-  return record.tc
-}
 
 type RouteVariant = {
   key: string
@@ -124,6 +123,7 @@ function useKmbRouteList() {
   const [routes, setRoutes] = React.useState<KmbRouteInfoLite[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [retryKey, setRetryKey] = React.useState(0)
 
   React.useEffect(() => {
     let cancelled = false
@@ -158,9 +158,15 @@ function useKmbRouteList() {
     return () => {
       cancelled = true
     }
+  }, [retryKey])
+
+  const retry = React.useCallback(() => {
+    setError(null)
+    setLoading(true)
+    setRetryKey((k) => k + 1)
   }, [])
 
-  return { routes, loading, error }
+  return { routes, loading, error, retry }
 }
 
 function useKmbStops() {
@@ -211,7 +217,10 @@ export function KmbRoutesView({
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
 }) {
   const { t } = useTranslations(lang)
-  const { routes, loading, error } = useKmbRouteList()
+  const { routes, loading, error, retry } = useKmbRouteList()
+  const handleRetryRoutes = React.useCallback(() => {
+    retry()
+  }, [retry])
   const allStops = useKmbStops()
   const stopsById = React.useMemo(() => new Map(allStops.map((s) => [s.stopId, s])), [allStops])
 
@@ -449,36 +458,49 @@ export function KmbRoutesView({
 
   return (
     <div className="space-y-4">
-      <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+      <div className="card-m3 p-4">
         <div className="m3-title-md mb-3">{t('kmb.routes')}</div>
         <div className="relative">
           <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={lang === 'en' ? 'Search route number…' : '搜尋路線編號…'}
+            placeholder={t('kmb.searchRouteNumber')}
             className="bg-surface-container h-12 rounded-full pl-10"
           />
         </div>
 
-        {loading && (
-          <div className="text-on-surface-variant m3-body-md py-4 text-center">Loading…</div>
-        )}
+        {loading && <ResultsSkeleton />}
         {error && (
-          <div className="text-error mt-3 flex items-center gap-2 text-sm">
-            <AlertCircle className="h-4 w-4" />
-            {error}
-          </div>
+          <EmptyState
+            title={t('common.wentWrong')}
+            hint={error}
+            action={
+              <button
+                type="button"
+                onClick={handleRetryRoutes}
+                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+              >
+                {t('common.tryAgain')}
+              </button>
+            }
+          />
         )}
 
         {!selectedRouteKey ? (
-          <StaggerContainer className="mt-3 flex flex-wrap gap-2" stagger={0.02}>
-            {filteredRoutes.map((entry) => (
-              <StaggerItem key={routeSelectionKey(entry)}>
+          !loading && !error && filteredRoutes.length === 0 && query.trim() !== '' ? (
+            <EmptyState title={t('common.noResults')} />
+          ) : (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {filteredRoutes.map((entry, idx) => (
                 <button
+                  key={routeSelectionKey(entry)}
                   type="button"
                   onClick={() => setSelectedRouteKey(entry)}
-                  className="bg-surface-container-high hover:bg-surface-container hover:elevation-1 m3-label-lg flex items-center gap-1.5 rounded-full px-4 py-2 transition-colors"
+                  className={cn(
+                    'bg-surface-container-high hover:bg-surface-container hover:elevation-1 ui-press m3-label-lg flex min-h-[44px] items-center gap-1.5 rounded-full px-4 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                    staggerClassForIndex(idx)
+                  )}
                 >
                   <RouteBadge route={entry.route} company={entry.co} size="sm" />
                   {showOperatorInSearch && (
@@ -487,25 +509,20 @@ export function KmbRoutesView({
                     </span>
                   )}
                 </button>
-              </StaggerItem>
-            ))}
-          </StaggerContainer>
-        ) : (
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedRouteKey(null)
-                  setSelectedVariant(null)
-                }}
-                className="text-primary m3-label-lg"
-              >
-                ← {t('common.back') ?? 'Back'}
-              </button>
-              <RouteBadge route={selectedRouteKey.route} company={selectedRouteKey.co} size="lg" />
+              ))}
             </div>
-
+          )
+        ) : (
+          <RouteDrilldown
+            lang={lang}
+            onBack={() => {
+              setSelectedRouteKey(null)
+              setSelectedVariant(null)
+            }}
+            title={
+              <RouteBadge route={selectedRouteKey.route} company={selectedRouteKey.co} size="lg" />
+            }
+          >
             {variantsForRoute.length > 1 && (
               <div className="flex flex-wrap gap-2">
                 {variantsForRoute.map((v) => (
@@ -514,7 +531,7 @@ export function KmbRoutesView({
                     type="button"
                     onClick={() => setSelectedVariant(v)}
                     className={cn(
-                      'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                      'inline-flex min-h-[44px] items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
                       currentVariant?.key === v.key
                         ? 'bg-primary-container text-on-primary-container'
                         : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
@@ -523,13 +540,7 @@ export function KmbRoutesView({
                     {showOperatorInVariants && (
                       <span className="mr-1 uppercase">{normalizeCo(v.co)}</span>
                     )}
-                    {v.bound === 'I'
-                      ? lang === 'en'
-                        ? 'Inbound'
-                        : '往'
-                      : lang === 'en'
-                        ? 'Outbound'
-                        : '往'}{' '}
+                    {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}{' '}
                     {pickLang(v.destination, lang)}
                     {v.serviceType !== '1' ? ` · ${v.serviceType}` : ''}
                   </button>
@@ -543,31 +554,31 @@ export function KmbRoutesView({
                   {pickLang(currentVariant.origin, lang)} →{' '}
                   {pickLang(currentVariant.destination, lang)}
                 </div>
-                <Button size="sm" className="rounded-full" onClick={onSaveRoute}>
+                <Button size="sm" className="min-h-[44px] rounded-full" onClick={onSaveRoute}>
                   <Heart className="mr-1.5 h-4 w-4" />
                   {t('common.save')}
                 </Button>
               </div>
             )}
-          </div>
+          </RouteDrilldown>
         )}
       </div>
 
       {currentVariant && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
+          <div className="card-m3 p-4">
             <div className="m3-title-md mb-3 flex items-center gap-2">
               <Clock className="h-5 w-5" />
               {t('kmb.routeStops')}
             </div>
             {variantStops.length === 0 ? (
-              <div className="text-on-surface-variant py-8 text-center">{t('common.loading')}</div>
+              <ResultsSkeleton />
             ) : (
               <RouteStopTimeline
                 lineColor={
                   currentVariant
                     ? getRouteBadgeStyle(currentVariant.route, currentVariant.co).bgColor
-                    : '#64748b'
+                    : LINE_COLOR_FALLBACK
                 }
               >
                 {variantStops.map((rs) => {
@@ -602,8 +613,8 @@ export function KmbRoutesView({
             )}
           </div>
 
-          <div className="bg-surface-container-low rounded-3xl p-4 shadow-sm">
-            <div className="m3-title-md mb-3">{t('common.map') ?? 'Map'}</div>
+          <div className="card-m3 p-4">
+            <div className="m3-title-md mb-3">{t('common.map')}</div>
             <TransitMap
               center={mapCenter}
               markers={mapMarkers}

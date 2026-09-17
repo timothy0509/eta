@@ -66,6 +66,7 @@
   --color-on-tertiary: var(--on-tertiary);
   --color-tertiary-container: var(--tertiary-container);
   --color-on-tertiary-container: var(--on-tertiary-container);
+  --color-error: var(--error);
   --color-error-container: var(--error-container);
   --color-on-error-container: var(--on-error-container);
   --color-on-error: var(--on-error);
@@ -84,6 +85,15 @@
 }
 
 :root {
+  --app-max: 80rem;
+
+  /* UI motion primitives */
+  --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ui-dur-fast: 140ms;
+  --ui-dur-md: 220ms;
+  --ui-dur-slow: 360ms;
+
   /* Material 3 baseline radius */
   --radius: 0.75rem;
 
@@ -368,15 +378,8 @@
 
 /* -----------------------------
  * UI motion primitives
+ * (tokens live in the merged :root above)
  * ----------------------------- */
-
-:root {
-  --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
-  --ui-dur-fast: 140ms;
-  --ui-dur-md: 220ms;
-  --ui-dur-slow: 360ms;
-}
 
 @keyframes ui-fade-up {
   0% {
@@ -563,8 +566,15 @@
   .ui-pop,
   .ui-spin,
   .live-pulse,
+  .marquee-track,
   .ui-stagger > * {
     animation: none !important;
+  }
+
+  .ui-stagger-1,
+  .ui-stagger-2,
+  .ui-stagger-3 {
+    animation-delay: 0ms !important;
   }
 
   .ui-lift,

@@ -33,7 +33,7 @@ export function RouteBadge({ route, company, size = 'md', className }: Props) {
       style={{
         color: style.textColor,
         backgroundColor: style.bgColor,
-        borderColor: style.bgColor === '#FFFFFF' ? '#D1D5DB' : style.bgColor,
+        borderColor: style.bgColor === '#FFFFFF' ? 'var(--outline-variant)' : style.bgColor,
       }}
     >
       {route}

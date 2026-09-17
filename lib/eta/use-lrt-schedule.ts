@@ -3,7 +3,9 @@
 import * as React from 'react'
 
 import { fetchLrtSchedule } from '@/lib/eta/client'
+import { translations } from '@/lib/eta/i18n'
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import type { LrtStationSearchItem, UiLanguage } from '@/lib/eta/types'
 
 export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang: UiLanguage }) {
@@ -89,10 +91,10 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
   }, [refresh, stationId])
 
   const title = React.useMemo(() => {
-    if (!stationId) return 'Light Rail'
+    if (!stationId) return translations.lrt.title[lang]
     const station = stationsById.get(stationId)
-    if (station) return lang === 'en' ? station.nameEn : station.nameZh
-    return `Station ${stationId}`
+    if (station) return pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang)
+    return translations.common.stationWithId[lang].replace('{id}', stationId)
   }, [lang, stationId, stationsById])
 
   return {

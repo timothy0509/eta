@@ -1,3 +1,4 @@
+import { translations } from './i18n'
 import type { UiLanguage } from './types'
 
 function normalizeNowMs(now?: number | Date): number {
@@ -53,19 +54,21 @@ export function formatRelativeAgeLabel(params: {
   const updatedAtTime = lastUpdatedAt
   if (Number.isNaN(updatedAtTime)) return null
 
+  const lang = params.lang
   const diffMs = nowMs - updatedAtTime
   if (diffMs < 0) return null
   if (diffMs < 30_000) {
-    return params.lang === 'en' ? 'just now' : params.lang === 'sc' ? '刚刚' : '剛剛'
+    return translations.common.justNow[lang]
   }
 
   const minutes = Math.abs(Math.round(diffMs / 60000))
   if (minutes < 60) {
-    if (params.lang === 'en') return `${minutes} min ago`
-    return `${minutes} ${params.lang === 'sc' ? '分钟前' : '分鐘前'}`
+    return translations.common.minutesAgo[lang].replace('{minutes}', String(minutes))
   }
 
   const hours = Math.max(1, Math.round(minutes / 60))
-  if (params.lang === 'en') return `${hours} hr${hours === 1 ? '' : 's'} ago`
-  return `${hours} ${params.lang === 'sc' ? '小时前' : '小時前'}`
+  if (hours === 1) {
+    return translations.common.hourAgo[lang].replace('{hours}', String(hours))
+  }
+  return translations.common.hoursAgo[lang].replace('{hours}', String(hours))
 }

@@ -381,40 +381,18 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     ) : null
 
   const routeHeader = ({ showEta, showSubtitle }: { showEta: boolean; showSubtitle: boolean }) => (
-    <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 flex-1 items-start gap-2">
-        <RouteBadge route={route} company={co} size="lg" />
-        <div className="min-w-0 flex-1 overflow-hidden">
-          <span className="sr-only">{operatorName}</span>
-          <Marquee
-            title={typeof label === 'string' ? label : undefined}
-            className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
-          >
-            {label || t('common.route')}
-          </Marquee>
-          {fareCodeNode ? (
-            <div
-              className={cn(
-                'ui-expand-panel grid motion-reduce:transition-none',
-                showSubtitle ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
-              )}
-              aria-hidden={!showSubtitle}
-            >
-              <div className="min-h-0 overflow-hidden">
-                <div
-                  className={cn(
-                    'ui-expand-inner pt-0.5',
-                    showSubtitle ? 'translate-y-0' : '-translate-y-0.5'
-                  )}
-                >
-                  {fareCodeNode}
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </div>
+    <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2">
+      <RouteBadge route={route} company={co} size="lg" className="col-start-1 row-start-1" />
+      <div className="col-start-2 row-start-1 min-w-0">
+        <span className="sr-only">{operatorName}</span>
+        <Marquee
+          title={typeof label === 'string' ? label : undefined}
+          className="text-on-surface m3-body-md min-w-0 font-medium"
+        >
+          {label || t('common.route')}
+        </Marquee>
       </div>
-      <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
+      <div className="col-start-3 row-start-1 flex items-center gap-1 sm:gap-1.5">
         {showEta && hasEta ? firstEtaNode : null}
         {expandable ? (
           <ChevronDown
@@ -422,6 +400,26 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           />
         ) : null}
       </div>
+      {fareCodeNode ? (
+        <div
+          className={cn(
+            'ui-expand-panel col-start-2 col-end-4 row-start-2 grid min-h-0 motion-reduce:transition-none',
+            showSubtitle ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+          )}
+          aria-hidden={!showSubtitle}
+        >
+          <div className="min-h-0 overflow-hidden">
+            <div
+              className={cn(
+                'ui-expand-inner pt-0.5',
+                showSubtitle ? 'translate-y-0' : '-translate-y-0.5'
+              )}
+            >
+              {fareCodeNode}
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 

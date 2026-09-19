@@ -122,6 +122,7 @@ export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
       nameSc: (s.name_sc ?? '').trim(),
       lat: toCoord(s.lat),
       lng: toCoord(s.long),
+      isKmb: s.isKmb,
     }))
     .filter((s) => s.stopId && s.nameEn && Number.isFinite(s.lat) && Number.isFinite(s.lng))
 }

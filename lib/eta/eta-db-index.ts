@@ -7,6 +7,7 @@ export type KmbStopSearchItem = {
   nameSc: string
   lat: number
   lng: number
+  isKmb: boolean
 }
 
 export type KmbRouteStopLite = {
@@ -151,7 +152,7 @@ export async function buildEtaDbIndexes(
   await yieldToMain()
 
   const busStopIds = new Set(kmbRouteStops.map((entry) => entry.stopId).filter(Boolean))
-  const kmbStops = Object.entries(db.stopList)
+  const kmbStops: KmbStopSearchItem[] = Object.entries(db.stopList)
     .map(([stopId, stop]) => ({
       stopId: normalizeStopId(stopId),
       nameEn: (stop.name.en ?? '').trim(),
@@ -159,6 +160,7 @@ export async function buildEtaDbIndexes(
       nameSc: (stop.name.zh ?? '').trim(),
       lat: stop.location.lat,
       lng: stop.location.lng,
+      isKmb: false,
     }))
     .filter((s) => s.stopId && s.nameEn && busStopIds.has(s.stopId))
 
@@ -216,6 +218,10 @@ export async function buildEtaDbIndexes(
     if (processed % CHUNK_SIZE === 0) {
       await yieldToMain()
     }
+  }
+
+  for (const stop of kmbStops) {
+    stop.isKmb = (stopRoutesIndex.get(stop.stopId) ?? []).some((e) => e.co === 'kmb')
   }
 
   return {

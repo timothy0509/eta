@@ -26,6 +26,7 @@ export type KmbStop = {
   name_sc: string
   lat: string | number
   long: string | number
+  isKmb: boolean
 }
 
 export type KmbEtaEntry = {
@@ -86,6 +87,7 @@ export async function getKmbStops(): Promise<KmbStop[]> {
         name_sc: stop.nameSc,
         lat: stop.lat,
         long: stop.lng,
+        isKmb: stop.isKmb,
       }))
     },
   })

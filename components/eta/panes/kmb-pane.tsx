@@ -880,7 +880,7 @@ export function KmbPane({
       const stop = kmbStopsById.get(kmbQuery.stopId)
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang)
-        const parsed = parseKmbStopNameCached(fullName)
+        const parsed = parseKmbStopNameCached(fullName, { isKmb: stop.isKmb ?? false, lang })
         return { title: parsed.name, code: parsed.stopCode }
       }
       return { title: `Stop ${kmbQuery.stopId}`, code: null }
@@ -889,7 +889,10 @@ export function KmbPane({
       const firstStop = kmbQuery.stopIds.map((stopId) => kmbStopsById.get(stopId)).find(Boolean)
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang)
-        const parsed = parseKmbStopNameCached(fullName)
+        const parsed = parseKmbStopNameCached(fullName, {
+          isKmb: firstStop.isKmb ?? false,
+          lang,
+        })
         return { title: parsed.name, code: null }
       }
       return { title: t('kmb.selectedStops'), code: null }
@@ -1022,7 +1025,10 @@ export function KmbPane({
           if (stops.length > 0) {
             const firstStop = stops[0]!
             const fullName = pickKmbStopTitle(firstStop, lang)
-            const { name } = parseKmbStopNameCached(fullName)
+            const { name } = parseKmbStopNameCached(fullName, {
+              isKmb: firstStop.isKmb ?? false,
+              lang,
+            })
             const firstStopId = stopIds[0]!
             onAddRecent({
               id: `kmb:${stopIds.join(',')}:__stops__`,

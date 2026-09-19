@@ -88,7 +88,10 @@ export function useKmbSave({
       const fullName = stop
         ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
         : translations.kmb.bus[lang]
-      const { name } = parseKmbStopNameCached(fullName)
+      const { name } = parseKmbStopNameCached(fullName, {
+        isKmb: stop?.isKmb ?? false,
+        lang,
+      })
       const title = `${name}${routeSuffix}`
 
       const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? '__all__')
@@ -107,7 +110,10 @@ export function useKmbSave({
       const fullName = firstStop
         ? pickLang({ en: firstStop.nameEn, tc: firstStop.nameTc, sc: firstStop.nameSc }, lang)
         : translations.kmb.selectedStops[lang]
-      const { name } = parseKmbStopNameCached(fullName)
+      const { name } = parseKmbStopNameCached(fullName, {
+        isKmb: firstStop?.isKmb ?? false,
+        lang,
+      })
       const title = `${name}${routeSuffix}`
 
       const idPart = isAdvanced ? `adv:${routeCount}` : (route ?? '__all__')

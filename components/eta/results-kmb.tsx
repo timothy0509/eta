@@ -151,7 +151,9 @@ function getStopChips(
 
   const stop = stopFromEta ?? stopFromBuiltInId
   const fullName = stop ? pickStopName(stop, lang) : null
-  const parsed = fullName ? parseKmbStopNameCached(fullName) : null
+  const parsed = fullName
+    ? parseKmbStopNameCached(fullName, { isKmb: stop?.isKmb ?? false, lang })
+    : null
 
   const result = {
     stopId,
@@ -169,6 +171,7 @@ type StopInfo = {
   nameEn: string
   nameTc: string
   nameSc: string
+  isKmb?: boolean
 }
 
 type Props = {
@@ -590,7 +593,7 @@ const StopSection = React.memo(function StopSection({
 }) {
   const { t } = useTranslations(lang)
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
-  const parsed = parseKmbStopNameCached(stopName)
+  const parsed = parseKmbStopNameCached(stopName, { isKmb: stopInfo?.isKmb ?? false, lang })
   const stopCodeBadge = parsed.platform ?? parsed.stopCode ?? null
   const stopRef = registerStopRef ? registerStopRef(stopId) : undefined
 
@@ -703,7 +706,7 @@ export const KmbResults = React.memo(function KmbResults({
     const next = new Map<string, StopChips>()
     for (const stop of stops) {
       const fullName = pickStopName(stop, lang)
-      const parsed = parseKmbStopNameCached(fullName)
+      const parsed = parseKmbStopNameCached(fullName, { isKmb: stop.isKmb ?? false, lang })
       next.set(stop.stopId, {
         stopId: stop.stopId,
         fullName,

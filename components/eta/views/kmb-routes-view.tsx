@@ -102,7 +102,10 @@ function getStopGroupForClick(
     { en: clickedStop.nameEn, tc: clickedStop.nameTc, sc: clickedStop.nameSc },
     lang
   )
-  const clickedParsed = parseKmbStopNameCached(clickedName)
+  const clickedParsed = parseKmbStopNameCached(clickedName, {
+    isKmb: clickedStop.isKmb ?? false,
+    lang,
+  })
   const baseName = clickedParsed.name
 
   const sameBase = variantStops
@@ -110,7 +113,7 @@ function getStopGroupForClick(
     .filter(({ stop }) => {
       if (!stop) return false
       const name = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
-      const parsed = parseKmbStopNameCached(name)
+      const parsed = parseKmbStopNameCached(name, { isKmb: stop.isKmb ?? false, lang })
       return parsed.name === baseName
     })
     .map(({ rs }) => rs.stopId)
@@ -584,7 +587,10 @@ export function KmbRoutesView({
                   const fullName = stop
                     ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
                     : rs.stopId
-                  const parsed = parseKmbStopNameCached(fullName)
+                  const parsed = parseKmbStopNameCached(fullName, {
+                    isKmb: stop?.isKmb ?? false,
+                    lang,
+                  })
                   const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
                   return (
                     <RouteStopRow

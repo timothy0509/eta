@@ -37,6 +37,7 @@ type KmbNearbyStop = {
   nameEn: string
   nameTc: string
   nameSc: string
+  isKmb: boolean
   lat: number
   lng: number
   distanceKm: number
@@ -363,7 +364,10 @@ function KmbNearbyView({
                   { en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc },
                   lang
                 )
-                const parsed = parseKmbStopNameCached(fullName)
+                const parsed = parseKmbStopNameCached(fullName, {
+                  isKmb: stop.isKmb,
+                  lang,
+                })
                 return (
                   <button
                     key={stop.stopId}

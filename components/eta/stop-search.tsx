@@ -245,7 +245,7 @@ export function StopSearch({
       const stop = stopById.get(value.stopId)
       if (stop) {
         const fullName = formatStopName(stop, lang)
-        const parsed = parseKmbStopNameCached(fullName)
+        const parsed = parseKmbStopNameCached(fullName, { isKmb: stop.isKmb ?? false, lang })
         return parsed.stopCode ? `${parsed.name} (${parsed.stopCode})` : parsed.name
       }
       return null
@@ -256,14 +256,20 @@ export function StopSearch({
       if (!firstStop) return null
 
       const fullName = formatStopName(firstStop, lang)
-      const { name: baseName } = parseKmbStopNameCached(fullName)
+      const { name: baseName } = parseKmbStopNameCached(fullName, {
+        isKmb: firstStop.isKmb ?? false,
+        lang,
+      })
 
       // Collect all codes for selected stops
       const codes: string[] = []
       for (const stopId of value.stopIds) {
         const stop = stopById.get(stopId)
         if (stop) {
-          const parsed = parseKmbStopNameCached(formatStopName(stop, lang))
+          const parsed = parseKmbStopNameCached(formatStopName(stop, lang), {
+            isKmb: stop.isKmb ?? false,
+            lang,
+          })
           if (parsed.stopCode) codes.push(parsed.stopCode)
         }
       }
@@ -282,7 +288,7 @@ export function StopSearch({
   const stopComputed = React.useMemo<StopComputed[]>(() => {
     return stops.map((stop) => {
       const fullName = formatStopName(stop, lang)
-      const parsed = parseKmbStopNameCached(fullName)
+      const parsed = parseKmbStopNameCached(fullName, { isKmb: stop.isKmb ?? false, lang })
       const baseName = parsed.name
       const stopCode = parsed.stopCode
       const displayName = baseName

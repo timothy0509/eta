@@ -144,7 +144,10 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
       const stop = kmbStopsById.get(item.stopId)
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang)
-        const { name } = parseKmbStopNameCached(fullName)
+        const { name } = parseKmbStopNameCached(fullName, {
+          isKmb: stop.isKmb ?? false,
+          lang,
+        })
 
         // Build suffix from saved data
         let suffix = ''
@@ -179,7 +182,10 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
       }
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang)
-        const { name } = parseKmbStopNameCached(fullName)
+        const { name } = parseKmbStopNameCached(fullName, {
+          isKmb: firstStop.isKmb ?? false,
+          lang,
+        })
 
         // Build suffix from saved data
         let suffix = ''

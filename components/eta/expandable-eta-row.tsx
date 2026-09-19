@@ -5,6 +5,10 @@ import { cn } from '@/lib/utils'
 type Props = {
   expanded: boolean
   onToggle: () => void
+  /**
+   * Left-edge strip color. For KMB entries this is the operator color from
+   * `getOperatorColor`, not the route badge color.
+   */
   color?: string
   className?: string
   flush?: boolean
@@ -35,7 +39,7 @@ export function ExpandableEtaRow({
     >
       {color ? (
         <span
-          className="absolute inset-y-2.5 left-0 w-[3px] rounded-full"
+          className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
           style={{ backgroundColor: color }}
           aria-hidden
         />
@@ -57,13 +61,20 @@ export function ExpandableEtaRow({
       <div
         id={panelId}
         className={cn(
-          'grid transition-[grid-template-rows,opacity] duration-[250ms] ease-[var(--ui-ease-spring-soft)] motion-reduce:transition-none',
+          'ui-expand-panel grid motion-reduce:transition-none',
           expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
         )}
         aria-hidden={!expanded}
       >
         <div className="min-h-0 overflow-hidden">
-          <div className="pointer-events-none relative z-10 pr-3 pb-3 pl-4">{panel}</div>
+          <div
+            className={cn(
+              'ui-expand-inner pointer-events-none relative z-10 pr-3 pb-3 pl-4',
+              expanded ? 'translate-y-0' : '-translate-y-1.5'
+            )}
+          >
+            {panel}
+          </div>
         </div>
       </div>
     </div>

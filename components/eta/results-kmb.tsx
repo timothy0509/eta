@@ -382,7 +382,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const routeHeader = ({ showEta, showSubtitle }: { showEta: boolean; showSubtitle: boolean }) => (
     <div className="flex items-center justify-between gap-2">
-      <div className="flex min-w-0 flex-1 items-center gap-2">
+      <div className="flex min-w-0 flex-1 items-start gap-2">
         <RouteBadge route={route} company={co} size="lg" />
         <div className="min-w-0 flex-1 overflow-hidden">
           <span className="sr-only">{operatorName}</span>
@@ -392,7 +392,26 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           >
             {label || t('common.route')}
           </Marquee>
-          {showSubtitle && fareCodeNode ? <div className="mt-0.5">{fareCodeNode}</div> : null}
+          {fareCodeNode ? (
+            <div
+              className={cn(
+                'ui-expand-panel grid motion-reduce:transition-none',
+                showSubtitle ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+              )}
+              aria-hidden={!showSubtitle}
+            >
+              <div className="min-h-0 overflow-hidden">
+                <div
+                  className={cn(
+                    'ui-expand-inner pt-0.5',
+                    showSubtitle ? 'translate-y-0' : '-translate-y-0.5'
+                  )}
+                >
+                  {fareCodeNode}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">

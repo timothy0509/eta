@@ -15,9 +15,13 @@ const OPERATOR_COLORS: Record<string, string> = {
 /** Neutral fallback for operators without a brand color. */
 export const OPERATOR_COLOR_FALLBACK = '#64748b'
 
-export function getOperatorColor(co: string | undefined): string {
-  const key = String(co ?? 'kmb')
+/** Shared normalization for operator codes. */
+export function normalizeOperator(co: string | undefined): string {
+  return String(co ?? 'kmb')
     .trim()
     .toLowerCase()
-  return OPERATOR_COLORS[key] ?? OPERATOR_COLOR_FALLBACK
+}
+
+export function getOperatorColor(co: string | undefined): string {
+  return OPERATOR_COLORS[normalizeOperator(co)] ?? OPERATOR_COLOR_FALLBACK
 }

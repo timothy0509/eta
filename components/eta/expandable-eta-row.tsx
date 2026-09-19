@@ -60,7 +60,6 @@ export function ExpandableEtaRow({
 
       <div
         id={panelId}
-        data-open={expanded}
         className={cn(
           'ui-expand-panel grid motion-reduce:transition-none',
           expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
@@ -69,7 +68,6 @@ export function ExpandableEtaRow({
       >
         <div className="min-h-0 overflow-hidden">
           <div
-            data-open={expanded}
             className={cn(
               'ui-expand-inner pointer-events-none relative z-10 pr-3 pb-3 pl-4',
               expanded ? 'translate-y-0' : '-translate-y-1.5'

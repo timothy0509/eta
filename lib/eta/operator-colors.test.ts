@@ -1,6 +1,21 @@
 import { describe, expect, it } from 'vitest'
 
-import { OPERATOR_COLOR_FALLBACK, getOperatorColor } from '@/lib/eta/operator-colors'
+import {
+  OPERATOR_COLOR_FALLBACK,
+  getOperatorColor,
+  normalizeOperator,
+} from '@/lib/eta/operator-colors'
+
+describe('normalizeOperator', () => {
+  it('trims and lowercases codes', () => {
+    expect(normalizeOperator(' Ctb ')).toBe('ctb')
+    expect(normalizeOperator('KMB')).toBe('kmb')
+  })
+
+  it('defaults undefined to kmb', () => {
+    expect(normalizeOperator(undefined)).toBe('kmb')
+  })
+})
 
 describe('getOperatorColor', () => {
   it('maps known operators to brand colors', () => {

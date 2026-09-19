@@ -22,7 +22,7 @@ import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
-import { getOperatorColor } from '@/lib/eta/operator-colors'
+import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -31,7 +31,7 @@ import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
 
 function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
-  const key = String(co ?? 'kmb').toLowerCase()
+  const key = normalizeOperator(co)
   const map: Record<string, { en: string; tc: string; sc: string }> = {
     kmb: { en: 'KMB', tc: '九巴', sc: '九巴' },
     ctb: { en: 'CTB', tc: '城巴', sc: '城巴' },
@@ -471,8 +471,15 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       </div>
       <div className="flex items-end justify-between gap-2 pt-1">
         <div className="min-w-0 flex-1">{fareCodeNode}</div>
-        <div className="shrink-0">{DetailsTextButton}</div>
+        <div className="pointer-events-auto shrink-0">{DetailsTextButton}</div>
       </div>
+    </div>
+  )
+
+  const staticFooter = (
+    <div className="flex items-end justify-between gap-2">
+      <div className="min-w-0 flex-1">{fareCodeNode}</div>
+      <div className="shrink-0">{DetailsTextButton}</div>
     </div>
   )
 
@@ -497,7 +504,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
             <Info className="h-4 w-4 shrink-0" />
             {remark || formatNoScheduledText(t)}
           </div>
-          {fareCodeNode}
+          {staticFooter}
         </div>
       </div>
     )
@@ -518,7 +525,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         />
         <div className="space-y-2.5 pl-4">
           {routeHeader({ showEta: true })}
-          {fareCodeNode}
+          {staticFooter}
         </div>
       </div>
     )

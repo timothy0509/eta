@@ -380,7 +380,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       </div>
     ) : null
 
-  const routeHeader = ({ showEta }: { showEta: boolean }) => (
+  const routeHeader = ({ showEta, showSubtitle }: { showEta: boolean; showSubtitle: boolean }) => (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RouteBadge route={route} company={co} size="lg" />
@@ -392,6 +392,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           >
             {label || t('common.route')}
           </Marquee>
+          {showSubtitle && fareCodeNode ? <div className="mt-0.5">{fareCodeNode}</div> : null}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
@@ -476,12 +477,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     </div>
   )
 
-  const staticFooter = (
-    <div className="flex items-end justify-between gap-2">
-      <div className="min-w-0 flex-1">{fareCodeNode}</div>
-      <div className="shrink-0">{DetailsTextButton}</div>
-    </div>
-  )
+  const staticFooter = <div className="flex items-center justify-end">{DetailsTextButton}</div>
 
   // Routes without valid ETAs get a simplified display
   if (!hasEta) {
@@ -499,7 +495,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           aria-hidden
         />
         <div className="space-y-2.5 pl-4">
-          {routeHeader({ showEta: false })}
+          {routeHeader({ showEta: false, showSubtitle: true })}
           <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
             <Info className="h-4 w-4 shrink-0" />
             {remark || formatNoScheduledText(t)}
@@ -524,7 +520,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           aria-hidden
         />
         <div className="space-y-2.5 pl-4">
-          {routeHeader({ showEta: true })}
+          {routeHeader({ showEta: true, showSubtitle: true })}
           {staticFooter}
         </div>
       </div>
@@ -540,7 +536,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
       panel={etaPanel}
       toggleLabel={`${route} ${label ?? ''} ${operatorName}`.trim()}
     >
-      {routeHeader({ showEta: !isExpanded })}
+      {routeHeader({ showEta: !isExpanded, showSubtitle: !isExpanded })}
     </ExpandableEtaRow>
   )
 })

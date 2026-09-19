@@ -758,24 +758,17 @@ export const KmbResults = React.memo(function KmbResults({
     return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
+  // Stagger replay key: query identity only, never live ETA arrays (see the
+  // replay rule on staggerClassForIndex). Refresh keeps this key so rows
+  // stay still and expand state survives; a new search remounts and replays.
   const listSignature = React.useMemo(() => {
     if (useStopSections) return `keyphrase:${(loadedStopIds ?? []).join(',')}`
-    if (precomputedFlat && !multipleStops)
-      return `flat:${precomputedFlat.map((g) => g.key).join(',')}`
     if (multipleStops && loadedStopIds) return `multi:${loadedStopIds.join(',')}`
     return `single:${title}:${stopCode ?? ''}:${routesFilter ?? ''}`
-  }, [
-    useStopSections,
-    loadedStopIds,
-    precomputedFlat,
-    multipleStops,
-    title,
-    stopCode,
-    routesFilter,
-  ])
+  }, [useStopSections, loadedStopIds, multipleStops, title, stopCode, routesFilter])
 
   return (
-    <div key={listSignature}>
+    <div>
       <ResultsHeader
         lang={lang}
         mode="kmb"
@@ -801,7 +794,7 @@ export const KmbResults = React.memo(function KmbResults({
         onRefresh={onRefresh}
       />
 
-      <div className="space-y-2">
+      <div key={listSignature} className="space-y-2">
         {error ? (
           <p className="text-error m3-body-md" aria-live="polite">
             {tWithParams('kmb.updateFailed', { error })}

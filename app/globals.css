@@ -616,6 +616,7 @@
   }
 
   .ui-shimmer {
+    background-color: var(--surface-container-high);
     background: linear-gradient(
       100deg,
       color-mix(in srgb, var(--surface-container-high) 65%, transparent) 40%,

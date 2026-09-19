@@ -175,6 +175,14 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
   )
 
   const activeCount = countActiveFilters(value)
+  // Gate the badge pop behind a post-mount flag so it plays on count
+  // changes, never on first mount. useSyncExternalStore avoids a
+  // set-state-in-effect that the hooks lint forbids.
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  )
   const focusedVariants = focusedRoute ? groupedByRoute.get(focusedRoute) : undefined
   const showVariantRow = Boolean(focusedVariants && focusedVariants.length > 1)
   const useScrollCap = routeNumbers.length > 16
@@ -187,7 +195,10 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
           {activeCount > 0 && (
             <span
               key={activeCount}
-              className="bg-primary-container text-on-primary-container m3-label-sm ui-pop rounded-full px-2 py-0.5"
+              className={cn(
+                'bg-primary-container text-on-primary-container m3-label-sm rounded-full px-2 py-0.5',
+                mounted && 'ui-pop'
+              )}
             >
               {activeCount}
             </span>

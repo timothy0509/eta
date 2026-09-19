@@ -184,6 +184,7 @@ function MtrResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
         : {
             title: s.mtr.title,
             lang: s.mtr.lang,
+            sta: s.mtr.sta,
             schedule: s.mtr.schedule,
             error: s.mtr.error,
             stale: s.mtr.stale,
@@ -201,6 +202,7 @@ function MtrResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
     <MtrResults
       title={data?.title ?? ''}
       lang={data?.lang ?? fallbackLang}
+      sta={data?.sta}
       schedule={data?.schedule ?? null}
       error={data?.error ?? null}
       stale={data?.stale ?? false}
@@ -237,6 +239,7 @@ function LrtResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
     <LrtResults
       title={data?.title ?? ''}
       lang={data?.lang ?? fallbackLang}
+      stationId={data?.stationId}
       schedule={data?.schedule ?? null}
       hasStation={Boolean(data?.stationId)}
       error={data?.error ?? null}
@@ -523,7 +526,7 @@ export default function HomeClient() {
   const renderRoutes = () => {
     if (mode === 'kmb')
       return (
-        <PaneEnter key={`routes:kmb:${kmbRouteInitialSelection?.route ?? ''}`}>
+        <PaneEnter key="routes:kmb">
           <KmbRoutesView
             lang={lang}
             initialSelection={kmbRouteInitialSelection}

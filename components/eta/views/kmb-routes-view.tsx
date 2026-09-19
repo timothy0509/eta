@@ -1,14 +1,14 @@
 'use client'
 
-import { Clock, Heart, Search } from 'lucide-react'
+import { Clock, Search } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
+import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
-import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { RouteStopRow, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
 import { TickingSoonestPill } from '@/components/eta/ticking-eta'
@@ -40,25 +40,6 @@ const TransitMap = dynamic(
     loading: () => <div className="bg-surface-container ui-shimmer h-56 rounded-2xl" />,
   }
 )
-
-function RouteSaveButton({ onSave, label }: { onSave: () => void; label: string }) {
-  const [saveCount, setSaveCount] = React.useState(0)
-  return (
-    <Button
-      size="sm"
-      className="ui-press min-h-[44px] rounded-full"
-      onClick={() => {
-        onSave()
-        setSaveCount((c) => c + 1)
-      }}
-    >
-      <span key={saveCount} className="ui-fav-pop inline-flex">
-        <Heart className="mr-1.5 h-4 w-4" />
-      </span>
-      {label}
-    </Button>
-  )
-}
 
 type RouteVariant = {
   key: string
@@ -573,7 +554,7 @@ export function KmbRoutesView({
                   {pickLang(currentVariant.origin, lang)} →{' '}
                   {pickLang(currentVariant.destination, lang)}
                 </div>
-                <RouteSaveButton onSave={onSaveRoute} label={t('common.save')} />
+                <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
               </div>
             )}
           </RouteDrilldown>

@@ -43,6 +43,7 @@ function isArrivingTime(time: string | number | null | undefined) {
 type Props = {
   title: string
   lang: UiLanguage
+  stationId?: string
   schedule: LrtScheduleResponse | null
   hasStation?: boolean
   error?: string | null
@@ -55,6 +56,7 @@ type Props = {
 export const LrtResults = React.memo(function LrtResults({
   title,
   lang,
+  stationId,
   schedule,
   hasStation,
   error,
@@ -64,13 +66,10 @@ export const LrtResults = React.memo(function LrtResults({
   loading,
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
-  const listSignature = React.useMemo(
-    () => `lrt:${title}:${(schedule?.platform_list ?? []).map((p) => p.platform_id).join(',')}`,
-    [title, schedule]
-  )
+  const listSignature = React.useMemo(() => `lrt:${stationId ?? title}`, [stationId, title])
 
   return (
-    <div key={listSignature}>
+    <div>
       <ResultsHeader
         lang={lang}
         mode="lrt"
@@ -83,7 +82,8 @@ export const LrtResults = React.memo(function LrtResults({
         onRefresh={onRefresh}
       />
 
-      <div className="space-y-4">
+      {/* Key covers only the list so the header stays mounted on refresh. */}
+      <div key={listSignature} className="space-y-4">
         {error ? (
           <EmptyState
             icon={TriangleAlert}

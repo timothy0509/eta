@@ -149,9 +149,11 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
     const container = containerRef.current
     const activeButton = buttonRefs.current.get(mode)
     if (!container || !activeButton) return
+    const containerRect = container.getBoundingClientRect()
+    const rect = activeButton.getBoundingClientRect()
     setIndicator({
-      x: activeButton.offsetLeft,
-      w: activeButton.offsetWidth,
+      x: rect.left - containerRect.left,
+      w: rect.width,
       ready: true,
     })
   }, [mode])
@@ -165,6 +167,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
     if (!container || typeof ResizeObserver === 'undefined') return
     const observer = new ResizeObserver(() => measureIndicator())
     observer.observe(container)
+    for (const button of buttonRefs.current.values()) observer.observe(button)
     return () => observer.disconnect()
   }, [measureIndicator])
 
@@ -187,13 +190,18 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
             aria-label={t('common.transportMode')}
             className="bg-surface-container-high/70 relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
           >
-            {indicator.ready ? (
-              <span
-                aria-hidden
-                className="bg-secondary-container ui-indicator-slide absolute top-1 bottom-1 left-0 rounded-full shadow-sm"
-                style={{ transform: `translateX(${indicator.x}px)`, width: indicator.w }}
-              />
-            ) : null}
+            <span
+              aria-hidden
+              className="bg-secondary-container ui-indicator-slide absolute top-1 bottom-1 left-0 rounded-full shadow-sm"
+              style={
+                indicator.ready
+                  ? { transform: `translateX(${indicator.x}px)`, width: indicator.w }
+                  : {
+                      left: `${(MODES.findIndex((m) => m.mode === mode) / MODES.length) * 100}%`,
+                      width: `${100 / MODES.length}%`,
+                    }
+              }
+            />
             {MODES.map((m) => {
               const Icon = m.icon
               const active = mode === m.mode

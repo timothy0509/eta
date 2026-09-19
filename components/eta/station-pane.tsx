@@ -6,6 +6,7 @@ import * as React from 'react'
 import { Button } from '@/components/ui/button'
 import { useTranslations } from '@/lib/eta/i18n'
 import type { UiLanguage } from '@/lib/eta/types'
+import { cn } from '@/lib/utils'
 
 type StationPaneProps = {
   lang: UiLanguage
@@ -39,7 +40,7 @@ export function StationPane({ lang, search, hasSelection, onSave }: StationPaneP
           }}
           disabled={!hasSelection}
         >
-          <span key={saveCount} className="ui-fav-pop inline-flex">
+          <span key={saveCount} className={cn('inline-flex', saveCount > 0 && 'ui-fav-pop')}>
             <Heart className="mr-1.5 h-4 w-4" />
           </span>
           {t('common.save')}

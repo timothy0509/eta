@@ -1,6 +1,6 @@
 'use client'
 
-import { render } from '@testing-library/react'
+import { render } from '@/lib/test-utils'
 import { describe, expect, it } from 'vitest'
 
 import { EtaValue, PaneEnter } from '@/components/m3/motion'

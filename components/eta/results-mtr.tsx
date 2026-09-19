@@ -21,6 +21,7 @@ import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 type Props = {
   title: string
   lang: UiLanguage
+  sta?: string
   schedule: MtrScheduleResponse | null
   error?: string | null
   stale?: boolean
@@ -329,6 +330,7 @@ function MtrLineCard({
 export const MtrResults = React.memo(function MtrResults({
   title,
   lang,
+  sta,
   schedule,
   error,
   stale,
@@ -342,13 +344,10 @@ export const MtrResults = React.memo(function MtrResults({
   const onToggleExpand = React.useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
-  const listSignature = React.useMemo(
-    () => `mtr:${title}:${Object.keys(schedule?.data ?? {}).join(',')}`,
-    [title, schedule]
-  )
+  const listSignature = React.useMemo(() => `mtr:${sta ?? title}`, [sta, title])
 
   return (
-    <div key={listSignature}>
+    <div>
       <ResultsHeader
         lang={lang}
         mode="mtr"
@@ -361,7 +360,8 @@ export const MtrResults = React.memo(function MtrResults({
         onRefresh={onRefresh}
       />
 
-      <div className="space-y-4">
+      {/* Key covers only the list so the header and expandedKey state survive refresh. */}
+      <div key={listSignature} className="space-y-4">
         {error ? (
           <EmptyState
             icon={TriangleAlert}

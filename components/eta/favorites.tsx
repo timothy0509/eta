@@ -305,6 +305,17 @@ function FavoriteRow({
   disableMoveDown,
 }: FavoriteRowProps) {
   const dragControls = useDragControls()
+  const prevPinned = React.useRef(item.pinned)
+  const [pinPopped, setPinPopped] = React.useState(false)
+  React.useEffect(() => {
+    if (item.pinned && !prevPinned.current) {
+      setPinPopped(true)
+      const id = setTimeout(() => setPinPopped(false), 350)
+      prevPinned.current = item.pinned
+      return () => clearTimeout(id)
+    }
+    prevPinned.current = item.pinned
+  }, [item.pinned])
 
   const content = (
     <div className="flex items-center gap-3">
@@ -359,7 +370,7 @@ function FavoriteRow({
         </div>
         <div className="text-on-surface-variant m3-body-md truncate">
           {item.pinned ? (
-            <span key="pinned" className="ui-fav-pop inline-flex">
+            <span className={cn('inline-flex', pinPopped && 'ui-fav-pop')}>
               {`${t('favorites.pinned')} · `}
             </span>
           ) : (

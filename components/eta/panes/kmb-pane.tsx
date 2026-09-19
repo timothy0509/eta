@@ -1,6 +1,6 @@
 'use client'
 
-import { Heart, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import {
@@ -9,7 +9,7 @@ import {
   type RouteFilterState,
 } from '@/components/eta/route-filter'
 import { StopSearch, type StopSearchSelection } from '@/components/eta/stop-search'
-import { Button } from '@/components/ui/button'
+import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import {
   fetchKmbFares,
   fetchKmbRouteInfo,
@@ -67,34 +67,6 @@ function isKmbRouteFavorite(
   item: FavoritesItem
 ): item is Extract<FavoritesItem, { mode: 'kmb'; type: 'route' }> {
   return item.mode === 'kmb' && 'type' in item && item.type === 'route'
-}
-
-function SaveButton({
-  canFavorite,
-  onSave,
-  label,
-}: {
-  canFavorite: boolean | string | undefined
-  onSave: () => void
-  label: string
-}) {
-  const [saveCount, setSaveCount] = React.useState(0)
-  return (
-    <Button
-      size="sm"
-      className="ui-press rounded-full shadow-sm"
-      disabled={!canFavorite}
-      onClick={() => {
-        onSave()
-        setSaveCount((c) => c + 1)
-      }}
-    >
-      <span key={saveCount} className="ui-fav-pop inline-flex">
-        <Heart className="mr-1 h-4 w-4" />
-      </span>
-      {label}
-    </Button>
-  )
 }
 
 function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
@@ -1078,7 +1050,7 @@ export function KmbPane({
       {routeStopsError ? <p className="text-error m3-body-md">{routeStopsError}</p> : null}
 
       <div className="border-outline-variant/15 mt-2 flex items-center justify-between gap-3 border-t pt-3">
-        <SaveButton canFavorite={canFavorite} onSave={onSave} label={t('common.save')} />
+        <FavoriteSaveButton onSave={onSave} label={t('common.save')} disabled={!canFavorite} />
         <span className="text-on-surface-variant m3-label-sm text-right">
           {loadingStops || loadingRouteStops ? (
             <span className="inline-flex items-center gap-1.5">

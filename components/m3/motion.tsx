@@ -57,6 +57,38 @@ export function StaggerItem({
   return <div className={className}>{children}</div>
 }
 
+/**
+ * View-root entrance for mode and subview switches. Same delay and
+ * duration props as FadeIn so call sites read the same way.
+ */
+export const PaneEnter = React.forwardRef<HTMLDivElement, FadeInProps>(
+  ({ children, className, delay = 0, duration = 0.22, style, ...props }, ref) => (
+    <div
+      ref={ref}
+      className={cn('ui-pane-enter', className)}
+      style={{
+        ...style,
+        ...(delay ? { animationDelay: `${delay * 1000}ms` } : null),
+        ...(duration && duration !== 0.22 ? { animationDuration: `${duration * 1000}ms` } : null),
+      }}
+      {...props}
+    >
+      {children}
+    </div>
+  )
+)
+PaneEnter.displayName = 'PaneEnter'
+
+/**
+ * ETA text that replays its rise animation only when the displayed
+ * value changes. Callers must pass `key={value}` alongside the value:
+ * the key remount is what replays the animation, so identical
+ * refreshes keep the same key and stay still.
+ */
+export function EtaValue({ value, className }: { value: string; className?: string }) {
+  return <span className={cn('ui-eta-tick', className)}>{value}</span>
+}
+
 type MotionCardProps = React.HTMLAttributes<HTMLDivElement> & {
   hoverScale?: number
   tapScale?: number

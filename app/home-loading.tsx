@@ -19,11 +19,11 @@ export function HomeLoading() {
         className="bg-surface-container-low/90 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15"
       >
         <div className="mx-auto flex h-[3.5rem] max-w-[var(--app-max)] items-center justify-between gap-2 px-3 sm:h-14 sm:gap-3 sm:px-6">
-          <div className="bg-muted/50 h-8 w-8 animate-pulse rounded-xl min-[500px]:w-24 sm:h-9" />
-          <div className="bg-muted/50 h-9 w-full max-w-[420px] animate-pulse rounded-full" />
+          <div className="bg-muted/50 ui-shimmer h-8 w-8 rounded-xl min-[500px]:w-24 sm:h-9" />
+          <div className="bg-muted/50 ui-shimmer h-9 w-full max-w-[420px] rounded-full" />
           <div className="flex items-center gap-2">
-            <div className="bg-muted/50 h-11 w-11 animate-pulse rounded-full" />
-            <div className="bg-muted/50 h-11 w-11 animate-pulse rounded-full" />
+            <div className="bg-muted/50 ui-shimmer h-11 w-11 rounded-full" />
+            <div className="bg-muted/50 ui-shimmer h-11 w-11 rounded-full" />
           </div>
         </div>
       </div>
@@ -35,7 +35,7 @@ export function HomeLoading() {
           className="bg-surface-container-low border-outline-variant/20 sticky top-20 hidden h-fit shrink-0 flex-col items-center gap-1 rounded-[28px] border px-2 py-3 shadow-sm lg:flex"
         >
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="bg-muted/50 h-[64px] w-[64px] animate-pulse rounded-2xl" />
+            <div key={i} className="bg-muted/50 ui-shimmer h-[64px] w-[64px] rounded-2xl" />
           ))}
         </div>
 
@@ -45,11 +45,11 @@ export function HomeLoading() {
             <div className="mx-auto lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
               <div aria-hidden className="card-m3 p-4 sm:p-5 lg:p-5">
                 <div className="space-y-4">
-                  <div className="bg-muted/50 h-11 w-full animate-pulse rounded-2xl" />
+                  <div className="bg-muted/50 ui-shimmer h-11 w-full rounded-2xl" />
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="bg-muted/50 h-7 w-20 animate-pulse rounded-full" />
-                    <div className="bg-muted/50 h-7 w-20 animate-pulse rounded-full" />
-                    <div className="bg-muted/50 h-7 w-20 animate-pulse rounded-full" />
+                    <div className="bg-muted/50 ui-shimmer h-7 w-20 rounded-full" />
+                    <div className="bg-muted/50 ui-shimmer h-7 w-20 rounded-full" />
+                    <div className="bg-muted/50 ui-shimmer h-7 w-20 rounded-full" />
                   </div>
                 </div>
               </div>
@@ -62,14 +62,14 @@ export function HomeLoading() {
                 <div className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="space-y-2">
-                      <div className="bg-muted/50 h-6 w-40 animate-pulse rounded" />
-                      <div className="bg-muted/50 h-4 w-24 animate-pulse rounded" />
+                      <div className="bg-muted/50 ui-shimmer h-6 w-40 rounded" />
+                      <div className="bg-muted/50 ui-shimmer h-4 w-24 rounded" />
                     </div>
-                    <div className="bg-muted/50 h-10 w-10 animate-pulse rounded-full" />
+                    <div className="bg-muted/50 ui-shimmer h-10 w-10 rounded-full" />
                   </div>
                   <div className="space-y-3">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="bg-muted/50 h-24 animate-pulse rounded-2xl" />
+                      <div key={i} className="bg-muted/50 ui-shimmer h-24 rounded-2xl" />
                     ))}
                   </div>
                 </div>
@@ -86,7 +86,7 @@ export function HomeLoading() {
       >
         <div className="flex w-full items-center gap-1">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="bg-muted/50 h-12 min-w-0 flex-1 animate-pulse rounded-full" />
+            <div key={i} className="bg-muted/50 ui-shimmer h-12 min-w-0 flex-1 rounded-full" />
           ))}
         </div>
       </div>

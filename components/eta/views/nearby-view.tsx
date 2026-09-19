@@ -28,7 +28,7 @@ const TransitMap = dynamic(
   () => import('@/components/eta/transit-map').then((mod) => mod.TransitMap),
   {
     ssr: false,
-    loading: () => <div className="bg-surface-container h-72 animate-pulse rounded-2xl" />,
+    loading: () => <div className="bg-surface-container ui-shimmer h-72 rounded-2xl" />,
   }
 )
 
@@ -300,7 +300,7 @@ function KmbNearbyView({
             onClick={onRefresh}
             disabled={locating}
           >
-            <RefreshCw className={cn('mr-1.5 h-4 w-4', locating && 'animate-spin')} />
+            <RefreshCw className={cn('mr-1.5 h-4 w-4', locating && 'ui-spin')} />
             {t('common.refreshLocation')}
           </Button>
         </div>

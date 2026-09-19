@@ -87,7 +87,7 @@ export function ResultsHeader({
           disabled={loading}
           aria-label={t('common.refresh')}
         >
-          <RefreshCw className={cn('h-5 w-5', loading && 'animate-spin')} />
+          <RefreshCw className={cn('h-5 w-5', loading && 'ui-spin')} />
         </button>
       ) : null}
     </div>

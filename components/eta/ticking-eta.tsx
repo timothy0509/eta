@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 
-import { LivePulse } from '@/components/m3/motion'
+import { EtaValue, LivePulse } from '@/components/m3/motion'
 import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickSoonestIsoEta } from '@/lib/eta/pick-soonest-eta'
@@ -86,32 +86,38 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   const minutes =
     eta != null ? formatRelativeMinutesWithDrift(eta, dataTimestamp ?? undefined, now) : null
   const arriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
+  const display = formatMinutesDisplay(minutes, t, tWithParams)
 
   if (variant === 'plain') {
-    return <span className={className}>{formatMinutesDisplay(minutes, t, tWithParams)}</span>
+    return (
+      <span className={className}>
+        <EtaValue key={display} value={display} />
+      </span>
+    )
   }
 
   if (variant === 'panel') {
     return (
       <span className="font-tabular flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
         {arriving ? <LivePulse /> : null}
-        {formatMinutesDisplay(minutes, t, tWithParams)}
+        <EtaValue key={display} value={display} />
       </span>
     )
   }
 
   if (arriving) {
+    const nowText = t('common.now')
     return (
       <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
         <LivePulse />
-        {t('common.now')}
+        <EtaValue key={nowText} value={nowText} />
       </span>
     )
   }
 
   return (
     <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
-      {formatMinutesDisplay(minutes, t, tWithParams)}
+      <EtaValue key={display} value={display} />
     </span>
   )
 })
@@ -139,20 +145,7 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
   }
 
   const isArriving = soonest.arriving || minutes <= 0
-
-  if (isArriving) {
-    return (
-      <span
-        className={cn(
-          'bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1',
-          className
-        )}
-      >
-        <LivePulse />
-        <span className="m3-title-md">{t('common.now')}</span>
-      </span>
-    )
-  }
+  const display = isArriving ? t('common.now') : tWithParams('common.minutes', { count: minutes })
 
   return (
     <span
@@ -162,7 +155,9 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
       )}
     >
       <LivePulse />
-      <span className="m3-title-md">{tWithParams('common.minutes', { count: minutes })}</span>
+      <span className="m3-title-md">
+        <EtaValue key={display} value={display} />
+      </span>
     </span>
   )
 })

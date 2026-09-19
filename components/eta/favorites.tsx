@@ -349,12 +349,22 @@ function FavoriteRow({
       <div className="bg-surface-container-high flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
         <ModeIcon mode={item.mode} className="text-on-surface-variant h-4 w-4" />
       </div>
-      <button type="button" className="min-w-0 flex-1 text-left" onClick={() => onSelect(item)}>
+      <button
+        type="button"
+        className="ui-press min-w-0 flex-1 text-left"
+        onClick={() => onSelect(item)}
+      >
         <div className="m3-body-md text-on-surface truncate font-medium">
           <FavoriteItemDisplay item={item} lang={lang} maps={maps} t={t} />
         </div>
         <div className="text-on-surface-variant m3-body-md truncate">
-          {item.pinned ? `${t('favorites.pinned')} · ` : ''}
+          {item.pinned ? (
+            <span key="pinned" className="ui-fav-pop inline-flex">
+              {`${t('favorites.pinned')} · `}
+            </span>
+          ) : (
+            ''
+          )}
           {groupName}
         </div>
       </button>

@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, TrainFront, TriangleAlert } from 'lucide-react'
+import { ChevronDown, ExternalLink, TrainFront, TriangleAlert } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
 import { EmptyState } from '@/components/eta/empty-state'
@@ -292,11 +292,7 @@ function MtrLineCard({
       >
         <span className="m3-title-md font-medium">{getMtrLineName(line, lang)}</span>
         {includeChevron ? (
-          expanded ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )
+          <ChevronDown className={cn('ui-chevron h-4 w-4', expanded && 'rotate-180')} />
         ) : null}
       </div>
     ) : null
@@ -346,9 +342,13 @@ export const MtrResults = React.memo(function MtrResults({
   const onToggleExpand = React.useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
+  const listSignature = React.useMemo(
+    () => `mtr:${title}:${Object.keys(schedule?.data ?? {}).join(',')}`,
+    [title, schedule]
+  )
 
   return (
-    <div>
+    <div key={listSignature}>
       <ResultsHeader
         lang={lang}
         mode="mtr"

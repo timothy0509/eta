@@ -141,6 +141,32 @@ type TopAppBarProps = {
 
 export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
   const { t } = useTranslations(lang)
+  const containerRef = React.useRef<HTMLDivElement | null>(null)
+  const buttonRefs = React.useRef(new Map<TransportMode, HTMLButtonElement>())
+  const [indicator, setIndicator] = React.useState({ x: 0, w: 0, ready: false })
+
+  const measureIndicator = React.useCallback(() => {
+    const container = containerRef.current
+    const activeButton = buttonRefs.current.get(mode)
+    if (!container || !activeButton) return
+    setIndicator({
+      x: activeButton.offsetLeft,
+      w: activeButton.offsetWidth,
+      ready: true,
+    })
+  }, [mode])
+
+  React.useLayoutEffect(() => {
+    measureIndicator()
+  }, [measureIndicator, lang])
+
+  React.useEffect(() => {
+    const container = containerRef.current
+    if (!container || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => measureIndicator())
+    observer.observe(container)
+    return () => observer.disconnect()
+  }, [measureIndicator])
 
   return (
     <header className="bg-surface-container-low/90 supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
@@ -156,16 +182,28 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
 
         <nav className="flex min-w-0 flex-1 justify-center sm:px-6" aria-label={t('common.routes')}>
           <div
+            ref={containerRef}
             role="group"
             aria-label={t('common.transportMode')}
             className="bg-surface-container-high/70 relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
           >
+            {indicator.ready ? (
+              <span
+                aria-hidden
+                className="bg-secondary-container ui-indicator-slide absolute top-1 bottom-1 left-0 rounded-full shadow-sm"
+                style={{ transform: `translateX(${indicator.x}px)`, width: indicator.w }}
+              />
+            ) : null}
             {MODES.map((m) => {
               const Icon = m.icon
               const active = mode === m.mode
               return (
                 <button
                   key={m.mode}
+                  ref={(el) => {
+                    if (el) buttonRefs.current.set(m.mode, el)
+                    else buttonRefs.current.delete(m.mode)
+                  }}
                   type="button"
                   onClick={() => onModeChange(m.mode)}
                   aria-pressed={active}
@@ -178,12 +216,6 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                       : 'text-on-surface-variant hover:text-on-surface'
                   )}
                 >
-                  {active && (
-                    <span
-                      aria-hidden
-                      className="bg-secondary-container absolute inset-0 -z-10 rounded-full shadow-sm"
-                    />
-                  )}
                   <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
                   <span className="hidden truncate sm:inline">{m.labels[lang]}</span>
                   <span className="truncate sm:hidden">{MODE_SHORT_LABELS[m.mode]}</span>
@@ -235,17 +267,18 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
             aria-current={active ? 'page' : undefined}
             {...preloadProps}
             className={cn(
-              'relative flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-colors',
+              'ui-press relative flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-[color,background-color,transform]',
               active ? 'text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'
             )}
           >
             {active && (
               <span
+                key={sv.id}
                 aria-hidden
-                className="bg-primary-container absolute inset-0 -z-10 rounded-2xl"
+                className="bg-primary-container ui-pill-pop absolute inset-0 -z-10 rounded-2xl"
               />
             )}
-            <Icon className="h-5 w-5" />
+            <Icon className={cn('h-5 w-5 transition-transform', active && 'scale-110')} />
             <span className="leading-none">{t(`common.${sv.id}`)}</span>
           </button>
         )
@@ -288,7 +321,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
               aria-current={active ? 'page' : undefined}
               {...preloadProps}
               className={cn(
-                'relative flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 text-[11px] font-medium transition-colors',
+                'ui-press relative flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 text-[11px] font-medium transition-[color,background-color,transform]',
                 active
                   ? 'text-on-primary-container'
                   : 'text-on-surface-variant hover:text-on-surface'
@@ -296,11 +329,14 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
             >
               {active && (
                 <span
+                  key={sv.id}
                   aria-hidden
-                  className="bg-primary-container absolute inset-0 -z-10 rounded-full"
+                  className="bg-primary-container ui-pill-pop absolute inset-0 -z-10 rounded-full"
                 />
               )}
-              <Icon className="h-[22px] w-[22px]" />
+              <Icon
+                className={cn('h-[22px] w-[22px] transition-transform', active && 'scale-110')}
+              />
               <span className="leading-none">{t(`common.${sv.id}`)}</span>
             </button>
           )

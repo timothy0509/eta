@@ -57,7 +57,7 @@ export function ExpandableEtaRow({
       <div
         id={panelId}
         className={cn(
-          'grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-none',
+          'grid transition-[grid-template-rows,opacity] duration-[250ms] ease-[var(--ui-ease-spring-soft)] motion-reduce:transition-none',
           expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
         )}
         aria-hidden={!expanded}

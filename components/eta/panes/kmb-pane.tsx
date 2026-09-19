@@ -69,6 +69,34 @@ function isKmbRouteFavorite(
   return item.mode === 'kmb' && 'type' in item && item.type === 'route'
 }
 
+function SaveButton({
+  canFavorite,
+  onSave,
+  label,
+}: {
+  canFavorite: boolean | string | undefined
+  onSave: () => void
+  label: string
+}) {
+  const [saveCount, setSaveCount] = React.useState(0)
+  return (
+    <Button
+      size="sm"
+      className="ui-press rounded-full shadow-sm"
+      disabled={!canFavorite}
+      onClick={() => {
+        onSave()
+        setSaveCount((c) => c + 1)
+      }}
+    >
+      <span key={saveCount} className="ui-fav-pop inline-flex">
+        <Heart className="mr-1 h-4 w-4" />
+      </span>
+      {label}
+    </Button>
+  )
+}
+
 function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
   if (lang === 'en') return stop.nameEn
   if (lang === 'sc') return stop.nameSc
@@ -1050,19 +1078,11 @@ export function KmbPane({
       {routeStopsError ? <p className="text-error m3-body-md">{routeStopsError}</p> : null}
 
       <div className="border-outline-variant/15 mt-2 flex items-center justify-between gap-3 border-t pt-3">
-        <Button
-          size="sm"
-          className="rounded-full shadow-sm"
-          disabled={!canFavorite}
-          onClick={onSave}
-        >
-          <Heart className="mr-1 h-4 w-4" />
-          {t('common.save')}
-        </Button>
+        <SaveButton canFavorite={canFavorite} onSave={onSave} label={t('common.save')} />
         <span className="text-on-surface-variant m3-label-sm text-right">
           {loadingStops || loadingRouteStops ? (
             <span className="inline-flex items-center gap-1.5">
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Loader2 className="ui-spin h-3 w-3" />
               {t('common.loading')}
             </span>
           ) : (

@@ -23,6 +23,7 @@ type StationPaneProps = {
  */
 export function StationPane({ lang, search, hasSelection, onSave }: StationPaneProps) {
   const { t } = useTranslations(lang)
+  const [saveCount, setSaveCount] = React.useState(0)
 
   return (
     <div className="space-y-4">
@@ -31,11 +32,16 @@ export function StationPane({ lang, search, hasSelection, onSave }: StationPaneP
       <div className="flex items-center justify-between gap-3 pt-1">
         <Button
           size="sm"
-          className="min-h-[44px] rounded-full"
-          onClick={() => void onSave()}
+          className="ui-press min-h-[44px] rounded-full"
+          onClick={() => {
+            void onSave()
+            setSaveCount((c) => c + 1)
+          }}
           disabled={!hasSelection}
         >
-          <Heart className="mr-1.5 h-4 w-4" />
+          <span key={saveCount} className="ui-fav-pop inline-flex">
+            <Heart className="mr-1.5 h-4 w-4" />
+          </span>
           {t('common.save')}
         </Button>
       </div>

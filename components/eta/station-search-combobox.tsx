@@ -58,7 +58,7 @@ export function StationSearchCombobox({
           aria-haspopup="listbox"
           className={cn(
             'bg-surface-container-high text-on-surface w-full min-w-0 justify-start rounded-2xl border border-[var(--outline-variant)]/20 py-5 text-left shadow-sm',
-            'hover:bg-surface-container hover:border-[var(--outline-variant)]/30',
+            'hover:bg-surface-container transition-[box-shadow,border-color,background-color,transform] hover:border-[var(--outline-variant)]/30',
             !triggerLabel && 'text-on-surface-variant'
           )}
         >
@@ -67,7 +67,7 @@ export function StationSearchCombobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        className="bg-surface-container-low w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[var(--outline-variant)]/20 p-0 shadow-lg"
+        className="bg-surface-container-low ui-popover-in data-[state=closed]:ui-animate-fade w-[min(560px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-[var(--outline-variant)]/20 p-0 shadow-lg"
         align="start"
       >
         <Command shouldFilter={false} className="rounded-none bg-transparent">

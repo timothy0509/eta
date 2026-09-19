@@ -3,7 +3,7 @@
 import * as React from 'react'
 
 import { BottomNav, SideRail, TopAppBar } from '@/components/eta/app-shell'
-import { FadeIn } from '@/components/m3/motion'
+import { FadeIn, PaneEnter } from '@/components/m3/motion'
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 
 type HomeLayoutProps = {
@@ -48,7 +48,7 @@ export function StopsLayout({
   results: React.ReactNode
 }) {
   return (
-    <FadeIn className="mx-auto max-w-[var(--app-max)] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
+    <PaneEnter className="mx-auto max-w-[var(--app-max)] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
       <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
         <div className="card-m3 p-4 sm:p-5 lg:p-5">{controls}</div>
       </div>
@@ -59,6 +59,6 @@ export function StopsLayout({
           {results}
         </div>
       </FadeIn>
-    </FadeIn>
+    </PaneEnter>
   )
 }

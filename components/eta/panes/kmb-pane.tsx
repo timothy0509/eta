@@ -1,6 +1,6 @@
 'use client'
 
-import { Heart, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import {
@@ -9,7 +9,7 @@ import {
   type RouteFilterState,
 } from '@/components/eta/route-filter'
 import { StopSearch, type StopSearchSelection } from '@/components/eta/stop-search'
-import { Button } from '@/components/ui/button'
+import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import {
   fetchKmbFares,
   fetchKmbRouteInfo,
@@ -1050,19 +1050,11 @@ export function KmbPane({
       {routeStopsError ? <p className="text-error m3-body-md">{routeStopsError}</p> : null}
 
       <div className="border-outline-variant/15 mt-2 flex items-center justify-between gap-3 border-t pt-3">
-        <Button
-          size="sm"
-          className="rounded-full shadow-sm"
-          disabled={!canFavorite}
-          onClick={onSave}
-        >
-          <Heart className="mr-1 h-4 w-4" />
-          {t('common.save')}
-        </Button>
+        <FavoriteSaveButton onSave={onSave} label={t('common.save')} disabled={!canFavorite} />
         <span className="text-on-surface-variant m3-label-sm text-right">
           {loadingStops || loadingRouteStops ? (
             <span className="inline-flex items-center gap-1.5">
-              <Loader2 className="h-3 w-3 animate-spin" />
+              <Loader2 className="ui-spin h-3 w-3" />
               {t('common.loading')}
             </span>
           ) : (

@@ -175,6 +175,14 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
   )
 
   const activeCount = countActiveFilters(value)
+  // Gate the badge pop behind a post-mount flag so it plays on count
+  // changes, never on first mount. useSyncExternalStore avoids a
+  // set-state-in-effect that the hooks lint forbids.
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  )
   const focusedVariants = focusedRoute ? groupedByRoute.get(focusedRoute) : undefined
   const showVariantRow = Boolean(focusedVariants && focusedVariants.length > 1)
   const useScrollCap = routeNumbers.length > 16
@@ -185,7 +193,13 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
         <div className="flex items-center gap-2">
           <span className="m3-label-lg text-on-surface">{t.routes}</span>
           {activeCount > 0 && (
-            <span className="bg-primary-container text-on-primary-container m3-label-sm rounded-full px-2 py-0.5">
+            <span
+              key={activeCount}
+              className={cn(
+                'bg-primary-container text-on-primary-container m3-label-sm rounded-full px-2 py-0.5',
+                mounted && 'ui-pop'
+              )}
+            >
               {activeCount}
             </span>
           )}
@@ -228,7 +242,7 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                   title={tooltip}
                   onClick={() => handleRouteClick(route, variants)}
                   className={cn(
-                    'inline-flex rounded-xl p-0.5 transition-all',
+                    'ui-press inline-flex rounded-xl p-0.5 transition-all',
                     active && 'bg-primary-container shadow-sm',
                     focused && !active && 'bg-surface-container-high ring-primary/30 ring-2',
                     !active && !focused && 'hover:bg-surface-container-high'
@@ -241,7 +255,10 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
           </div>
 
           {showVariantRow && focusedVariants ? (
-            <div className="bg-surface-container/50 flex flex-wrap gap-1.5 rounded-2xl p-2">
+            <div
+              key={focusedRoute}
+              className="bg-surface-container/50 ui-chip-row-in flex flex-wrap gap-1.5 rounded-2xl p-2"
+            >
               {focusedVariants.map((opt) => {
                 const active = selectedKeys.has(opt.key)
                 const direction = getDirectionFromVariantKey(opt.key)
@@ -254,7 +271,7 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
                     type="button"
                     onClick={() => toggleOption(opt)}
                     className={cn(
-                      'm3-label-md max-w-full overflow-hidden rounded-full px-3 py-1.5 transition-colors',
+                      'm3-label-md ui-press max-w-full overflow-hidden rounded-full px-3 py-1.5 transition-colors',
                       active
                         ? 'bg-primary-container text-on-primary-container shadow-sm'
                         : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'

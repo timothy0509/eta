@@ -1,7 +1,7 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronDown, ChevronUp, ExternalLink, TrainFront, TriangleAlert } from 'lucide-react'
+import { ChevronDown, ExternalLink, TrainFront, TriangleAlert } from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
 import { EmptyState } from '@/components/eta/empty-state'
@@ -21,6 +21,7 @@ import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 type Props = {
   title: string
   lang: UiLanguage
+  sta?: string
   schedule: MtrScheduleResponse | null
   error?: string | null
   stale?: boolean
@@ -292,11 +293,7 @@ function MtrLineCard({
       >
         <span className="m3-title-md font-medium">{getMtrLineName(line, lang)}</span>
         {includeChevron ? (
-          expanded ? (
-            <ChevronUp className="h-4 w-4" />
-          ) : (
-            <ChevronDown className="h-4 w-4" />
-          )
+          <ChevronDown className={cn('ui-chevron h-4 w-4', expanded && 'rotate-180')} />
         ) : null}
       </div>
     ) : null
@@ -333,6 +330,7 @@ function MtrLineCard({
 export const MtrResults = React.memo(function MtrResults({
   title,
   lang,
+  sta,
   schedule,
   error,
   stale,
@@ -346,6 +344,7 @@ export const MtrResults = React.memo(function MtrResults({
   const onToggleExpand = React.useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
+  const listSignature = React.useMemo(() => `mtr:${sta ?? title}`, [sta, title])
 
   return (
     <div>
@@ -361,7 +360,8 @@ export const MtrResults = React.memo(function MtrResults({
         onRefresh={onRefresh}
       />
 
-      <div className="space-y-4">
+      {/* Key covers only the list so the header and expandedKey state survive refresh. */}
+      <div key={listSignature} className="space-y-4">
         {error ? (
           <EmptyState
             icon={TriangleAlert}

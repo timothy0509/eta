@@ -41,7 +41,7 @@ export function RouteDrilldown({
         <button
           type="button"
           onClick={onBack}
-          className="bg-secondary-container text-on-secondary-container m3-label-lg inline-flex min-h-[44px] items-center gap-1 rounded-full px-4 py-2 transition-colors hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+          className="bg-secondary-container text-on-secondary-container m3-label-lg ui-press inline-flex min-h-[44px] items-center gap-1 rounded-full px-4 py-2 transition-colors hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
         >
           <ChevronLeft className="h-4 w-4" aria-hidden />
           {t('common.back')}

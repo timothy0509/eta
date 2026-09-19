@@ -4,7 +4,7 @@ import { MapPin } from 'lucide-react'
 import * as React from 'react'
 
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
-import { LivePulse } from '@/components/m3/motion'
+import { EtaValue, LivePulse } from '@/components/m3/motion'
 import { useTranslations } from '@/lib/eta/i18n'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -26,20 +26,13 @@ export function SoonestEtaPill({
 
   const isArriving = arriving ?? minutes <= 0
 
-  if (isArriving) {
-    return (
-      <div className="bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1">
-        <LivePulse />
-        <span className="m3-title-md">{t('common.now')}</span>
-      </div>
-    )
-  }
+  const display = isArriving ? t('common.now') : `${minutes} ${t('common.minutesUnit')}`
 
   return (
     <div className="bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1">
       <LivePulse />
       <span className="m3-title-md">
-        {minutes} {t('common.minutesUnit')}
+        <EtaValue key={display} value={display} />
       </span>
     </div>
   )

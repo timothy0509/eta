@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, ChevronUp, Clock, Info, Loader2 } from 'lucide-react'
+import { ChevronDown, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
@@ -418,11 +418,9 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         {showEta && hasEta ? firstEtaNode : null}
         {showInfo ? InfoIconButton : null}
         {expandable ? (
-          isExpanded ? (
-            <ChevronUp className="text-on-surface-variant h-4 w-4" />
-          ) : (
-            <ChevronDown className="text-on-surface-variant h-4 w-4" />
-          )
+          <ChevronDown
+            className={cn('text-on-surface-variant ui-chevron h-4 w-4', isExpanded && 'rotate-180')}
+          />
         ) : null}
       </div>
     </div>
@@ -760,6 +758,15 @@ export const KmbResults = React.memo(function KmbResults({
     return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
+  // Stagger replay key: query identity only, never live ETA arrays (see the
+  // replay rule on staggerClassForIndex). Refresh keeps this key so rows
+  // stay still and expand state survives; a new search remounts and replays.
+  const listSignature = React.useMemo(() => {
+    if (useStopSections) return `keyphrase:${(loadedStopIds ?? []).join(',')}`
+    if (multipleStops && loadedStopIds) return `multi:${loadedStopIds.join(',')}`
+    return `single:${title}:${stopCode ?? ''}:${routesFilter ?? ''}`
+  }, [useStopSections, loadedStopIds, multipleStops, title, stopCode, routesFilter])
+
   return (
     <div>
       <ResultsHeader
@@ -787,7 +794,7 @@ export const KmbResults = React.memo(function KmbResults({
         onRefresh={onRefresh}
       />
 
-      <div className="space-y-2">
+      <div key={listSignature} className="space-y-2">
         {error ? (
           <p className="text-error m3-body-md" aria-live="polite">
             {tWithParams('kmb.updateFailed', { error })}
@@ -821,7 +828,7 @@ export const KmbResults = React.memo(function KmbResults({
               <div ref={sentinelRef} className="flex items-center justify-center py-4">
                 {loading ? (
                   <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="ui-spin h-4 w-4" />
                     {t('kmb.loadingMoreStops')}
                   </div>
                 ) : (

@@ -5,13 +5,20 @@ import { cn } from '@/lib/utils'
 /**
  * Index-based entrance delay class. Replaces the `idx === 0 ? ...`
  * ternary chain that was copy-pasted across every results view.
- * Only the first three items stagger; the rest render immediately
+ * Only the first five items stagger; the rest render immediately
  * so long lists do not feel sluggish.
+ *
+ * Replay rule: list containers key on the query signature (stop ids,
+ * route key, station id), never on live ETA arrays. A new search
+ * remounts and replays the stagger, a data refresh keeps the same
+ * key and rows stay still.
  */
 export function staggerClassForIndex(idx: number): string {
   if (idx === 0) return 'ui-stagger-1'
   if (idx === 1) return 'ui-stagger-2'
   if (idx === 2) return 'ui-stagger-3'
+  if (idx === 3) return 'ui-stagger-4'
+  if (idx === 4) return 'ui-stagger-5'
   return ''
 }
 

@@ -10,14 +10,14 @@ export function ResultsSkeleton() {
     <div className="space-y-4" role="status" aria-busy aria-label={t('common.loading')}>
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-2">
-          <div className="bg-muted/50 h-6 w-40 animate-pulse rounded" />
-          <div className="bg-muted/50 h-4 w-24 animate-pulse rounded" />
+          <div className="bg-muted/50 ui-shimmer h-6 w-40 rounded" />
+          <div className="bg-muted/50 ui-shimmer h-4 w-24 rounded" />
         </div>
-        <div className="bg-muted/50 h-10 w-10 animate-pulse rounded-full" />
+        <div className="bg-muted/50 ui-shimmer h-10 w-10 rounded-full" />
       </div>
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="bg-muted/50 h-24 animate-pulse rounded-2xl" />
+          <div key={i} className="bg-muted/50 ui-shimmer h-24 rounded-2xl" />
         ))}
       </div>
       <span className="sr-only">{t('common.loading')}</span>

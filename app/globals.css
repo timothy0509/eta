@@ -90,6 +90,8 @@
   /* UI motion primitives */
   --ui-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ui-ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ui-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ui-ease-spring-soft: cubic-bezier(0.22, 1.2, 0.36, 1);
   --ui-dur-fast: 140ms;
   --ui-dur-md: 220ms;
   --ui-dur-slow: 360ms;
@@ -428,6 +430,71 @@
   }
 }
 
+@keyframes ui-pane-in {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes ui-eta-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(7px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ui-fav-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  55% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes ui-chip-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes ui-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes ui-popover-in {
+  0% {
+    opacity: 0;
+    transform: translateY(-4px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @layer utilities {
   .ui-animate-in {
     animation: ui-fade-up var(--ui-dur-md) var(--ui-ease-out) both;
@@ -453,6 +520,14 @@
     animation-delay: 120ms;
   }
 
+  .ui-stagger-4 {
+    animation-delay: 160ms;
+  }
+
+  .ui-stagger-5 {
+    animation-delay: 200ms;
+  }
+
   /* Container stagger: first children fade up in sequence, rest appear at
      once so long lists stay cheap. Replaces framer-motion stagger. */
   .ui-stagger > * {
@@ -475,7 +550,11 @@
     animation-delay: 160ms;
   }
 
-  .ui-stagger > *:nth-child(n + 6) {
+  .ui-stagger > *:nth-child(6) {
+    animation-delay: 200ms;
+  }
+
+  .ui-stagger > *:nth-child(n + 7) {
     animation: ui-fade var(--ui-dur-md) var(--ui-ease-out) both;
   }
 
@@ -507,6 +586,60 @@
 
   .ui-pop {
     animation: ui-soft-pop var(--ui-dur-fast) var(--ui-ease-out) both;
+  }
+
+  .ui-pane-enter {
+    animation: ui-pane-in var(--ui-dur-md) var(--ui-ease-out) both;
+  }
+
+  .ui-empty-in {
+    animation: ui-fade-up var(--ui-dur-slow) var(--ui-ease-out) both;
+  }
+
+  .ui-eta-tick {
+    animation: ui-eta-rise var(--ui-dur-fast) var(--ui-ease-out) both;
+    display: inline-block;
+  }
+
+  .ui-fav-pop {
+    animation: ui-fav-pop 320ms var(--ui-ease-spring) both;
+  }
+
+  .ui-chip-row-in {
+    animation: ui-chip-in var(--ui-dur-fast) var(--ui-ease-spring-soft) both;
+    transform-origin: top center;
+  }
+
+  .ui-popover-in {
+    animation: ui-popover-in var(--ui-dur-fast) var(--ui-ease-out) both;
+    transform-origin: top center;
+  }
+
+  .ui-shimmer {
+    background-color: var(--surface-container-high);
+    background: linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--surface-container-high) 65%, transparent) 40%,
+      color-mix(in srgb, var(--surface-container-highest) 90%, transparent) 50%,
+      color-mix(in srgb, var(--surface-container-high) 65%, transparent) 60%
+    );
+    background-size: 200% 100%;
+    animation: ui-shimmer 1.4s linear infinite;
+  }
+
+  .ui-indicator-slide {
+    transition:
+      transform var(--ui-dur-md) var(--ui-ease-spring),
+      width var(--ui-dur-md) var(--ui-ease-spring);
+    will-change: transform, width;
+  }
+
+  .ui-pill-pop {
+    animation: ui-soft-pop var(--ui-dur-md) var(--ui-ease-spring-soft) both;
+  }
+
+  .ui-chevron {
+    transition: transform var(--ui-dur-fast) var(--ui-ease-out);
   }
 
   .ui-spin {
@@ -564,21 +697,36 @@
   .ui-animate-in-fast,
   .ui-animate-fade,
   .ui-pop,
+  .ui-pane-enter,
+  .ui-empty-in,
+  .ui-eta-tick,
+  .ui-fav-pop,
+  .ui-chip-row-in,
+  .ui-popover-in,
+  .ui-shimmer,
+  .ui-pill-pop,
   .ui-spin,
   .live-pulse,
   .marquee-track,
-  .ui-stagger > * {
+  .ui-stagger > *,
+  .animate-spin,
+  .animate-pulse,
+  .animate-ping {
     animation: none !important;
   }
 
   .ui-stagger-1,
   .ui-stagger-2,
-  .ui-stagger-3 {
+  .ui-stagger-3,
+  .ui-stagger-4,
+  .ui-stagger-5 {
     animation-delay: 0ms !important;
   }
 
   .ui-lift,
-  .ui-press {
+  .ui-press,
+  .ui-indicator-slide,
+  .ui-chevron {
     transition: none !important;
   }
 

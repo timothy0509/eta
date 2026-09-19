@@ -4,6 +4,7 @@ import * as React from 'react'
 import dynamic from 'next/dynamic'
 
 import { HomeLayout, StopsLayout } from '@/components/eta/home-layout'
+import { PaneEnter } from '@/components/m3/motion'
 import { useRefreshRegistry } from '@/components/eta/hooks/use-refresh-registry'
 import { useUrlSync } from '@/components/eta/hooks/use-url-sync'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
@@ -183,6 +184,7 @@ function MtrResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
         : {
             title: s.mtr.title,
             lang: s.mtr.lang,
+            sta: s.mtr.sta,
             schedule: s.mtr.schedule,
             error: s.mtr.error,
             stale: s.mtr.stale,
@@ -200,6 +202,7 @@ function MtrResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
     <MtrResults
       title={data?.title ?? ''}
       lang={data?.lang ?? fallbackLang}
+      sta={data?.sta}
       schedule={data?.schedule ?? null}
       error={data?.error ?? null}
       stale={data?.stale ?? false}
@@ -236,6 +239,7 @@ function LrtResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
     <LrtResults
       title={data?.title ?? ''}
       lang={data?.lang ?? fallbackLang}
+      stationId={data?.stationId}
       schedule={data?.schedule ?? null}
       hasStation={Boolean(data?.stationId)}
       error={data?.error ?? null}
@@ -522,15 +526,25 @@ export default function HomeClient() {
   const renderRoutes = () => {
     if (mode === 'kmb')
       return (
-        <KmbRoutesView
-          lang={lang}
-          initialSelection={kmbRouteInitialSelection}
-          onSelectStopGroup={onSelectStopGroupFromRoute}
-        />
+        <PaneEnter key="routes:kmb">
+          <KmbRoutesView
+            lang={lang}
+            initialSelection={kmbRouteInitialSelection}
+            onSelectStopGroup={onSelectStopGroupFromRoute}
+          />
+        </PaneEnter>
       )
     if (mode === 'mtr')
-      return <MtrRoutesView lang={lang} onSelectStation={onSelectMtrStationFromRoute} />
-    return <LrtRoutesView lang={lang} onSelectStation={onSelectLrtStationFromRoute} />
+      return (
+        <PaneEnter key="routes:mtr">
+          <MtrRoutesView lang={lang} onSelectStation={onSelectMtrStationFromRoute} />
+        </PaneEnter>
+      )
+    return (
+      <PaneEnter key="routes:lrt">
+        <LrtRoutesView lang={lang} onSelectStation={onSelectLrtStationFromRoute} />
+      </PaneEnter>
+    )
   }
 
   const renderContent = () => {
@@ -541,22 +555,28 @@ export default function HomeClient() {
         return renderStops()
       case 'nearby':
         return (
-          <NearbyView
-            lang={lang}
-            mode={mode}
-            onSelectStopGroup={onSelectStopGroupFromRoute}
-            onSelectMtrStation={onSelectMtrStationFromRoute}
-            onSelectLrtStation={onSelectLrtStationFromRoute}
-          />
+          <PaneEnter key={`nearby:${mode}`}>
+            <NearbyView
+              lang={lang}
+              mode={mode}
+              onSelectStopGroup={onSelectStopGroupFromRoute}
+              onSelectMtrStation={onSelectMtrStationFromRoute}
+              onSelectLrtStation={onSelectLrtStationFromRoute}
+            />
+          </PaneEnter>
         )
       case 'saved':
         return (
-          <div className="ui-animate-fade">
+          <PaneEnter key="saved">
             <FavoritesAndRecents lang={lang} onSelect={onSelectFromLists} />
-          </div>
+          </PaneEnter>
         )
       case 'settings':
-        return <SettingsView lang={lang} />
+        return (
+          <PaneEnter key="settings">
+            <SettingsView lang={lang} />
+          </PaneEnter>
+        )
       default:
         return renderStops()
     }

@@ -3,7 +3,7 @@
 import * as React from 'react'
 import { RefreshCw, TramFront, TriangleAlert } from 'lucide-react'
 
-import { LivePulse } from '@/components/m3/motion'
+import { EtaValue, LivePulse } from '@/components/m3/motion'
 import { EmptyState } from '@/components/eta/empty-state'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { ResultsHeader } from '@/components/eta/results-header'
@@ -43,6 +43,7 @@ function isArrivingTime(time: string | number | null | undefined) {
 type Props = {
   title: string
   lang: UiLanguage
+  stationId?: string
   schedule: LrtScheduleResponse | null
   hasStation?: boolean
   error?: string | null
@@ -55,6 +56,7 @@ type Props = {
 export const LrtResults = React.memo(function LrtResults({
   title,
   lang,
+  stationId,
   schedule,
   hasStation,
   error,
@@ -64,6 +66,7 @@ export const LrtResults = React.memo(function LrtResults({
   loading,
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
+  const listSignature = React.useMemo(() => `lrt:${stationId ?? title}`, [stationId, title])
 
   return (
     <div>
@@ -79,7 +82,8 @@ export const LrtResults = React.memo(function LrtResults({
         onRefresh={onRefresh}
       />
 
-      <div className="space-y-4">
+      {/* Key covers only the list so the header stays mounted on refresh. */}
+      <div key={listSignature} className="space-y-4">
         {error ? (
           <EmptyState
             icon={TriangleAlert}
@@ -98,7 +102,7 @@ export const LrtResults = React.memo(function LrtResults({
         ) : null}
         {loading && !schedule ? (
           <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
-            <RefreshCw className="h-4 w-4 animate-spin" />
+            <RefreshCw className="ui-spin h-4 w-4" />
             {t('lrt.loadingTrains')}
           </div>
         ) : !schedule ? (
@@ -106,7 +110,7 @@ export const LrtResults = React.memo(function LrtResults({
             <EmptyState title={t('lrt.selectStation')} />
           ) : !error ? (
             <div className="text-on-surface-variant m3-body-md flex items-center justify-center gap-2 py-8">
-              <RefreshCw className="h-4 w-4 animate-spin" />
+              <RefreshCw className="ui-spin h-4 w-4" />
               {t('lrt.loadingTrains')}
             </div>
           ) : null
@@ -182,11 +186,11 @@ export const LrtResults = React.memo(function LrtResults({
                               {arriving ? (
                                 <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
                                   <LivePulse />
-                                  {timeText}
+                                  <EtaValue key={timeText} value={timeText} />
                                 </span>
                               ) : (
                                 <div className="text-on-surface font-tabular m3-body-md font-semibold">
-                                  {timeText}
+                                  <EtaValue key={timeText} value={timeText} />
                                 </div>
                               )}
                               {r.stop ? (

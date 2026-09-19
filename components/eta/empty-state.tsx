@@ -23,7 +23,7 @@ export function EmptyState({ icon: Icon = Info, title, hint, action, className }
     <div
       role="status"
       className={cn(
-        'text-on-surface-variant m3-body-md flex flex-col items-center justify-center gap-2 px-4 py-8 text-center',
+        'text-on-surface-variant m3-body-md ui-empty-in flex flex-col items-center justify-center gap-2 px-4 py-8 text-center',
         className
       )}
     >

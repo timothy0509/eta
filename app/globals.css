@@ -642,6 +642,23 @@
     transition: transform var(--ui-dur-fast) var(--ui-ease-out);
   }
 
+  /* Expandable ETA panel: grid-rows height plus fade. The data-open
+     attribute flips at toggle time so the transition runs in both
+     directions while the grid rows animate. */
+  .ui-expand-panel {
+    transition:
+      grid-template-rows 320ms var(--ui-ease-spring-soft),
+      opacity 220ms var(--ui-ease-out);
+    will-change: grid-template-rows;
+  }
+
+  .ui-expand-inner {
+    transition:
+      transform 280ms var(--ui-ease-spring-soft),
+      opacity 200ms var(--ui-ease-out);
+    will-change: transform, opacity;
+  }
+
   .ui-spin {
     animation: ui-spin 900ms linear infinite;
   }
@@ -726,13 +743,19 @@
   .ui-lift,
   .ui-press,
   .ui-indicator-slide,
-  .ui-chevron {
+  .ui-chevron,
+  .ui-expand-panel,
+  .ui-expand-inner {
     transition: none !important;
   }
 
   .ui-lift:hover,
   .ui-lift:active,
   .ui-press:active {
+    transform: none !important;
+  }
+
+  .ui-expand-inner {
     transform: none !important;
   }
 }

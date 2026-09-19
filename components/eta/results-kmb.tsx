@@ -22,7 +22,7 @@ import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
-import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
+import { getOperatorColor } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -271,7 +271,8 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const origin = routeInfo?.origin ? pickLang(routeInfo.origin, lang) : null
   const destination = routeInfo?.destination ? pickLang(routeInfo.destination, lang) : null
-  const badgeStyle = getRouteBadgeStyle(route, co)
+  const operatorColor = getOperatorColor(first?.co ?? co)
+  const operatorName = formatOperatorLabel(first?.co ?? co, lang)
 
   const { t } = useTranslations(lang)
 
@@ -336,23 +337,6 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     </>
   )
 
-  const InfoIconButton = (
-    <RouteDetailsDialog
-      trigger={
-        <button
-          type="button"
-          onClick={(e) => e.stopPropagation()}
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 pointer-events-auto inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
-          aria-label={t('common.routeDetails')}
-        >
-          <Info className="h-4 w-4" />
-        </button>
-      }
-    >
-      {detailsContent}
-    </RouteDetailsDialog>
-  )
-
   const DetailsTextButton = (
     <RouteDetailsDialog
       trigger={
@@ -383,40 +367,35 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     </span>
   )
 
-  const routeHeader = ({ showEta, showInfo }: { showEta: boolean; showInfo: boolean }) => (
+  const fareCodeNode =
+    fareLabel || codeLabel ? (
+      <div className="text-on-surface-variant m3-label-sm flex min-w-0 items-center gap-1.5 overflow-hidden">
+        {fareLabel ? <span className="font-tabular shrink-0">{fareLabel}</span> : null}
+        {fareLabel && codeLabel ? (
+          <span aria-hidden="true" className="shrink-0 opacity-60">
+            ·
+          </span>
+        ) : null}
+        {codeLabel ? <span className="min-w-0 flex-1 truncate font-mono">{codeLabel}</span> : null}
+      </div>
+    ) : null
+
+  const routeHeader = ({ showEta }: { showEta: boolean }) => (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RouteBadge route={route} company={co} size="lg" />
         <div className="min-w-0 flex-1 overflow-hidden">
-          <div className="flex min-w-0 items-center gap-2">
-            <span className="text-on-surface-variant m3-label-md hidden shrink-0 sm:inline">
-              {formatOperatorLabel(first?.co ?? co, lang)}
-            </span>
-            <Marquee
-              title={typeof label === 'string' ? label : undefined}
-              className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
-            >
-              {label || t('common.route')}
-            </Marquee>
-          </div>
-          {fareLabel || codeLabel ? (
-            <div className="text-on-surface-variant m3-label-sm mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden">
-              {fareLabel ? <span className="font-tabular shrink-0">{fareLabel}</span> : null}
-              {fareLabel && codeLabel ? (
-                <span aria-hidden="true" className="shrink-0 opacity-60">
-                  ·
-                </span>
-              ) : null}
-              {codeLabel ? (
-                <span className="min-w-0 flex-1 truncate font-mono">{codeLabel}</span>
-              ) : null}
-            </div>
-          ) : null}
+          <span className="sr-only">{operatorName}</span>
+          <Marquee
+            title={typeof label === 'string' ? label : undefined}
+            className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
+          >
+            {label || t('common.route')}
+          </Marquee>
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1 sm:gap-1.5">
         {showEta && hasEta ? firstEtaNode : null}
-        {showInfo ? InfoIconButton : null}
         {expandable ? (
           <ChevronDown
             className={cn('text-on-surface-variant ui-chevron h-4 w-4', isExpanded && 'rotate-180')}
@@ -490,7 +469,10 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
           )
         })}
       </div>
-      <div className="flex items-center justify-end">{DetailsTextButton}</div>
+      <div className="flex items-end justify-between gap-2 pt-1">
+        <div className="min-w-0 flex-1">{fareCodeNode}</div>
+        <div className="shrink-0">{DetailsTextButton}</div>
+      </div>
     </div>
   )
 
@@ -505,16 +487,17 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         )}
       >
         <span
-          className="absolute inset-y-2.5 left-0 w-[3px] rounded-full"
-          style={{ backgroundColor: badgeStyle.bgColor }}
+          className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
+          style={{ backgroundColor: operatorColor }}
           aria-hidden
         />
         <div className="space-y-2.5 pl-4">
-          {routeHeader({ showEta: false, showInfo: true })}
+          {routeHeader({ showEta: false })}
           <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
             <Info className="h-4 w-4 shrink-0" />
             {remark || formatNoScheduledText(t)}
           </div>
+          {fareCodeNode}
         </div>
       </div>
     )
@@ -529,11 +512,14 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         )}
       >
         <span
-          className="absolute inset-y-2.5 left-0 w-[3px] rounded-full"
-          style={{ backgroundColor: badgeStyle.bgColor }}
+          className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
+          style={{ backgroundColor: operatorColor }}
           aria-hidden
         />
-        <div className="space-y-2.5 pl-4">{routeHeader({ showEta: true, showInfo: true })}</div>
+        <div className="space-y-2.5 pl-4">
+          {routeHeader({ showEta: true })}
+          {fareCodeNode}
+        </div>
       </div>
     )
   }
@@ -542,12 +528,12 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
     <ExpandableEtaRow
       expanded={isExpanded}
       onToggle={onToggleExpand!}
-      color={badgeStyle.bgColor}
+      color={operatorColor}
       className={staggerClass}
       panel={etaPanel}
-      toggleLabel={`${route} ${label ?? ''}`.trim()}
+      toggleLabel={`${route} ${label ?? ''} ${operatorName}`.trim()}
     >
-      {routeHeader({ showEta: !isExpanded, showInfo: !isExpanded })}
+      {routeHeader({ showEta: !isExpanded })}
     </ExpandableEtaRow>
   )
 })

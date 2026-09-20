@@ -46,6 +46,24 @@ describe('parseKmbStopName gating', () => {
     })
   })
 
+  it('strips a KMB stop code with a lowercase suffix', () => {
+    expect(parseKmbStopName('Foo Bus Stop (KT120a)', { isKmb: true, lang: 'tc' })).toEqual({
+      name: 'Foo Bus Stop',
+      platform: null,
+      stopCode: 'KT120a',
+    })
+  })
+
+  it('parses platform plus stop code with a lowercase suffix', () => {
+    expect(
+      parseKmbStopName('Tuen Mun Road BBI (A12) (KT120a)', { isKmb: true, lang: 'tc' })
+    ).toEqual({
+      name: 'Tuen Mun Road BBI',
+      platform: 'A12',
+      stopCode: 'KT120a',
+    })
+  })
+
   it('parses platform only', () => {
     expect(parseKmbStopName('Central (A1)', { isKmb: true, lang: 'tc' })).toEqual({
       name: 'Central',

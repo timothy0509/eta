@@ -42,7 +42,7 @@ import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
-import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang, pickLangZh } from '@/lib/eta/pick-lang'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -125,7 +125,12 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
   if (item.mode === 'kmb') {
     // Saved KMB route
     if ('type' in item && item.type === 'route') {
-      const destination = item.destination ? pickLang(item.destination, lang) : item.title
+      const destination = item.destination
+        ? formatKmbRouteEndpointName(pickLang(item.destination, lang), {
+            co: item.co,
+            lang,
+          })
+        : item.title
 
       return (
         <span className="flex items-center gap-2">

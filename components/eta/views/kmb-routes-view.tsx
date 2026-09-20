@@ -23,7 +23,7 @@ import {
   type KmbRouteStopLite,
 } from '@/lib/eta/client'
 import type { GeoPoint } from '@/lib/eta/geo'
-import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { LINE_COLOR_FALLBACK } from '@/lib/eta/line-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
@@ -449,7 +449,10 @@ export function KmbRoutesView({
       id: `kmb:route:${currentVariant.co}:${currentVariant.route}:${currentVariant.bound}:${currentVariant.serviceType}`,
       mode: 'kmb',
       type: 'route',
-      title: `${currentVariant.route} ${pickLang(currentVariant.destination, lang)}`,
+      title: `${currentVariant.route} ${formatKmbRouteEndpointName(
+        pickLang(currentVariant.destination, lang),
+        { co: currentVariant.co, lang }
+      )}`,
       route: currentVariant.route,
       co: currentVariant.co,
       bound: currentVariant.bound,
@@ -545,7 +548,10 @@ export function KmbRoutesView({
                       <span className="mr-1 uppercase">{normalizeCo(v.co)}</span>
                     )}
                     {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}{' '}
-                    {pickLang(v.destination, lang)}
+                    {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
+                      co: v.co,
+                      lang,
+                    })}
                     {v.serviceType !== '1' ? ` · ${v.serviceType}` : ''}
                   </button>
                 ))}
@@ -555,8 +561,15 @@ export function KmbRoutesView({
             {currentVariant && (
               <div className="flex items-center justify-between gap-3">
                 <div className="text-on-surface-variant m3-body-md">
-                  {pickLang(currentVariant.origin, lang)} →{' '}
-                  {pickLang(currentVariant.destination, lang)}
+                  {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
+                    co: currentVariant.co,
+                    lang,
+                  })}{' '}
+                  →{' '}
+                  {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
+                    co: currentVariant.co,
+                    lang,
+                  })}
                 </div>
                 <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
               </div>

@@ -20,7 +20,7 @@ import {
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
-import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
@@ -61,10 +61,10 @@ function formatRouteVariantLabel(
     // For arriving leg, show origin (where the bus came from) instead of destination
     if (isArrivingLeg) {
       const origin = pickLang(info.origin, lang)
-      if (origin) return origin
+      if (origin) return formatKmbRouteEndpointName(origin, { co: info.co, lang })
     }
     const destination = pickLang(info.destination, lang)
-    if (destination) return destination
+    if (destination) return formatKmbRouteEndpointName(destination, { co: info.co, lang })
   }
 
   // Fallback when route info not yet loaded
@@ -83,7 +83,7 @@ function formatRouteVariantLabel(
     },
     lang
   )
-  return dest
+  return formatKmbRouteEndpointName(dest, { co: etaFallback.co, lang })
 }
 
 function formatNoScheduledText(t: (key: string) => string) {
@@ -267,8 +267,18 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   // Fare is only shown if hasFare is true (suppressed for arriving leg)
   const fare = hasFare && faresByVariantKey ? faresByVariantKey[baseKey] : undefined
 
-  const origin = routeInfo?.origin ? pickLang(routeInfo.origin, lang) : null
-  const destination = routeInfo?.destination ? pickLang(routeInfo.destination, lang) : null
+  const origin = routeInfo?.origin
+    ? formatKmbRouteEndpointName(pickLang(routeInfo.origin, lang), {
+        co: routeInfo.co,
+        lang,
+      })
+    : null
+  const destination = routeInfo?.destination
+    ? formatKmbRouteEndpointName(pickLang(routeInfo.destination, lang), {
+        co: routeInfo.co,
+        lang,
+      })
+    : null
   const operatorColor = getOperatorColor(first?.co ?? co)
   const operatorName = formatOperatorLabel(first?.co ?? co, lang)
 

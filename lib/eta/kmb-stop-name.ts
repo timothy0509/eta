@@ -104,6 +104,27 @@ export function titleCaseKmbEnName(body: string): string {
   return body.split(' ').map(titleCaseWord).join(' ')
 }
 
+/**
+ * Title-cases a KMB route endpoint (origin/destination) for display.
+ *
+ * Same rules as stop names: English only, KMB-operated routes only.
+ * tc/sc names and non-KMB operators pass through unchanged. Endpoints
+ * never carry platform/stop-code suffixes, so no parsing is applied.
+ */
+export function formatKmbRouteEndpointName(
+  name: string,
+  opts: { co?: string; lang: UiLanguage }
+): string {
+  if (opts.lang !== 'en') return name
+  if (
+    String(opts.co ?? 'kmb')
+      .trim()
+      .toLowerCase() !== 'kmb'
+  )
+    return name
+  return titleCaseKmbEnName(name)
+}
+
 export function parseKmbStopName(fullName: string, opts?: KmbParseOpts): ParsedKmbStopName {
   if (!opts?.isKmb) {
     return { name: fullName, platform: null, stopCode: null }

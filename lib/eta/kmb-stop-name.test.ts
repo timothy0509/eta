@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   clearKmbStopNameCache,
+  formatKmbRouteEndpointName,
   parseKmbStopName,
   parseKmbStopNameCached,
   titleCaseKmbEnName,
@@ -176,5 +177,44 @@ describe('parseKmbStopNameCached', () => {
       stopCode: null,
     })
     expect(nonKmb).not.toBe(kmb)
+  })
+})
+
+describe('formatKmbRouteEndpointName', () => {
+  it('title-cases KMB English endpoints with the stop-name rules', () => {
+    expect(formatKmbRouteEndpointName('KWUN TONG FERRY', { co: 'kmb', lang: 'en' })).toBe(
+      'Kwun Tong Ferry'
+    )
+    expect(formatKmbRouteEndpointName('TUEN MUN ROAD BBI', { co: 'kmb', lang: 'en' })).toBe(
+      'Tuen Mun Road BBI'
+    )
+    expect(formatKmbRouteEndpointName('CHINA HONG KONG CITY B/T', { co: 'kmb', lang: 'en' })).toBe(
+      'China Hong Kong City B/T'
+    )
+    expect(formatKmbRouteEndpointName('METRO CITY PHASE II', { co: 'kmb', lang: 'en' })).toBe(
+      'Metro City Phase II'
+    )
+  })
+
+  it('passes tc/sc names through unchanged', () => {
+    for (const lang of ['tc', 'sc'] as const) {
+      expect(formatKmbRouteEndpointName('KWUN TONG FERRY', { co: 'kmb', lang })).toBe(
+        'KWUN TONG FERRY'
+      )
+      expect(formatKmbRouteEndpointName('觀塘碼頭', { co: 'kmb', lang })).toBe('觀塘碼頭')
+    }
+  })
+
+  it('passes non-KMB operators through unchanged', () => {
+    expect(formatKmbRouteEndpointName('KWUN TONG FERRY', { co: 'ctb', lang: 'en' })).toBe(
+      'KWUN TONG FERRY'
+    )
+    expect(formatKmbRouteEndpointName('KWUN TONG FERRY', { lang: 'en' })).toBe('Kwun Tong Ferry')
+  })
+
+  it('is idempotent', () => {
+    expect(formatKmbRouteEndpointName('Kwun Tong Ferry', { co: 'kmb', lang: 'en' })).toBe(
+      'Kwun Tong Ferry'
+    )
   })
 })

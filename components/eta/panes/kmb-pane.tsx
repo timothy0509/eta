@@ -22,7 +22,7 @@ import {
   type KmbRouteStopLite,
 } from '@/lib/eta/client'
 import { isStaleByFlagOrAge } from '@/lib/eta/stale'
-import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
@@ -315,8 +315,14 @@ export function KmbPane({
   const pickRouteVariantLabel = React.useCallback(
     (info: KmbRouteInfoLite | undefined) => {
       if (!info) return ''
-      const origin = pickLang(info.origin, lang)
-      const destination = pickLang(info.destination, lang)
+      const origin = formatKmbRouteEndpointName(pickLang(info.origin, lang), {
+        co: info.co,
+        lang,
+      })
+      const destination = formatKmbRouteEndpointName(pickLang(info.destination, lang), {
+        co: info.co,
+        lang,
+      })
       if (!origin || !destination) return ''
       return `${origin} → ${destination}`
     },

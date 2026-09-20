@@ -30,6 +30,10 @@ export type KmbStopSearchItem = {
   isKmb: boolean
 }
 
+export function isKmbStop(stop: { isKmb?: unknown } | null | undefined): boolean {
+  return stop?.isKmb === true
+}
+
 export type LrtStationSearchItem = {
   stationId: string
   nameEn: string

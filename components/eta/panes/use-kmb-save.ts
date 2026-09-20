@@ -3,6 +3,7 @@ import * as React from 'react'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { translations } from '@/lib/eta/i18n'
 import { pickLang } from '@/lib/eta/pick-lang'
+import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 import type { RouteFilterState } from '@/components/eta/route-filter'
@@ -89,7 +90,7 @@ export function useKmbSave({
         ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
         : translations.kmb.bus[lang]
       const { name } = parseKmbStopNameCached(fullName, {
-        isKmb: stop?.isKmb ?? false,
+        isKmb: isKmbStop(stop),
         lang,
       })
       const title = `${name}${routeSuffix}`
@@ -111,7 +112,7 @@ export function useKmbSave({
         ? pickLang({ en: firstStop.nameEn, tc: firstStop.nameTc, sc: firstStop.nameSc }, lang)
         : translations.kmb.selectedStops[lang]
       const { name } = parseKmbStopNameCached(fullName, {
-        isKmb: firstStop?.isKmb ?? false,
+        isKmb: isKmbStop(firstStop),
         lang,
       })
       const title = `${name}${routeSuffix}`

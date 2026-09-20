@@ -13,7 +13,9 @@ beforeEach(() => {
 
 describe('parseKmbStopName gating', () => {
   it('strips a KMB stop code when isKmb is true', () => {
-    expect(parseKmbStopName('Chuk Yuen Estate Bus Terminus (WT916)', { isKmb: true })).toEqual({
+    expect(
+      parseKmbStopName('Chuk Yuen Estate Bus Terminus (WT916)', { isKmb: true, lang: 'tc' })
+    ).toEqual({
       name: 'Chuk Yuen Estate Bus Terminus',
       platform: null,
       stopCode: 'WT916',
@@ -35,7 +37,9 @@ describe('parseKmbStopName gating', () => {
   })
 
   it('parses platform plus stop code', () => {
-    expect(parseKmbStopName('Tuen Mun Road BBI (A12) (TM744)', { isKmb: true })).toEqual({
+    expect(
+      parseKmbStopName('Tuen Mun Road BBI (A12) (TM744)', { isKmb: true, lang: 'tc' })
+    ).toEqual({
       name: 'Tuen Mun Road BBI',
       platform: 'A12',
       stopCode: 'TM744',
@@ -43,7 +47,7 @@ describe('parseKmbStopName gating', () => {
   })
 
   it('parses platform only', () => {
-    expect(parseKmbStopName('Central (A1)', { isKmb: true })).toEqual({
+    expect(parseKmbStopName('Central (A1)', { isKmb: true, lang: 'tc' })).toEqual({
       name: 'Central',
       platform: 'A1',
       stopCode: null,
@@ -51,7 +55,7 @@ describe('parseKmbStopName gating', () => {
   })
 
   it('returns plain names unchanged with isKmb', () => {
-    expect(parseKmbStopName('Central', { isKmb: true })).toEqual({
+    expect(parseKmbStopName('Central', { isKmb: true, lang: 'tc' })).toEqual({
       name: 'Central',
       platform: null,
       stopCode: null,
@@ -72,6 +76,10 @@ describe('titleCaseKmbEnName', () => {
     ['MTR TSUEN WAN STATION', 'MTR Tsuen Wan Station'],
     ['DR SUN YAT-SEN MUSEUM', 'Dr Sun Yat-Sen Museum'],
     ["ST. TERESA'S HOSPITAL", "St. Teresa's Hospital"],
+    ['APM TERMINUS', 'APM Terminus'],
+    ['IFC MALL', 'IFC Mall'],
+    ['HK SCIENCE PARK', 'HK Science Park'],
+    ['MOKO SHOPPING CENTRE', 'MOKO Shopping Centre'],
   ]
 
   for (const [input, expected] of cases) {

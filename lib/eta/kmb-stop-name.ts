@@ -13,14 +13,22 @@ const PLATFORM_RE = '[A-Z][0-9]{1,2}'
 // Note: platforms are excluded by requiring 3+ digits.
 const STOP_CODE_RE = '[A-Z]{1,2}[0-9]{3,}'
 
+export type KmbParseOpts =
+  | { isKmb?: false; lang?: UiLanguage }
+  | { isKmb: true; lang: UiLanguage }
+  | { isKmb: boolean; lang: UiLanguage }
+
 /**
  * Parses KMB stop names that may contain platform and/or stop code suffixes.
  *
  * Only KMB embeds stop codes in stop names, so callers must pass
- * `{ isKmb: true }` for KMB-sourced names. Anything else passes through
+ * `{ isKmb: true, lang }` for KMB-sourced names. Anything else passes through
  * untouched with null platform/stopCode.
  *
- * Examples (with isKmb: true):
+ * KMB English title-casing runs only when lang is 'en'; tc/sc names pass
+ * through unchanged.
+ *
+ * Examples (with isKmb: true, lang: 'tc'):
  * - "Chuk Yuen Estate Bus Terminus (WT916)" -> { name: "Chuk Yuen Estate Bus Terminus", platform: null, stopCode: "WT916" }
  * - "Tuen Mun Road BBI (A12) (TM744)" -> { name: "Tuen Mun Road BBI", platform: "A12", stopCode: "TM744" }
  */
@@ -31,7 +39,19 @@ const RE_CODE_ONLY = new RegExp(`^(.+?)\\s*\\((${STOP_CODE_RE})\\)\\s*$`)
 const RE_PLATFORM_ONLY = new RegExp(`^(.+?)\\s*\\((${PLATFORM_RE})\\)\\s*$`)
 
 // All-caps tokens that are abbreviations, never ordinary words.
-const KEEP_UPPERCASE = new Set(['BBI', 'B/T', 'MTR', 'KCR', 'LRT', 'KMB', 'CTB'])
+const KEEP_UPPERCASE = new Set([
+  'BBI',
+  'B/T',
+  'MTR',
+  'KCR',
+  'LRT',
+  'KMB',
+  'CTB',
+  'APM',
+  'IFC',
+  'HK',
+  'MOKO',
+])
 
 // Dotted abbreviations like H.K.
 const DOTTED_ABBREV_RE = /^([A-Z]\.)+[A-Z]?\.?$/
@@ -84,10 +104,7 @@ export function titleCaseKmbEnName(body: string): string {
   return body.split(' ').map(titleCaseWord).join(' ')
 }
 
-export function parseKmbStopName(
-  fullName: string,
-  opts?: { isKmb?: boolean; lang?: UiLanguage }
-): ParsedKmbStopName {
+export function parseKmbStopName(fullName: string, opts?: KmbParseOpts): ParsedKmbStopName {
   if (!opts?.isKmb) {
     return { name: fullName, platform: null, stopCode: null }
   }
@@ -128,10 +145,7 @@ export function parseKmbStopName(
 
 const parseCache = new Map<string, ParsedKmbStopName>()
 
-export function parseKmbStopNameCached(
-  fullName: string,
-  opts?: { isKmb?: boolean; lang?: UiLanguage }
-): ParsedKmbStopName {
+export function parseKmbStopNameCached(fullName: string, opts?: KmbParseOpts): ParsedKmbStopName {
   const key = `${opts?.isKmb ? 1 : 0}|${opts?.lang ?? ''}|${fullName}`
   const cached = parseCache.get(key)
   if (cached) return cached

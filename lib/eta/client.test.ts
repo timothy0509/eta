@@ -86,5 +86,25 @@ describe('fetchKmbStops', () => {
 
     expect(stops.map((s) => s.stopId).sort()).toEqual(['A', 'F'])
     expect(stops.find((s) => s.stopId === 'A')).toMatchObject({ lat: 22.28, lng: 114.15 })
+    expect(stops.find((s) => s.stopId === 'A')).toMatchObject({ isKmb: true })
+    expect(stops.find((s) => s.stopId === 'F')).toMatchObject({ isKmb: false })
+  })
+
+  it('defaults stale cached stops without the flag to non-KMB', async () => {
+    mockGetKmbStops.mockResolvedValue([
+      {
+        stop: 'X',
+        name_en: 'Central',
+        name_tc: '中環',
+        name_sc: '中环',
+        lat: 22.28,
+        long: 114.15,
+        isKmb: undefined as unknown as boolean,
+      },
+    ])
+
+    const stops = await fetchKmbStops()
+
+    expect(stops).toMatchObject([{ stopId: 'X', isKmb: false }])
   })
 })

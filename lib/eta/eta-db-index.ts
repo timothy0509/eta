@@ -1,14 +1,8 @@
 import type { Company, EtaDb, RouteListEntry } from 'hk-bus-eta'
 
-export type KmbStopSearchItem = {
-  stopId: string
-  nameEn: string
-  nameTc: string
-  nameSc: string
-  lat: number
-  lng: number
-  isKmb: boolean
-}
+import type { KmbStopSearchItem } from '@/lib/eta/types'
+
+export type { KmbStopSearchItem }
 
 export type KmbRouteStopLite = {
   co: Company

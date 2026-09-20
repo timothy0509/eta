@@ -28,6 +28,7 @@ import { LINE_COLOR_FALLBACK } from '@/lib/eta/line-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import { getRoutedGeometry } from '@/lib/eta/routing'
+import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -103,7 +104,7 @@ function getStopGroupForClick(
     lang
   )
   const clickedParsed = parseKmbStopNameCached(clickedName, {
-    isKmb: clickedStop.isKmb ?? false,
+    isKmb: isKmbStop(clickedStop),
     lang,
   })
   const baseName = clickedParsed.name
@@ -113,7 +114,7 @@ function getStopGroupForClick(
     .filter(({ stop }) => {
       if (!stop) return false
       const name = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
-      const parsed = parseKmbStopNameCached(name, { isKmb: stop.isKmb ?? false, lang })
+      const parsed = parseKmbStopNameCached(name, { isKmb: isKmbStop(stop), lang })
       return parsed.name === baseName
     })
     .map(({ rs }) => rs.stopId)
@@ -588,7 +589,7 @@ export function KmbRoutesView({
                     ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
                     : rs.stopId
                   const parsed = parseKmbStopNameCached(fullName, {
-                    isKmb: stop?.isKmb ?? false,
+                    isKmb: isKmbStop(stop),
                     lang,
                   })
                   const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)

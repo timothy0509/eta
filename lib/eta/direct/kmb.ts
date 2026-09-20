@@ -1,6 +1,7 @@
 import type { Company } from 'hk-bus-eta'
 
-import { kmbStopEtaKey } from '@/lib/eta/cache/keys'
+import { KMB_STOPS_CACHE_KEY, kmbStopEtaKey } from '@/lib/eta/cache/keys'
+import { isKmbStop } from '@/lib/eta/types'
 import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import type { KmbRouteStopLite } from '@/lib/eta/client'
 import {
@@ -75,7 +76,7 @@ function mapKmbEtaEntry(eta: KmbEta, stopId: string): KmbEtaEntry {
 
 export async function getKmbStops(): Promise<KmbStop[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:stops',
+    key: KMB_STOPS_CACHE_KEY,
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -87,7 +88,7 @@ export async function getKmbStops(): Promise<KmbStop[]> {
         name_sc: stop.nameSc,
         lat: stop.lat,
         long: stop.lng,
-        isKmb: stop.isKmb,
+        isKmb: isKmbStop(stop),
       }))
     },
   })

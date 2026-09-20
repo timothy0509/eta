@@ -24,7 +24,8 @@ import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
-import type { UiLanguage } from '@/lib/eta/types'
+import { isKmbStop } from '@/lib/eta/types'
+import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
@@ -152,7 +153,7 @@ function getStopChips(
   const stop = stopFromEta ?? stopFromBuiltInId
   const fullName = stop ? pickStopName(stop, lang) : null
   const parsed = fullName
-    ? parseKmbStopNameCached(fullName, { isKmb: stop?.isKmb ?? false, lang })
+    ? parseKmbStopNameCached(fullName, { isKmb: isKmbStop(stop), lang })
     : null
 
   const result = {
@@ -166,13 +167,7 @@ function getStopChips(
   return result
 }
 
-type StopInfo = {
-  stopId: string
-  nameEn: string
-  nameTc: string
-  nameSc: string
-  isKmb?: boolean
-}
+type StopInfo = KmbStopSearchItem
 
 type Props = {
   lang: UiLanguage
@@ -593,7 +588,7 @@ const StopSection = React.memo(function StopSection({
 }) {
   const { t } = useTranslations(lang)
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
-  const parsed = parseKmbStopNameCached(stopName, { isKmb: stopInfo?.isKmb ?? false, lang })
+  const parsed = parseKmbStopNameCached(stopName, { isKmb: isKmbStop(stopInfo), lang })
   const stopCodeBadge = parsed.platform ?? parsed.stopCode ?? null
   const stopRef = registerStopRef ? registerStopRef(stopId) : undefined
 
@@ -706,7 +701,7 @@ export const KmbResults = React.memo(function KmbResults({
     const next = new Map<string, StopChips>()
     for (const stop of stops) {
       const fullName = pickStopName(stop, lang)
-      const parsed = parseKmbStopNameCached(fullName, { isKmb: stop.isKmb ?? false, lang })
+      const parsed = parseKmbStopNameCached(fullName, { isKmb: isKmbStop(stop), lang })
       next.set(stop.stopId, {
         stopId: stop.stopId,
         fullName,

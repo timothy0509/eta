@@ -11,7 +11,9 @@ import { ResultsHeader } from '@/components/eta/results-header'
 import { Marquee } from '@/components/ui/marquee'
 import {
   formatLrtEtaLabel,
+  getLrtDisplayTime,
   groupLrtEntriesByRoute,
+  isLrtArrivingText,
   type LrtRouteGroup,
   type LrtRouteListEntry,
 } from '@/lib/eta/lrt-eta-groups'
@@ -34,28 +36,12 @@ function formatArrivalDeparture(code: string, t: (key: string) => string) {
   return code === 'A' ? t('lrt.arrivingLabel') : t('lrt.departingLabel')
 }
 
-function isArrivingTime(time: string | number | null | undefined) {
-  const text = String(time ?? '')
-  const lower = text.toLowerCase()
-  return (
-    lower.includes('arriv') ||
-    text.includes('到達') ||
-    text.includes('到达') ||
-    text.includes('即將') ||
-    text.includes('即将')
-  )
-}
-
-function getEntryTimeText(entry: LrtRouteListEntry, lang: UiLanguage): string {
-  return pickLangZh({ en: String(entry.time_en ?? ''), zh: String(entry.time_ch ?? '') }, lang)
-}
-
 function isEntryArriving(entry: LrtRouteListEntry, lang: UiLanguage): boolean {
-  return entry.arrival_departure === 'A' || isArrivingTime(getEntryTimeText(entry, lang))
+  return entry.arrival_departure === 'A' || isLrtArrivingText(getLrtDisplayTime(entry, lang))
 }
 
 function formatNoScheduledText(t: (key: string) => string) {
-  return t('common.noScheduledBuses')
+  return t('lrt.noScheduledTrains')
 }
 
 /** Single route group card. Mirrors the bus RouteDepartureRow. */
@@ -69,8 +55,8 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   group: LrtRouteGroup
   lang: UiLanguage
   staggerClass?: string
-  expanded?: boolean
-  onToggleExpand?: () => void
+  expanded: boolean
+  onToggleExpand: () => void
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const { routeNo, items, hasEta } = group
@@ -78,11 +64,11 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   const routeColor = getLineColor(routeNo)
   const dest = pickLangZh({ en: group.destEn, zh: group.destCh }, lang)
 
-  const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
-  const isExpanded = expandable && Boolean(expanded)
+  const expandable = hasEta && items.length >= 1
+  const isExpanded = expandable && expanded
 
   const firstArriving = first ? isEntryArriving(first, lang) : false
-  const firstTimeText = first ? getEntryTimeText(first, lang) : '—'
+  const firstTimeText = first ? getLrtDisplayTime(first, lang) : '—'
 
   const firstEtaNode = firstArriving ? (
     <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
@@ -160,55 +146,59 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
     </div>
   )
 
+  const visibleItems = items.slice(0, 3)
+
+  const etaTile = (entry: LrtRouteListEntry, entryIdx: number) => {
+    const timeText = getLrtDisplayTime(entry, lang)
+    const arriving = isEntryArriving(entry, lang)
+    const isFirst = entryIdx === 0
+
+    if (isFirst) {
+      return (
+        <div
+          key={`${group.key}:${entryIdx}`}
+          className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+        >
+          <div className="m3-label-md opacity-80">{formatLrtEtaLabel(1, lang)}</div>
+          <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
+            {arriving ? <LivePulse /> : null}
+            <EtaValue key={timeText} value={timeText} />
+          </div>
+          <div className="m3-label-md mt-1 opacity-80">
+            {formatTrainLength(entry.train_length, tWithParams)}
+          </div>
+          {entry.stop ? (
+            <div className="m3-label-md mt-0.5 opacity-80">{t('lrt.stopped')}</div>
+          ) : null}
+        </div>
+      )
+    }
+
+    return (
+      <div
+        key={`${group.key}:${entryIdx}`}
+        className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
+      >
+        <div className="text-on-surface-variant m3-label-md">
+          {formatLrtEtaLabel(entryIdx + 1, lang)}
+        </div>
+        <div className="text-on-surface font-tabular mt-0.5 text-base font-semibold tracking-tight sm:text-lg">
+          <EtaValue key={timeText} value={timeText} />
+        </div>
+        <div className="text-on-surface-variant m3-label-md mt-0.5">
+          {formatTrainLength(entry.train_length, tWithParams)}
+        </div>
+        {entry.stop ? (
+          <div className="text-error m3-label-md mt-0.5">{t('lrt.stopped')}</div>
+        ) : null}
+      </div>
+    )
+  }
+
   const etaPanel = (
     <div className="space-y-2">
       <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
-        {items.map((entry, entryIdx) => {
-          const timeText = getEntryTimeText(entry, lang)
-          const arriving = isEntryArriving(entry, lang)
-          const isFirst = entryIdx === 0
-
-          if (isFirst) {
-            return (
-              <div
-                key={`${group.key}:${entryIdx}`}
-                className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
-              >
-                <div className="m3-label-md opacity-80">{formatLrtEtaLabel(1, lang)}</div>
-                <div className="font-tabular mt-0.5 flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
-                  {arriving ? <LivePulse /> : null}
-                  <EtaValue key={timeText} value={timeText} />
-                </div>
-                <div className="m3-label-md mt-1 opacity-80">
-                  {formatTrainLength(entry.train_length, tWithParams)}
-                </div>
-                {entry.stop ? (
-                  <div className="m3-label-md mt-0.5 opacity-80">{t('lrt.stopped')}</div>
-                ) : null}
-              </div>
-            )
-          }
-
-          return (
-            <div
-              key={`${group.key}:${entryIdx}`}
-              className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
-            >
-              <div className="text-on-surface-variant m3-label-md">
-                {formatLrtEtaLabel(entryIdx + 1, lang)}
-              </div>
-              <div className="text-on-surface font-tabular mt-0.5 text-base font-semibold tracking-tight sm:text-lg">
-                <EtaValue key={timeText} value={timeText} />
-              </div>
-              <div className="text-on-surface-variant m3-label-md mt-0.5">
-                {formatTrainLength(entry.train_length, tWithParams)}
-              </div>
-              {entry.stop ? (
-                <div className="text-error m3-label-md mt-0.5">{t('lrt.stopped')}</div>
-              ) : null}
-            </div>
-          )
-        })}
+        {visibleItems.map((entry, entryIdx) => etaTile(entry, entryIdx))}
       </div>
       <div className="flex min-h-8 min-w-0 flex-1 items-center">{trainInfoNode}</div>
     </div>
@@ -238,28 +228,14 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
     )
   }
 
-  if (!expandable) {
-    return (
-      <div
-        className={cn(
-          'bg-surface-container relative overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 py-3.5 pr-3 pl-0 shadow-sm',
-          staggerClass
-        )}
-      >
-        <span
-          className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
-          style={{ backgroundColor: routeColor }}
-          aria-hidden
-        />
-        <div className="space-y-2.5 pl-4">{routeHeader({ showEta: true, showSubtitle: true })}</div>
-      </div>
-    )
-  }
+  // Non-expandable rows happen only for groups without ETAs, handled above.
+  // This guard exists so TypeScript narrows onToggleExpand below.
+  if (!expandable) return null
 
   return (
     <ExpandableEtaRow
       expanded={isExpanded}
-      onToggle={onToggleExpand!}
+      onToggle={onToggleExpand}
       color={routeColor}
       className={staggerClass}
       panel={etaPanel}
@@ -352,13 +328,18 @@ export const LrtResults = React.memo(function LrtResults({
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
 
+  // A stale key would keep a same-named route expanded in the wrong station.
+  React.useEffect(() => {
+    setExpandedKey(null)
+  }, [stationId, title])
+
   const platformGroups = React.useMemo(() => {
     if (!schedule) return []
     return (schedule.platform_list ?? []).map((p) => ({
       platform_id: p.platform_id,
-      groups: groupLrtEntriesByRoute(p.route_list ?? []),
+      groups: groupLrtEntriesByRoute(p.route_list ?? [], lang),
     }))
-  }, [schedule])
+  }, [schedule, lang])
 
   return (
     <div>

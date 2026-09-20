@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { groupLrtEntriesByRoute, type LrtRouteListEntry } from '@/lib/eta/lrt-eta-groups'
+import {
+  formatLrtEtaLabel,
+  groupLrtEntriesByRoute,
+  type LrtRouteListEntry,
+} from '@/lib/eta/lrt-eta-groups'
 
 function entry(routeNo: string, timeEn: string, timeCh = timeEn): LrtRouteListEntry {
   return {
@@ -45,5 +49,26 @@ describe('groupLrtEntriesByRoute', () => {
     const groups = groupLrtEntriesByRoute([entry('705', '-'), entry('505', '3'), entry('507', '5')])
     expect(groups.map((g) => g.routeNo)).toEqual(['505', '507', '705'])
     expect(groups[2]?.hasEta).toBe(false)
+  })
+
+  it('sorts and classifies on the displayed language', () => {
+    const groups = groupLrtEntriesByRoute(
+      [entry('505', '-', '3 分'), entry('505', '-', '即將到達')],
+      'tc'
+    )
+    expect(groups[0]?.hasEta).toBe(true)
+    const times = groups[0]?.items.map((item) => item.time_ch)
+    expect(times).toEqual(['即將到達', '3 分'])
+  })
+})
+
+describe('formatLrtEtaLabel', () => {
+  it('uses dictionary strings for en, tc, and sc', () => {
+    expect(formatLrtEtaLabel(1, 'en')).toBe('1st')
+    expect(formatLrtEtaLabel(2, 'en')).toBe('2nd')
+    expect(formatLrtEtaLabel(3, 'en')).toBe('3rd')
+    expect(formatLrtEtaLabel(4, 'en')).toBe('4th')
+    expect(formatLrtEtaLabel(1, 'tc')).toBe('第1班')
+    expect(formatLrtEtaLabel(4, 'sc')).toBe('第4班')
   })
 })

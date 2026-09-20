@@ -1,4 +1,6 @@
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
+import { translations } from '@/lib/eta/i18n'
+import { pickLangZh } from '@/lib/eta/pick-lang'
 import type { UiLanguage } from '@/lib/eta/types'
 
 export type LrtRouteListEntry = NonNullable<
@@ -14,7 +16,7 @@ export type LrtRouteGroup = {
   hasEta: boolean
 }
 
-function isArrivingText(time: string): boolean {
+export function isLrtArrivingText(time: string): boolean {
   const lower = time.toLowerCase()
   return (
     lower.includes('arriv') ||
@@ -25,22 +27,25 @@ function isArrivingText(time: string): boolean {
   )
 }
 
-/** Minutes for sorting. Arriving is 0, numeric strings parse, '-' and empty are null. */
-export function parseLrtMinutes(timeEn: string | number | null | undefined): number | null {
-  const text = String(timeEn ?? '').trim()
+/** Display text for an entry in the active language. Sorting and display both use this. */
+export function getLrtDisplayTime(entry: LrtRouteListEntry, lang: UiLanguage): string {
+  return pickLangZh({ en: String(entry.time_en ?? ''), zh: String(entry.time_ch ?? '') }, lang)
+}
+
+/** Minutes for sorting. Arriving is 0, '-' and empty are null. */
+export function parseLrtMinutes(time: string | number | null | undefined): number | null {
+  const text = String(time ?? '').trim()
   if (!text || text === '-') return null
-  if (isArrivingText(text)) return 0
+  if (isLrtArrivingText(text)) return 0
   const match = text.match(/(\d+)/)
   if (!match?.[1]) return null
   const minutes = Number(match[1])
   return Number.isNaN(minutes) ? null : minutes
 }
 
-function hasValidLrtEta(items: LrtRouteListEntry[]): boolean {
+function hasValidLrtEta(items: LrtRouteListEntry[], lang: UiLanguage): boolean {
   for (const entry of items) {
-    if (parseLrtMinutes(entry.time_en) !== null) return true
-    const zh = String(entry.time_ch ?? '').trim()
-    if (zh && zh !== '-' && zh !== '') return true
+    if (parseLrtMinutes(getLrtDisplayTime(entry, lang)) !== null) return true
   }
   return false
 }
@@ -52,17 +57,23 @@ function buildRouteKey(entry: LrtRouteListEntry): string {
   return `${route}|${destEn}|${destCh}`
 }
 
-export function formatLrtEtaLabel(seq: number, lang: UiLanguage): string {
-  if (lang === 'en') {
-    if (seq === 1) return '1st'
-    if (seq === 2) return '2nd'
-    if (seq === 3) return '3rd'
-    return `${seq}th`
-  }
-  return `第${seq}班`
+function replaceSeq(template: string, seq: number): string {
+  return template.replace('{seq}', String(seq))
 }
 
-export function groupLrtEntriesByRoute(routeList: LrtRouteListEntry[]): LrtRouteGroup[] {
+export function formatLrtEtaLabel(seq: number, lang: UiLanguage): string {
+  const lrt = translations.lrt
+  if (seq === 1) return lrt.trainOrder1[lang] ?? lrt.trainOrder1.tc
+  if (seq === 2) return lrt.trainOrder2[lang] ?? lrt.trainOrder2.tc
+  if (seq === 3) return lrt.trainOrder3[lang] ?? lrt.trainOrder3.tc
+  const template = lrt.trainOrderN[lang] ?? lrt.trainOrderN.tc
+  return replaceSeq(template, seq)
+}
+
+export function groupLrtEntriesByRoute(
+  routeList: LrtRouteListEntry[],
+  lang: UiLanguage = 'tc'
+): LrtRouteGroup[] {
   const byRoute = new Map<string, LrtRouteListEntry[]>()
   for (const entry of routeList) {
     const key = buildRouteKey(entry)
@@ -73,8 +84,8 @@ export function groupLrtEntriesByRoute(routeList: LrtRouteListEntry[]): LrtRoute
 
   const groups = Array.from(byRoute.entries()).map(([key, items]) => {
     const sorted = [...items].sort((a, b) => {
-      const aMin = parseLrtMinutes(a.time_en)
-      const bMin = parseLrtMinutes(b.time_en)
+      const aMin = parseLrtMinutes(getLrtDisplayTime(a, lang))
+      const bMin = parseLrtMinutes(getLrtDisplayTime(b, lang))
       if (aMin === null && bMin === null) return 0
       if (aMin === null) return 1
       if (bMin === null) return -1
@@ -87,7 +98,7 @@ export function groupLrtEntriesByRoute(routeList: LrtRouteListEntry[]): LrtRoute
       destEn: String(first?.dest_en ?? ''),
       destCh: String(first?.dest_ch ?? ''),
       items: sorted,
-      hasEta: hasValidLrtEta(sorted),
+      hasEta: hasValidLrtEta(sorted, lang),
     }
   })
 

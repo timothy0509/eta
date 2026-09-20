@@ -27,6 +27,11 @@ export type KmbStopSearchItem = {
   nameSc: string
   lat: number
   lng: number
+  isKmb: boolean
+}
+
+export function isKmbStop(stop: { isKmb?: unknown } | null | undefined): boolean {
+  return stop?.isKmb === true
 }
 
 export type LrtStationSearchItem = {

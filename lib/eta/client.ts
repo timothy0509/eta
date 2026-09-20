@@ -3,6 +3,7 @@ import type { Company, Eta, RouteListEntry } from 'hk-bus-eta'
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
+import { isKmbStop } from '@/lib/eta/types'
 import type { KmbEtaEntry, KmbRouteListEntry } from '@/lib/eta/direct/kmb'
 import {
   fetchKmbFares as fetchKmbFaresDirect,
@@ -122,6 +123,7 @@ export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
       nameSc: (s.name_sc ?? '').trim(),
       lat: toCoord(s.lat),
       lng: toCoord(s.long),
+      isKmb: isKmbStop(s),
     }))
     .filter((s) => s.stopId && s.nameEn && Number.isFinite(s.lat) && Number.isFinite(s.lng))
 }

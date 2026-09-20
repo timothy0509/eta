@@ -20,7 +20,8 @@ import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { listLrtRoutes } from '@/lib/eta/direct/eta-db'
 import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
-import type { TransportMode, UiLanguage } from '@/lib/eta/types'
+import { isKmbStop } from '@/lib/eta/types'
+import type { KmbStopSearchItem, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import type { RouteListEntry } from 'hk-bus-eta'
 
@@ -32,15 +33,7 @@ const TransitMap = dynamic(
   }
 )
 
-type KmbNearbyStop = {
-  stopId: string
-  nameEn: string
-  nameTc: string
-  nameSc: string
-  lat: number
-  lng: number
-  distanceKm: number
-}
+type KmbNearbyStop = KmbStopSearchItem & { distanceKm: number }
 
 const NEARBY_CACHE_MS = 60_000
 const NEARBY_HYSTERESIS_KM = 0.05
@@ -363,7 +356,10 @@ function KmbNearbyView({
                   { en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc },
                   lang
                 )
-                const parsed = parseKmbStopNameCached(fullName)
+                const parsed = parseKmbStopNameCached(fullName, {
+                  isKmb: isKmbStop(stop),
+                  lang,
+                })
                 return (
                   <button
                     key={stop.stopId}

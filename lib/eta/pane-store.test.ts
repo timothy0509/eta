@@ -11,6 +11,7 @@ const makeStop = (stopId: string): KmbStopSearchItem => ({
   nameSc: stopId,
   lat: 22.3,
   lng: 114.1,
+  isKmb: true,
 })
 
 // Shared references mirror the real pane, where paneState is a useMemo: object

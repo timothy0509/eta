@@ -23,6 +23,7 @@ import {
 } from '@/lib/eta/client'
 import { isStaleByFlagOrAge } from '@/lib/eta/stale'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
@@ -880,7 +881,7 @@ export function KmbPane({
       const stop = kmbStopsById.get(kmbQuery.stopId)
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang)
-        const parsed = parseKmbStopNameCached(fullName)
+        const parsed = parseKmbStopNameCached(fullName, { isKmb: isKmbStop(stop), lang })
         return { title: parsed.name, code: parsed.stopCode }
       }
       return { title: `Stop ${kmbQuery.stopId}`, code: null }
@@ -889,7 +890,7 @@ export function KmbPane({
       const firstStop = kmbQuery.stopIds.map((stopId) => kmbStopsById.get(stopId)).find(Boolean)
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang)
-        const parsed = parseKmbStopNameCached(fullName)
+        const parsed = parseKmbStopNameCached(fullName, { isKmb: isKmbStop(firstStop), lang })
         return { title: parsed.name, code: null }
       }
       return { title: t('kmb.selectedStops'), code: null }
@@ -1022,7 +1023,10 @@ export function KmbPane({
           if (stops.length > 0) {
             const firstStop = stops[0]!
             const fullName = pickKmbStopTitle(firstStop, lang)
-            const { name } = parseKmbStopNameCached(fullName)
+            const { name } = parseKmbStopNameCached(fullName, {
+              isKmb: isKmbStop(firstStop),
+              lang,
+            })
             const firstStopId = stopIds[0]!
             onAddRecent({
               id: `kmb:${stopIds.join(',')}:__stops__`,

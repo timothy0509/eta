@@ -44,6 +44,7 @@ import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang, pickLangZh } from '@/lib/eta/pick-lang'
+import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
@@ -144,7 +145,10 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
       const stop = kmbStopsById.get(item.stopId)
       if (stop) {
         const fullName = pickKmbStopTitle(stop, lang)
-        const { name } = parseKmbStopNameCached(fullName)
+        const { name } = parseKmbStopNameCached(fullName, {
+          isKmb: isKmbStop(stop),
+          lang,
+        })
 
         // Build suffix from saved data
         let suffix = ''
@@ -179,7 +183,10 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
       }
       if (firstStop) {
         const fullName = pickKmbStopTitle(firstStop, lang)
-        const { name } = parseKmbStopNameCached(fullName)
+        const { name } = parseKmbStopNameCached(fullName, {
+          isKmb: isKmbStop(firstStop),
+          lang,
+        })
 
         // Build suffix from saved data
         let suffix = ''

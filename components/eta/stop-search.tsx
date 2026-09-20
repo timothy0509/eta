@@ -8,6 +8,7 @@ import { StationSearchCombobox } from '@/components/eta/station-search-combobox'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLang, pickSecondaryName } from '@/lib/eta/pick-lang'
+import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 
 export type StopSearchSelection =
@@ -245,7 +246,7 @@ export function StopSearch({
       const stop = stopById.get(value.stopId)
       if (stop) {
         const fullName = formatStopName(stop, lang)
-        const parsed = parseKmbStopNameCached(fullName)
+        const parsed = parseKmbStopNameCached(fullName, { isKmb: isKmbStop(stop), lang })
         return parsed.stopCode ? `${parsed.name} (${parsed.stopCode})` : parsed.name
       }
       return null
@@ -256,14 +257,20 @@ export function StopSearch({
       if (!firstStop) return null
 
       const fullName = formatStopName(firstStop, lang)
-      const { name: baseName } = parseKmbStopNameCached(fullName)
+      const { name: baseName } = parseKmbStopNameCached(fullName, {
+        isKmb: isKmbStop(firstStop),
+        lang,
+      })
 
       // Collect all codes for selected stops
       const codes: string[] = []
       for (const stopId of value.stopIds) {
         const stop = stopById.get(stopId)
         if (stop) {
-          const parsed = parseKmbStopNameCached(formatStopName(stop, lang))
+          const parsed = parseKmbStopNameCached(formatStopName(stop, lang), {
+            isKmb: isKmbStop(stop),
+            lang,
+          })
           if (parsed.stopCode) codes.push(parsed.stopCode)
         }
       }
@@ -282,7 +289,7 @@ export function StopSearch({
   const stopComputed = React.useMemo<StopComputed[]>(() => {
     return stops.map((stop) => {
       const fullName = formatStopName(stop, lang)
-      const parsed = parseKmbStopNameCached(fullName)
+      const parsed = parseKmbStopNameCached(fullName, { isKmb: isKmbStop(stop), lang })
       const baseName = parsed.name
       const stopCode = parsed.stopCode
       const displayName = baseName

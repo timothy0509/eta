@@ -58,25 +58,31 @@ function formatStopSecondary(stop: KmbStopSearchItem, lang: UiLanguage) {
 }
 
 /**
- * Parse a stop code into prefix and numeric parts.
- * e.g., "KT313" → { prefix: "KT", num: 313 }
+ * Parse a stop code into prefix, numeric, and optional lowercase suffix parts.
+ * e.g., "KT313" → { prefix: "KT", num: 313, suffix: "" }
+ * e.g., "KT120a" → { prefix: "KT", num: 120, suffix: "a" }
  */
-function parseCodeParts(code: string): { prefix: string; num: number } | null {
-  const match = code.match(/^([A-Z]{1,2})(\d+)$/)
+function parseCodeParts(code: string): { prefix: string; num: number; suffix: string } | null {
+  const match = code.match(/^([A-Z]{1,2})(\d+)([a-z]?)$/)
   if (!match) return null
-  return { prefix: match[1], num: parseInt(match[2], 10) }
+  return { prefix: match[1], num: parseInt(match[2], 10), suffix: match[3] ?? '' }
 }
 
 /**
- * Check if a set of codes are sequential (same prefix, consecutive numbers).
+ * Check if a set of codes are sequential (same prefix, same suffix, consecutive numbers).
  */
 function areCodesSequential(codes: string[]): boolean {
   if (codes.length <= 1) return true
-  const parsed = codes.map(parseCodeParts).filter(Boolean) as { prefix: string; num: number }[]
+  const parsed = codes.map(parseCodeParts).filter(Boolean) as {
+    prefix: string
+    num: number
+    suffix: string
+  }[]
   if (parsed.length !== codes.length) return false
 
   const prefix = parsed[0].prefix
-  if (!parsed.every((p) => p.prefix === prefix)) return false
+  const suffix = parsed[0].suffix
+  if (!parsed.every((p) => p.prefix === prefix && p.suffix === suffix)) return false
 
   const nums = parsed.map((p) => p.num).sort((a, b) => a - b)
   for (let i = 1; i < nums.length; i++) {
@@ -97,7 +103,9 @@ function formatCodeRange(codes: string[]): string {
     const pa = parseCodeParts(a)
     const pb = parseCodeParts(b)
     if (!pa || !pb) return a.localeCompare(b)
-    return pa.num - pb.num
+    if (pa.prefix !== pb.prefix) return pa.prefix.localeCompare(pb.prefix)
+    if (pa.num !== pb.num) return pa.num - pb.num
+    return pa.suffix.localeCompare(pb.suffix)
   })
 
   return `${sorted[0]}-${sorted[sorted.length - 1]}`
@@ -141,7 +149,8 @@ function groupStopsByName(stops: StopComputed[]): StopGroup[] {
       const pb = parseCodeParts(b.stopCode!)
       if (!pa || !pb) return 0
       if (pa.prefix !== pb.prefix) return pa.prefix.localeCompare(pb.prefix)
-      return pa.num - pb.num
+      if (pa.num !== pb.num) return pa.num - pb.num
+      return pa.suffix.localeCompare(pb.suffix)
     })
 
     const runs: StopComputed[][] = []
@@ -160,6 +169,7 @@ function groupStopsByName(stops: StopComputed[]): StopGroup[] {
         lastParts &&
         currParts &&
         lastParts.prefix === currParts.prefix &&
+        lastParts.suffix === currParts.suffix &&
         currParts.num === lastParts.num + 1
       ) {
         lastRun.push(item)

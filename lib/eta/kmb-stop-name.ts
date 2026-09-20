@@ -9,9 +9,9 @@ export type ParsedKmbStopName = {
 // Platform: 1 letter + 1–2 digits (e.g. A12)
 const PLATFORM_RE = '[A-Z][0-9]{1,2}'
 
-// Stop code: 1–2 letters + 3+ digits (e.g. TM744, WT916)
+// Stop code: 1–2 letters + 3+ digits + optional lowercase suffix (e.g. TM744, WT916, KT120a)
 // Note: platforms are excluded by requiring 3+ digits.
-const STOP_CODE_RE = '[A-Z]{1,2}[0-9]{3,}'
+const STOP_CODE_RE = '[A-Z]{1,2}[0-9]{3,}[a-z]?'
 
 export type KmbParseOpts =
   | { isKmb?: false; lang?: UiLanguage }

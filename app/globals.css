@@ -630,12 +630,9 @@
   .ui-indicator-slide {
     transition:
       transform var(--ui-dur-md) var(--ui-ease-spring),
-      width var(--ui-dur-md) var(--ui-ease-spring);
-    will-change: transform, width;
-  }
-
-  .ui-pill-pop {
-    animation: ui-soft-pop var(--ui-dur-md) var(--ui-ease-spring-soft) both;
+      width var(--ui-dur-md) var(--ui-ease-spring),
+      height var(--ui-dur-md) var(--ui-ease-spring);
+    will-change: transform, width, height;
   }
 
   .ui-chevron {
@@ -720,7 +717,6 @@
   .ui-chip-row-in,
   .ui-popover-in,
   .ui-shimmer,
-  .ui-pill-pop,
   .ui-spin,
   .live-pulse,
   .marquee-track,

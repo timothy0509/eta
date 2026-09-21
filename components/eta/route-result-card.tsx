@@ -73,7 +73,7 @@ export function RouteResultCard({ entry, stopsById, lang, index, matchReason, on
         <ChevronRight aria-hidden className="text-on-surface-variant ml-auto h-4 w-4 shrink-0" />
       </span>
       <span className="text-on-surface m3-title-md w-full truncate">
-        {origin} → {destination}
+        {origin} {entry.directions.length > 1 ? '↔' : '→'} {destination}
       </span>
       {keyStops.length > 0 && (
         <span className="text-on-surface-variant m3-body-md w-full truncate">

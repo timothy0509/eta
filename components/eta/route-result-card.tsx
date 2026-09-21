@@ -6,6 +6,7 @@ import { ChevronRight } from 'lucide-react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
+import { Marquee } from '@/components/ui/marquee'
 import { formatKmbRouteEndpointName } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
 import { getOperatorColor } from '@/lib/eta/operator-colors'
@@ -35,7 +36,7 @@ export function RouteResultCard({
   usageByStopName,
   onSelect,
 }: Props) {
-  const { tWithParams } = useTranslations(lang)
+  const { t } = useTranslations(lang)
   const keyStops = React.useMemo(
     () => getKeyStops(entry, stopsById, lang, 7, usageByStopName),
     [entry, stopsById, lang, usageByStopName]
@@ -64,36 +65,42 @@ export function RouteResultCard({
         staggerClassForIndex(index)
       )}
     >
-      <span className="flex w-full items-center gap-2">
-        <RouteBadge route={entry.route} company={entry.co} size="md" />
-        <span className="flex items-center gap-1.5">
+      <div className="flex w-full items-center gap-2">
+        <RouteBadge route={entry.route} company={entry.co} size="lg" />
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <Marquee
+            title={`${origin} ${entry.directions.length > 1 ? '↔' : '→'} ${destination}`}
+            className="text-on-surface m3-title-md w-full"
+          >
+            {origin} {entry.directions.length > 1 ? '↔' : '→'} {destination}
+          </Marquee>
+          {keyStops.length > 0 && (
+            <div className="text-on-surface-variant m3-body-md flex w-full items-center gap-1 overflow-hidden">
+              <span className="shrink-0">{t('kmb.via')}</span>
+              <Marquee
+                title={keyStops.join(' · ')}
+                className="text-on-surface-variant m3-body-md min-w-0 flex-1"
+              >
+                {keyStops.join(' · ')}
+              </Marquee>
+            </div>
+          )}
+          {showReason && (
+            <div className="text-on-surface-variant m3-label-md w-full truncate">
+              • {matchReason.text}
+            </div>
+          )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
           <span
             aria-hidden
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ backgroundColor: getOperatorColor(entry.co) }}
           />
           <span className="text-on-surface-variant m3-label-md uppercase">{entry.co}</span>
-        </span>
-        {entry.directions.length > 1 && (
-          <span className="text-on-surface-variant m3-label-md">
-            {tWithParams('kmb.directionsCount', { count: entry.directions.length })}
-          </span>
-        )}
-        <ChevronRight aria-hidden className="text-on-surface-variant ml-auto h-4 w-4 shrink-0" />
-      </span>
-      <span className="text-on-surface m3-title-md w-full truncate">
-        {origin} {entry.directions.length > 1 ? '↔' : '→'} {destination}
-      </span>
-      {keyStops.length > 0 && (
-        <span className="text-on-surface-variant m3-body-md w-full truncate">
-          {tWithParams('kmb.viaStops', { stops: keyStops.join(' · ') })}
-        </span>
-      )}
-      {showReason && (
-        <span className="text-on-surface-variant m3-label-md w-full truncate">
-          • {matchReason.text}
-        </span>
-      )}
+        </div>
+        <ChevronRight aria-hidden className="text-on-surface-variant h-4 w-4 shrink-0" />
+      </div>
     </button>
   )
 }

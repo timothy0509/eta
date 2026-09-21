@@ -1,14 +1,15 @@
 'use client'
 
-import { Clock, Search } from 'lucide-react'
+import { Clock, Search, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
+import { OperatorFilter } from '@/components/eta/operator-filter'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
-import { staggerClassForIndex } from '@/components/eta/stagger-list'
+import { RouteResultCard } from '@/components/eta/route-result-card'
 import { Input } from '@/components/ui/input'
 import { RouteStopRow, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
 import { TickingSoonestPill } from '@/components/eta/ticking-eta'
@@ -27,7 +28,15 @@ import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/km
 import { LINE_COLOR_FALLBACK } from '@/lib/eta/line-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
+import {
+  buildRouteSearchIndex,
+  loadRouteFuseIndex,
+  operatorCounts,
+  searchRouteIndex,
+  type RouteFuseInstance,
+} from '@/lib/eta/route-search'
 import { getRoutedGeometry } from '@/lib/eta/routing'
+import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
@@ -61,10 +70,6 @@ function normalizeCo(co: string | undefined): string {
   return String(co ?? 'kmb').toLowerCase()
 }
 
-function routeSelectionKey(sel: RouteSelection): string {
-  return `${normalizeCo(sel.co)}|${sel.route}`
-}
-
 function variantBaseKey(entry: {
   co?: string
   route?: string
@@ -74,15 +79,6 @@ function variantBaseKey(entry: {
   service_type?: string | number
 }): string {
   return `${normalizeCo(entry.co)}|${String(entry.route ?? '').toUpperCase()}|${entry.bound ?? entry.dir ?? ''}|${String(entry.serviceType ?? entry.service_type ?? '')}`
-}
-
-function hasDuplicateRouteNumbers(entries: RouteSelection[]): boolean {
-  const routeCounts = new Map<string, number>()
-  for (const entry of entries) {
-    const route = entry.route.toUpperCase()
-    routeCounts.set(route, (routeCounts.get(route) ?? 0) + 1)
-  }
-  return Array.from(routeCounts.values()).some((count) => count > 1)
 }
 
 function hasDuplicateOperators(variants: RouteVariant[]): boolean {
@@ -220,7 +216,7 @@ export function KmbRoutesView({
   initialSelection?: { co: string; route: string; bound?: string; serviceType?: string }
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
 }) {
-  const { t } = useTranslations(lang)
+  const { t, tWithParams } = useTranslations(lang)
   const { routes, loading, error, retry } = useKmbRouteList()
   const handleRetryRoutes = React.useCallback(() => {
     retry()
@@ -229,6 +225,10 @@ export function KmbRoutesView({
   const stopsById = React.useMemo(() => new Map(allStops.map((s) => [s.stopId, s])), [allStops])
 
   const [query, setQuery] = React.useState('')
+  const [debouncedQuery, setDebouncedQuery] = React.useState('')
+  const [operator, setOperator] = React.useState<string | null>(null)
+  const [routeStopsAll, setRouteStopsAll] = React.useState<KmbRouteStopLite[]>([])
+  const [fuse, setFuse] = React.useState<RouteFuseInstance | null>(null)
   const [manualSelection, setManualSelection] = React.useState<{
     sourceKey: string
     routeKey: RouteSelection | null
@@ -315,18 +315,71 @@ export function KmbRoutesView({
     [initialKey]
   )
 
-  const showOperatorInSearch = React.useMemo(
-    () => hasDuplicateRouteNumbers(routeEntries),
-    [routeEntries]
+  // Debounce the query so the ranker and Fuse run less often while typing.
+  React.useEffect(() => {
+    const id = window.setTimeout(() => setDebouncedQuery(query), 150)
+    return () => window.clearTimeout(id)
+  }, [query])
+
+  // Load the full route-stop table once for stop-name matching and via lines.
+  React.useEffect(() => {
+    let cancelled = false
+    fetchKmbRouteStops()
+      .then((data) => {
+        if (!cancelled) setRouteStopsAll(data)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const searchIndex = React.useMemo(
+    () => buildRouteSearchIndex(routes, routeStopsAll, stopsById),
+    [routes, routeStopsAll, stopsById]
   )
 
-  const filteredRoutes = React.useMemo(() => {
-    const needle = query.trim().toUpperCase()
-    const matches = needle
-      ? routeEntries.filter((e) => e.route.toUpperCase().includes(needle))
-      : routeEntries
-    return matches.slice(0, 30)
-  }, [query, routeEntries])
+  // Fuse loads lazily so the fuzzy index stays out of the first paint.
+  React.useEffect(() => {
+    if (fuse || searchIndex.length === 0) return
+    let cancelled = false
+    void loadRouteFuseIndex(searchIndex).then((instance) => {
+      if (!cancelled && instance) setFuse(instance)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [fuse, searchIndex])
+
+  const operatorOptions = React.useMemo(() => operatorCounts(searchIndex), [searchIndex])
+
+  const searchHits = React.useMemo(
+    () =>
+      searchRouteIndex(searchIndex, debouncedQuery, {
+        operator,
+        lang,
+        fuse,
+        stopsById,
+      }),
+    [searchIndex, debouncedQuery, operator, lang, fuse, stopsById]
+  )
+
+  const { visibleCount, hasMore, sentinelRef, loadMore } = useInfiniteScroll({
+    totalItems: searchHits.length,
+    initialPageSize: 40,
+    pageSize: 30,
+  })
+  const visibleHits = searchHits.slice(0, visibleCount)
+
+  const handleOperatorChange = React.useCallback((code: string | null) => {
+    setOperator(code)
+  }, [])
+
+  const handleClearSearch = React.useCallback(() => {
+    setQuery('')
+    setDebouncedQuery('')
+    setOperator(null)
+  }, [])
 
   const variantsForRoute = React.useMemo(() => {
     if (!selectedRouteKey) return []
@@ -472,8 +525,28 @@ export function KmbRoutesView({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('kmb.searchRouteNumber')}
-            className="bg-surface-container h-12 rounded-full pl-10"
+            placeholder={t('kmb.searchRouteNumberAndPlace')}
+            aria-label={t('kmb.searchBusRoutes')}
+            className="bg-surface-container h-12 rounded-full pr-10 pl-10"
+          />
+          {query.trim() !== '' && (
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              aria-label={t('kmb.clearSearch')}
+              className="text-on-surface-variant hover:text-on-surface ui-press absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          )}
+        </div>
+        <div className="mt-3">
+          <OperatorFilter
+            operators={operatorOptions}
+            total={searchIndex.length}
+            value={operator}
+            onChange={handleOperatorChange}
+            lang={lang}
           />
         </div>
 
@@ -495,28 +568,62 @@ export function KmbRoutesView({
         )}
 
         {!selectedRouteKey ? (
-          !loading && !error && filteredRoutes.length === 0 && query.trim() !== '' ? (
-            <EmptyState title={t('common.noResults')} />
+          !loading && !error && searchHits.length === 0 ? (
+            <EmptyState
+              title={t('common.noResults')}
+              hint={
+                debouncedQuery.trim() !== ''
+                  ? tWithParams('kmb.noRoutesMatch', { query: debouncedQuery.trim() })
+                  : undefined
+              }
+              action={
+                debouncedQuery.trim() !== '' || operator !== null ? (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                  >
+                    {t('kmb.clearFilters')}
+                  </button>
+                ) : undefined
+              }
+            />
           ) : (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {filteredRoutes.map((entry, idx) => (
-                <button
-                  key={routeSelectionKey(entry)}
-                  type="button"
-                  onClick={() => setSelectedRouteKey(entry)}
-                  className={cn(
-                    'bg-surface-container-high hover:bg-surface-container hover:elevation-1 ui-press m3-label-lg flex min-h-[44px] items-center gap-1.5 rounded-full px-4 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                    staggerClassForIndex(idx)
-                  )}
-                >
-                  <RouteBadge route={entry.route} company={entry.co} size="sm" />
-                  {showOperatorInSearch && (
-                    <span className="text-on-surface-variant m3-label-sm uppercase">
-                      {entry.co}
-                    </span>
-                  )}
-                </button>
-              ))}
+            <div className="mt-3 space-y-3">
+              {!loading && !error && (
+                <div className="text-on-surface-variant m3-label-md" role="status">
+                  {tWithParams('kmb.routesFound', { count: searchHits.length })}
+                </div>
+              )}
+              <div className="space-y-3" key={`${debouncedQuery}|${operator ?? 'all'}|${lang}`}>
+                {visibleHits.map((hit, idx) => (
+                  <RouteResultCard
+                    key={hit.entry.key}
+                    entry={hit.entry}
+                    stopsById={stopsById}
+                    lang={lang}
+                    index={idx}
+                    matchReason={hit.matchReason}
+                    onSelect={() =>
+                      setSelectedRouteKey({
+                        co: hit.entry.co,
+                        route: hit.entry.route,
+                      })
+                    }
+                  />
+                ))}
+              </div>
+              {hasMore && (
+                <div ref={sentinelRef}>
+                  <button
+                    type="button"
+                    onClick={loadMore}
+                    className="bg-surface-container-high text-on-surface-variant hover:text-on-surface m3-label-lg ui-press inline-flex min-h-[44px] w-full items-center justify-center rounded-full px-5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                  >
+                    {t('kmb.loadMore')}
+                  </button>
+                </div>
+              )}
             </div>
           )
         ) : (
@@ -527,32 +634,65 @@ export function KmbRoutesView({
               setSelectedVariant(null)
             }}
             title={
-              <RouteBadge route={selectedRouteKey.route} company={selectedRouteKey.co} size="lg" />
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="flex flex-wrap items-center gap-2">
+                  <RouteBadge
+                    route={selectedRouteKey.route}
+                    company={selectedRouteKey.co}
+                    size="lg"
+                  />
+                  <span className="text-on-surface-variant m3-label-md uppercase">
+                    {selectedRouteKey.co}
+                  </span>
+                </span>
+                {currentVariant && (
+                  <span className="text-on-surface m3-title-md truncate">
+                    {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
+                      co: currentVariant.co,
+                      lang,
+                    })}{' '}
+                    →{' '}
+                    {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
+                      co: currentVariant.co,
+                      lang,
+                    })}
+                  </span>
+                )}
+              </span>
             }
           >
             {variantsForRoute.length > 1 && (
-              <div className="flex flex-wrap gap-2">
+              <div
+                className="flex gap-2 overflow-x-auto pb-1"
+                role="group"
+                aria-label={t('common.route')}
+              >
                 {variantsForRoute.map((v) => (
                   <button
                     key={v.key}
                     type="button"
+                    aria-pressed={currentVariant?.key === v.key}
                     onClick={() => setSelectedVariant(v)}
                     className={cn(
-                      'inline-flex min-h-[44px] items-center rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                      'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
                       currentVariant?.key === v.key
                         ? 'bg-primary-container text-on-primary-container'
                         : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
                     )}
                   >
+                    <span>{v.bound === 'I' ? t('common.inbound') : t('common.outbound')}</span>
+                    <span>
+                      {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
+                        co: v.co,
+                        lang,
+                      })}
+                    </span>
                     {showOperatorInVariants && (
-                      <span className="mr-1 uppercase">{normalizeCo(v.co)}</span>
+                      <span className="m3-label-sm uppercase opacity-80">{normalizeCo(v.co)}</span>
                     )}
-                    {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}{' '}
-                    {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
-                      co: v.co,
-                      lang,
-                    })}
-                    {v.serviceType !== '1' ? ` · ${v.serviceType}` : ''}
+                    {v.serviceType !== '1' ? (
+                      <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
+                    ) : null}
                   </button>
                 ))}
               </div>

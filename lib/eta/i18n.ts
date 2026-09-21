@@ -202,7 +202,6 @@ const kmb: Record<string, TranslationEntry> = {
   },
   updated: { en: 'Updated {time}', tc: '更新 {time}', sc: '更新 {time}' },
   routeFilter: { en: 'Route Filter', tc: '路線篩選', sc: '路线筛选' },
-  searchRouteNumber: { en: 'Search route number…', tc: '搜尋路線編號…', sc: '搜索路线编号…' },
   searchRouteNumberAndPlace: {
     en: 'Search route number or place…',
     tc: '搜尋路線編號或地點…',
@@ -220,11 +219,6 @@ const kmb: Record<string, TranslationEntry> = {
   viaStops: { en: 'Via {stops}', tc: '途經 {stops}', sc: '途经 {stops}' },
   directionsCount: { en: '{count} directions', tc: '{count} 個方向', sc: '{count} 个方向' },
   loadMore: { en: 'Load more', tc: '載入更多', sc: '载入更多' },
-  loadingMoreRoutes: {
-    en: 'Loading more routes…',
-    tc: '正在載入更多路線…',
-    sc: '正在载入更多路线…',
-  },
   stops: { en: 'stops', tc: '個車站', sc: '个车站' },
   routeStops: { en: 'route-stops', tc: '個路線車站', sc: '个路线车站' },
   selectedStops: { en: 'Selected stops', tc: '已選車站', sc: '已选车站' },

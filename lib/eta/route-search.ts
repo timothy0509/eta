@@ -1,5 +1,6 @@
 import type { KmbRouteInfoLite, KmbRouteStopLite } from '@/lib/eta/client'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -22,6 +23,8 @@ export type RouteSearchEntry = {
   stopNames: string[]
   /** Lowercased join of number, termini, and stops for fuzzy matching. */
   haystack: string
+  /** Lowercased origin/destination names across all variants, so short workings match. */
+  altNames: string[]
   stopCount: number
   variantCount: number
   serviceTypes: string[]
@@ -75,12 +78,6 @@ export async function loadRouteFuseIndex(
 const MAX_STOP_IDS_PER_ROUTE = 40
 const MAX_STOP_NAMES_PER_ROUTE = 60
 
-function normalizeCo(co: string | undefined): string {
-  return String(co ?? 'kmb')
-    .trim()
-    .toLowerCase()
-}
-
 export function normalizeRouteQuery(query: string): {
   raw: string
   lower: string
@@ -119,7 +116,7 @@ export function buildRouteSearchIndex(
 ): RouteSearchEntry[] {
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {
-    const key = `${normalizeCo(String(r.co))}|${r.route}`
+    const key = `${normalizeOperator(String(r.co))}|${r.route}`
     const list = variantsByKey.get(key)
     if (list) list.push(r)
     else variantsByKey.set(key, [r])
@@ -127,7 +124,7 @@ export function buildRouteSearchIndex(
 
   const stopIdsByKey = new Map<string, { ids: string[]; seen: Set<string>; total: number }>()
   for (const rs of routeStops) {
-    const key = `${normalizeCo(String(rs.co))}|${rs.route}`
+    const key = `${normalizeOperator(String(rs.co))}|${rs.route}`
     if (!variantsByKey.has(key)) continue
     let bucket = stopIdsByKey.get(key)
     if (!bucket) {
@@ -144,7 +141,7 @@ export function buildRouteSearchIndex(
   for (const [key, variants] of variantsByKey) {
     const first = variants[0]
     if (!first) continue
-    const co = normalizeCo(String(first.co))
+    const co = normalizeOperator(String(first.co))
     const bucket = stopIdsByKey.get(key)
     const stopIds = bucket?.ids ?? []
 
@@ -163,22 +160,26 @@ export function buildRouteSearchIndex(
       }
     }
 
-    const operators = Array.from(new Set(variants.map((v) => normalizeCo(String(v.co)))))
+    const operators = Array.from(new Set(variants.map((v) => normalizeOperator(String(v.co)))))
     const serviceTypes = Array.from(new Set(variants.map((v) => String(v.serviceType))))
     const directions = Array.from(new Set(variants.map((v) => String(v.bound))))
 
-    const haystack = [
-      first.route,
-      first.origin.en,
-      first.origin.tc,
-      first.origin.sc,
-      first.destination.en,
-      first.destination.tc,
-      first.destination.sc,
-      ...stopNames,
-    ]
-      .join(' ')
-      .toLowerCase()
+    const altNameSeen = new Set<string>()
+    const altNames: string[] = []
+    for (const v of variants) {
+      for (const record of [v.origin, v.destination]) {
+        for (const name of [record.en, record.tc, record.sc]) {
+          const lowered = String(name ?? '')
+            .trim()
+            .toLowerCase()
+          if (!lowered || altNameSeen.has(lowered)) continue
+          altNameSeen.add(lowered)
+          altNames.push(lowered)
+        }
+      }
+    }
+
+    const haystack = [first.route, ...altNames, ...stopNames].join(' ').toLowerCase()
 
     entries.push({
       key,
@@ -190,6 +191,7 @@ export function buildRouteSearchIndex(
       stopIds,
       stopNames,
       haystack,
+      altNames,
       stopCount: bucket?.total ?? 0,
       variantCount: variants.length,
       serviceTypes,
@@ -228,19 +230,38 @@ function matchEntrySync(
     termini.push({ raw: record.tc, display: entryDisplayText(entry, field, lang) })
     termini.push({ raw: record.sc, display: entryDisplayText(entry, field, lang) })
   }
-  for (const t of termini) {
-    if (t.raw.trim().toLowerCase() === norm.lower) {
-      return { entry, score: 2, matchReason: { kind: 'terminus', text: t.display } }
+  if (norm.lower) {
+    for (const t of termini) {
+      if (t.raw.trim().toLowerCase() === norm.lower) {
+        return { entry, score: 2, matchReason: { kind: 'terminus', text: t.display } }
+      }
+    }
+    for (const name of entry.altNames) {
+      if (name === norm.lower) {
+        return { entry, score: 2, matchReason: { kind: 'terminus', text: name } }
+      }
     }
   }
-  for (const t of termini) {
-    if (t.raw.trim().toLowerCase().startsWith(norm.lower)) {
-      return { entry, score: 3, matchReason: { kind: 'terminus', text: t.display } }
+  if (norm.lower) {
+    for (const t of termini) {
+      if (t.raw.trim().toLowerCase().startsWith(norm.lower)) {
+        return { entry, score: 3, matchReason: { kind: 'terminus', text: t.display } }
+      }
     }
-  }
-  for (const t of termini) {
-    if (norm.lower && t.raw.toLowerCase().includes(norm.lower)) {
-      return { entry, score: 4, matchReason: { kind: 'terminus', text: t.display } }
+    for (const name of entry.altNames) {
+      if (name.startsWith(norm.lower)) {
+        return { entry, score: 3, matchReason: { kind: 'terminus', text: name } }
+      }
+    }
+    for (const t of termini) {
+      if (t.raw.toLowerCase().includes(norm.lower)) {
+        return { entry, score: 4, matchReason: { kind: 'terminus', text: t.display } }
+      }
+    }
+    for (const name of entry.altNames) {
+      if (name.includes(norm.lower)) {
+        return { entry, score: 4, matchReason: { kind: 'terminus', text: name } }
+      }
     }
   }
 
@@ -360,7 +381,9 @@ export function searchRouteIndex(
 export function operatorCounts(index: RouteSearchEntry[]): Array<{ code: string; count: number }> {
   const counts = new Map<string, number>()
   for (const entry of index) {
-    counts.set(entry.co, (counts.get(entry.co) ?? 0) + 1)
+    for (const code of entry.operators) {
+      counts.set(code, (counts.get(code) ?? 0) + 1)
+    }
   }
   return Array.from(counts.entries())
     .map(([code, count]) => ({ code, count }))
@@ -386,6 +409,7 @@ export function getKeyStops(
       if (lowered) skip.add(lowered)
     }
   }
+  for (const name of entry.altNames) skip.add(name)
 
   const names: string[] = []
   const seen = new Set<string>()
@@ -403,6 +427,7 @@ export function getKeyStops(
   }
 
   if (names.length <= n) return names
+  if (n <= 1) return names.slice(0, 1)
   const picked: string[] = []
   for (let i = 0; i < n; i += 1) {
     const name = names[Math.round((i * (names.length - 1)) / (n - 1))]

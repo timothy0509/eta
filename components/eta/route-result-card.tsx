@@ -1,7 +1,8 @@
 'use client'
 
-import { ChevronRight } from 'lucide-react'
 import * as React from 'react'
+
+import { ChevronRight } from 'lucide-react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'

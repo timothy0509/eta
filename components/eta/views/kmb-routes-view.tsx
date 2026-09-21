@@ -26,6 +26,7 @@ import {
 import type { GeoPoint } from '@/lib/eta/geo'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { LINE_COLOR_FALLBACK } from '@/lib/eta/line-colors'
+import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import {
@@ -66,10 +67,6 @@ type RouteSelection = {
   route: string
 }
 
-function normalizeCo(co: string | undefined): string {
-  return String(co ?? 'kmb').toLowerCase()
-}
-
 function variantBaseKey(entry: {
   co?: string
   route?: string
@@ -78,11 +75,11 @@ function variantBaseKey(entry: {
   serviceType?: string
   service_type?: string | number
 }): string {
-  return `${normalizeCo(entry.co)}|${String(entry.route ?? '').toUpperCase()}|${entry.bound ?? entry.dir ?? ''}|${String(entry.serviceType ?? entry.service_type ?? '')}`
+  return `${normalizeOperator(entry.co)}|${String(entry.route ?? '').toUpperCase()}|${entry.bound ?? entry.dir ?? ''}|${String(entry.serviceType ?? entry.service_type ?? '')}`
 }
 
 function hasDuplicateOperators(variants: RouteVariant[]): boolean {
-  const cos = new Set(variants.map((v) => normalizeCo(v.co)))
+  const cos = new Set(variants.map((v) => normalizeOperator(v.co)))
   return cos.size > 1
 }
 
@@ -243,7 +240,7 @@ export function KmbRoutesView({
   const routeEntries = React.useMemo(() => {
     const map = new Map<string, RouteSelection>()
     for (const r of routes) {
-      const co = normalizeCo(String(r.co ?? 'kmb'))
+      const co = normalizeOperator(String(r.co ?? 'kmb'))
       const key = `${co}|${r.route}`
       if (!map.has(key)) map.set(key, { co, route: r.route })
     }
@@ -255,24 +252,24 @@ export function KmbRoutesView({
   const initialKey = React.useMemo(
     () =>
       initialSelection
-        ? `${normalizeCo(initialSelection.co)}|${initialSelection.route}|${initialSelection.bound ?? ''}|${initialSelection.serviceType ?? ''}`
+        ? `${normalizeOperator(initialSelection.co)}|${initialSelection.route}|${initialSelection.bound ?? ''}|${initialSelection.serviceType ?? ''}`
         : '',
     [initialSelection]
   )
 
   const autoRouteKey = React.useMemo(() => {
     if (!initialSelection || routes.length === 0) return null
-    const co = normalizeCo(initialSelection.co)
+    const co = normalizeOperator(initialSelection.co)
     const route = initialSelection.route
-    return routeEntries.find((e) => normalizeCo(e.co) === co && e.route === route) ?? null
+    return routeEntries.find((e) => normalizeOperator(e.co) === co && e.route === route) ?? null
   }, [initialSelection, routes, routeEntries])
 
   const autoVariant = React.useMemo(() => {
     if (!initialSelection || !autoRouteKey || routes.length === 0) return null
-    const co = normalizeCo(initialSelection.co)
+    const co = normalizeOperator(initialSelection.co)
     const route = initialSelection.route
     const matchingVariants = routes.filter(
-      (r) => r.route === route && normalizeCo(String(r.co ?? 'kmb')) === co
+      (r) => r.route === route && normalizeOperator(String(r.co ?? 'kmb')) === co
     )
     if (!matchingVariants.length) return null
     const matchedVariant =
@@ -339,17 +336,22 @@ export function KmbRoutesView({
     [routes, routeStopsAll, stopsById]
   )
 
-  // Fuse loads lazily so the fuzzy index stays out of the first paint.
+  // Fuse loads lazily so the fuzzy index stays out of the first paint. The build
+  // follows searchIndex so stop names join the fuzzy fallback once the
+  // route-stop table arrives.
+  const fuseBuildRef = React.useRef(0)
   React.useEffect(() => {
-    if (fuse || searchIndex.length === 0) return
+    if (searchIndex.length === 0) return
+    fuseBuildRef.current += 1
+    const build = fuseBuildRef.current
     let cancelled = false
     void loadRouteFuseIndex(searchIndex).then((instance) => {
-      if (!cancelled && instance) setFuse(instance)
+      if (!cancelled && instance && fuseBuildRef.current === build) setFuse(instance)
     })
     return () => {
       cancelled = true
     }
-  }, [fuse, searchIndex])
+  }, [searchIndex])
 
   const operatorOptions = React.useMemo(() => operatorCounts(searchIndex), [searchIndex])
 
@@ -378,6 +380,11 @@ export function KmbRoutesView({
   const handleClearSearch = React.useCallback(() => {
     setQuery('')
     setDebouncedQuery('')
+  }, [])
+
+  const handleClearFilters = React.useCallback(() => {
+    setQuery('')
+    setDebouncedQuery('')
     setOperator(null)
   }, [])
 
@@ -387,7 +394,7 @@ export function KmbRoutesView({
     for (const r of routes) {
       if (
         r.route !== selectedRouteKey.route ||
-        normalizeCo(String(r.co ?? 'kmb')) !== selectedRouteKey.co
+        normalizeOperator(String(r.co ?? 'kmb')) !== selectedRouteKey.co
       ) {
         continue
       }
@@ -425,15 +432,15 @@ export function KmbRoutesView({
     if (!currentVariant) return
     let cancelled = false
     const load = async () => {
-      const co = normalizeCo(currentVariant.co)
+      const co = normalizeOperator(currentVariant.co)
       const variantKey = variantBaseKey(currentVariant)
-      const allRouteStops = await fetchKmbRouteStops()
+      const allRouteStops = routeStopsAll.length > 0 ? routeStopsAll : await fetchKmbRouteStops()
       if (cancelled) return
       const filtered = allRouteStops
         .filter(
           (rs) =>
             rs.route === currentVariant.route &&
-            normalizeCo(rs.co) === co &&
+            normalizeOperator(rs.co) === co &&
             rs.bound === currentVariant.bound &&
             rs.serviceType === currentVariant.serviceType
         )
@@ -458,7 +465,7 @@ export function KmbRoutesView({
     return () => {
       cancelled = true
     }
-  }, [currentVariant])
+  }, [currentVariant, routeStopsAll])
 
   const routePath = React.useMemo(() => {
     return variantStops
@@ -580,7 +587,7 @@ export function KmbRoutesView({
                 debouncedQuery.trim() !== '' || operator !== null ? (
                   <button
                     type="button"
-                    onClick={handleClearSearch}
+                    onClick={handleClearFilters}
                     className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
                   >
                     {t('kmb.clearFilters')}
@@ -595,7 +602,7 @@ export function KmbRoutesView({
                   {tWithParams('kmb.routesFound', { count: searchHits.length })}
                 </div>
               )}
-              <div className="space-y-3" key={`${debouncedQuery}|${operator ?? 'all'}|${lang}`}>
+              <div className="space-y-3">
                 {visibleHits.map((hit, idx) => (
                   <RouteResultCard
                     key={hit.entry.key}
@@ -688,7 +695,9 @@ export function KmbRoutesView({
                       })}
                     </span>
                     {showOperatorInVariants && (
-                      <span className="m3-label-sm uppercase opacity-80">{normalizeCo(v.co)}</span>
+                      <span className="m3-label-sm uppercase opacity-80">
+                        {normalizeOperator(v.co)}
+                      </span>
                     )}
                     {v.serviceType !== '1' ? (
                       <span className="m3-label-sm opacity-80">· {v.serviceType}</span>

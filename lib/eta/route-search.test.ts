@@ -140,6 +140,31 @@ describe('operatorCounts', () => {
     expect(counts.find((c) => c.code === 'kmb')?.count).toBe(3)
     expect(counts.find((c) => c.code === 'ctb')?.count).toBe(1)
   })
+
+  it('counts joint-operator routes under every operator', () => {
+    const index = buildRouteSearchIndex(routes, routeStops, stopsById)
+    const entry = index.find((e) => e.key === 'kmb|1A')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    const joint = [{ ...entry, operators: ['kmb', 'ctb'] }]
+    const counts = operatorCounts(joint)
+    expect(counts.find((c) => c.code === 'kmb')?.count).toBe(1)
+    expect(counts.find((c) => c.code === 'ctb')?.count).toBe(1)
+    expect(searchRouteIndex(joint, '', { operator: 'ctb' })).toHaveLength(1)
+  })
+})
+
+describe('variant termini', () => {
+  it('matches termini from non-first variants', () => {
+    const variants = [
+      makeRoute('kmb', '1A', 'Tsim Sha Tsui', 'Kwun Tong', 'O'),
+      makeRoute('kmb', '1A', 'Mong Kok', 'Po Tat', 'O', '2'),
+    ]
+    const index = buildRouteSearchIndex(variants, [], new Map())
+    const hits = searchRouteIndex(index, 'Po Tat')
+    expect(hits.map((h) => h.entry.key)).toContain('kmb|1A')
+    expect(hits[0]?.matchReason?.kind).toBe('terminus')
+  })
 })
 
 describe('getKeyStops', () => {
@@ -151,5 +176,13 @@ describe('getKeyStops', () => {
     const keys = getKeyStops(entry, stopsById, 'tc')
     expect(keys.length).toBeGreaterThan(0)
     expect(keys.join(' ')).not.toContain('Kwun Tong繁')
+  })
+
+  it('handles n=1 without NaN', () => {
+    const index = buildRouteSearchIndex(routes, routeStops, stopsById)
+    const entry = index.find((e) => e.key === 'kmb|1A')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    expect(getKeyStops(entry, stopsById, 'tc', 1)).toHaveLength(1)
   })
 })

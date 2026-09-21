@@ -4,9 +4,11 @@ import type { KmbRouteInfoLite, KmbRouteStopLite } from '@/lib/eta/client'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 import {
   buildRouteSearchIndex,
+  countRoutesByStopName,
   getKeyStops,
   normalizeRouteQuery,
   operatorCounts,
+  resolveKeyStopCount,
   searchRouteIndex,
 } from '@/lib/eta/route-search'
 
@@ -169,20 +171,201 @@ describe('variant termini', () => {
 
 describe('getKeyStops', () => {
   it('skips termini names', () => {
-    const index = buildRouteSearchIndex(routes, routeStops, stopsById)
+    const localStops = new Map<string, KmbStopSearchItem>([
+      ['s1', makeStop('s1', 'Mong Kok', '旺角')],
+      ['s2', makeStop('s2', 'Wong Tai Sin', '黃大仙')],
+      ['s3', makeStop('s3', 'Mid Stop', '中站')],
+      ['s4', makeStop('s4', 'Other Stop', '他站')],
+    ])
+    const localRouteStops: KmbRouteStopLite[] = [
+      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 1, stopId: 's1' },
+      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 2, stopId: 's3' },
+      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 3, stopId: 's4' },
+      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 4, stopId: 's2' },
+    ]
+    const localRoutes = [
+      makeRoute('kmb', '1A', 'Tsim Sha Tsui', 'Kwun Tong', 'O'),
+      makeRoute('kmb', '1A', 'Kwun Tong', 'Tsim Sha Tsui', 'I'),
+    ]
+    const index = buildRouteSearchIndex(localRoutes, localRouteStops, localStops)
     const entry = index.find((e) => e.key === 'kmb|1A')
     expect(entry).toBeDefined()
     if (!entry) return
-    const keys = getKeyStops(entry, stopsById, 'tc')
+    const keys = getKeyStops(entry, localStops, 'tc')
     expect(keys.length).toBeGreaterThan(0)
     expect(keys.join(' ')).not.toContain('Kwun Tong繁')
+    expect(keys.join(' ')).not.toContain('Mong Kok')
   })
 
-  it('handles n=1 without NaN', () => {
-    const index = buildRouteSearchIndex(routes, routeStops, stopsById)
+  it('caps at max=1 without NaN', () => {
+    const localStops = new Map<string, KmbStopSearchItem>([
+      ['s1', makeStop('s1', 'Mong Kok', '旺角')],
+      ['s2', makeStop('s2', 'Wong Tai Sin', '黃大仙')],
+      ['s3', makeStop('s3', 'Mid Stop', '中站')],
+      ['s4', makeStop('s4', 'Other Stop', '他站')],
+    ])
+    const localRouteStops: KmbRouteStopLite[] = [
+      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 1, stopId: 's1' },
+      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 2, stopId: 's3' },
+      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 3, stopId: 's4' },
+      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 4, stopId: 's2' },
+    ]
+    const localRoutes = [
+      makeRoute('kmb', '1A', 'Tsim Sha Tsui', 'Kwun Tong', 'O'),
+      makeRoute('kmb', '1A', 'Kwun Tong', 'Tsim Sha Tsui', 'I'),
+    ]
+    const index = buildRouteSearchIndex(localRoutes, localRouteStops, localStops)
     const entry = index.find((e) => e.key === 'kmb|1A')
     expect(entry).toBeDefined()
     if (!entry) return
-    expect(getKeyStops(entry, stopsById, 'tc', 1)).toHaveLength(1)
+    expect(getKeyStops(entry, localStops, 'tc', 1)).toHaveLength(1)
+  })
+
+  it('never shows the first or last stop', () => {
+    const stops = new Map<string, KmbStopSearchItem>([
+      ['a', makeStop('a', 'Stop A')],
+      ['b', makeStop('b', 'Stop B')],
+      ['c', makeStop('c', 'Stop C')],
+    ])
+    const variants = [makeRoute('kmb', 'X1', 'Stop A', 'Stop C', 'O')]
+    const localRouteStops: KmbRouteStopLite[] = [
+      { co: 'kmb', route: 'X1', bound: 'O', serviceType: '1', seq: 1, stopId: 'a' },
+      { co: 'kmb', route: 'X1', bound: 'O', serviceType: '1', seq: 2, stopId: 'b' },
+      { co: 'kmb', route: 'X1', bound: 'O', serviceType: '1', seq: 3, stopId: 'c' },
+    ]
+    const index = buildRouteSearchIndex(variants, localRouteStops, stops)
+    const entry = index.find((e) => e.key === 'kmb|X1')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    expect(getKeyStops(entry, stops, 'tc')).toEqual(['Stop B'])
+  })
+
+  it('prefers the busy stop in a 5-stop route', () => {
+    const names = ['Stop A', 'Stop B', 'Stop C', 'Stop D', 'Stop E']
+    const stops = new Map<string, KmbStopSearchItem>(
+      names.map((n, i) => [`s${i}`, makeStop(`s${i}`, n)])
+    )
+    const variants = [makeRoute('kmb', 'X2', 'Stop A', 'Stop E', 'O')]
+    const localRouteStops: KmbRouteStopLite[] = names.map((_, i) => ({
+      co: 'kmb',
+      route: 'X2',
+      bound: 'O',
+      serviceType: '1',
+      seq: i + 1,
+      stopId: `s${i}`,
+    }))
+    // Extra routes through s3 (Stop D) so it counts as the busy group.
+    const extraRoutes: KmbRouteStopLite[] = [1, 2, 3].map((n) => ({
+      co: 'kmb',
+      route: `B${n}`,
+      bound: 'O',
+      serviceType: '1',
+      seq: 1,
+      stopId: 's3',
+    }))
+    const index = buildRouteSearchIndex(variants, localRouteStops, stops)
+    const entry = index.find((e) => e.key === 'kmb|X2')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    const usage = countRoutesByStopName([...localRouteStops, ...extraRoutes], stops, 'tc')
+    expect(getKeyStops(entry, stops, 'tc', 7, usage)).toEqual(['Stop D'])
+  })
+
+  it('scales the via count with route length', () => {
+    expect(resolveKeyStopCount(2)).toBe(0)
+    expect(resolveKeyStopCount(4)).toBe(1)
+    expect(resolveKeyStopCount(10)).toBe(2)
+    expect(resolveKeyStopCount(18)).toBe(3)
+    expect(resolveKeyStopCount(28)).toBe(4)
+    expect(resolveKeyStopCount(40)).toBe(5)
+    expect(resolveKeyStopCount(60)).toBe(6)
+    expect(resolveKeyStopCount(80)).toBe(7)
+  })
+
+  it('clamps max to the absolute cap', () => {
+    expect(resolveKeyStopCount(80, 10)).toBe(7)
+    expect(resolveKeyStopCount(80, 0)).toBe(0)
+  })
+
+  it('groups stop names case-insensitively for usage counts', () => {
+    const stops = new Map<string, KmbStopSearchItem>([
+      ['s1', makeStop('s1', 'MONG KOK')],
+      ['s2', makeStop('s2', 'mong kok')],
+    ])
+    const rows: KmbRouteStopLite[] = [
+      { co: 'kmb', route: 'A1', bound: 'O', serviceType: '1', seq: 1, stopId: 's1' },
+      { co: 'kmb', route: 'B2', bound: 'O', serviceType: '1', seq: 1, stopId: 's2' },
+    ]
+    const usage = countRoutesByStopName(rows, stops, 'en')
+    expect(usage.get('mong kok')).toBe(2)
+  })
+
+  it('uses one direction in seq order for interleaved O+I input', () => {
+    const stops = new Map<string, KmbStopSearchItem>([
+      ['a', makeStop('a', 'Stop A')],
+      ['b', makeStop('b', 'Stop B')],
+      ['c', makeStop('c', 'Stop C')],
+      ['d', makeStop('d', 'Stop D')],
+      ['e', makeStop('e', 'Stop E')],
+      ['f', makeStop('f', 'Stop F')],
+      ['g', makeStop('g', 'Stop G')],
+      ['h', makeStop('h', 'Stop H')],
+    ])
+    const variants = [
+      makeRoute('kmb', 'X4', 'Stop A', 'Stop H', 'O'),
+      makeRoute('kmb', 'X4', 'Stop H', 'Stop A', 'I'),
+    ]
+    // Interleaved and out of seq order on purpose. O is the longer
+    // direction: a..h is 8 stops, I is e,d,c only.
+    const rows: KmbRouteStopLite[] = [
+      { co: 'kmb', route: 'X4', bound: 'I', serviceType: '1', seq: 3, stopId: 'c' },
+      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 5, stopId: 'e' },
+      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 1, stopId: 'a' },
+      { co: 'kmb', route: 'X4', bound: 'I', serviceType: '1', seq: 1, stopId: 'e' },
+      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 8, stopId: 'h' },
+      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 2, stopId: 'b' },
+      { co: 'kmb', route: 'X4', bound: 'I', serviceType: '1', seq: 2, stopId: 'd' },
+      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 4, stopId: 'd' },
+      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 7, stopId: 'g' },
+      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 3, stopId: 'c' },
+      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 6, stopId: 'f' },
+    ]
+    const index = buildRouteSearchIndex(variants, rows, stops)
+    const entry = index.find((e) => e.key === 'kmb|X4')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    expect(entry.viaStopCount).toBe(8)
+    for (const name of getKeyStops(entry, stops, 'tc')) {
+      expect(name).not.toBe('Stop A')
+      expect(name).not.toBe('Stop H')
+    }
+    expect(getKeyStops(entry, stops, 'tc', 2)).toHaveLength(2)
+  })
+
+  it('spreads picks across a long route', () => {
+    const total = 30
+    const stops = new Map<string, KmbStopSearchItem>()
+    for (let i = 0; i < total; i += 1) stops.set(`s${i}`, makeStop(`s${i}`, `Stop ${i}`))
+    const variants = [makeRoute('kmb', 'X3', 'Stop 0', `Stop ${total - 1}`, 'O')]
+    const localRouteStops: KmbRouteStopLite[] = Array.from({ length: total }, (_, i) => ({
+      co: 'kmb',
+      route: 'X3',
+      bound: 'O',
+      serviceType: '1',
+      seq: i + 1,
+      stopId: `s${i}`,
+    }))
+    const index = buildRouteSearchIndex(variants, localRouteStops, stops)
+    const entry = index.find((e) => e.key === 'kmb|X3')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    const keys = getKeyStops(entry, stops, 'tc')
+    expect(keys.length).toBeGreaterThan(1)
+    const positions = keys.map((name) => Number(name.replace('Stop ', '')))
+    expect(Math.min(...positions)).toBeGreaterThan(0)
+    expect(Math.max(...positions)).toBeLessThan(total - 1)
+    for (let i = 1; i < positions.length; i += 1) {
+      expect((positions[i] ?? 0) - (positions[i - 1] ?? 0)).toBeGreaterThan(1)
+    }
   })
 })

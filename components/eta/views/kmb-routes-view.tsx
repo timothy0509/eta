@@ -357,8 +357,11 @@ export function KmbRoutesView({
   const operatorOptions = React.useMemo(() => operatorCounts(searchIndex), [searchIndex])
 
   const usageByStopName = React.useMemo(
-    () => countRoutesByStopName(routeStopsAll, stopsById, lang),
-    [routeStopsAll, stopsById, lang]
+    () =>
+      selectedRouteKey
+        ? new Map<string, number>()
+        : countRoutesByStopName(routeStopsAll, stopsById, lang),
+    [routeStopsAll, stopsById, lang, selectedRouteKey]
   )
 
   const searchHits = React.useMemo(

@@ -4,7 +4,7 @@ import { ChevronDown, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
-import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import { formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -91,13 +91,7 @@ function formatNoScheduledText(t: (key: string) => string) {
 }
 
 function formatEtaLabel(seq: number, lang: UiLanguage) {
-  if (lang === 'en') {
-    if (seq === 1) return '1st'
-    if (seq === 2) return '2nd'
-    if (seq === 3) return '3rd'
-    return `${seq}th`
-  }
-  return `第${seq}班`
+  return formatEtaOrdinals(seq, lang)
 }
 
 function getGroupRemark(items: KmbEtaEntryWithLeg[], lang: UiLanguage): string | null {

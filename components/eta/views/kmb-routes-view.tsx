@@ -11,8 +11,9 @@ import { OperatorFilter } from '@/components/eta/operator-filter'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
 import { Input } from '@/components/ui/input'
-import { RouteStopRow, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
-import { TickingSoonestPill } from '@/components/eta/ticking-eta'
+import { RouteStopCard, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
+import { TickingKmbMinutes, TickingSoonestPill } from '@/components/eta/ticking-eta'
+import { formatEtaOrdinals } from '@/lib/eta/kmb-eta-groups'
 import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
 import {
   fetchKmbRouteStops,
@@ -23,9 +24,14 @@ import {
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
 } from '@/lib/eta/client'
+import type { Company } from 'hk-bus-eta'
+
+import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
+import { routeVariantKey } from '@/lib/eta/eta-db-index'
+import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
+import { formatFareHkd } from '@/lib/eta/format'
 import type { GeoPoint } from '@/lib/eta/geo'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
-import { LINE_COLOR_FALLBACK } from '@/lib/eta/line-colors'
 import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
@@ -81,6 +87,266 @@ function variantBaseKey(entry: {
 function hasDuplicateOperators(variants: RouteVariant[]): boolean {
   const cos = new Set(variants.map((v) => normalizeOperator(v.co)))
   return cos.size > 1
+}
+
+/**
+ * Expandable KMB stop card. Collapsed header shows the stop plus the
+ * soonest bus; expanding lists up to three departures. Matches the
+ * stop-mode route card layout.
+ */
+function KmbRouteStopCard({
+  stopEtas,
+  name,
+  stopCode,
+  seq,
+  color,
+  lang,
+  expanded,
+  onToggle,
+  selectLabel,
+  onSelect,
+}: {
+  stopEtas: KmbEtaEntryWithLeg[]
+  name: string
+  stopCode: string | null
+  seq: number
+  color: string
+  lang: UiLanguage
+  expanded: boolean
+  onToggle: () => void
+  selectLabel?: string
+  onSelect?: () => void
+}) {
+  const sorted = React.useMemo(
+    () =>
+      [...stopEtas]
+        .filter((entry) => Boolean(entry.eta))
+        .sort((a, b) => new Date(a.eta).getTime() - new Date(b.eta).getTime()),
+    [stopEtas]
+  )
+  const visible = sorted.slice(0, 3)
+  const { t: cardT } = useTranslations(lang)
+
+  const panel =
+    visible.length === 0 ? (
+      <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+        {cardT('common.noScheduledBuses')}
+      </div>
+    ) : (
+      <div className="space-y-2">
+        <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
+          {visible.map((entry, entryIdx) => {
+            const remark =
+              pickLang(
+                { en: entry.rmk_en ?? '', tc: entry.rmk_tc ?? '', sc: entry.rmk_sc ?? '' },
+                lang
+              ).trim() || null
+            const label = formatEtaOrdinals(entry.eta_seq, lang)
+            const isFirst = entryIdx === 0
+            if (isFirst) {
+              return (
+                <div
+                  key={`${entry.eta_seq}:${entryIdx}`}
+                  className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+                >
+                  <div className="m3-label-md opacity-80">{label}</div>
+                  <div className="mt-0.5">
+                    <TickingKmbMinutes
+                      eta={entry.eta}
+                      dataTimestamp={entry.data_timestamp}
+                      lang={lang}
+                      variant="panel"
+                    />
+                  </div>
+                  {remark ? (
+                    <div className="m3-label-md mt-1 truncate opacity-80" title={remark}>
+                      {remark}
+                    </div>
+                  ) : null}
+                </div>
+              )
+            }
+            return (
+              <div
+                key={`${entry.eta_seq}:${entryIdx}`}
+                className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
+              >
+                <div className="text-on-surface-variant m3-label-md">{label}</div>
+                <div className="mt-0.5">
+                  <TickingKmbMinutes
+                    eta={entry.eta}
+                    dataTimestamp={entry.data_timestamp}
+                    lang={lang}
+                    variant="plain"
+                    className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg"
+                  />
+                </div>
+                {remark ? (
+                  <div
+                    className="text-on-surface-variant m3-label-md mt-0.5 truncate"
+                    title={remark}
+                  >
+                    {remark}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
+        </div>
+        {stopCode ? (
+          <div className="text-on-surface-variant m3-label-sm flex min-w-0 items-center gap-1.5 overflow-hidden">
+            <span className="min-w-0 flex-1 truncate font-mono">{stopCode}</span>
+          </div>
+        ) : null}
+      </div>
+    )
+
+  return (
+    <RouteStopCard
+      expanded={expanded}
+      onToggle={onToggle}
+      color={color}
+      seq={seq}
+      name={name}
+      subtitle={stopCode}
+      eta={<TickingSoonestPill etas={stopEtas} lang={lang} />}
+      panel={panel}
+      toggleLabel={name}
+      selectLabel={selectLabel}
+      onSelect={onSelect}
+    />
+  )
+}
+
+function KmbRouteStopList({
+  currentVariant,
+  variantStops,
+  stopsById,
+  etas,
+  lang,
+  onSelectStopGroup,
+  listKey,
+}: {
+  listKey: string
+  currentVariant: RouteVariant
+  variantStops: KmbRouteStopLite[]
+  stopsById: Map<string, KmbStopSearchItem>
+  etas: Record<string, KmbEtaEntryWithLeg[]>
+  lang: UiLanguage
+  onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
+}) {
+  const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
+  const variantKey = routeVariantKey({
+    co: currentVariant.co as Company,
+    route: currentVariant.route,
+    bound: currentVariant.bound,
+    serviceType: currentVariant.serviceType,
+  })
+  const [faresBySeq, setFaresBySeq] = React.useState<Record<number, number>>({})
+
+  React.useEffect(() => {
+    let cancelled = false
+    getEtaDbIndexes()
+      .then(({ routeVariantIndex }) => {
+        if (cancelled) return
+        const entry = routeVariantIndex.get(variantKey)
+        setFaresBySeq(entry ? getFaresBySeq(entry, currentVariant.co) : {})
+      })
+      .catch(() => {
+        if (!cancelled) setFaresBySeq({})
+      })
+    return () => {
+      cancelled = true
+    }
+    // listKey already remounts this list on variant change, and the key
+    // string is cheaper to depend on than the whole variant object.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listKey])
+
+  const { t } = useTranslations(lang)
+  const color = getRouteBadgeStyle(currentVariant.route, currentVariant.co).bgColor
+
+  const sections = React.useMemo(
+    () => groupIntoFareSections(variantStops, (rs) => faresBySeq[rs.seq] ?? null),
+    [variantStops, faresBySeq]
+  )
+
+  const seqByStopSeq = React.useMemo(() => {
+    const map = new Map<number, number>()
+    variantStops.forEach((rs, index) => {
+      if (!map.has(rs.seq)) map.set(rs.seq, index + 1)
+    })
+    return map
+  }, [variantStops])
+
+  return (
+    <div key={listKey} className="space-y-4">
+      {sections.map((section, sectionIdx) => {
+        const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
+        return (
+          <section
+            key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
+            aria-label={fareLabel ?? undefined}
+            className={
+              sectionIdx % 2 === 0
+                ? 'bg-surface-container overflow-hidden rounded-3xl px-3 py-3'
+                : 'bg-surface-container-high overflow-hidden rounded-3xl px-3 py-3'
+            }
+          >
+            {fareLabel ? (
+              <div className="text-on-surface-variant font-tabular m3-label-lg flex items-center gap-3 px-1 pt-1 pb-3">
+                <span aria-hidden className="bg-outline-variant h-px flex-1 opacity-60" />
+                <span className="shrink-0 rounded-full border border-[var(--outline-variant)]/40 px-3 py-0.5">
+                  {fareLabel}
+                </span>
+                <span aria-hidden className="bg-outline-variant h-px flex-1 opacity-60" />
+              </div>
+            ) : null}
+            <RouteStopTimeline>
+              {section.items.map((rs) => {
+                const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
+                const stop = stopsById.get(rs.stopId)
+                const stopEtas = etas[rs.stopId] ?? []
+                const fullName = stop
+                  ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+                  : rs.stopId
+                const parsed = parseKmbStopNameCached(fullName, {
+                  isKmb: isKmbStop(stop),
+                  lang,
+                })
+                const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
+                const cardKey = `${rs.stopId}:${rs.seq}`
+                return (
+                  <KmbRouteStopCard
+                    key={cardKey}
+                    stopEtas={stopEtas}
+                    name={parsed.name}
+                    stopCode={parsed.platform ?? parsed.stopCode}
+                    seq={seq}
+                    color={color}
+                    lang={lang}
+                    expanded={expandedKey === cardKey}
+                    onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
+                    selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
+                    onSelect={
+                      group && onSelectStopGroup
+                        ? () =>
+                            onSelectStopGroup({
+                              stopIds: group.stopIds,
+                              title: group.title,
+                              route: currentVariant.route,
+                            })
+                        : undefined
+                    }
+                  />
+                )
+              })}
+            </RouteStopTimeline>
+          </section>
+        )
+      })}
+    </div>
+  )
 }
 
 function getStopGroupForClick(
@@ -737,45 +1003,15 @@ export function KmbRoutesView({
             {variantStops.length === 0 ? (
               <ResultsSkeleton />
             ) : (
-              <RouteStopTimeline
-                lineColor={
-                  currentVariant
-                    ? getRouteBadgeStyle(currentVariant.route, currentVariant.co).bgColor
-                    : LINE_COLOR_FALLBACK
-                }
-              >
-                {variantStops.map((rs) => {
-                  const stop = stopsById.get(rs.stopId)
-                  const stopEtas = etas[rs.stopId] ?? []
-                  const fullName = stop
-                    ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
-                    : rs.stopId
-                  const parsed = parseKmbStopNameCached(fullName, {
-                    isKmb: isKmbStop(stop),
-                    lang,
-                  })
-                  const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
-                  return (
-                    <RouteStopRow
-                      key={rs.stopId}
-                      name={<span className="font-medium">{parsed.name}</span>}
-                      subtitle={parsed.stopCode}
-                      ariaLabel={parsed.name}
-                      eta={<TickingSoonestPill etas={stopEtas} lang={lang} />}
-                      onClick={
-                        onSelectStopGroup && group
-                          ? () =>
-                              onSelectStopGroup({
-                                stopIds: group.stopIds,
-                                title: group.title,
-                                route: currentVariant.route,
-                              })
-                          : undefined
-                      }
-                    />
-                  )
-                })}
-              </RouteStopTimeline>
+              <KmbRouteStopList
+                listKey={currentVariant.key}
+                currentVariant={currentVariant}
+                variantStops={variantStops}
+                stopsById={stopsById}
+                etas={etas}
+                lang={lang}
+                onSelectStopGroup={onSelectStopGroup}
+              />
             )}
           </div>
 

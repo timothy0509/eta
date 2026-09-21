@@ -19,7 +19,7 @@ type Props = {
  * - Pauses animation on hover / touch
  */
 export function Marquee({ children, className, speed = 30, title }: Props) {
-  const containerRef = React.useRef<HTMLDivElement>(null)
+  const containerRef = React.useRef<HTMLSpanElement>(null)
   const [needsMarquee, setNeedsMarquee] = React.useState(false)
   const [animDuration, setAnimDuration] = React.useState(5)
   const [scrollDistance, setScrollDistance] = React.useState(0)
@@ -81,11 +81,11 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
   }, [children, speed])
 
   return (
-    <div
+    <span
       ref={containerRef}
       title={title}
       className={cn(
-        'overflow-hidden whitespace-nowrap',
+        'block overflow-hidden whitespace-nowrap',
         needsMarquee && 'marquee-container',
         className
       )}
@@ -93,6 +93,7 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
       {/* Always render a measurement span */}
       <span
         data-measure
+        aria-hidden={needsMarquee}
         className={cn(
           'whitespace-nowrap',
           needsMarquee ? 'pointer-events-none invisible absolute' : 'inline-block'
@@ -103,7 +104,7 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
 
       {/* Animated track (only when overflow detected) */}
       {needsMarquee && (
-        <div
+        <span
           className="marquee-track inline-flex"
           style={
             {
@@ -116,8 +117,8 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
           <span className="shrink-0 pr-8" aria-hidden="true">
             {children}
           </span>
-        </div>
+        </span>
       )}
-    </div>
+    </span>
   )
 }

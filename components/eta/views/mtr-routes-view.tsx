@@ -4,7 +4,7 @@ import { MapPin, TrainFront } from 'lucide-react'
 import * as React from 'react'
 
 import {
-  RouteStopRow,
+  RouteStopCard,
   RouteStopTimeline,
   SoonestEtaPill,
 } from '@/components/eta/route-stop-timeline'
@@ -17,8 +17,7 @@ import { fetchMtrRouteSchedules, listMtrRoutes } from '@/lib/eta/client'
 import { LINE_COLOR_FALLBACK, getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLangZh } from '@/lib/eta/pick-lang'
-import { pickSoonestMtrTrain } from '@/lib/eta/pick-soonest-eta'
-import type { MtrScheduleResponse } from '@/lib/eta/mtr'
+import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
@@ -45,6 +44,148 @@ function getRouteDestination(dest: { en: string; zh: string }, lang: UiLanguage)
 
 function variantKey(entry: RouteListEntry): string {
   return `${entry.route}|${entry.serviceType}|${entry.bound.mtr ?? ''}`
+}
+
+/**
+ * Expandable MTR station card. Collapsed header shows the next trains
+ * toward the route terminus; expanding lists up to four of them.
+ * The card reads both UP and DOWN schedule entries and keeps only
+ * trains heading to a station further down the selected route.
+ * This mirrors the stop-mode line card breakdown.
+ */
+function MtrRouteStopCard({
+  sta,
+  seq,
+  stationStas,
+  selectedLine,
+  schedule,
+  lang,
+  color,
+  onSelectStation,
+  currentVariant,
+}: {
+  sta: string
+  seq: number
+  stationStas: string[]
+  selectedLine: string
+  schedule: MtrScheduleResponse | undefined
+  lang: UiLanguage
+  color: string
+  onSelectStation?: (sta: string, line: string, name: string) => void
+  currentVariant: RouteListEntry
+}) {
+  const [expanded, setExpanded] = React.useState(false)
+  const { t } = useTranslations(lang)
+  const station = findMtrStationBySta(sta)
+  const name = station ? formatMtrStationName(station, toMtrLang(lang)) : sta
+
+  const downstreamStas = React.useMemo(() => new Set(stationStas.slice(seq)), [stationStas, seq])
+  const soonestTrains = React.useMemo(() => {
+    const payload = schedule?.data?.[`${selectedLine}-${sta}`]
+    if (!payload) return []
+    const matching: MtrTrainEntry[] = []
+    for (const dir of ['UP', 'DOWN'] as const) {
+      for (const train of payload[dir] ?? []) {
+        const dest = String(train.dest ?? '').trim()
+        if (!dest || !downstreamStas.has(dest)) continue
+        matching.push(train)
+      }
+    }
+    return matching.sort((a, b) => {
+      const aMin = Number(String(a.ttnt ?? '').trim())
+      const bMin = Number(String(b.ttnt ?? '').trim())
+      const aSafe = Number.isNaN(aMin) ? Number.MAX_SAFE_INTEGER : aMin
+      const bSafe = Number.isNaN(bMin) ? Number.MAX_SAFE_INTEGER : bMin
+      return aSafe - bSafe
+    })
+  }, [schedule, selectedLine, sta, downstreamStas])
+
+  const trainLine = (ttnt: unknown) => {
+    const raw = String(ttnt ?? '').trim()
+    if (!raw) return { text: '—', arriving: false }
+    const minutes = Number(raw)
+    if (Number.isNaN(minutes)) return { text: raw, arriving: false }
+    if (minutes <= 0) return { text: t('common.now'), arriving: true }
+    return { text: `${minutes} ${t('common.minutesUnit')}`, arriving: false }
+  }
+
+  const soonestText =
+    soonestTrains.length > 0 ? trainLine(soonestTrains[0]?.ttnt) : { text: '—', arriving: false }
+
+  const etaNode =
+    soonestTrains.length > 0 ? (
+      <SoonestEtaPill
+        minutes={soonestText.arriving ? 0 : Number(String(soonestTrains[0]?.ttnt ?? ''))}
+        arriving={soonestText.arriving}
+        lang={lang}
+      />
+    ) : (
+      <SoonestEtaPill minutes={null} lang={lang} />
+    )
+
+  const renderTrains = (list: MtrTrainEntry[]) => (
+    <div className="space-y-1">
+      {list.length === 0 ? (
+        <div className="text-on-surface-variant m3-body-md">—</div>
+      ) : (
+        list.slice(0, 4).map((train, trainIdx) => {
+          const destRaw = String(train.dest ?? '')
+          const destStation = findMtrStationBySta(destRaw)
+          const destName = destStation
+            ? formatMtrStationName(destStation, toMtrLang(lang))
+            : destRaw || '—'
+          const platform = String(train.plat ?? '').trim()
+          const eta = trainLine(train.ttnt)
+          return (
+            <div
+              key={`${trainIdx}:${destRaw}:${String(train.ttnt ?? '')}`}
+              className="flex items-center justify-between gap-3 py-0.5"
+            >
+              <div className="text-on-surface m3-body-md min-w-0 flex-1 truncate font-medium">
+                {destName}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {platform ? (
+                  <span className="text-on-surface-variant m3-label-md font-mono">P{platform}</span>
+                ) : null}
+                <span className="text-on-surface font-tabular m3-body-md font-semibold">
+                  {eta.text}
+                </span>
+              </div>
+            </div>
+          )
+        })
+      )}
+    </div>
+  )
+
+  const panel =
+    soonestTrains.length === 0 && !schedule ? (
+      <div className="text-on-surface-variant m3-body-md">{t('mtr.noSchedule')}</div>
+    ) : (
+      <div className="space-y-1">
+        <div className="text-on-surface-variant m3-label-md mb-1 font-medium">
+          {getRouteDestination(currentVariant.dest, lang)}
+        </div>
+        {renderTrains(soonestTrains)}
+      </div>
+    )
+
+  return (
+    <RouteStopCard
+      expanded={expanded}
+      onToggle={() => setExpanded((v) => !v)}
+      color={color}
+      seq={seq}
+      name={name}
+      subtitle={sta}
+      eta={etaNode}
+      panel={panel}
+      toggleLabel={typeof name === 'string' ? name : sta}
+      selectLabel={onSelectStation ? t('common.viewEtas') : undefined}
+      onSelect={onSelectStation ? () => onSelectStation(sta, selectedLine, name) : undefined}
+    />
+  )
 }
 
 export function MtrRoutesView({
@@ -293,30 +434,21 @@ export function MtrRoutesView({
               </span>
             </div>
 
-            <RouteStopTimeline lineColor={lineColor}>
-              {stationStas.map((sta, idx) => {
-                const station = findMtrStationBySta(sta)
-                const downstreamStas = new Set(stationStas.slice(idx + 1))
-                const schedule = schedulesBySta[sta]
-                const soonest = pickSoonestMtrTrain(schedule, selectedLine, sta, downstreamStas)
-                const name = station ? formatMtrStationName(station, toMtrLang(lang)) : sta
-                return (
-                  <RouteStopRow
-                    key={sta}
-                    name={name}
-                    subtitle={<span className="hidden sm:inline">{sta}</span>}
-                    ariaLabel={typeof name === 'string' ? name : sta}
-                    eta={
-                      <SoonestEtaPill
-                        minutes={soonest.minutes}
-                        arriving={soonest.arriving}
-                        lang={lang}
-                      />
-                    }
-                    onClick={() => onSelectStation?.(sta, selectedLine, name)}
-                  />
-                )
-              })}
+            <RouteStopTimeline key={currentVariant ? variantKey(currentVariant) : selectedLine}>
+              {stationStas.map((sta, idx) => (
+                <MtrRouteStopCard
+                  key={sta}
+                  sta={sta}
+                  seq={idx + 1}
+                  stationStas={stationStas}
+                  selectedLine={selectedLine}
+                  schedule={schedulesBySta[sta]}
+                  lang={lang}
+                  color={lineColor}
+                  onSelectStation={onSelectStation}
+                  currentVariant={currentVariant!}
+                />
+              ))}
             </RouteStopTimeline>
           </div>
         </RouteDrilldown>

@@ -205,7 +205,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
           >
             <span
               aria-hidden
-              className="bg-secondary-container ui-indicator-slide absolute top-1 bottom-1 left-0 rounded-full shadow-sm"
+              className="bg-secondary-container ui-indicator-slide pointer-events-none absolute top-1 bottom-1 left-0 rounded-full shadow-sm"
               style={
                 indicator.ready
                   ? { transform: `translateX(${indicator.x}px)`, width: indicator.w }
@@ -271,19 +271,17 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
       className="bg-surface-container-low border-outline-variant/20 sticky top-20 hidden h-fit shrink-0 flex-col items-center gap-1 rounded-[28px] border px-2 py-3 shadow-sm lg:flex"
     >
       <div ref={containerRef} className="relative flex flex-col items-center gap-1">
-        <span
-          aria-hidden
-          className="bg-primary-container ui-indicator-slide absolute top-0 left-0 rounded-2xl"
-          style={
-            indicator.ready
-              ? {
-                  transform: `translate(${indicator.x}px, ${indicator.y}px)`,
-                  width: indicator.w,
-                  height: indicator.h,
-                }
-              : { opacity: 0 }
-          }
-        />
+        {indicator.ready && (
+          <span
+            aria-hidden
+            className="bg-primary-container ui-indicator-slide pointer-events-none absolute top-0 left-0 rounded-2xl"
+            style={{
+              transform: `translate(${indicator.x}px, ${indicator.y}px)`,
+              width: indicator.w,
+              height: indicator.h,
+            }}
+          />
+        )}
         {SUB_VIEWS.map((sv) => {
           const Icon = sv.icon
           const active = subView === sv.id
@@ -339,19 +337,17 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
       className="bg-surface-container-low fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),28rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg lg:hidden"
     >
       <div ref={containerRef} className="relative flex w-full items-center">
-        <span
-          aria-hidden
-          className="bg-primary-container ui-indicator-slide absolute top-0 left-0 rounded-full"
-          style={
-            indicator.ready
-              ? {
-                  transform: `translate(${indicator.x}px, ${indicator.y}px)`,
-                  width: indicator.w,
-                  height: indicator.h,
-                }
-              : { opacity: 0 }
-          }
-        />
+        {indicator.ready && (
+          <span
+            aria-hidden
+            className="bg-primary-container ui-indicator-slide pointer-events-none absolute top-0 left-0 rounded-full"
+            style={{
+              transform: `translate(${indicator.x}px, ${indicator.y}px)`,
+              width: indicator.w,
+              height: indicator.h,
+            }}
+          />
+        )}
         {SUB_VIEWS.map((sv) => {
           const Icon = sv.icon
           const active = subView === sv.id

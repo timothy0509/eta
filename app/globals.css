@@ -630,8 +630,9 @@
   .ui-indicator-slide {
     transition:
       transform var(--ui-dur-md) var(--ui-ease-spring),
-      width var(--ui-dur-md) var(--ui-ease-spring);
-    will-change: transform, width;
+      width var(--ui-dur-md) var(--ui-ease-spring),
+      height var(--ui-dur-md) var(--ui-ease-spring);
+    will-change: transform, width, height;
   }
 
   .ui-pill-pop {

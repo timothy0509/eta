@@ -79,6 +79,47 @@ function preloadTransitMap(): void {
     mapPreloadStarted = false
   })
 }
+// Sliding pill shared by the transport switcher and the section navs.
+// Measures the active button relative to its container and moves a single
+// absolute indicator with a spring transition.
+function useSlidingIndicator<T extends HTMLElement>(activeId: string, extraKey: string) {
+  const containerRef = React.useRef<T | null>(null)
+  const buttonRefs = React.useRef(new Map<string, HTMLButtonElement>())
+  const [indicator, setIndicator] = React.useState({ x: 0, y: 0, w: 0, h: 0, ready: false })
+
+  const measure = React.useCallback(() => {
+    const container = containerRef.current
+    const activeButton = buttonRefs.current.get(activeId)
+    if (!container || !activeButton) return
+    const containerRect = container.getBoundingClientRect()
+    const rect = activeButton.getBoundingClientRect()
+    // Hidden navs (SideRail on mobile, BottomNav on desktop) measure at
+    // zero size. Stay unready until visible so the pill never flashes at 0.
+    if (rect.width === 0 && rect.height === 0) return
+    setIndicator({
+      x: rect.left - containerRect.left,
+      y: rect.top - containerRect.top,
+      w: rect.width,
+      h: rect.height,
+      ready: true,
+    })
+  }, [activeId])
+
+  React.useLayoutEffect(() => {
+    measure()
+  }, [measure, extraKey])
+
+  React.useEffect(() => {
+    const container = containerRef.current
+    if (!container || typeof ResizeObserver === 'undefined') return
+    const observer = new ResizeObserver(() => measure())
+    observer.observe(container)
+    for (const button of buttonRefs.current.values()) observer.observe(button)
+    return () => observer.disconnect()
+  }, [measure])
+
+  return { containerRef, buttonRefs, indicator }
+}
 function ThemeToggle({ label }: { label: string }) {
   const { resolvedTheme, setTheme } = useTheme()
   const dark = resolvedTheme === 'dark'
@@ -141,35 +182,7 @@ type TopAppBarProps = {
 
 export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
   const { t } = useTranslations(lang)
-  const containerRef = React.useRef<HTMLDivElement | null>(null)
-  const buttonRefs = React.useRef(new Map<TransportMode, HTMLButtonElement>())
-  const [indicator, setIndicator] = React.useState({ x: 0, w: 0, ready: false })
-
-  const measureIndicator = React.useCallback(() => {
-    const container = containerRef.current
-    const activeButton = buttonRefs.current.get(mode)
-    if (!container || !activeButton) return
-    const containerRect = container.getBoundingClientRect()
-    const rect = activeButton.getBoundingClientRect()
-    setIndicator({
-      x: rect.left - containerRect.left,
-      w: rect.width,
-      ready: true,
-    })
-  }, [mode])
-
-  React.useLayoutEffect(() => {
-    measureIndicator()
-  }, [measureIndicator, lang])
-
-  React.useEffect(() => {
-    const container = containerRef.current
-    if (!container || typeof ResizeObserver === 'undefined') return
-    const observer = new ResizeObserver(() => measureIndicator())
-    observer.observe(container)
-    for (const button of buttonRefs.current.values()) observer.observe(button)
-    return () => observer.disconnect()
-  }, [measureIndicator])
+  const { containerRef, buttonRefs, indicator } = useSlidingIndicator<HTMLDivElement>(mode, lang)
 
   return (
     <header className="bg-surface-container-low/90 supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
@@ -250,66 +263,27 @@ type SideRailProps = {
 
 export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
   const { t } = useTranslations(lang)
+  const { containerRef, buttonRefs, indicator } = useSlidingIndicator<HTMLDivElement>(subView, lang)
 
   return (
     <nav
       aria-label={t('common.sections')}
       className="bg-surface-container-low border-outline-variant/20 sticky top-20 hidden h-fit shrink-0 flex-col items-center gap-1 rounded-[28px] border px-2 py-3 shadow-sm lg:flex"
     >
-      {SUB_VIEWS.map((sv) => {
-        const Icon = sv.icon
-        const active = subView === sv.id
-        const preloadProps =
-          sv.id === 'nearby'
-            ? {
-                onMouseEnter: preloadTransitMap,
-                onFocus: preloadTransitMap,
-                onTouchStart: preloadTransitMap,
-              }
-            : {}
-        return (
-          <button
-            key={sv.id}
-            type="button"
-            onClick={() => onSubViewChange(sv.id)}
-            aria-current={active ? 'page' : undefined}
-            {...preloadProps}
-            className={cn(
-              'ui-press relative flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-[color,background-color,transform]',
-              active ? 'text-on-primary-container' : 'text-on-surface-variant hover:text-on-surface'
-            )}
-          >
-            {active && (
-              <span
-                key={sv.id}
-                aria-hidden
-                className="bg-primary-container ui-pill-pop absolute inset-0 -z-10 rounded-2xl"
-              />
-            )}
-            <Icon className={cn('h-5 w-5 transition-transform', active && 'scale-110')} />
-            <span className="leading-none">{t(`common.${sv.id}`)}</span>
-          </button>
-        )
-      })}
-    </nav>
-  )
-}
-
-type BottomNavProps = {
-  lang: UiLanguage
-  subView: SubView
-  onSubViewChange: (subView: SubView) => void
-}
-
-export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
-  const { t } = useTranslations(lang)
-
-  return (
-    <nav
-      aria-label={t('common.sections')}
-      className="bg-surface-container-low fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),28rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg lg:hidden"
-    >
-      <div className="flex w-full items-center">
+      <div ref={containerRef} className="relative flex flex-col items-center gap-1">
+        <span
+          aria-hidden
+          className="bg-primary-container ui-indicator-slide absolute top-0 left-0 rounded-2xl"
+          style={
+            indicator.ready
+              ? {
+                  transform: `translate(${indicator.x}px, ${indicator.y}px)`,
+                  width: indicator.w,
+                  height: indicator.h,
+                }
+              : { opacity: 0 }
+          }
+        />
         {SUB_VIEWS.map((sv) => {
           const Icon = sv.icon
           const active = subView === sv.id
@@ -324,24 +298,89 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
           return (
             <button
               key={sv.id}
+              ref={(el) => {
+                if (el) buttonRefs.current.set(sv.id, el)
+                else buttonRefs.current.delete(sv.id)
+              }}
               type="button"
               onClick={() => onSubViewChange(sv.id)}
               aria-current={active ? 'page' : undefined}
               {...preloadProps}
               className={cn(
-                'ui-press relative flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 text-[11px] font-medium transition-[color,background-color,transform]',
+                'ui-press relative z-10 flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-[color,background-color,transform]',
                 active
                   ? 'text-on-primary-container'
                   : 'text-on-surface-variant hover:text-on-surface'
               )}
             >
-              {active && (
-                <span
-                  key={sv.id}
-                  aria-hidden
-                  className="bg-primary-container ui-pill-pop absolute inset-0 -z-10 rounded-full"
-                />
+              <Icon className={cn('h-5 w-5 transition-transform', active && 'scale-110')} />
+              <span className="leading-none">{t(`common.${sv.id}`)}</span>
+            </button>
+          )
+        })}
+      </div>
+    </nav>
+  )
+}
+
+type BottomNavProps = {
+  lang: UiLanguage
+  subView: SubView
+  onSubViewChange: (subView: SubView) => void
+}
+
+export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
+  const { t } = useTranslations(lang)
+  const { containerRef, buttonRefs, indicator } = useSlidingIndicator<HTMLDivElement>(subView, lang)
+
+  return (
+    <nav
+      aria-label={t('common.sections')}
+      className="bg-surface-container-low fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),28rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg lg:hidden"
+    >
+      <div ref={containerRef} className="relative flex w-full items-center">
+        <span
+          aria-hidden
+          className="bg-primary-container ui-indicator-slide absolute top-0 left-0 rounded-full"
+          style={
+            indicator.ready
+              ? {
+                  transform: `translate(${indicator.x}px, ${indicator.y}px)`,
+                  width: indicator.w,
+                  height: indicator.h,
+                }
+              : { opacity: 0 }
+          }
+        />
+        {SUB_VIEWS.map((sv) => {
+          const Icon = sv.icon
+          const active = subView === sv.id
+          const preloadProps =
+            sv.id === 'nearby'
+              ? {
+                  onMouseEnter: preloadTransitMap,
+                  onFocus: preloadTransitMap,
+                  onTouchStart: preloadTransitMap,
+                }
+              : {}
+          return (
+            <button
+              key={sv.id}
+              ref={(el) => {
+                if (el) buttonRefs.current.set(sv.id, el)
+                else buttonRefs.current.delete(sv.id)
+              }}
+              type="button"
+              onClick={() => onSubViewChange(sv.id)}
+              aria-current={active ? 'page' : undefined}
+              {...preloadProps}
+              className={cn(
+                'ui-press relative z-10 flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 text-[11px] font-medium transition-[color,background-color,transform]',
+                active
+                  ? 'text-on-primary-container'
+                  : 'text-on-surface-variant hover:text-on-surface'
               )}
+            >
               <Icon
                 className={cn('h-[22px] w-[22px] transition-transform', active && 'scale-110')}
               />

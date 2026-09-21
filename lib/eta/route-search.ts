@@ -19,6 +19,8 @@ export type RouteSearchEntry = {
   destination: { en: string; tc: string; sc: string }
   /** Ordered stop ids along the route, deduped and capped. */
   stopIds: string[]
+  /** Full ordered stop ids along the route, deduped, for the via line. */
+  viaStopIds: string[]
   /** Lowercased stop names across all languages, capped, for matching. */
   stopNames: string[]
   /** Lowercased join of number, termini, and stops for fuzzy matching. */
@@ -123,6 +125,7 @@ export function buildRouteSearchIndex(
   }
 
   const stopIdsByKey = new Map<string, { ids: string[]; seen: Set<string>; total: number }>()
+  const viaStopIdsByKey = new Map<string, { ids: string[]; seen: Set<string> }>()
   for (const rs of routeStops) {
     const key = `${normalizeOperator(String(rs.co))}|${rs.route}`
     if (!variantsByKey.has(key)) continue
@@ -131,6 +134,14 @@ export function buildRouteSearchIndex(
       bucket = { ids: [], seen: new Set(), total: 0 }
       stopIdsByKey.set(key, bucket)
     }
+    let via = viaStopIdsByKey.get(key)
+    if (!via) {
+      via = { ids: [], seen: new Set() }
+      viaStopIdsByKey.set(key, via)
+    }
+    if (via.seen.has(rs.stopId)) continue
+    via.seen.add(rs.stopId)
+    via.ids.push(rs.stopId)
     if (bucket.seen.has(rs.stopId)) continue
     bucket.seen.add(rs.stopId)
     bucket.total += 1
@@ -144,6 +155,7 @@ export function buildRouteSearchIndex(
     const co = normalizeOperator(String(first.co))
     const bucket = stopIdsByKey.get(key)
     const stopIds = bucket?.ids ?? []
+    const viaStopIds = viaStopIdsByKey.get(key)?.ids ?? bucket?.ids ?? []
 
     const stopNames: string[] = []
     const stopNameSeen = new Set<string>()
@@ -189,6 +201,7 @@ export function buildRouteSearchIndex(
       origin: first.origin,
       destination: first.destination,
       stopIds,
+      viaStopIds,
       stopNames,
       haystack,
       altNames,
@@ -391,15 +404,78 @@ export function operatorCounts(index: RouteSearchEntry[]): Array<{ code: string;
 }
 
 /**
- * Pick spread key stops for the via line: first, middle, last intermediates,
- * skipping termini dupes and repeated names.
+ * Count distinct co|route values per stop-name group (parsed base name,
+ * lowercased). Stops sharing a name form one group, so the count is the
+ * number of routes serving the group. Used to rank via-line candidates
+ * so busy interchanges win over quiet stops.
+ */
+export function countRoutesByStopName(
+  routeStops: Array<{ co: string; route: string; stopId: string }>,
+  stopsById: Map<string, KmbStopSearchItem>,
+  lang: UiLanguage
+): Map<string, number> {
+  const nameByStopId = new Map<string, string>()
+  for (const [stopId, stop] of stopsById) {
+    const full = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+    const parsed = parseKmbStopNameCached(full, { isKmb: isKmbStop(stop), lang })
+    const key = parsed.name.trim().toLowerCase()
+    if (key) nameByStopId.set(stopId, key)
+  }
+  const byName = new Map<string, Set<string>>()
+  for (const rs of routeStops) {
+    const stopId = String(rs.stopId ?? '').trim()
+    if (!stopId) continue
+    const key = nameByStopId.get(stopId)
+    if (!key) continue
+    const routeKey = `${String(rs.co ?? '').toLowerCase()}|${String(rs.route ?? '').toUpperCase()}`
+    let set = byName.get(key)
+    if (!set) {
+      set = new Set()
+      byName.set(key, set)
+    }
+    set.add(routeKey)
+  }
+  const out = new Map<string, number>()
+  for (const [key, set] of byName) out.set(key, set.size)
+  return out
+}
+
+/**
+ * How many via stops to show for a route of `totalStops` length,
+ * capped at `max` (default 7). Short routes show a single midpoint,
+ * long routes scale up.
+ */
+export function resolveKeyStopCount(totalStops: number, max = 7): number {
+  const cap = Math.max(0, Math.min(7, max))
+  if (totalStops <= 2) return 0
+  if (totalStops <= 5) return Math.min(1, cap)
+  if (totalStops <= 12) return Math.min(2, cap)
+  if (totalStops <= 20) return Math.min(3, cap)
+  if (totalStops <= 30) return Math.min(4, cap)
+  if (totalStops <= 45) return Math.min(5, cap)
+  if (totalStops <= 65) return Math.min(6, cap)
+  return cap
+}
+
+/**
+ * Pick via-line stops: never the first or last stop, up to 7 based on
+ * route length, spread evenly along the route, preferring stops served
+ * by many routes within each segment. Falls back to segment centres
+ * when no usage data is given.
  */
 export function getKeyStops(
   entry: RouteSearchEntry,
   stopsById: Map<string, KmbStopSearchItem>,
   lang: UiLanguage,
-  n = 3
+  max = 7,
+  usageByStopName?: Map<string, number>
 ): string[] {
+  const orderedIds = entry.viaStopIds.length > 0 ? entry.viaStopIds : entry.stopIds
+  const total = orderedIds.length
+  if (total <= 2) return []
+  const k = resolveKeyStopCount(entry.stopCount > 0 ? entry.stopCount : total, max)
+  if (k <= 0) return []
+
   const skip = new Set<string>()
   for (const field of ['origin', 'destination'] as const) {
     for (const name of Object.values(entry[field])) {
@@ -411,9 +487,21 @@ export function getKeyStops(
   }
   for (const name of entry.altNames) skip.add(name)
 
-  const names: string[] = []
+  // Interior window with an end margin so picks stay clear of the
+  // termini. Indices are positions in entry.stopIds.
+  let start = Math.max(1, Math.floor(total * 0.12))
+  let end = Math.min(total - 1, Math.ceil(total * 0.88))
+  if (end <= start) {
+    start = 1
+    end = total - 1
+  }
+
+  type Candidate = { name: string; pos: number; usage: number }
+  const candidates: Candidate[] = []
   const seen = new Set<string>()
-  for (const stopId of entry.stopIds) {
+  for (let idx = start; idx < end; idx += 1) {
+    const stopId = orderedIds[idx]
+    if (!stopId) continue
     const stop = stopsById.get(stopId)
     if (!stop) continue
     const full = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
@@ -423,15 +511,34 @@ export function getKeyStops(
     const key = name.toLowerCase()
     if (!name || seen.has(key)) continue
     seen.add(key)
-    names.push(name)
+    candidates.push({ name, pos: candidates.length, usage: usageByStopName?.get(key) ?? 0 })
   }
 
-  if (names.length <= n) return names
-  if (n <= 1) return names.slice(0, 1)
-  const picked: string[] = []
-  for (let i = 0; i < n; i += 1) {
-    const name = names[Math.round((i * (names.length - 1)) / (n - 1))]
-    if (name && !picked.includes(name)) picked.push(name)
+  if (candidates.length <= k) return candidates.map((c) => c.name)
+
+  // Split the ordered candidates into k contiguous bins and take the
+  // highest-usage stop in each bin, breaking ties toward the bin centre
+  // so picks stay evenly spaced.
+  const picked: Candidate[] = []
+  for (let i = 0; i < k; i += 1) {
+    const binStart = Math.floor((i * candidates.length) / k)
+    const binEnd = Math.floor(((i + 1) * candidates.length) / k)
+    const bin = candidates.slice(binStart, binEnd)
+    if (!bin.length) continue
+    const centre = (binStart + binEnd - 1) / 2
+    let best = bin[0]
+    if (!best) continue
+    for (const c of bin) {
+      if (c.usage !== best.usage) {
+        if (c.usage > best.usage) best = c
+        continue
+      }
+      const distC = Math.abs(c.pos - centre)
+      const distBest = Math.abs(best.pos - centre)
+      if (distC < distBest) best = c
+    }
+    picked.push(best)
   }
-  return picked
+  picked.sort((a, b) => a.pos - b.pos)
+  return Array.from(new Set(picked.map((c) => c.name)))
 }

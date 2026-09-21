@@ -21,15 +21,24 @@ type Props = {
   lang: UiLanguage
   index: number
   matchReason?: RouteMatchReason
+  usageByStopName?: Map<string, number>
   onSelect: () => void
 }
 
 /** Rich route result: badge, operator, origin to destination, key stops. */
-export function RouteResultCard({ entry, stopsById, lang, index, matchReason, onSelect }: Props) {
+export function RouteResultCard({
+  entry,
+  stopsById,
+  lang,
+  index,
+  matchReason,
+  usageByStopName,
+  onSelect,
+}: Props) {
   const { tWithParams } = useTranslations(lang)
   const keyStops = React.useMemo(
-    () => getKeyStops(entry, stopsById, lang, 3),
-    [entry, stopsById, lang]
+    () => getKeyStops(entry, stopsById, lang, 7, usageByStopName),
+    [entry, stopsById, lang, usageByStopName]
   )
   const origin = formatKmbRouteEndpointName(pickLang(entry.origin, lang), {
     co: entry.co,

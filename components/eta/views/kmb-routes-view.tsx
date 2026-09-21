@@ -31,6 +31,7 @@ import { pickLang } from '@/lib/eta/pick-lang'
 import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import {
   buildRouteSearchIndex,
+  countRoutesByStopName,
   loadRouteFuseIndex,
   operatorCounts,
   searchRouteIndex,
@@ -355,6 +356,11 @@ export function KmbRoutesView({
 
   const operatorOptions = React.useMemo(() => operatorCounts(searchIndex), [searchIndex])
 
+  const usageByStopName = React.useMemo(
+    () => countRoutesByStopName(routeStopsAll, stopsById, lang),
+    [routeStopsAll, stopsById, lang]
+  )
+
   const searchHits = React.useMemo(
     () =>
       searchRouteIndex(searchIndex, debouncedQuery, {
@@ -611,6 +617,7 @@ export function KmbRoutesView({
                     lang={lang}
                     index={idx}
                     matchReason={hit.matchReason}
+                    usageByStopName={usageByStopName}
                     onSelect={() =>
                       setSelectedRouteKey({
                         co: hit.entry.co,

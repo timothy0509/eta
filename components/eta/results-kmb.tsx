@@ -4,7 +4,7 @@ import { ChevronDown, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
-import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import { formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -91,13 +91,7 @@ function formatNoScheduledText(t: (key: string) => string) {
 }
 
 function formatEtaLabel(seq: number, lang: UiLanguage) {
-  if (lang === 'en') {
-    if (seq === 1) return '1st'
-    if (seq === 2) return '2nd'
-    if (seq === 3) return '3rd'
-    return `${seq}th`
-  }
-  return `第${seq}班`
+  return formatEtaOrdinals(seq, lang)
 }
 
 function getGroupRemark(items: KmbEtaEntryWithLeg[], lang: UiLanguage): string | null {
@@ -293,7 +287,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const detailsContent = (
     <>
       <DialogHeader>
-        <DialogTitle className="m3-title-md text-on-surface">
+        <DialogTitle className="m3-title-md text-on-surface break-words">
           {route} {destination ? `→ ${destination}` : label ? `→ ${label}` : ''}
         </DialogTitle>
         <DialogDescription className="sr-only">{t('common.routeAndStopDetails')}</DialogDescription>
@@ -303,7 +297,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
         <div className="space-y-1">
           <div className="text-on-surface-variant m3-label-md">{t('common.stop')}</div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="text-on-surface m3-body-md min-w-0 flex-1 truncate font-medium">
+            <div className="text-on-surface m3-body-md min-w-0 flex-1 font-medium break-words">
               {stopChips.name ?? t('common.unknown')}
             </div>
             {stopChips.platform ? (
@@ -328,7 +322,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
         <div className="space-y-1">
           <div className="text-on-surface-variant m3-label-md">{t('common.route')}</div>
-          <div className="text-on-surface m3-body-md">
+          <div className="text-on-surface m3-body-md break-words">
             {origin && destination
               ? `${origin} → ${destination}`
               : label || destination || t('common.unknown')}

@@ -1,4 +1,16 @@
 import type { KmbEtaEntryWithLeg } from '@/lib/eta/client'
+import type { UiLanguage } from '@/lib/eta/types'
+
+/** Ordinal label for the nth departure: 1st/2nd/3rd or 第N班. */
+export function formatEtaOrdinals(seq: number, lang: UiLanguage): string {
+  if (lang === 'en') {
+    if (seq === 1) return '1st'
+    if (seq === 2) return '2nd'
+    if (seq === 3) return '3rd'
+    return `${seq}th`
+  }
+  return `第${seq}班`
+}
 
 export type EtaGroup = {
   key: string

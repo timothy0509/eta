@@ -23,3 +23,13 @@ export function lrtScheduleKey(params: {
 export function kmbRouteGeometryKey(variantKey: string): string {
   return `kmb-route-geometry:${variantKey}`
 }
+
+export function lrtRouteEtaKey(params: {
+  route: string
+  bound: string
+  serviceType: string
+  stationId: string
+  language: string
+}): string {
+  return `lrt-route-eta:${params.route}|${params.bound}|${params.serviceType}|${params.stationId}|${params.language}`
+}

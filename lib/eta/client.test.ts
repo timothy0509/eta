@@ -1,18 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchKmbStops } from './client'
-import { getKmbStops } from '@/lib/eta/direct/kmb'
+import { clearKmbStaticListCache, fetchKmbRouteStops, fetchKmbStops } from './client'
+import { getKmbRouteStops, getKmbStops } from '@/lib/eta/direct/kmb'
 
 vi.mock('@/lib/eta/direct/kmb', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/eta/direct/kmb')>()
-  return { ...original, getKmbStops: vi.fn() }
+  return { ...original, getKmbStops: vi.fn(), getKmbRouteStops: vi.fn() }
 })
 
 const mockGetKmbStops = vi.mocked(getKmbStops)
+const mockGetKmbRouteStops = vi.mocked(getKmbRouteStops)
 
 describe('fetchKmbStops', () => {
   beforeEach(() => {
     mockGetKmbStops.mockReset()
+    clearKmbStaticListCache('stops')
   })
 
   it('coerces string coords and drops stops with invalid coords', async () => {
@@ -106,5 +108,52 @@ describe('fetchKmbStops', () => {
     const stops = await fetchKmbStops()
 
     expect(stops).toMatchObject([{ stopId: 'X', isKmb: false }])
+  })
+
+  it('shares one mapped array across repeat calls without refetching', async () => {
+    mockGetKmbStops.mockResolvedValue([
+      {
+        stop: 'A',
+        name_en: 'Central',
+        name_tc: '中環',
+        name_sc: '中环',
+        lat: 22.28,
+        long: 114.15,
+        isKmb: true,
+      },
+    ])
+
+    const first = await fetchKmbStops()
+    const second = await fetchKmbStops()
+
+    expect(mockGetKmbStops).toHaveBeenCalledTimes(1)
+    expect(second).toBe(first)
+  })
+})
+
+describe('fetchKmbRouteStops', () => {
+  beforeEach(() => {
+    mockGetKmbRouteStops.mockReset()
+    clearKmbStaticListCache('routeStops')
+  })
+
+  it('maps entries once and reuses the result', async () => {
+    mockGetKmbRouteStops.mockResolvedValue([
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        service_type: 1,
+        seq: '3',
+        stop: 'S1',
+      },
+    ])
+
+    const first = await fetchKmbRouteStops()
+    const second = await fetchKmbRouteStops()
+
+    expect(mockGetKmbRouteStops).toHaveBeenCalledTimes(1)
+    expect(first).toMatchObject([{ route: '1A', seq: 3, stopId: 'S1' }])
+    expect(second).toBe(first)
   })
 })

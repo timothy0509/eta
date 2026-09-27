@@ -44,6 +44,7 @@ import {
   type RouteFuseInstance,
 } from '@/lib/eta/route-search'
 import { getRoutedGeometry } from '@/lib/eta/routing'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -434,19 +435,29 @@ function useKmbRouteList() {
 }
 
 function useKmbStops() {
-  const [stops, setStops] = React.useState<KmbStopSearchItem[]>([])
+  // Share the pane-store list so the routes view never fetches its own
+  // copy when the stops pane already loaded one.
+  const cachedStops = usePaneStore((s) => s.kmbStops)
+  const setCachedStops = usePaneStore((s) => s.setKmbStops)
+  const [localStops, setLocalStops] = React.useState<KmbStopSearchItem[]>(() =>
+    usePaneStore.getState().kmbStops.length ? usePaneStore.getState().kmbStops : []
+  )
+  const hasCached = cachedStops.length > 0
   React.useEffect(() => {
+    if (hasCached) return
     let cancelled = false
     fetchKmbStops()
       .then((data) => {
-        if (!cancelled) setStops(data)
+        if (cancelled) return
+        setLocalStops(data)
+        setCachedStops(data)
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [])
-  return stops
+  }, [hasCached, setCachedStops])
+  return hasCached ? cachedStops : localStops
 }
 
 function useKmbRouteGeometry(variantKey: string | null, points: GeoPoint[]): GeoPoint[] | null {
@@ -491,7 +502,8 @@ export function KmbRoutesView({
   const [query, setQuery] = React.useState('')
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const [operator, setOperator] = React.useState<string | null>(null)
-  const [routeStopsAll, setRouteStopsAll] = React.useState<KmbRouteStopLite[]>([])
+  const routeStopsAll = usePaneStore((s) => s.kmbRouteStops)
+  const setRouteStopsAll = usePaneStore((s) => s.setKmbRouteStops)
   const [fuse, setFuse] = React.useState<RouteFuseInstance | null>(null)
   const [manualSelection, setManualSelection] = React.useState<{
     sourceKey: string
@@ -586,7 +598,10 @@ export function KmbRoutesView({
   }, [query])
 
   // Load the full route-stop table once for stop-name matching and via lines.
+  // Shared through the pane store so the stops pane and routes view reuse
+  // the same array instead of each fetching and mapping their own copy.
   React.useEffect(() => {
+    if (routeStopsAll.length) return
     let cancelled = false
     fetchKmbRouteStops()
       .then((data) => {
@@ -596,7 +611,7 @@ export function KmbRoutesView({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [routeStopsAll.length, setRouteStopsAll])
 
   const searchIndex = React.useMemo(
     () => buildRouteSearchIndex(routes, routeStopsAll, stopsById),

@@ -44,7 +44,7 @@ import {
   type StopSearchIndex,
 } from '@/components/eta/panes/kmb-stop-search'
 import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
-import { setKmbPaneState } from '@/lib/eta/pane-store'
+import { setKmbPaneState, usePaneStore } from '@/lib/eta/pane-store'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { useTranslations } from '@/lib/eta/i18n'
 
@@ -160,7 +160,8 @@ export function KmbPane({
     return new Map(kmbStops.map((stop) => [stop.stopId, stop]))
   }, [kmbStops])
 
-  const [kmbRouteStops, setKmbRouteStops] = React.useState<KmbRouteStopLite[]>([])
+  const kmbRouteStops = usePaneStore((s) => s.kmbRouteStops)
+  const setKmbRouteStops = usePaneStore((s) => s.setKmbRouteStops)
   const [loadingRouteStops, setLoadingRouteStops] = React.useState(false)
   const [routeStopsError, setRouteStopsError] = React.useState<string | null>(null)
 
@@ -293,7 +294,7 @@ export function KmbPane({
     return () => {
       cancelled = true
     }
-  }, [kmbRouteStops.length])
+  }, [kmbRouteStops.length, setKmbRouteStops])
 
   const availableStopIdsForFilter = React.useMemo(() => {
     if (!kmbDraftStopSelection) return [] as string[]

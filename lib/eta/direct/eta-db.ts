@@ -2,7 +2,12 @@ import { fetchEtas } from 'hk-bus-eta'
 import type { Company, Eta, EtaDb, RouteListEntry } from 'hk-bus-eta'
 
 import { idbGet, idbSet } from '@/lib/eta/cache/idb'
-import { ETA_DB_CACHE_KEY, ETA_DB_INDEX_KEY, ETA_DB_MD5_KEY } from '@/lib/eta/cache/keys'
+import {
+  ETA_DB_CACHE_KEY,
+  ETA_DB_INDEX_KEY,
+  ETA_DB_MD5_KEY,
+  lrtRouteEtaKey,
+} from '@/lib/eta/cache/keys'
 import { CACHE_POLICIES, createMetaForPolicy, isFresh } from '@/lib/eta/cache/policy'
 import { MicroCache } from '@/lib/eta/cache/micro-cache'
 import {
@@ -23,6 +28,7 @@ import {
   type SerializedEtaDbIndexes,
 } from '@/lib/eta/eta-db-index'
 import { fetchJson, getAdaptiveConcurrency } from '@/lib/eta/http'
+import { getCachedValue } from '@/lib/eta/direct/shared'
 import { promisePool } from '@/lib/eta/promise-pool'
 import { lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -484,34 +490,65 @@ export async function fetchMtrEtasForStop(params: {
   })
 }
 
-export async function fetchLrtEtasForStop(params: {
-  route: string
-  bound: string
-  serviceType: string
-  stationId: string
-  language: UiLanguage
-}): Promise<Eta[]> {
-  const { lrtRoutes } = await getEtaDbIndexes()
+export type FetchLrtEtasForStopDeps = {
+  getIndexes: () => Promise<EtaDbIndexes>
+  fetchVariantEtas: typeof fetchEtas
+}
+
+const defaultFetchLrtEtasForStopDeps: FetchLrtEtasForStopDeps = {
+  getIndexes: getEtaDbIndexes,
+  fetchVariantEtas: fetchEtas,
+}
+
+export async function fetchLrtEtasForStop(
+  params: {
+    route: string
+    bound: string
+    serviceType: string
+    stationId: string
+    language: UiLanguage
+  },
+  deps: FetchLrtEtasForStopDeps = defaultFetchLrtEtasForStopDeps
+): Promise<Eta[]> {
+  const { lrtRoutes } = await deps.getIndexes()
   const route = params.route.toUpperCase()
   const bound = normalizeBound(params.bound)
   const serviceType = String(params.serviceType ?? '')
   const stopId = stationIdToLrtStopId(params.stationId)
   if (!stopId) return []
 
-  const entry = lrtRoutes.find((item) => {
-    if (item.route.toUpperCase() !== route) return false
-    if (String(item.serviceType) !== serviceType) return false
-    return normalizeBound(item.bound.lightRail) === bound
+  const key = lrtRouteEtaKey({
+    route,
+    bound,
+    serviceType,
+    stationId: stopId,
+    language: params.language,
   })
 
-  if (!entry) return []
-  const stops = entry.stops.lightRail ?? []
-  const seq = stops.findIndex((id) => lrtStopIdsEqual(id, stopId))
-  if (seq < 0) return []
+  const { value } = await getCachedValue<Eta[]>({
+    key,
+    policyKey: 'lrtRouteEta',
+    policy: CACHE_POLICIES.lrtRouteEta,
+    allowStale: true,
+    fetcher: async () => {
+      const entry = lrtRoutes.find((item) => {
+        if (item.route.toUpperCase() !== route) return false
+        if (String(item.serviceType) !== serviceType) return false
+        return normalizeBound(item.bound.lightRail) === bound
+      })
 
-  return await fetchEtas({
-    ...entry,
-    seq,
-    language: toHkBusEtaLanguage(params.language),
+      if (!entry) return []
+      const stops = entry.stops.lightRail ?? []
+      const seq = stops.findIndex((id) => lrtStopIdsEqual(id, stopId))
+      if (seq < 0) return []
+
+      return await deps.fetchVariantEtas({
+        ...entry,
+        seq,
+        language: toHkBusEtaLanguage(params.language),
+      })
+    },
   })
+
+  return value
 }

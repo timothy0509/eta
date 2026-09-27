@@ -20,6 +20,7 @@ import {
 } from '@/lib/eta/direct/eta-db'
 import { getLrtSchedule } from '@/lib/eta/direct/lrt'
 import { fetchMtrSchedules as fetchMtrSchedulesDirect } from '@/lib/eta/direct/mtr'
+import { secondsUntilNextKmbDailyUpdate } from '@/lib/eta/kmb-cache'
 import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
 
@@ -103,33 +104,67 @@ export type KmbEtaEntryWithLeg = KmbEtaEntry & {
   leg: 'A' | 'B' | null
 }
 
-export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
-  const stops = await getKmbStops()
+type KmbStaticListSlot = 'stops' | 'routeStops' | 'routes'
 
-  const toCoord = (value: unknown) => {
-    if (typeof value === 'string') {
-      if (!value.trim()) return Number.NaN
-      return Number(value)
-    }
-    if (typeof value === 'number') return value
-    return Number.NaN
+const kmbStaticCaches = new Map<
+  KmbStaticListSlot,
+  { expiresAtMs: number; value: Promise<unknown> }
+>()
+
+function staticTtlMs(): number {
+  try {
+    return Math.max(60_000, secondsUntilNextKmbDailyUpdate() * 1000)
+  } catch {
+    return 24 * 60 * 60 * 1000
   }
+}
 
-  return stops
-    .map((s) => ({
-      stopId: s.stop,
-      nameEn: (s.name_en ?? '').trim(),
-      nameTc: (s.name_tc ?? '').trim(),
-      nameSc: (s.name_sc ?? '').trim(),
-      lat: toCoord(s.lat),
-      lng: toCoord(s.long),
-      isKmb: isKmbStop(s),
-    }))
-    .filter((s) => s.stopId && s.nameEn && Number.isFinite(s.lat) && Number.isFinite(s.lng))
+function cachedStaticList<T>(load: () => Promise<T>, slot: KmbStaticListSlot): Promise<T> {
+  const now = Date.now()
+  const current = kmbStaticCaches.get(slot)
+  if (current && current.expiresAtMs > now) return current.value as Promise<T>
+  const value = load()
+  kmbStaticCaches.set(slot, { expiresAtMs: now + staticTtlMs(), value })
+  value.catch(() => {
+    if (kmbStaticCaches.get(slot)?.value === value) kmbStaticCaches.delete(slot)
+  })
+  return value
+}
+
+export function clearKmbStaticListCache(slot?: KmbStaticListSlot): void {
+  if (slot) kmbStaticCaches.delete(slot)
+  else kmbStaticCaches.clear()
+}
+
+export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
+  return cachedStaticList(async () => {
+    const stops = await getKmbStops()
+
+    const toCoord = (value: unknown) => {
+      if (typeof value === 'string') {
+        if (!value.trim()) return Number.NaN
+        return Number(value)
+      }
+      if (typeof value === 'number') return value
+      return Number.NaN
+    }
+
+    return stops
+      .map((s) => ({
+        stopId: s.stop,
+        nameEn: (s.name_en ?? '').trim(),
+        nameTc: (s.name_tc ?? '').trim(),
+        nameSc: (s.name_sc ?? '').trim(),
+        lat: toCoord(s.lat),
+        lng: toCoord(s.long),
+        isKmb: isKmbStop(s),
+      }))
+      .filter((s) => s.stopId && s.nameEn && Number.isFinite(s.lat) && Number.isFinite(s.lng))
+  }, 'stops')
 }
 
 export async function fetchKmbRoutes(): Promise<KmbRouteListEntry[]> {
-  return await getKmbRouteList()
+  return cachedStaticList(() => getKmbRouteList(), 'routes')
 }
 
 export type KmbRouteStopLite = {
@@ -142,18 +177,20 @@ export type KmbRouteStopLite = {
 }
 
 export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
-  const routeStops = await getKmbRouteStops()
+  return cachedStaticList(async () => {
+    const routeStops = await getKmbRouteStops()
 
-  return routeStops
-    .map((entry) => ({
-      co: entry.co ?? 'kmb',
-      route: entry.route,
-      bound: entry.bound,
-      serviceType: String(entry.service_type),
-      seq: typeof entry.seq === 'string' ? Number(entry.seq) : entry.seq,
-      stopId: entry.stop,
-    }))
-    .filter((entry) => entry.route && entry.stopId)
+    return routeStops
+      .map((entry) => ({
+        co: entry.co ?? 'kmb',
+        route: entry.route,
+        bound: entry.bound,
+        serviceType: String(entry.service_type),
+        seq: typeof entry.seq === 'string' ? Number(entry.seq) : entry.seq,
+        stopId: entry.stop,
+      }))
+      .filter((entry) => entry.route && entry.stopId)
+  }, 'routeStops')
 }
 
 export type KmbRouteInfoLite = {

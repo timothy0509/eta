@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
 import type { MtrPaneState } from '@/components/eta/panes/mtr-pane'
 import type { LrtPaneState } from '@/components/eta/panes/lrt-pane'
+import type { KmbRouteStopLite } from '@/lib/eta/client'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 
 type PaneStore = {
@@ -12,6 +13,23 @@ type PaneStore = {
   lrt: LrtPaneState | null
   kmbStops: KmbStopSearchItem[]
   setKmbStops: (stops: KmbStopSearchItem[]) => void
+  kmbRouteStops: KmbRouteStopLite[]
+  setKmbRouteStops: (stops: KmbRouteStopLite[]) => void
+}
+
+function isSameRouteStop(
+  a: KmbRouteStopLite | undefined,
+  b: KmbRouteStopLite | undefined
+): boolean {
+  if (!a || !b) return false
+  return (
+    a.co === b.co &&
+    a.route === b.route &&
+    a.bound === b.bound &&
+    a.serviceType === b.serviceType &&
+    a.seq === b.seq &&
+    a.stopId === b.stopId
+  )
 }
 
 export const usePaneStore = create<PaneStore>()((set) => ({
@@ -36,6 +54,24 @@ export const usePaneStore = create<PaneStore>()((set) => ({
         if (same) return prev
       }
       return { kmbStops: stops }
+    }),
+  kmbRouteStops: [],
+  // Same guard for the route-stop table so the stops pane and the routes
+  // view share one array instead of each keeping a copy.
+  setKmbRouteStops: (stops) =>
+    set((prev) => {
+      const prevStops = prev.kmbRouteStops
+      if (prevStops.length === stops.length) {
+        let same = true
+        for (let i = 0; i < prevStops.length; i++) {
+          if (!isSameRouteStop(prevStops[i], stops[i])) {
+            same = false
+            break
+          }
+        }
+        if (same) return prev
+      }
+      return { kmbRouteStops: stops }
     }),
 }))
 

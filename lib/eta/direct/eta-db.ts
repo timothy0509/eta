@@ -16,6 +16,7 @@ import {
 } from '@/lib/eta/direct/eta-db-list'
 import {
   buildEtaDbIndexes,
+  mergedRouteVariantKey,
   normalizeBound,
   normalizeStopId,
   routeVariantKey,
@@ -83,10 +84,6 @@ const BUS_COMPANIES = [
   'lightRail',
   'mtr',
 ] as Company[]
-
-function isBusCompany(company: Company): boolean {
-  return BUS_COMPANIES.includes(company)
-}
 
 export function toHkBusEtaLanguage(lang: UiLanguage): 'en' | 'zh' {
   if (lang === 'en') return 'en'
@@ -192,21 +189,71 @@ export async function listKmbStops(): Promise<KmbStopSearchItem[]> {
   return kmbStops
 }
 
+function pickPrimaryOperator(operators: Company[]): Company {
+  if (operators.includes('kmb' as Company)) return 'kmb' as Company
+  if (operators.includes('ctb' as Company)) return 'ctb' as Company
+  return [...operators].sort()[0] as Company
+}
+
+/**
+ * One merged row per joint-route entry. Merging lives in
+ * mergeRouteListEntries (route plus service type plus shared termini), so
+ * this only maps display fields. The same physical direction can carry
+ * opposite raw letters per operator, so the row carries the canonical bound.
+ */
 export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
-  const { kmbRouteListEntries } = await getEtaDbIndexes()
-  return kmbRouteListEntries.flatMap((entry) =>
-    entry.co
-      .filter((co) => isBusCompany(co) && entry.stops[co]?.length)
-      .map((co) => ({
-        co,
-        route: entry.route,
-        bound: normalizeBound(entry.bound[co]),
-        serviceType: entry.serviceType,
+  const { mergedDbEntries } = await getEtaDbIndexes()
+
+  return mergedDbEntries.map((merged) => {
+    const { entry, operators, bound } = merged
+    const sorted = [...operators].sort()
+    const primary = pickPrimaryOperator(sorted)
+    // The raw db row carries a single orig/dest pair, so per-operator
+    // display falls back to the entry strings until hk-bus-eta exposes
+    // per-operator termini.
+    const namesByOperator: Record<
+      string,
+      {
+        origin: { en: string; tc: string; sc: string }
+        destination: { en: string; tc: string; sc: string }
+      }
+    > = {}
+    for (const co of sorted) {
+      namesByOperator[String(co)] = {
         origin: mapEtaLangToUi(entry.orig),
         destination: mapEtaLangToUi(entry.dest),
-        routeEntry: entry,
-      }))
+      }
+    }
+    return {
+      co: primary,
+      route: entry.route,
+      bound,
+      serviceType: entry.serviceType,
+      origin: mapEtaLangToUi(entry.orig),
+      destination: mapEtaLangToUi(entry.dest),
+      routeEntry: entry,
+      operators: sorted,
+      namesByOperator,
+    }
+  })
+}
+
+/** Joint-route stops for one merged variant, in display order (KMB seq first). */
+export async function listMergedRouteStops(params: {
+  route: string
+  bound: string
+  serviceType: string
+}): Promise<Array<{ stopId: string; seq: number }>> {
+  const { mergedVariantIndex } = await getEtaDbIndexes()
+  const merged = mergedVariantIndex.get(
+    mergedRouteVariantKey({
+      route: params.route,
+      bound: params.bound,
+      serviceType: params.serviceType,
+    })
   )
+  if (!merged) return []
+  return merged.orderedStops.map((stopId, idx) => ({ stopId, seq: idx + 1 }))
 }
 
 export async function listKmbRouteStops(): Promise<KmbRouteStopLite[]> {
@@ -220,12 +267,46 @@ export async function findKmbRouteInfo(params: {
   bound: string
   serviceType: string
 }): Promise<KmbRouteInfoLite | null> {
-  const { routeVariantIndex } = await getEtaDbIndexes()
+  const { mergedVariantIndex, routeVariantIndex } = await getEtaDbIndexes()
   const routeName = params.route.toUpperCase()
-  const bound = normalizeBound(params.bound)
   const serviceType = String(params.serviceType ?? '')
   const co = (params.co ?? 'kmb') as Company
 
+  // Merged lookup first: the canonical bound resolves opposite KMB/CTB
+  // letters, so a bound from either operator finds the joint entry.
+  const merged = mergedVariantIndex.get(
+    mergedRouteVariantKey({ route: routeName, bound: params.bound, serviceType })
+  )
+  if (merged) {
+    const sorted = [...merged.operators].sort()
+    const primary = pickPrimaryOperator(sorted)
+    const namesByOperator: Record<
+      string,
+      {
+        origin: { en: string; tc: string; sc: string }
+        destination: { en: string; tc: string; sc: string }
+      }
+    > = {}
+    for (const op of sorted) {
+      namesByOperator[String(op)] = {
+        origin: mapEtaLangToUi(merged.entry.orig),
+        destination: mapEtaLangToUi(merged.entry.dest),
+      }
+    }
+    return {
+      co: primary,
+      route: merged.entry.route,
+      bound: merged.bound,
+      serviceType: merged.entry.serviceType,
+      origin: mapEtaLangToUi(merged.entry.orig),
+      destination: mapEtaLangToUi(merged.entry.dest),
+      routeEntry: merged.entry,
+      operators: sorted,
+      namesByOperator,
+    }
+  }
+
+  const bound = normalizeBound(params.bound)
   const entry = routeVariantIndex.get(
     routeVariantKey({
       co,
@@ -357,12 +438,22 @@ export async function fetchKmbEtasForStop(
   const serviceType = params.serviceType ? String(params.serviceType) : null
   const language = toHkBusEtaLanguage(params.language)
 
-  const { stopRoutesIndex, routeVariantIndex } = await deps.getIndexes()
-  const routeEntries = (stopRoutesIndex.get(stopId) ?? []).filter((e) => {
-    if (routeFilter && e.route.toUpperCase() !== routeFilter) return false
-    if (serviceType && String(e.serviceType) !== serviceType) return false
-    return true
-  })
+  const { stopRoutesIndex, stopEquivalents, routeVariantIndex } = await deps.getIndexes()
+  // KMB and CTB use different stop ids for the same boarding point, so fan
+  // out to equivalent ids. Each id resolves its own variants below; the
+  // official KMB call stays on the requested id to avoid duplicate calls.
+  const equivalentIds = new Set<string>([stopId])
+  for (const [id, canon] of stopEquivalents) {
+    if (id === stopId) equivalentIds.add(canon)
+    else if (canon === stopId) equivalentIds.add(id)
+  }
+  const routeEntries = Array.from(equivalentIds).flatMap((id) =>
+    (stopRoutesIndex.get(id) ?? []).filter((e) => {
+      if (routeFilter && e.route.toUpperCase() !== routeFilter) return false
+      if (serviceType && String(e.serviceType) !== serviceType) return false
+      return true
+    })
+  )
 
   if (routeEntries.length === 0) return [] as KmbEta[]
 

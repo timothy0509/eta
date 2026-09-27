@@ -62,21 +62,29 @@ describe('normalizeRouteQuery', () => {
 })
 
 describe('buildRouteSearchIndex', () => {
-  it('dedupes variants into one entry per co|route', () => {
+  it('dedupes variants into one entry per route', () => {
     const index = buildRouteSearchIndex(routes, routeStops, stopsById)
     const keys = index.map((e) => e.key)
-    expect(keys).toContain('kmb|1A')
-    expect(keys).toContain('kmb|1')
-    expect(keys).toContain('ctb|1')
-    expect(keys.filter((k) => k === 'kmb|1A')).toHaveLength(1)
-    const entry = index.find((e) => e.key === 'kmb|1A')
+    expect(keys).toContain('1A')
+    expect(keys).toContain('1')
+    expect(keys.filter((k) => k === '1A')).toHaveLength(1)
+    expect(keys.filter((k) => k === '1')).toHaveLength(1)
+    const entry = index.find((e) => e.key === '1A')
     expect(entry?.variantCount).toBe(2)
     expect(entry?.directions).toEqual(expect.arrayContaining(['O', 'I']))
   })
 
+  it('merges jointly operated routes into one entry with both operators', () => {
+    const index = buildRouteSearchIndex(routes, routeStops, stopsById)
+    const entry = index.find((e) => e.key === '1')
+    expect(entry).toBeDefined()
+    expect(entry?.operators).toEqual(expect.arrayContaining(['kmb', 'ctb']))
+    expect(entry?.co).toBe('kmb')
+  })
+
   it('sorts empty results numerically', () => {
     const index = buildRouteSearchIndex(routes, routeStops, stopsById)
-    expect(index.map((e) => `${e.co}:${e.route}`).slice(0, 2)).toEqual(['ctb:1', 'kmb:1'])
+    expect(index.map((e) => e.route).slice(0, 2)).toEqual(['1', '1A'])
   })
 })
 
@@ -86,7 +94,7 @@ describe('searchRouteIndex', () => {
   it('ranks exact number first (1A over 13M for "1A")', () => {
     const hits = searchRouteIndex(index, '1A')
     expect(hits[0]?.entry.route).toBe('1A')
-    expect(hits[0]?.entry.key).toBe('kmb|1A')
+    expect(hits[0]?.entry.key).toBe('1A')
   })
 
   it('treats "1 A" like "1A"', () => {
@@ -97,31 +105,31 @@ describe('searchRouteIndex', () => {
   it('ranks number prefix before terminus includes', () => {
     const hits = searchRouteIndex(index, '1')
     const routesFound = hits.map((h) => h.entry.key)
-    expect(routesFound.slice(0, 3)).toContain('kmb|1')
-    expect(routesFound.slice(0, 3)).toContain('ctb|1')
+    expect(routesFound.slice(0, 3)).toContain('1')
+    expect(routesFound.slice(0, 3)).toContain('1A')
   })
 
   it('matches terminus in English', () => {
     const hits = searchRouteIndex(index, 'Kwun Tong')
-    expect(hits.map((h) => h.entry.key)).toContain('kmb|1A')
+    expect(hits.map((h) => h.entry.key)).toContain('1A')
     expect(hits[0]?.matchReason?.kind).toBe('terminus')
   })
 
   it('matches terminus in Traditional Chinese', () => {
     const hits = searchRouteIndex(index, 'Kwun Tong繁')
-    expect(hits.map((h) => h.entry.key)).toContain('kmb|1A')
+    expect(hits.map((h) => h.entry.key)).toContain('1A')
   })
 
   it('matches mid-route stop names', () => {
     const hits = searchRouteIndex(index, 'Mong Kok')
-    expect(hits.map((h) => h.entry.key)).toContain('kmb|1A')
-    const hit = hits.find((h) => h.entry.key === 'kmb|1A')
+    expect(hits.map((h) => h.entry.key)).toContain('1A')
+    const hit = hits.find((h) => h.entry.key === '1A')
     expect(hit?.matchReason?.kind).toBe('stop')
   })
 
   it('matches stop names in Chinese', () => {
     const hits = searchRouteIndex(index, '旺角')
-    expect(hits.map((h) => h.entry.key)).toContain('kmb|1A')
+    expect(hits.map((h) => h.entry.key)).toContain('1A')
   })
 
   it('filters by operator', () => {
@@ -139,13 +147,14 @@ describe('operatorCounts', () => {
   it('counts entries per primary operator', () => {
     const index = buildRouteSearchIndex(routes, routeStops, stopsById)
     const counts = operatorCounts(index)
+    // Merged joint route 1 counts under both operators.
     expect(counts.find((c) => c.code === 'kmb')?.count).toBe(3)
     expect(counts.find((c) => c.code === 'ctb')?.count).toBe(1)
   })
 
   it('counts joint-operator routes under every operator', () => {
     const index = buildRouteSearchIndex(routes, routeStops, stopsById)
-    const entry = index.find((e) => e.key === 'kmb|1A')
+    const entry = index.find((e) => e.key === '1A')
     expect(entry).toBeDefined()
     if (!entry) return
     const joint = [{ ...entry, operators: ['kmb', 'ctb'] }]
@@ -164,7 +173,7 @@ describe('variant termini', () => {
     ]
     const index = buildRouteSearchIndex(variants, [], new Map())
     const hits = searchRouteIndex(index, 'Po Tat')
-    expect(hits.map((h) => h.entry.key)).toContain('kmb|1A')
+    expect(hits.map((h) => h.entry.key)).toContain('1A')
     expect(hits[0]?.matchReason?.kind).toBe('terminus')
   })
 })
@@ -188,7 +197,7 @@ describe('getKeyStops', () => {
       makeRoute('kmb', '1A', 'Kwun Tong', 'Tsim Sha Tsui', 'I'),
     ]
     const index = buildRouteSearchIndex(localRoutes, localRouteStops, localStops)
-    const entry = index.find((e) => e.key === 'kmb|1A')
+    const entry = index.find((e) => e.key === '1A')
     expect(entry).toBeDefined()
     if (!entry) return
     const keys = getKeyStops(entry, localStops, 'tc')
@@ -215,7 +224,7 @@ describe('getKeyStops', () => {
       makeRoute('kmb', '1A', 'Kwun Tong', 'Tsim Sha Tsui', 'I'),
     ]
     const index = buildRouteSearchIndex(localRoutes, localRouteStops, localStops)
-    const entry = index.find((e) => e.key === 'kmb|1A')
+    const entry = index.find((e) => e.key === '1A')
     expect(entry).toBeDefined()
     if (!entry) return
     expect(getKeyStops(entry, localStops, 'tc', 1)).toHaveLength(1)
@@ -234,7 +243,7 @@ describe('getKeyStops', () => {
       { co: 'kmb', route: 'X1', bound: 'O', serviceType: '1', seq: 3, stopId: 'c' },
     ]
     const index = buildRouteSearchIndex(variants, localRouteStops, stops)
-    const entry = index.find((e) => e.key === 'kmb|X1')
+    const entry = index.find((e) => e.key === 'X1')
     expect(entry).toBeDefined()
     if (!entry) return
     expect(getKeyStops(entry, stops, 'tc')).toEqual(['Stop B'])
@@ -264,7 +273,7 @@ describe('getKeyStops', () => {
       stopId: 's3',
     }))
     const index = buildRouteSearchIndex(variants, localRouteStops, stops)
-    const entry = index.find((e) => e.key === 'kmb|X2')
+    const entry = index.find((e) => e.key === 'X2')
     expect(entry).toBeDefined()
     if (!entry) return
     const usage = countRoutesByStopName([...localRouteStops, ...extraRoutes], stops, 'tc')
@@ -331,7 +340,7 @@ describe('getKeyStops', () => {
       { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 6, stopId: 'f' },
     ]
     const index = buildRouteSearchIndex(variants, rows, stops)
-    const entry = index.find((e) => e.key === 'kmb|X4')
+    const entry = index.find((e) => e.key === 'X4')
     expect(entry).toBeDefined()
     if (!entry) return
     expect(entry.viaStopCount).toBe(8)
@@ -356,7 +365,7 @@ describe('getKeyStops', () => {
       stopId: `s${i}`,
     }))
     const index = buildRouteSearchIndex(variants, localRouteStops, stops)
-    const entry = index.find((e) => e.key === 'kmb|X3')
+    const entry = index.find((e) => e.key === 'X3')
     expect(entry).toBeDefined()
     if (!entry) return
     const keys = getKeyStops(entry, stops, 'tc')

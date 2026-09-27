@@ -33,6 +33,8 @@ export function SettingsView({ lang }: Props) {
   const setLang = useAppStore((s) => s.setLang)
   const autoRefreshSeconds = useAppStore((s) => s.autoRefreshSeconds)
   const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds)
+  const jointRouteNameSource = useAppStore((s) => s.jointRouteNameSource)
+  const setJointRouteNameSource = useAppStore((s) => s.setJointRouteNameSource)
 
   const scSupported = isLanguageSupported(mode, 'sc')
 
@@ -94,6 +96,36 @@ export function SettingsView({ lang }: Props) {
           </div>
         </section>
       </div>
+
+      <section className="card-m3 p-5">
+        <h2 className="m3-title-md mb-4 flex items-center gap-2">
+          <Globe className="h-5 w-5" />
+          {t('common.jointRouteNames')}
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {(
+            [
+              { value: 'stop', labelKey: 'common.jointRouteNamesStop' },
+              { value: 'kmb', labelKey: 'common.jointRouteNamesKmb' },
+              { value: 'ctb', labelKey: 'common.jointRouteNamesCtb' },
+            ] as const
+          ).map(({ value, labelKey }) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setJointRouteNameSource(value)}
+              className={cn(
+                'm3-label-lg flex min-h-[44px] items-center gap-2 rounded-full px-5 py-2 shadow-sm transition-colors',
+                jointRouteNameSource === value
+                  ? 'bg-primary-container text-on-primary-container'
+                  : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+              )}
+            >
+              {t(labelKey)}
+            </button>
+          ))}
+        </div>
+      </section>
 
       <section className="card-m3 p-5">
         <h2 className="m3-title-md mb-4 flex items-center gap-2">

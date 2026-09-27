@@ -136,7 +136,7 @@ describe('encodeUrlState', () => {
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {
-          entries: [{ variantKey: 'kmb|1A|1|1' }],
+          entries: [{ variantKey: '1A|O|1' }],
         },
       },
     }
@@ -305,7 +305,7 @@ describe('decodeUrlState', () => {
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {
-          entries: [{ variantKey: 'kmb|1A|1|1' }],
+          entries: [{ variantKey: '1A|O|1' }],
         },
       },
     }
@@ -313,5 +313,30 @@ describe('decodeUrlState', () => {
     const decoded = decodeUrlState(encoded)
     expect(decoded.selectedItem).toHaveProperty('routeFilterMode', 'advanced')
     expect(decoded.state.routeFilterMode).toBeUndefined()
+  })
+
+  it('decodes legacy co-prefixed entries to the same merged key', () => {
+    const legacy = decodeUrlState('km=stop&ks=1234&rfm=advanced&ke=kmb|101|O|1')
+    const merged = decodeUrlState('km=stop&ks=1234&rfm=advanced&ke=101|O|1')
+    expect(legacy.selectedItem).toHaveProperty('entries', [{ variantKey: '101|O|1' }])
+    expect(merged.selectedItem).toHaveProperty('entries', [{ variantKey: '101|O|1' }])
+  })
+
+  it('encodes merged entries without the operator prefix', () => {
+    const input: UrlEncodeInput = {
+      mode: 'kmb',
+      subView: 'stops',
+      lang: 'tc',
+      routeFilterMode: 'advanced',
+      autoRefreshSeconds: 15,
+      kmb: {
+        query: { mode: 'stop', stopId: '1234' },
+        routeFilter: {
+          entries: [{ variantKey: '101|O|1' }],
+        },
+      },
+    }
+    const encoded = encodeUrlState(input)
+    expect(encoded).toContain('ke=101%7CO%7C1')
   })
 })

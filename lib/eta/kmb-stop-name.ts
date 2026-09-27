@@ -125,6 +125,56 @@ export function formatKmbRouteEndpointName(
   return titleCaseKmbEnName(name)
 }
 
+export type JointRouteNameSource = 'stop' | 'kmb' | 'ctb'
+
+type LocalizedName = { en: string; tc: string; sc: string }
+
+function pickNonEmptyName(names: LocalizedName[], lang: UiLanguage): string {
+  for (const record of names) {
+    const text = String(record[lang] ?? '').trim()
+    if (text) return text
+  }
+  return ''
+}
+
+/**
+ * Resolve which origin/destination text a merged joint route shows.
+ * Setting `kmb` or `ctb` wins directly. Setting `stop` follows the viewing
+ * stop: KMB stops use KMB names, others use CTB names. Falls back to the
+ * primary names when the winning operator has no string.
+ */
+export function resolveJointRouteEndpoint(
+  info:
+    | {
+        origin: LocalizedName
+        destination: LocalizedName
+        namesByOperator?: Record<string, { origin: LocalizedName; destination: LocalizedName }>
+      }
+    | undefined,
+  field: 'origin' | 'destination',
+  opts: { source: JointRouteNameSource; isKmbStop?: boolean; lang: UiLanguage }
+): string {
+  if (!info) return ''
+  const names = info.namesByOperator
+  const winner =
+    opts.source === 'kmb' ? 'kmb' : opts.source === 'ctb' ? 'ctb' : opts.isKmbStop ? 'kmb' : 'ctb'
+  const winnerText =
+    names?.[winner]?.[field]?.[opts.lang]?.trim() ??
+    names?.[Object.keys(names ?? {}).find((key) => key.toLowerCase() === winner) ?? '']?.[field]?.[
+      opts.lang
+    ]?.trim() ??
+    ''
+  if (winnerText) return winnerText
+  const fallback = pickNonEmptyName(
+    [
+      info[field],
+      ...(Object.values(names ?? {}).map((record) => record[field]) as LocalizedName[]),
+    ],
+    opts.lang
+  )
+  return fallback
+}
+
 export function parseKmbStopName(fullName: string, opts?: KmbParseOpts): ParsedKmbStopName {
   if (!opts?.isKmb) {
     return { name: fullName, platform: null, stopCode: null }

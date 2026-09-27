@@ -200,6 +200,14 @@ export type KmbRouteInfoLite = {
     tc: string
     sc: string
   }
+  operators?: Company[]
+  namesByOperator?: Record<
+    string,
+    {
+      origin: { en: string; tc: string; sc: string }
+      destination: { en: string; tc: string; sc: string }
+    }
+  >
 }
 
 export async function fetchKmbEtas(
@@ -232,22 +240,27 @@ export async function fetchKmbRouteInfo(params: {
   serviceType: string
 }): Promise<KmbRouteInfoLite> {
   const info = await getKmbRouteInfo(params)
+  const origin = {
+    en: (info.orig_en ?? '').trim(),
+    tc: (info.orig_tc ?? '').trim(),
+    sc: (info.orig_sc ?? '').trim(),
+  }
+  const destination = {
+    en: (info.dest_en ?? '').trim(),
+    tc: (info.dest_tc ?? '').trim(),
+    sc: (info.dest_sc ?? '').trim(),
+  }
+  const co = info.co ?? params.co ?? 'kmb'
 
   return {
-    co: info.co ?? params.co ?? 'kmb',
+    co,
     route: info.route,
     bound: info.bound,
     serviceType: String(info.service_type),
-    origin: {
-      en: (info.orig_en ?? '').trim(),
-      tc: (info.orig_tc ?? '').trim(),
-      sc: (info.orig_sc ?? '').trim(),
-    },
-    destination: {
-      en: (info.dest_en ?? '').trim(),
-      tc: (info.dest_tc ?? '').trim(),
-      sc: (info.dest_sc ?? '').trim(),
-    },
+    origin,
+    destination,
+    operators: info.operators,
+    namesByOperator: info.namesByOperator,
   }
 }
 

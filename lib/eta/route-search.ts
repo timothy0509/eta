@@ -98,7 +98,11 @@ export function normalizeRouteQuery(query: string): {
 }
 
 export function compareRouteEntries(a: RouteSearchEntry, b: RouteSearchEntry): number {
-  return a.route.localeCompare(b.route, undefined, { numeric: true }) || a.co.localeCompare(b.co)
+  // Route-only keys are unique, so the tiebreak rarely matters.
+  return (
+    a.route.localeCompare(b.route, undefined, { numeric: true }) ||
+    pickLang(a.origin, 'en').localeCompare(pickLang(b.origin, 'en'))
+  )
 }
 
 function entryDisplayText(
@@ -109,12 +113,14 @@ function entryDisplayText(
   return pickLang(entry[field], lang)
 }
 
-function canonicalRouteSearchKey(co: unknown, route: unknown): string {
-  return `${normalizeOperator(String(co ?? ''))}|${String(route ?? '').toUpperCase()}`
+function canonicalRouteSearchKey(_co: unknown, route: unknown): string {
+  // Joint routes merge across operators, so the key is route-only. The `co`
+  // param stays so existing callers keep compiling.
+  return String(route ?? '').toUpperCase()
 }
 
 /**
- * Build one search entry per co|route from the variant list plus the full
+ * Build one search entry per route from the variant list plus the full
  * route-stop table joined with stop names. Pure and memo-friendly.
  */
 export function buildRouteSearchIndex(
@@ -163,7 +169,9 @@ export function buildRouteSearchIndex(
   for (const [key, variants] of variantsByKey) {
     const first = variants[0]
     if (!first) continue
-    const co = normalizeOperator(String(first.co))
+    // Prefer KMB for display so joint routes keep a stable badge and termini.
+    const primary = variants.find((v) => normalizeOperator(String(v.co)) === 'kmb') ?? first
+    const co = normalizeOperator(String(primary.co))
     const bucket = stopIdsByKey.get(key)
     const stopIds = bucket?.ids ?? []
 
@@ -222,15 +230,15 @@ export function buildRouteSearchIndex(
       }
     }
 
-    const haystack = [first.route, ...altNames, ...stopNames].join(' ').toLowerCase()
+    const haystack = [primary.route, ...altNames, ...stopNames].join(' ').toLowerCase()
 
     entries.push({
       key,
       co,
-      route: first.route,
+      route: primary.route,
       operators,
-      origin: first.origin,
-      destination: first.destination,
+      origin: primary.origin,
+      destination: primary.destination,
       stopIds,
       viaStopIds,
       stopNames,

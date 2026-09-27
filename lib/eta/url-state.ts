@@ -93,8 +93,11 @@ function normalizeVariantKeys(entries: string[]): string[] {
     .map((entry) => {
       if (!entry) return ''
       const parts = entry.split('|')
-      if (parts.length === 3) return `kmb|${entry}`
-      if (parts.length === 4) return entry
+      // Canonical keys are merged `route|dir|serviceType`. Legacy 4-part
+      // `co|route|dir|st` keys strip the operator. Old 3-part route-only
+      // input was ambiguous; treat it as already merged.
+      if (parts.length === 3) return entry
+      if (parts.length === 4) return parts.slice(1).join('|')
       // Invalid format: ensure this entry is filtered out
       return ''
     })

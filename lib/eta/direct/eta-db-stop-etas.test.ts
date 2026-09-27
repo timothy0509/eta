@@ -65,6 +65,9 @@ function emptyIndexes(): EtaDbIndexes {
     routeStopSeqIndex: new Map(),
     stopRoutesIndex: new Map(),
     routeVariantIndex: new Map(),
+    stopEquivalents: new Map(),
+    mergedDbEntries: [],
+    mergedVariantIndex: new Map(),
   }
 }
 

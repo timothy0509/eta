@@ -178,6 +178,10 @@ const common: Record<string, TranslationEntry> = {
   hourAgo: { en: '{hours} hr ago', tc: '{hours} 小時前', sc: '{hours} 小时前' },
   hoursAgo: { en: '{hours} hrs ago', tc: '{hours} 小時前', sc: '{hours} 小时前' },
   stationWithId: { en: 'Station {id}', tc: '車站 {id}', sc: '车站 {id}' },
+  jointRouteNames: { en: 'Joint route names', tc: '聯營路線名稱', sc: '联营路线名称' },
+  jointRouteNamesStop: { en: 'Follow stop', tc: '跟隨車站', sc: '跟随车站' },
+  jointRouteNamesKmb: { en: 'KMB names', tc: '九巴名稱', sc: '九巴名称' },
+  jointRouteNamesCtb: { en: 'CTB names', tc: '城巴名稱', sc: '城巴名称' },
 }
 
 const kmb: Record<string, TranslationEntry> = {

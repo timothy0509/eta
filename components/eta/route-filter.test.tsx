@@ -12,9 +12,9 @@ import {
 } from '@/components/eta/route-filter'
 
 const OPTIONS = [
-  { key: 'kmb|1A|O|1', route: '1A', label: '1A outbound' },
-  { key: 'kmb|1A|I|1', route: '1A', label: '1A inbound' },
-  { key: 'kmb|2|O|1', route: '2', label: '2 outbound' },
+  { key: '1A|O|1', route: '1A', label: '1A outbound' },
+  { key: '1A|I|1', route: '1A', label: '1A inbound' },
+  { key: '2|O|1', route: '2', label: '2 outbound' },
 ]
 
 function Harness() {
@@ -26,9 +26,9 @@ describe('countActiveFilters', () => {
   it('counts entries first, then comma routes', () => {
     expect(countActiveFilters({ routes: '', entries: [] })).toBe(0)
     expect(countActiveFilters({ routes: '1A, 2', entries: [] })).toBe(2)
-    expect(
-      countActiveFilters({ routes: '1A', entries: [{ id: 'a', variantKey: 'kmb|1A|O|1' }] })
-    ).toBe(1)
+    expect(countActiveFilters({ routes: '1A', entries: [{ id: 'a', variantKey: '1A|O|1' }] })).toBe(
+      1
+    )
   })
 })
 
@@ -48,5 +48,18 @@ describe('RouteFilter', () => {
     fireEvent.click(variantButton!)
     expect(variantButton?.className).toContain('bg-primary-container')
     unmount()
+  })
+})
+
+describe('parseRouteVariantKey compat', () => {
+  it('parses merged and legacy keys to the same route and direction', async () => {
+    const { parseRouteVariantKey } = await import('@/lib/eta/eta-db-index')
+    const merged = parseRouteVariantKey('101|O|1')
+    const legacy = parseRouteVariantKey('kmb|101|O|1')
+    expect(merged?.route).toBe('101')
+    expect(legacy?.route).toBe('101')
+    expect(merged?.bound).toBe('O')
+    expect(legacy?.bound).toBe('O')
+    expect(legacy?.co).toBe('kmb')
   })
 })

@@ -7,6 +7,34 @@ import { persist, createJSONStorage } from 'zustand/middleware'
 
 export type RouteFilterMode = 'simple' | 'advanced'
 
+export type JointRouteNameSource = 'stop' | 'kmb' | 'ctb'
+
+/** New merged id: `kmb:route:{ROUTE}:{BOUND}:{ST}`. Legacy ids carry `co` after `route:`. */
+export function parseRouteFavoriteId(id: string): {
+  route: string
+  bound: string
+  serviceType: string
+  co?: string
+} | null {
+  const parts = String(id ?? '').split(':')
+  if (parts[0] !== 'kmb' || parts[1] !== 'route') return null
+  if (parts.length === 5) {
+    const [, , route = '', bound = '', serviceType = ''] = parts
+    if (!route) return null
+    return { route: route.toUpperCase(), bound, serviceType }
+  }
+  if (parts.length === 6) {
+    const [, , co = '', route = '', bound = '', serviceType = ''] = parts
+    if (!route) return null
+    return { route: route.toUpperCase(), bound, serviceType, co }
+  }
+  return null
+}
+
+export function toMergedRouteFavoriteId(route: string, bound: string, serviceType: string): string {
+  return `kmb:route:${String(route ?? '').toUpperCase()}:${bound}:${serviceType}`
+}
+
 type FavoritesMeta = {
   pinned?: boolean
   groupId?: string | null
@@ -59,6 +87,7 @@ export type FavoritesItem = FavoritesMeta &
         title: string
         route: string
         co?: string
+        operators?: string[]
         bound: string
         serviceType: string
         origin?: { en: string; tc: string; sc: string }
@@ -108,6 +137,7 @@ type PrefsSlice = {
   lang: UiLanguage
   routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
+  jointRouteNameSource: JointRouteNameSource
 
   favorites: FavoritesItem[]
   favoritesGroups: FavoritesGroup[]
@@ -116,6 +146,7 @@ type PrefsSlice = {
   setLang: (lang: UiLanguage) => void
   setRouteFilterMode: (mode: RouteFilterMode) => void
   setAutoRefreshSeconds: (seconds: number) => void
+  setJointRouteNameSource: (source: JointRouteNameSource) => void
   addFavorite: (item: FavoritesItem) => void
   removeFavorite: (id: string) => void
   toggleFavoritePin: (id: string) => void
@@ -163,6 +194,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   lang: 'tc',
   routeFilterMode: 'simple',
   autoRefreshSeconds: 15,
+  jointRouteNameSource: 'stop',
 
   favorites: [],
   favoritesGroups: [],
@@ -171,6 +203,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   setLang: (lang) => set({ lang }),
   setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
   setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
+  setJointRouteNameSource: (jointRouteNameSource) => set({ jointRouteNameSource }),
 
   addFavorite: (item) =>
     set((state) => {
@@ -305,7 +338,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 5,
+      version: 6,
       // Direct persist write. The previous 300 ms debounced localStorage
       // wrapper plus beforeunload flush could lose the last write on
       // mobile, where beforeunload often never fires. Zustand now writes
@@ -315,7 +348,22 @@ export const useAppStore = create<AppState>()(
       migrate: (persistedState, _fromVersion) => {
         const state = persistedState as Partial<AppState> | undefined
         const favorites = capFavorites(
-          (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
+          (state?.favorites ?? []).map((favorite) => {
+            const withMeta = withFavoriteMeta(favorite)
+            if (withMeta.mode === 'kmb' && 'type' in withMeta && withMeta.type === 'route') {
+              const parsed = parseRouteFavoriteId(withMeta.id)
+              if (parsed) {
+                const mergedId = toMergedRouteFavoriteId(
+                  parsed.route,
+                  parsed.bound,
+                  parsed.serviceType
+                )
+                const operators = withMeta.operators ?? (parsed.co ? [parsed.co] : undefined)
+                return { ...withMeta, id: mergedId, operators }
+              }
+            }
+            return withMeta
+          })
         )
 
         // v4 persisted nav (mode, subView) alongside prefs. Carry those
@@ -327,6 +375,7 @@ export const useAppStore = create<AppState>()(
           lang: state?.lang ?? 'tc',
           routeFilterMode: state?.routeFilterMode ?? 'simple',
           autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
+          jointRouteNameSource: state?.jointRouteNameSource ?? 'stop',
           favorites,
           favoritesGroups: state?.favoritesGroups ?? [],
           recents: state?.recents ?? [],
@@ -336,6 +385,7 @@ export const useAppStore = create<AppState>()(
         lang: state.lang,
         routeFilterMode: state.routeFilterMode,
         autoRefreshSeconds: state.autoRefreshSeconds,
+        jointRouteNameSource: state.jointRouteNameSource,
         favorites: state.favorites,
         favoritesGroups: state.favoritesGroups,
         recents: state.recents,

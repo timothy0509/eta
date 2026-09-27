@@ -736,3 +736,22 @@ describe('capFavorites', () => {
     expect(capped.some((f) => f.id === 'old-pinned')).toBe(true)
   })
 })
+
+describe('route favorite ids', () => {
+  it('parses new merged and legacy co-prefixed ids', async () => {
+    const { parseRouteFavoriteId, toMergedRouteFavoriteId } = await import('./store')
+    expect(parseRouteFavoriteId('kmb:route:101:O:1')).toEqual({
+      route: '101',
+      bound: 'O',
+      serviceType: '1',
+    })
+    expect(parseRouteFavoriteId('kmb:route:kmb:101:O:1')).toEqual({
+      route: '101',
+      bound: 'O',
+      serviceType: '1',
+      co: 'kmb',
+    })
+    expect(toMergedRouteFavoriteId('101', 'O', '1')).toBe('kmb:route:101:O:1')
+    expect(parseRouteFavoriteId('junk')).toBeNull()
+  })
+})

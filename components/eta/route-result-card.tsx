@@ -97,7 +97,9 @@ export function RouteResultCard({
             className="h-2 w-2 shrink-0 rounded-full"
             style={{ backgroundColor: getOperatorColor(entry.co) }}
           />
-          <span className="text-on-surface-variant m3-label-md uppercase">{entry.co}</span>
+          <span className="text-on-surface-variant m3-label-md uppercase">
+            {entry.operators.length > 1 ? entry.operators.join('·') : entry.co}
+          </span>
         </span>
         <ChevronRight aria-hidden className="text-on-surface-variant h-4 w-4 shrink-0" />
       </span>

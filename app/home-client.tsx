@@ -148,8 +148,10 @@ function KmbResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
   )
   const refreshFn = data?.refresh
   const onRefresh = React.useCallback(() => void refreshFn?.({ toastOnError: true }), [refreshFn])
+  const nameSource = useAppStore((s) => s.jointRouteNameSource)
   return (
     <KmbResults
+      nameSource={nameSource}
       lang={data?.lang ?? fallbackLang}
       title={data?.title ?? ''}
       stopCode={data?.stopCode ?? null}

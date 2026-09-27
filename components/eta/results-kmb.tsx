@@ -4,7 +4,9 @@ import { ChevronDown, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
-import { formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import { defaultMergedKey, formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
+import { canonicalStopId } from '@/lib/eta/eta-db-index'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -20,7 +22,12 @@ import {
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
-import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import {
+  formatKmbRouteEndpointName,
+  parseKmbStopNameCached,
+  resolveJointRouteEndpoint,
+} from '@/lib/eta/kmb-stop-name'
+import { parseRouteVariantKey } from '@/lib/eta/eta-db-index'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
@@ -31,7 +38,7 @@ import { useTranslations } from '@/lib/eta/i18n'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
 
-function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
+export function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
   const key = normalizeOperator(co)
   const map: Record<string, { en: string; tc: string; sc: string }> = {
     kmb: { en: 'KMB', tc: '九巴', sc: '九巴' },
@@ -55,16 +62,28 @@ function formatRouteVariantLabel(
   /** For circular routes, use origin instead of destination for the arriving leg */
   isArrivingLeg?: boolean,
   /** Fallback stop name to use for arriving leg when route info is not yet loaded */
-  stopNameFallback?: string
+  stopNameFallback?: string,
+  opts?: { nameSource?: 'stop' | 'kmb' | 'ctb'; isKmbStop?: boolean }
 ) {
   if (info) {
-    // For arriving leg, show origin (where the bus came from) instead of destination
-    if (isArrivingLeg) {
-      const origin = pickLang(info.origin, lang)
-      if (origin) return formatKmbRouteEndpointName(origin, { co: info.co, lang })
+    const field = isArrivingLeg ? 'origin' : 'destination'
+    // Joint-route naming rule: follow the stop unless the setting overrides.
+    const resolved = resolveJointRouteEndpoint(info, field, {
+      source: opts?.nameSource ?? 'stop',
+      isKmbStop: opts?.isKmbStop,
+      lang,
+    })
+    if (resolved) {
+      const winnerCo =
+        opts?.nameSource === 'kmb'
+          ? 'kmb'
+          : opts?.nameSource === 'ctb'
+            ? 'ctb'
+            : opts?.isKmbStop === false
+              ? 'ctb'
+              : (info.co ?? 'kmb')
+      return formatKmbRouteEndpointName(resolved, { co: winnerCo, lang })
     }
-    const destination = pickLang(info.destination, lang)
-    if (destination) return formatKmbRouteEndpointName(destination, { co: info.co, lang })
   }
 
   // Fallback when route info not yet loaded
@@ -194,6 +213,7 @@ type Props = {
   onLoadMore?: () => void
   /** Precomputed render groups from pane (avoids recomputation during render) */
   precomputedGroups?: PrecomputedGroups
+  nameSource?: 'stop' | 'kmb' | 'ctb'
 }
 
 /** Shared details dialog shell: each call site passes its own trigger, content stays identical */
@@ -229,9 +249,11 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stopChips,
   expanded,
   onToggleExpand,
+  stop,
+  nameSource,
 }: {
   variantKey: string
-  /** Base variant key without leg suffix (co|route|dir|service_type) for route info & fare lookup */
+  /** Base variant key without leg suffix (route|dir|service_type) for route info & fare lookup */
   baseKey: string
   items: KmbEtaEntryWithLeg[]
   hasEta: boolean
@@ -246,35 +268,59 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stopChips: StopChips
   expanded?: boolean
   onToggleExpand?: () => void
+  stop?: StopInfo
+  nameSource?: 'stop' | 'kmb' | 'ctb'
 }) {
-  const [co = 'kmb', route = ''] = variantKey.split('|')
+  // Merged key is `route|dir|serviceType|leg`; legacy keys carry a `co|` prefix.
+  const parsedKey = parseRouteVariantKey(variantKey)
+  const legacyParts = variantKey.split('|')
+  const route =
+    parsedKey?.route ?? (legacyParts.length === 5 ? legacyParts[1] : legacyParts[0]) ?? ''
+  const primaryCo = String(routeInfos[baseKey]?.co ?? items[0]?.co ?? 'kmb')
   const first = items[0]
   // Use baseKey for route info lookup (full key may have leg suffix)
   const routeInfo = routeInfos[baseKey]
+  const isKmbViewingStop = stop ? isKmbStop(stop) : undefined
   const label = formatRouteVariantLabel(
     routeInfo,
     first,
     lang,
     isArrivingLeg,
-    stopChips.name ?? undefined
+    stopChips.name ?? undefined,
+    {
+      nameSource,
+      isKmbStop: isKmbViewingStop,
+    }
   )
   // Fare is only shown if hasFare is true (suppressed for arriving leg)
   const fare = hasFare && faresByVariantKey ? faresByVariantKey[baseKey] : undefined
 
-  const origin = routeInfo?.origin
-    ? formatKmbRouteEndpointName(pickLang(routeInfo.origin, lang), {
-        co: routeInfo.co,
-        lang,
-      })
+  const origin = routeInfo
+    ? formatKmbRouteEndpointName(
+        resolveJointRouteEndpoint(routeInfo, 'origin', {
+          source: nameSource ?? 'stop',
+          isKmbStop: isKmbViewingStop,
+          lang,
+        }),
+        { co: routeInfo.co, lang }
+      ) || null
     : null
-  const destination = routeInfo?.destination
-    ? formatKmbRouteEndpointName(pickLang(routeInfo.destination, lang), {
-        co: routeInfo.co,
-        lang,
-      })
+  const destination = routeInfo
+    ? formatKmbRouteEndpointName(
+        resolveJointRouteEndpoint(routeInfo, 'destination', {
+          source: nameSource ?? 'stop',
+          isKmbStop: isKmbViewingStop,
+          lang,
+        }),
+        { co: routeInfo.co, lang }
+      ) || null
     : null
-  const operatorColor = getOperatorColor(first?.co ?? co)
-  const operatorName = formatOperatorLabel(first?.co ?? co, lang)
+  const groupOperators = Array.from(
+    new Set(items.map((entry) => normalizeOperator(entry.co)).filter(Boolean))
+  ).sort()
+  // Primary color keeps the edge strip stable; per-departure chips show the rest.
+  const operatorColor = getOperatorColor(primaryCo)
+  const operatorName = groupOperators.map((op) => formatOperatorLabel(op, lang)).join(' · ')
 
   const { t } = useTranslations(lang)
 
@@ -315,9 +361,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
         <div className="space-y-1">
           <div className="text-on-surface-variant m3-label-md">{t('common.operator')}</div>
-          <div className="text-on-surface m3-body-md">
-            {formatOperatorLabel(first?.co ?? co, lang)}
-          </div>
+          <div className="text-on-surface m3-body-md">{operatorName || t('common.unknown')}</div>
         </div>
 
         <div className="space-y-1">
@@ -385,7 +429,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const routeHeader = ({ showEta, showSubtitle }: { showEta: boolean; showSubtitle: boolean }) => (
     <div className="flex items-center justify-between gap-2">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <RouteBadge route={route} company={co} size="lg" />
+        <RouteBadge route={route} company={primaryCo} size="lg" />
         <div className="min-w-0 flex-1 overflow-hidden">
           <span className="sr-only">{operatorName}</span>
           <Marquee
@@ -439,7 +483,12 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
             },
             lang
           )
-          const isFirst = entry.eta_seq === 1
+          const operatorChip = (
+            <span className="m3-label-md mt-1 block uppercase opacity-70">
+              {formatOperatorLabel(entry.co, lang)}
+            </span>
+          )
+          const isFirst = entryIdx === 0
 
           if (isFirst) {
             return (
@@ -456,6 +505,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
                     variant="panel"
                   />
                 </div>
+                {groupOperators.length > 1 ? operatorChip : null}
                 {remark ? (
                   <Marquee title={remark} className="m3-label-md mt-1 opacity-80">
                     {remark}
@@ -482,6 +532,7 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
                   className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg"
                 />
               </div>
+              {groupOperators.length > 1 ? operatorChip : null}
               {remark ? (
                 <Marquee title={remark} className="text-on-surface-variant m3-label-md mt-0.5">
                   {remark}
@@ -576,6 +627,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById,
   expandedKey,
   onToggleExpand,
+  nameSource,
 }: {
   stopId: string
   stopInfo?: StopInfo
@@ -589,6 +641,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById: Map<string, StopChips>
   expandedKey?: string | null
   onToggleExpand?: (key: string) => void
+  nameSource?: 'stop' | 'kmb' | 'ctb'
 }) {
   const { t } = useTranslations(lang)
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
@@ -632,6 +685,8 @@ const StopSection = React.memo(function StopSection({
               staggerClass={isFirst ? staggerClassForIndex(idx) : ''}
               expanded={expandedKey === g.key}
               onToggleExpand={() => onToggleExpand?.(g.key)}
+              stop={stopInfo ?? stopLookup.get(stopId)}
+              nameSource={nameSource}
             />
           ))}
         </div>
@@ -663,6 +718,7 @@ export const KmbResults = React.memo(function KmbResults({
   hasMoreStops,
   onLoadMore,
   precomputedGroups,
+  nameSource,
 }: Props) {
   // Scroll and visibility state stays local so intersections never hit the store.
   const sentinelRef = React.useRef<HTMLDivElement | null>(null)
@@ -692,6 +748,29 @@ export const KmbResults = React.memo(function KmbResults({
   const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
   const onToggleExpand = React.useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key))
+  }, [])
+  // Canonical bound letters plus physical-stop equivalence for the
+  // multipleStops fallback grouping. Precomputed groups already carry these
+  // from the pane; this only covers the fallback path.
+  const [groupRouteVariantIndex, setGroupRouteVariantIndex] = React.useState<
+    Map<string, { bound: Record<string, string> }> | undefined
+  >(undefined)
+  const [groupStopEquivalents, setGroupStopEquivalents] = React.useState<
+    Map<string, string> | undefined
+  >(undefined)
+  React.useEffect(() => {
+    let cancelled = false
+    void getEtaDbIndexes()
+      .then(({ routeVariantIndex, stopEquivalents }) => {
+        if (!cancelled) {
+          setGroupRouteVariantIndex(routeVariantIndex)
+          setGroupStopEquivalents(stopEquivalents)
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
   }, [])
 
   // Create a lookup map for stops by ID
@@ -756,17 +835,21 @@ export const KmbResults = React.memo(function KmbResults({
     if (precomputedFlat && !multipleStops) return []
 
     const buildKeyWithStop = (entry: KmbEtaEntryWithLeg) => {
-      const co = String(entry.co ?? 'kmb')
-      const route = (entry.route ?? '').toUpperCase()
-      const dir = String(entry.dir ?? '')
-      const serviceType = String(entry.service_type ?? '')
-      const legSuffix = entry.leg ?? '_'
       const stop = entry.stop ?? ''
-      return `${co}|${route}|${dir}|${serviceType}|${legSuffix}|${stop}`
+      const canon = canonicalStopId(groupStopEquivalents, stop)
+      return `${defaultMergedKey(entry, { routeVariantIndex: groupRouteVariantIndex })}|${canon}`
     }
 
     return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
-  }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
+  }, [
+    eta,
+    multipleStops,
+    useStopSections,
+    precomputedFlat,
+    faresByVariantKey,
+    groupRouteVariantIndex,
+    groupStopEquivalents,
+  ])
 
   // Stagger replay key: query identity only, never live ETA arrays (see the
   // replay rule on staggerClassForIndex). Refresh keeps this key so rows
@@ -830,6 +913,7 @@ export const KmbResults = React.memo(function KmbResults({
                 stopChipsById={stopChipsById}
                 expandedKey={expandedKey}
                 onToggleExpand={onToggleExpand}
+                nameSource={nameSource}
               />
             ))}
 
@@ -877,6 +961,8 @@ export const KmbResults = React.memo(function KmbResults({
                   stopChips={stopChips}
                   expanded={expandedKey === g.key}
                   onToggleExpand={() => onToggleExpand(g.key)}
+                  stop={stopId ? stopLookup.get(stopId) : undefined}
+                  nameSource={nameSource}
                 />
               )
             })}
@@ -909,6 +995,8 @@ export const KmbResults = React.memo(function KmbResults({
                   stopChips={stopChips}
                   expanded={expandedKey === g.key}
                   onToggleExpand={() => onToggleExpand(g.key)}
+                  stop={stopId ? stopLookup.get(stopId) : undefined}
+                  nameSource={nameSource}
                 />
               )
             })}

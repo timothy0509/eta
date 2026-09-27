@@ -23,6 +23,8 @@ import {
 } from '@/lib/eta/client'
 import { isStaleByFlagOrAge } from '@/lib/eta/stale'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
+import { mergedRouteVariantKey, parseRouteVariantKey, toMergedKey } from '@/lib/eta/eta-db-index'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
@@ -87,7 +89,12 @@ type RouteStopIndex = {
 function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
   const byStopId = new Map<string, Set<string>>()
   for (const entry of routeStops) {
-    const key = `${entry.co}|${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`
+    // Merged joint-route key, ignoring operator.
+    const key = mergedRouteVariantKey({
+      route: entry.route,
+      bound: entry.bound,
+      serviceType: entry.serviceType,
+    })
     let set = byStopId.get(entry.stopId)
     if (!set) {
       set = new Set()
@@ -339,7 +346,8 @@ export function KmbPane({
 
     return variantKeys
       .map((key) => {
-        const [, route = ''] = key.split('|')
+        const parsed = parseRouteVariantKey(key)
+        const route = parsed?.route ?? ''
         const label = pickRouteVariantLabel(kmbRouteInfos[key])
         return {
           key,
@@ -364,8 +372,13 @@ export function KmbPane({
     const load = async () => {
       const fetched = await Promise.allSettled(
         missing.map(async (key) => {
-          const [co = 'kmb', route = '', direction = '', serviceType = ''] = key.split('|')
-          const info = await fetchKmbRouteInfo({ co: co as Company, route, direction, serviceType })
+          const parsed = parseRouteVariantKey(key)
+          const route = parsed?.route ?? ''
+          const direction = parsed?.bound ?? ''
+          const serviceType = parsed?.serviceType ?? ''
+          // Fetch once per merged key; the merged listKmbRoutes row carries
+          // the primary operator plus per-operator names.
+          const info = await fetchKmbRouteInfo({ route, direction, serviceType })
           return { key, info }
         })
       )
@@ -457,14 +470,21 @@ export function KmbPane({
         ? new Set(currentFilterEntries.map((e) => e.variantKey).filter(Boolean))
         : null
 
+      const normalizedFilterKeys = variantFilterKeys
+        ? new Set(Array.from(variantFilterKeys).map((key) => toMergedKey(key)))
+        : null
       const filteredByStopId: Record<string, KmbEtaEntryWithLeg[]> = {}
       for (const stopId of stopIds) {
         let etas = result.byStopId[stopId] ?? []
-        if (variantFilterKeys) {
+        if (normalizedFilterKeys) {
           etas = etas.filter((eta) => {
-            // Use base key (without leg) for variant filter matching
-            const key = `${String(eta.co ?? 'kmb')}|${(eta.route ?? '').toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
-            return variantFilterKeys.has(key)
+            // Merged base key (without leg or operator) for variant filter matching
+            const key = mergedRouteVariantKey({
+              route: eta.route ?? '',
+              bound: eta.dir ?? '',
+              serviceType: String(eta.service_type ?? ''),
+            })
+            return normalizedFilterKeys.has(key)
           })
         }
         filteredByStopId[stopId] = etas
@@ -532,10 +552,15 @@ export function KmbPane({
         const dir = String(eta.dir ?? '')
         const serviceType = String(eta.service_type ?? '')
         const vKey = `${co}|${route}|${dir}|${serviceType}`
+        const mergedFareKey = mergedRouteVariantKey({
+          route,
+          bound: dir,
+          serviceType,
+        })
 
         // Skip if we already have this fare or already queued it (use ref for latest state)
         const currentFares = etaStateRef.current.faresByVariantKey
-        if (currentFares[vKey] || seenVariants.has(vKey)) continue
+        if (currentFares[vKey] || currentFares[mergedFareKey] || seenVariants.has(vKey)) continue
         seenVariants.add(vKey)
 
         fareVariants.push({
@@ -941,9 +966,25 @@ export function KmbPane({
   }, [kmbQuery])
 
   // ========== OPTIMIZATION: Precompute render groups to avoid work during render ==========
+  const [groupIndex, setGroupIndex] = React.useState<{
+    routeVariantIndex?: Map<string, { bound: Record<string, string> }>
+  }>({})
+  React.useEffect(() => {
+    let cancelled = false
+    void getEtaDbIndexes()
+      .then(({ routeVariantIndex }) => {
+        if (!cancelled) setGroupIndex({ routeVariantIndex })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
   const precomputedGroups = React.useMemo<PrecomputedGroups>(() => {
-    return precomputeRenderGroups(kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey)
-  }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey])
+    return precomputeRenderGroups(kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey, {
+      routeVariantIndex: groupIndex.routeVariantIndex,
+    })
+  }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey, groupIndex])
 
   const hasQuery = Boolean(kmbQuery)
   const multipleStops = kmbQuery?.mode === 'stops' || kmbQuery?.mode === 'contains'

@@ -2,7 +2,12 @@ import { describe, expect, it } from 'vitest'
 
 import type { Company, EtaDb } from 'hk-bus-eta'
 
-import { buildEtaDbIndexes, deserializeEtaDbIndexes, serializeEtaDbIndexes } from './eta-db-index'
+import {
+  buildEtaDbIndexes,
+  deserializeEtaDbIndexes,
+  mergeRouteListEntries,
+  serializeEtaDbIndexes,
+} from './eta-db-index'
 
 function routeEntry(route: string, co: Company[], stopsByCo: Partial<Record<Company, string[]>>) {
   const stops = {} as Record<Company, string[]>
@@ -82,5 +87,53 @@ describe('buildEtaDbIndexes isKmb derivation', () => {
         ?.map((e) => e.co)
         .sort()
     ).toEqual(['ctb', 'kmb'])
+  })
+})
+
+describe('mergeRouteListEntries', () => {
+  it('merges opposite-letter joint rows into one entry with canonical bound', async () => {
+    const db = dbWith(
+      [
+        {
+          ...routeEntry('101', ['kmb', 'ctb'], {
+            kmb: ['K1', 'K2'],
+            ctb: ['C1', 'C2'],
+          }),
+          bound: { kmb: 'I', ctb: 'O' } as unknown as Record<Company, 'O'>,
+        },
+      ],
+      ['K1', 'K2', 'C1', 'C2']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    expect(indexes.mergedDbEntries).toHaveLength(1)
+    expect(indexes.mergedDbEntries[0]?.bound).toBe('I')
+    expect(indexes.mergedDbEntries[0]?.operators).toEqual(['ctb', 'kmb'])
+    const merged = mergeRouteListEntries(
+      Object.values(db.routeList),
+      ['kmb', 'ctb'],
+      indexes.stopEquivalents
+    )
+    expect(merged).toHaveLength(1)
+  })
+
+  it('keeps short workings with different termini separate', async () => {
+    const mk = (
+      route: string,
+      co: Company[],
+      stopsByCo: Partial<Record<Company, string[]>>,
+      dest: string
+    ) => ({
+      ...routeEntry(route, co, stopsByCo),
+      dest: { en: dest, zh: dest },
+    })
+    const db = dbWith(
+      [
+        mk('101', ['kmb', 'ctb'], { kmb: ['K1'], ctb: ['C1'] }, 'Kwun Tong'),
+        mk('101', ['kmb'], { kmb: ['K2'] }, 'Des Voeux Rd'),
+      ],
+      ['K1', 'K2', 'C1']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    expect(indexes.mergedDbEntries).toHaveLength(2)
   })
 })

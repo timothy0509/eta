@@ -4,6 +4,7 @@ import { X } from 'lucide-react'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
+import { parseRouteVariantKey } from '@/lib/eta/eta-db-index'
 import { useTranslations } from '@/lib/eta/i18n'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -20,7 +21,7 @@ export type RouteFilterState = {
 }
 
 export type RouteFilterOption = {
-  key: string // `${co}|${route}|${direction}|${serviceType}`
+  key: string // `${route}|${direction}|${serviceType}` (legacy `co|...` still parses)
   route: string
   label: string
 }
@@ -39,13 +40,12 @@ export function countActiveFilters(state: RouteFilterState): number {
 }
 
 function getCompanyFromVariantKey(key: string) {
-  const [co] = key.split('|')
-  return co || 'kmb'
+  const parsed = parseRouteVariantKey(key)
+  return parsed?.co || 'kmb'
 }
 
 function getDirectionFromVariantKey(key: string) {
-  const parts = key.split('|')
-  return parts[2] ?? ''
+  return parseRouteVariantKey(key)?.bound ?? ''
 }
 
 function sortOptions(options: RouteFilterOption[]) {

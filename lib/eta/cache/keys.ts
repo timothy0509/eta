@@ -2,6 +2,9 @@ export const ETA_DB_CACHE_KEY = 'hk-bus-eta:db'
 export const ETA_DB_MD5_KEY = 'hk-bus-eta:md5'
 export const ETA_DB_INDEX_KEY = 'hk-bus-eta:db-index:v2'
 export const KMB_STOPS_CACHE_KEY = 'kmb:stops:v2'
+export const KMB_STOPS_MAPPED_CACHE_KEY = 'kmb:stops:mapped:v1'
+export const KMB_ROUTE_STOPS_MAPPED_CACHE_KEY = 'kmb:route-stops:mapped:v1'
+export const KMB_ROUTES_MAPPED_CACHE_KEY = 'kmb:routes:mapped:v1'
 
 export function kmbStopEtaKey(stopId: string): string {
   return `stop-eta:${String(stopId ?? '').trim()}`
@@ -22,4 +25,14 @@ export function lrtScheduleKey(params: {
 
 export function kmbRouteGeometryKey(variantKey: string): string {
   return `kmb-route-geometry:${variantKey}`
+}
+
+export function lrtRouteEtaKey(params: {
+  route: string
+  bound: string
+  serviceType: string
+  stationId: string
+  language: string
+}): string {
+  return `lrt-route-eta:${params.route}|${params.bound}|${params.serviceType}|${params.stationId}|${params.language}`
 }

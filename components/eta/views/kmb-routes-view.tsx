@@ -44,6 +44,7 @@ import {
   type RouteFuseInstance,
 } from '@/lib/eta/route-search'
 import { getRoutedGeometry } from '@/lib/eta/routing'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -434,7 +435,12 @@ function useKmbRouteList() {
 }
 
 function useKmbStops() {
-  const [stops, setStops] = React.useState<KmbStopSearchItem[]>([])
+  // Share the pane-store list so the routes view never fetches its own
+  // copy when the stops pane already loaded one. Always revalidate on
+  // mount through the cached fetcher; the store guard skips the write
+  // when the contents are unchanged.
+  const stops = usePaneStore((s) => s.kmbStops)
+  const setStops = usePaneStore((s) => s.setKmbStops)
   React.useEffect(() => {
     let cancelled = false
     fetchKmbStops()
@@ -445,7 +451,7 @@ function useKmbStops() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [setStops])
   return stops
 }
 
@@ -491,7 +497,8 @@ export function KmbRoutesView({
   const [query, setQuery] = React.useState('')
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const [operator, setOperator] = React.useState<string | null>(null)
-  const [routeStopsAll, setRouteStopsAll] = React.useState<KmbRouteStopLite[]>([])
+  const routeStopsAll = usePaneStore((s) => s.kmbRouteStops)
+  const setRouteStopsAll = usePaneStore((s) => s.setKmbRouteStops)
   const [fuse, setFuse] = React.useState<RouteFuseInstance | null>(null)
   const [manualSelection, setManualSelection] = React.useState<{
     sourceKey: string
@@ -585,7 +592,10 @@ export function KmbRoutesView({
     return () => window.clearTimeout(id)
   }, [query])
 
-  // Load the full route-stop table once for stop-name matching and via lines.
+  // Load the full route-stop table for stop-name matching and via lines.
+  // Shared through the pane store so the stops pane and routes view reuse
+  // the same array. Always revalidates on mount; the cached fetcher plus
+  // the store guard make repeat loads cheap and render-free.
   React.useEffect(() => {
     let cancelled = false
     fetchKmbRouteStops()
@@ -596,7 +606,7 @@ export function KmbRoutesView({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [setRouteStopsAll])
 
   const searchIndex = React.useMemo(
     () => buildRouteSearchIndex(routes, routeStopsAll, stopsById),

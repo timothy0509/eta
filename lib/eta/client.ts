@@ -18,8 +18,15 @@ import {
   fetchLrtEtasForStop as fetchLrtEtasForStopDirect,
   listMtrRoutes as listMtrRoutesDirect,
 } from '@/lib/eta/direct/eta-db'
+import {
+  KMB_ROUTE_STOPS_MAPPED_CACHE_KEY,
+  KMB_ROUTES_MAPPED_CACHE_KEY,
+  KMB_STOPS_MAPPED_CACHE_KEY,
+} from '@/lib/eta/cache/keys'
+import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import { getLrtSchedule } from '@/lib/eta/direct/lrt'
 import { fetchMtrSchedules as fetchMtrSchedulesDirect } from '@/lib/eta/direct/mtr'
+import { getCachedValue } from '@/lib/eta/direct/shared'
 import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
 
@@ -104,32 +111,46 @@ export type KmbEtaEntryWithLeg = KmbEtaEntry & {
 }
 
 export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
-  const stops = await getKmbStops()
+  const { value } = await getCachedValue<KmbStopSearchItem[]>({
+    key: KMB_STOPS_MAPPED_CACHE_KEY,
+    policyKey: 'kmbStaticList',
+    policy: CACHE_POLICIES.kmbStaticList,
+    fetcher: async () => {
+      const stops = await getKmbStops()
 
-  const toCoord = (value: unknown) => {
-    if (typeof value === 'string') {
-      if (!value.trim()) return Number.NaN
-      return Number(value)
-    }
-    if (typeof value === 'number') return value
-    return Number.NaN
-  }
+      const toCoord = (value: unknown) => {
+        if (typeof value === 'string') {
+          if (!value.trim()) return Number.NaN
+          return Number(value)
+        }
+        if (typeof value === 'number') return value
+        return Number.NaN
+      }
 
-  return stops
-    .map((s) => ({
-      stopId: s.stop,
-      nameEn: (s.name_en ?? '').trim(),
-      nameTc: (s.name_tc ?? '').trim(),
-      nameSc: (s.name_sc ?? '').trim(),
-      lat: toCoord(s.lat),
-      lng: toCoord(s.long),
-      isKmb: isKmbStop(s),
-    }))
-    .filter((s) => s.stopId && s.nameEn && Number.isFinite(s.lat) && Number.isFinite(s.lng))
+      return stops
+        .map((s) => ({
+          stopId: s.stop,
+          nameEn: (s.name_en ?? '').trim(),
+          nameTc: (s.name_tc ?? '').trim(),
+          nameSc: (s.name_sc ?? '').trim(),
+          lat: toCoord(s.lat),
+          lng: toCoord(s.long),
+          isKmb: isKmbStop(s),
+        }))
+        .filter((s) => s.stopId && s.nameEn && Number.isFinite(s.lat) && Number.isFinite(s.lng))
+    },
+  })
+  return value
 }
 
 export async function fetchKmbRoutes(): Promise<KmbRouteListEntry[]> {
-  return await getKmbRouteList()
+  const { value } = await getCachedValue<KmbRouteListEntry[]>({
+    key: KMB_ROUTES_MAPPED_CACHE_KEY,
+    policyKey: 'kmbStaticList',
+    policy: CACHE_POLICIES.kmbStaticList,
+    fetcher: () => getKmbRouteList(),
+  })
+  return value
 }
 
 export type KmbRouteStopLite = {
@@ -142,18 +163,26 @@ export type KmbRouteStopLite = {
 }
 
 export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
-  const routeStops = await getKmbRouteStops()
+  const { value } = await getCachedValue<KmbRouteStopLite[]>({
+    key: KMB_ROUTE_STOPS_MAPPED_CACHE_KEY,
+    policyKey: 'kmbStaticList',
+    policy: CACHE_POLICIES.kmbStaticList,
+    fetcher: async () => {
+      const routeStops = await getKmbRouteStops()
 
-  return routeStops
-    .map((entry) => ({
-      co: entry.co ?? 'kmb',
-      route: entry.route,
-      bound: entry.bound,
-      serviceType: String(entry.service_type),
-      seq: typeof entry.seq === 'string' ? Number(entry.seq) : entry.seq,
-      stopId: entry.stop,
-    }))
-    .filter((entry) => entry.route && entry.stopId)
+      return routeStops
+        .map((entry) => ({
+          co: entry.co ?? 'kmb',
+          route: entry.route,
+          bound: entry.bound,
+          serviceType: String(entry.service_type),
+          seq: typeof entry.seq === 'string' ? Number(entry.seq) : entry.seq,
+          stopId: entry.stop,
+        }))
+        .filter((entry) => entry.route && entry.stopId)
+    },
+  })
+  return value
 }
 
 export type KmbRouteInfoLite = {
@@ -349,8 +378,11 @@ export async function fetchLrtEtasForStop(
   },
   options?: { signal?: AbortSignal }
 ): Promise<Eta[]> {
+  const route = String(params.route ?? '').toUpperCase()
+  const bound = String(params.bound ?? '')
+  const serviceType = String(params.serviceType ?? '')
   const stationId = lrtStopIdToStationId(params.stationId) ?? params.stationId
-  const key = `lrt:etas:${params.route}|${params.bound}|${params.serviceType}|${stationId}|${params.language}`
+  const key = `lrt:etas:${route}|${bound}|${serviceType}|${stationId}|${params.language}`
   return await fetchJsonDedupe(
     key,
     async () => fetchLrtEtasForStopDirect({ ...params, stationId }),

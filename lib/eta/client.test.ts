@@ -1,18 +1,49 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchKmbStops } from './client'
-import { getKmbStops } from '@/lib/eta/direct/kmb'
+import { idbDelete } from '@/lib/eta/cache/idb'
+import {
+  KMB_ROUTE_STOPS_MAPPED_CACHE_KEY,
+  KMB_ROUTES_MAPPED_CACHE_KEY,
+  KMB_STOPS_MAPPED_CACHE_KEY,
+} from '@/lib/eta/cache/keys'
+import { fetchKmbRoutes, fetchKmbRouteStops, fetchKmbStops } from './client'
+import { getKmbRouteList, getKmbRouteStops, getKmbStops } from '@/lib/eta/direct/kmb'
+import { getCachedValue } from '@/lib/eta/direct/shared'
 
 vi.mock('@/lib/eta/direct/kmb', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/eta/direct/kmb')>()
-  return { ...original, getKmbStops: vi.fn() }
+  return { ...original, getKmbStops: vi.fn(), getKmbRouteStops: vi.fn(), getKmbRouteList: vi.fn() }
+})
+
+vi.mock('@/lib/eta/direct/shared', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@/lib/eta/direct/shared')>()
+  return { ...original, getCachedValue: vi.fn() }
 })
 
 const mockGetKmbStops = vi.mocked(getKmbStops)
+const mockGetKmbRouteStops = vi.mocked(getKmbRouteStops)
+const mockGetKmbRouteList = vi.mocked(getKmbRouteList)
+const mockGetCachedValue = vi.mocked(getCachedValue)
+
+async function clearMappedKeys() {
+  await Promise.all(
+    [KMB_STOPS_MAPPED_CACHE_KEY, KMB_ROUTE_STOPS_MAPPED_CACHE_KEY, KMB_ROUTES_MAPPED_CACHE_KEY].map(
+      (key) => idbDelete(key).catch(() => false)
+    )
+  )
+}
 
 describe('fetchKmbStops', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     mockGetKmbStops.mockReset()
+    mockGetCachedValue.mockReset()
+    await clearMappedKeys()
+    mockGetCachedValue.mockImplementation(async ({ fetcher }) => ({
+      value: await (fetcher as () => Promise<never>)(),
+      cached: false,
+      stale: false,
+      ageMs: null,
+    }))
   })
 
   it('coerces string coords and drops stops with invalid coords', async () => {
@@ -106,5 +137,85 @@ describe('fetchKmbStops', () => {
     const stops = await fetchKmbStops()
 
     expect(stops).toMatchObject([{ stopId: 'X', isKmb: false }])
+  })
+
+  it('routes through the mapped-keys cache with the static-list policy', async () => {
+    mockGetKmbStops.mockResolvedValue([])
+
+    await fetchKmbStops()
+
+    expect(mockGetCachedValue).toHaveBeenCalledTimes(1)
+    expect(mockGetCachedValue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: KMB_STOPS_MAPPED_CACHE_KEY,
+        policyKey: 'kmbStaticList',
+      })
+    )
+  })
+})
+
+describe('fetchKmbRouteStops', () => {
+  beforeEach(async () => {
+    mockGetKmbRouteStops.mockReset()
+    mockGetCachedValue.mockReset()
+    await clearMappedKeys()
+    mockGetCachedValue.mockImplementation(async ({ fetcher }) => ({
+      value: await (fetcher as () => Promise<never>)(),
+      cached: false,
+      stale: false,
+      ageMs: null,
+    }))
+  })
+
+  it('maps entries and routes through the mapped-keys cache', async () => {
+    mockGetKmbRouteStops.mockResolvedValue([
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        service_type: 1,
+        seq: '3',
+        stop: 'S1',
+      },
+    ])
+
+    const stops = await fetchKmbRouteStops()
+
+    expect(stops).toMatchObject([{ route: '1A', seq: 3, stopId: 'S1' }])
+    expect(mockGetCachedValue).toHaveBeenCalledTimes(1)
+    expect(mockGetCachedValue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: KMB_ROUTE_STOPS_MAPPED_CACHE_KEY,
+        policyKey: 'kmbStaticList',
+      })
+    )
+  })
+})
+
+describe('fetchKmbRoutes', () => {
+  beforeEach(async () => {
+    mockGetKmbRouteList.mockReset()
+    mockGetCachedValue.mockReset()
+    await clearMappedKeys()
+    mockGetCachedValue.mockImplementation(async ({ fetcher }) => ({
+      value: await (fetcher as () => Promise<never>)(),
+      cached: false,
+      stale: false,
+      ageMs: null,
+    }))
+  })
+
+  it('routes through the mapped-keys cache with the static-list policy', async () => {
+    mockGetKmbRouteList.mockResolvedValue([])
+
+    await fetchKmbRoutes()
+
+    expect(mockGetKmbRouteList).toHaveBeenCalledTimes(1)
+    expect(mockGetCachedValue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        key: KMB_ROUTES_MAPPED_CACHE_KEY,
+        policyKey: 'kmbStaticList',
+      })
+    )
   })
 })

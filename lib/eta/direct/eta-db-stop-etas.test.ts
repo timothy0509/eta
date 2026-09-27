@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Company, RouteListEntry } from 'hk-bus-eta'
+import type { Company, Eta, RouteListEntry } from 'hk-bus-eta'
 
-import { fetchKmbEtasForStop, type FetchKmbEtasForStopDeps } from './eta-db'
+import { fetchKmbEtasForStop, fetchLrtEtasForStop, type FetchKmbEtasForStopDeps } from './eta-db'
 import type { EtaDbIndexes } from '@/lib/eta/eta-db-index'
 
 function makeRouteEntry(
@@ -298,5 +298,139 @@ describe('fetchKmbEtasForStop hybrid', () => {
     )
 
     expect(fetchOfficialStopEta).toHaveBeenCalledWith('STOP1', controller.signal)
+  })
+})
+
+describe('fetchLrtEtasForStop cache', () => {
+  function makeLrtEntry(overrides?: { route?: string; stops?: string[] }): RouteListEntry {
+    return makeRouteEntry({
+      route: overrides?.route ?? '505',
+      co: ['lightRail'],
+      bound: { lightRail: 'O' },
+      stops: { lightRail: overrides?.stops ?? ['LR1', 'LR2'] },
+    })
+  }
+
+  function lrtIndexes(entry: RouteListEntry): ReturnType<typeof emptyIndexes> {
+    const indexes = emptyIndexes()
+    indexes.lrtRoutes = [entry]
+    return indexes
+  }
+
+  it('fetches once for repeated calls within the TTL', async () => {
+    const entry = makeLrtEntry()
+    const fetchVariantEtas = vi.fn().mockResolvedValue([
+      {
+        eta: '2026-08-02T15:30:00+08:00',
+        dest: { en: 'Sam Shing', zh: '三聖' },
+        remark: { en: '', zh: '' },
+        co: 'lightRail',
+      } as Eta,
+    ])
+    const deps = {
+      getIndexes: async () => lrtIndexes(entry),
+      fetchVariantEtas,
+    }
+
+    const params = {
+      route: '505',
+      bound: 'O',
+      serviceType: '1',
+      stationId: '1',
+      language: 'tc' as const,
+    }
+    const first = await fetchLrtEtasForStop(params, deps)
+    const second = await fetchLrtEtasForStop(params, deps)
+
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+    expect(second).toEqual(first)
+  })
+
+  it('normalizes LR-prefixed station ids to the same cache key', async () => {
+    const entry = makeLrtEntry({ route: '506' })
+    const fetchVariantEtas = vi.fn().mockResolvedValue([])
+    const deps = {
+      getIndexes: async () => lrtIndexes(entry),
+      fetchVariantEtas,
+    }
+
+    await fetchLrtEtasForStop(
+      { route: '506', bound: 'O', serviceType: '1', stationId: 'LR1', language: 'tc' },
+      deps
+    )
+    await fetchLrtEtasForStop(
+      { route: '506', bound: 'O', serviceType: '1', stationId: '1', language: 'tc' },
+      deps
+    )
+
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips index loading on cache hits', async () => {
+    const entry = makeLrtEntry({ route: '507' })
+    const getIndexes = vi.fn(async () => lrtIndexes(entry))
+    const fetchVariantEtas = vi.fn().mockResolvedValue([])
+    const deps = { getIndexes, fetchVariantEtas }
+
+    const params = {
+      route: '507',
+      bound: 'O',
+      serviceType: '1',
+      stationId: '1',
+      language: 'tc' as const,
+    }
+    await fetchLrtEtasForStop(params, deps)
+    await fetchLrtEtasForStop(params, deps)
+
+    expect(getIndexes).toHaveBeenCalledTimes(1)
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+  })
+
+  it('normalizes route and station case for the cache key', async () => {
+    const entry = makeLrtEntry({ route: '508' })
+    const fetchVariantEtas = vi.fn().mockResolvedValue([])
+    const deps = {
+      getIndexes: async () => lrtIndexes(entry),
+      fetchVariantEtas,
+    }
+
+    await fetchLrtEtasForStop(
+      { route: '508', bound: 'O', serviceType: '1', stationId: '1', language: 'tc' },
+      deps
+    )
+    await fetchLrtEtasForStop(
+      { route: '508', bound: 'O', serviceType: '1', stationId: 'LR1', language: 'tc' },
+      deps
+    )
+
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps bound variants on separate cache keys', async () => {
+    const mkEntry = (bound: string) =>
+      makeRouteEntry({
+        route: '509',
+        co: ['lightRail'],
+        bound: { lightRail: bound },
+        stops: { lightRail: ['LR1', 'LR2'] },
+      })
+    const both = emptyIndexes()
+    both.lrtRoutes = [mkEntry('O'), mkEntry('I')]
+    const fetchVariantEtas = vi.fn().mockResolvedValue([])
+    const deps = {
+      getIndexes: async () => both,
+      fetchVariantEtas,
+    }
+
+    await fetchLrtEtasForStop(
+      { route: '509', bound: 'O', serviceType: '1', stationId: '1', language: 'tc' },
+      deps
+    )
+    await fetchLrtEtasForStop(
+      { route: '509', bound: 'I', serviceType: '1', stationId: '1', language: 'tc' },
+      deps
+    )
+
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(2)
   })
 })

@@ -56,10 +56,20 @@ describe('TickingKmbMinutes', () => {
 })
 
 describe('TickingSoonestPill', () => {
-  it('ticks the minutes text inside the pill', () => {
+  it('ticks the minutes text without a pill', () => {
     const stamp = new Date(NOW).toISOString()
     const { container } = render(
       <TickingSoonestPill etas={[{ eta: etaIso(5), data_timestamp: stamp }]} lang="en" />
+    )
+    expect(container.querySelector('.ui-eta-tick')).not.toBeNull()
+    expect(container.querySelector('.live-pulse')).toBeNull()
+    expect(container.querySelector('.bg-primary-container')).toBeNull()
+  })
+
+  it('keeps the arriving pill shell with live pulse', () => {
+    const stamp = new Date(NOW).toISOString()
+    const { container } = render(
+      <TickingSoonestPill etas={[{ eta: etaIso(0), data_timestamp: stamp }]} lang="en" />
     )
     expect(container.querySelector('.ui-eta-tick')).not.toBeNull()
     expect(container.querySelector('.live-pulse')).not.toBeNull()

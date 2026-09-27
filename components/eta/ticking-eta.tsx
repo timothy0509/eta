@@ -123,7 +123,8 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
 })
 
 /**
- * Ticking "soonest ETA" pill for route-stop timeline rows. Ticks alone so
+ * Ticking "soonest ETA" label for route-stop rows. Plain tabular text,
+ * except the arriving state keeps the pill. Ticks alone so
  * the routes view tree stays static between data refreshes.
  */
 export const TickingSoonestPill = React.memo(function TickingSoonestPill({
@@ -147,17 +148,30 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
   const isArriving = soonest.arriving || minutes <= 0
   const display = isArriving ? t('common.now') : tWithParams('common.minutes', { count: minutes })
 
+  if (isArriving) {
+    return (
+      <span
+        className={cn(
+          'bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1',
+          className
+        )}
+      >
+        <LivePulse />
+        <span className="m3-title-md">
+          <EtaValue key={display} value={display} />
+        </span>
+      </span>
+    )
+  }
+
   return (
     <span
       className={cn(
-        'bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1',
+        'text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl',
         className
       )}
     >
-      <LivePulse />
-      <span className="m3-title-md">
-        <EtaValue key={display} value={display} />
-      </span>
+      <EtaValue key={display} value={display} />
     </span>
   )
 })

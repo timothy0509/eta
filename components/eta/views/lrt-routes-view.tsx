@@ -3,7 +3,7 @@
 import { MapPin, TramFront } from 'lucide-react'
 import * as React from 'react'
 
-import { RouteStopRow, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
+import { RouteStopCard, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
 import { TickingSoonestPill } from '@/components/eta/ticking-eta'
 import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
 import { EmptyState } from '@/components/eta/empty-state'
@@ -44,6 +44,90 @@ function mapEtaForPick(eta: Eta): { eta?: string; data_timestamp?: string } {
     eta: eta.eta,
     data_timestamp: (eta as { data_timestamp?: string }).data_timestamp,
   }
+}
+
+/**
+ * Expandable Light Rail station card. Collapsed header shows the station
+ * plus the soonest train; expanding lists the next trains on this route.
+ */
+function LrtRouteStopCard({
+  stationId,
+  seq,
+  etas,
+  lang,
+  color,
+  onSelectStation,
+}: {
+  stationId: string
+  seq: number
+  etas: Eta[]
+  lang: UiLanguage
+  color: string
+  onSelectStation?: (stationId: string, name: string) => void
+}) {
+  const [expanded, setExpanded] = React.useState(false)
+  const { t, tWithParams } = useTranslations(lang)
+  const name = getLrtStationName(stationId, lang)
+
+  const sorted = React.useMemo(
+    () =>
+      [...etas]
+        .filter((entry) => Boolean(entry.eta))
+        .sort((a, b) => new Date(a.eta).getTime() - new Date(b.eta).getTime()),
+    [etas]
+  )
+  const visible = sorted.slice(0, 3)
+
+  const panel =
+    visible.length === 0 ? (
+      <div className="text-on-surface-variant m3-body-md">{t('lrt.noScheduledTrains')}</div>
+    ) : (
+      <div className="space-y-1">
+        {visible.map((entry, entryIdx) => {
+          const remark = entry.remark
+          const cars = remark.en.match(/▭+/) ?? remark.zh.match(/▭+/)
+          const carCount = cars?.[0] ? cars[0].length : 1
+          const destName =
+            pickLangZh({ en: entry.dest?.en ?? '', zh: entry.dest?.zh ?? '' }, lang) || name
+          return (
+            <div
+              key={`${entryIdx}:${entry.eta}`}
+              className="flex items-center justify-between gap-3 py-0.5"
+            >
+              <div className="text-on-surface m3-body-md min-w-0 flex-1 truncate font-medium">
+                {destName}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-on-surface-variant m3-label-md">
+                  {tWithParams('lrt.trainCars', { count: carCount })}
+                </span>
+                <TickingSoonestPill
+                  etas={[{ eta: entry.eta, data_timestamp: undefined }]}
+                  lang={lang}
+                  className="text-on-surface font-tabular m3-body-md shrink-0 font-semibold"
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    )
+
+  return (
+    <RouteStopCard
+      expanded={expanded}
+      onToggle={() => setExpanded((v) => !v)}
+      color={color}
+      seq={seq}
+      name={name}
+      subtitle={stationId}
+      eta={<TickingSoonestPill etas={etas.map(mapEtaForPick)} lang={lang} />}
+      panel={panel}
+      toggleLabel={name}
+      selectLabel={onSelectStation ? t('common.viewEtas') : undefined}
+      onSelect={onSelectStation ? () => onSelectStation(stationId, name) : undefined}
+    />
+  )
 }
 
 export function LrtRoutesView({
@@ -255,21 +339,20 @@ export function LrtRoutesView({
               </span>
             </div>
 
-            <RouteStopTimeline lineColor={lineColor}>
-              {stationIds.map((stationId, idx) => {
-                const etas = stopEtas[stationId] ?? []
-                const name = getLrtStationName(stationId, lang)
-                return (
-                  <RouteStopRow
-                    key={`${stationId}-${idx}`}
-                    name={name}
-                    subtitle={<span className="hidden sm:inline">{stationId}</span>}
-                    ariaLabel={name}
-                    eta={<TickingSoonestPill etas={etas.map(mapEtaForPick)} lang={lang} />}
-                    onClick={() => onSelectStation?.(stationId, name)}
-                  />
-                )
-              })}
+            <RouteStopTimeline
+              key={`${selectedRoute.route}|${selectedRoute.serviceType}|${selectedRoute.bound.lightRail}`}
+            >
+              {stationIds.map((stationId, idx) => (
+                <LrtRouteStopCard
+                  key={`${stationId}-${idx}`}
+                  stationId={stationId}
+                  seq={idx + 1}
+                  etas={stopEtas[stationId] ?? []}
+                  lang={lang}
+                  color={lineColor}
+                  onSelectStation={onSelectStation}
+                />
+              ))}
             </RouteStopTimeline>
           </div>
         </RouteDrilldown>

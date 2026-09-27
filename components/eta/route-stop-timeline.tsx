@@ -1,8 +1,9 @@
 'use client'
 
-import { MapPin } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import * as React from 'react'
 
+import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { EtaValue, LivePulse } from '@/components/m3/motion'
 import { useTranslations } from '@/lib/eta/i18n'
@@ -28,31 +29,38 @@ export function SoonestEtaPill({
 
   const display = isArriving ? t('common.now') : `${minutes} ${t('common.minutesUnit')}`
 
+  if (isArriving) {
+    return (
+      <div className="bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1">
+        <LivePulse />
+        <span className="m3-title-md">
+          <EtaValue key={display} value={display} />
+        </span>
+      </div>
+    )
+  }
+
   return (
-    <div className="bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1">
-      <LivePulse />
-      <span className="m3-title-md">
-        <EtaValue key={display} value={display} />
-      </span>
-    </div>
+    <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
+      <EtaValue key={display} value={display} />
+    </span>
   )
 }
 
+/**
+ * Stack of stop cards. Each direct child keeps its own stagger slot so long
+ * route timelines stay cheap offscreen via content-visibility.
+ */
 export function RouteStopTimeline({
-  lineColor,
   children,
   className,
 }: {
-  lineColor: string
+  lineColor?: string
   children: React.ReactNode
   className?: string
 }) {
   return (
-    <div className={cn('relative space-y-0', className)}>
-      <div
-        className="absolute top-2 bottom-2 left-5 w-0.5 -translate-x-1/2"
-        style={{ backgroundColor: lineColor }}
-      />
+    <div className={cn('space-y-2', className)}>
       {React.Children.map(children, (child, idx) => (
         <div className={cn('ui-cv-row', staggerClassForIndex(idx))}>{child}</div>
       ))}
@@ -60,50 +68,95 @@ export function RouteStopTimeline({
   )
 }
 
-export function RouteStopRow({
+function StopPanel({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-2">{children}</div>
+}
+
+/**
+ * Expandable stop card for route mode. Mirrors the stop-mode ETA card:
+ * collapsed header with name plus soonest ETA, expanding to the full
+ * per-departure breakdown in the panel.
+ */
+export function RouteStopCard({
+  expanded,
+  onToggle,
+  color,
+  seq,
   name,
   subtitle,
   eta,
-  onClick,
-  ariaLabel,
+  panel,
+  toggleLabel,
+  selectLabel,
+  onSelect,
 }: {
+  expanded?: boolean
+  onToggle: () => void
+  color?: string
+  seq?: React.ReactNode
   name: React.ReactNode
   subtitle?: React.ReactNode
   eta?: React.ReactNode
-  onClick?: () => void
-  ariaLabel?: string
+  panel: React.ReactNode
+  toggleLabel?: string
+  selectLabel?: string
+  onSelect?: () => void
 }) {
-  const clickable = Boolean(onClick)
-  return (
-    <div
-      className={cn(
-        'ui-cv-row relative flex items-center gap-4 py-2',
-        clickable &&
-          'hover:bg-surface-container-high/50 cursor-pointer rounded-2xl transition-colors'
-      )}
-      role={clickable ? 'button' : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      aria-label={clickable ? ariaLabel : undefined}
-      onClick={onClick}
-      onKeyDown={
-        clickable
-          ? (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault()
-                onClick?.()
-              }
-            }
-          : undefined
-      }
-    >
-      <div className="bg-surface border-outline z-10 flex h-10 w-10 shrink-0 items-center justify-center rounded-full border">
-        <MapPin className="text-on-surface-variant h-4 w-4" />
+  const isExpanded = Boolean(expanded)
+  const hasSelect = Boolean(onSelect) && Boolean(selectLabel)
+
+  const header = (
+    <div className="flex items-center gap-3">
+      {seq !== undefined && seq !== null ? (
+        <span
+          aria-hidden
+          className="bg-surface-container-high text-on-surface-variant font-tabular m3-label-lg flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+        >
+          {seq}
+        </span>
+      ) : null}
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div className="m3-body-md text-on-surface truncate font-medium">{name}</div>
+        {subtitle && !isExpanded ? (
+          <div className="text-on-surface-variant m3-label-md truncate font-mono">{subtitle}</div>
+        ) : null}
       </div>
-      <div className="min-w-0 flex-1">
-        <div className="m3-body-md text-on-surface truncate">{name}</div>
-        {subtitle ? <div className="text-on-surface-variant m3-label-md">{subtitle}</div> : null}
+      <div className="flex shrink-0 items-center gap-1">
+        {!isExpanded ? eta : null}
+        <ChevronDown
+          className={cn('text-on-surface-variant ui-chevron h-4 w-4', isExpanded && 'rotate-180')}
+        />
       </div>
-      {eta ? <div className="flex shrink-0 items-center gap-2">{eta}</div> : null}
     </div>
+  )
+
+  return (
+    <ExpandableEtaRow
+      expanded={isExpanded}
+      onToggle={onToggle}
+      color={color}
+      panel={
+        <StopPanel>
+          {panel}
+          {hasSelect ? (
+            <div className="flex items-center justify-end pt-1">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onSelect?.()
+                }}
+                className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface pointer-events-auto inline-flex h-8 shrink-0 items-center rounded-full px-3 transition-colors"
+              >
+                <span className="m3-label-md">{selectLabel}</span>
+              </button>
+            </div>
+          ) : null}
+        </StopPanel>
+      }
+      toggleLabel={toggleLabel ?? (typeof name === 'string' ? name : 'stop')}
+    >
+      {header}
+    </ExpandableEtaRow>
   )
 }

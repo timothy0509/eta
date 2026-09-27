@@ -510,7 +510,6 @@ export async function fetchLrtEtasForStop(
   },
   deps: FetchLrtEtasForStopDeps = defaultFetchLrtEtasForStopDeps
 ): Promise<Eta[]> {
-  const { lrtRoutes } = await deps.getIndexes()
   const route = params.route.toUpperCase()
   const bound = normalizeBound(params.bound)
   const serviceType = String(params.serviceType ?? '')
@@ -531,6 +530,7 @@ export async function fetchLrtEtasForStop(
     policy: CACHE_POLICIES.lrtRouteEta,
     allowStale: true,
     fetcher: async () => {
+      const { lrtRoutes } = await deps.getIndexes()
       const entry = lrtRoutes.find((item) => {
         if (item.route.toUpperCase() !== route) return false
         if (String(item.serviceType) !== serviceType) return false

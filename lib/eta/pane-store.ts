@@ -32,6 +32,19 @@ function isSameRouteStop(
   )
 }
 
+function isSameStop(a: KmbStopSearchItem | undefined, b: KmbStopSearchItem | undefined): boolean {
+  if (!a || !b) return false
+  return (
+    a.stopId === b.stopId &&
+    a.nameEn === b.nameEn &&
+    a.nameTc === b.nameTc &&
+    a.nameSc === b.nameSc &&
+    a.lat === b.lat &&
+    a.lng === b.lng &&
+    a.isKmb === b.isKmb
+  )
+}
+
 export const usePaneStore = create<PaneStore>()((set) => ({
   kmb: null,
   mtr: null,
@@ -43,10 +56,11 @@ export const usePaneStore = create<PaneStore>()((set) => ({
   setKmbStops: (stops) =>
     set((prev) => {
       const prevStops = prev.kmbStops
+      if (prevStops === stops) return prev
       if (prevStops.length === stops.length) {
         let same = true
         for (let i = 0; i < prevStops.length; i++) {
-          if (prevStops[i].stopId !== stops[i].stopId) {
+          if (!isSameStop(prevStops[i], stops[i])) {
             same = false
             break
           }
@@ -61,6 +75,7 @@ export const usePaneStore = create<PaneStore>()((set) => ({
   setKmbRouteStops: (stops) =>
     set((prev) => {
       const prevStops = prev.kmbRouteStops
+      if (prevStops === stops) return prev
       if (prevStops.length === stops.length) {
         let same = true
         for (let i = 0; i < prevStops.length; i++) {

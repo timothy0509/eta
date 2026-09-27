@@ -365,4 +365,72 @@ describe('fetchLrtEtasForStop cache', () => {
 
     expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
   })
+
+  it('skips index loading on cache hits', async () => {
+    const entry = makeLrtEntry({ route: '507' })
+    const getIndexes = vi.fn(async () => lrtIndexes(entry))
+    const fetchVariantEtas = vi.fn().mockResolvedValue([])
+    const deps = { getIndexes, fetchVariantEtas }
+
+    const params = {
+      route: '507',
+      bound: 'O',
+      serviceType: '1',
+      stationId: '1',
+      language: 'tc' as const,
+    }
+    await fetchLrtEtasForStop(params, deps)
+    await fetchLrtEtasForStop(params, deps)
+
+    expect(getIndexes).toHaveBeenCalledTimes(1)
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+  })
+
+  it('normalizes route and station case for the cache key', async () => {
+    const entry = makeLrtEntry({ route: '508' })
+    const fetchVariantEtas = vi.fn().mockResolvedValue([])
+    const deps = {
+      getIndexes: async () => lrtIndexes(entry),
+      fetchVariantEtas,
+    }
+
+    await fetchLrtEtasForStop(
+      { route: '508', bound: 'O', serviceType: '1', stationId: '1', language: 'tc' },
+      deps
+    )
+    await fetchLrtEtasForStop(
+      { route: '508', bound: 'O', serviceType: '1', stationId: 'LR1', language: 'tc' },
+      deps
+    )
+
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps bound variants on separate cache keys', async () => {
+    const mkEntry = (bound: string) =>
+      makeRouteEntry({
+        route: '509',
+        co: ['lightRail'],
+        bound: { lightRail: bound },
+        stops: { lightRail: ['LR1', 'LR2'] },
+      })
+    const both = emptyIndexes()
+    both.lrtRoutes = [mkEntry('O'), mkEntry('I')]
+    const fetchVariantEtas = vi.fn().mockResolvedValue([])
+    const deps = {
+      getIndexes: async () => both,
+      fetchVariantEtas,
+    }
+
+    await fetchLrtEtasForStop(
+      { route: '509', bound: 'O', serviceType: '1', stationId: '1', language: 'tc' },
+      deps
+    )
+    await fetchLrtEtasForStop(
+      { route: '509', bound: 'I', serviceType: '1', stationId: '1', language: 'tc' },
+      deps
+    )
+
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(2)
+  })
 })

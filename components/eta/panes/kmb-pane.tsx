@@ -265,12 +265,12 @@ export function KmbPane({
       }
     }
 
-    if (!kmbStops.length) void load()
+    void load()
 
     return () => {
       cancelled = true
     }
-  }, [kmbStops.length, onStopsChange])
+  }, [onStopsChange])
 
   React.useEffect(() => {
     let cancelled = false
@@ -289,12 +289,12 @@ export function KmbPane({
       }
     }
 
-    if (!kmbRouteStops.length) void load()
+    void load()
 
     return () => {
       cancelled = true
     }
-  }, [kmbRouteStops.length, setKmbRouteStops])
+  }, [setKmbRouteStops])
 
   const availableStopIdsForFilter = React.useMemo(() => {
     if (!kmbDraftStopSelection) return [] as string[]

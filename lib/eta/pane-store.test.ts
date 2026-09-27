@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
+import type { KmbRouteStopLite } from '@/lib/eta/client'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 import { setKmbPaneState, usePaneStore } from './pane-store'
 
@@ -78,6 +79,59 @@ describe('setKmbStops', () => {
     const first = usePaneStore.getState().kmbStops
     setStops([makeStop('C'), makeStop('B'), makeStop('A')])
     expect(usePaneStore.getState().kmbStops).not.toBe(first)
+  })
+
+  it('keeps the reference when given the same array', () => {
+    setStops([makeStop('A')])
+    const first = usePaneStore.getState().kmbStops
+    usePaneStore.getState().setKmbStops(first)
+    expect(usePaneStore.getState().kmbStops).toBe(first)
+  })
+
+  it('replaces when a name changes but ids match', () => {
+    setStops([makeStop('A'), makeStop('B')])
+    const first = usePaneStore.getState().kmbStops
+    const renamed = [makeStop('A'), { ...makeStop('B'), nameEn: 'Renamed' }]
+    setStops(renamed)
+    expect(usePaneStore.getState().kmbStops).toBe(renamed)
+    expect(usePaneStore.getState().kmbStops).not.toBe(first)
+  })
+})
+
+describe('setKmbRouteStops', () => {
+  const makeRouteStop = (stopId: string, overrides?: Partial<KmbRouteStopLite>) => ({
+    co: 'kmb' as const,
+    route: '1A',
+    bound: 'O',
+    serviceType: '1',
+    seq: 1,
+    stopId,
+    ...overrides,
+  })
+
+  beforeEach(() => {
+    usePaneStore.setState({ kmbRouteStops: [] })
+  })
+
+  it('keeps the reference when given the same array', () => {
+    usePaneStore.getState().setKmbRouteStops([makeRouteStop('S1')])
+    const first = usePaneStore.getState().kmbRouteStops
+    usePaneStore.getState().setKmbRouteStops(first)
+    expect(usePaneStore.getState().kmbRouteStops).toBe(first)
+  })
+
+  it('keeps the reference for an identical list', () => {
+    usePaneStore.getState().setKmbRouteStops([makeRouteStop('S1'), makeRouteStop('S2', { seq: 2 })])
+    const first = usePaneStore.getState().kmbRouteStops
+    usePaneStore.getState().setKmbRouteStops([makeRouteStop('S1'), makeRouteStop('S2', { seq: 2 })])
+    expect(usePaneStore.getState().kmbRouteStops).toBe(first)
+  })
+
+  it('replaces when a seq changes', () => {
+    usePaneStore.getState().setKmbRouteStops([makeRouteStop('S1')])
+    const first = usePaneStore.getState().kmbRouteStops
+    usePaneStore.getState().setKmbRouteStops([makeRouteStop('S1', { seq: 2 })])
+    expect(usePaneStore.getState().kmbRouteStops).not.toBe(first)
   })
 })
 

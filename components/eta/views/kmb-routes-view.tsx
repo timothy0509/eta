@@ -436,28 +436,23 @@ function useKmbRouteList() {
 
 function useKmbStops() {
   // Share the pane-store list so the routes view never fetches its own
-  // copy when the stops pane already loaded one.
-  const cachedStops = usePaneStore((s) => s.kmbStops)
-  const setCachedStops = usePaneStore((s) => s.setKmbStops)
-  const [localStops, setLocalStops] = React.useState<KmbStopSearchItem[]>(() =>
-    usePaneStore.getState().kmbStops.length ? usePaneStore.getState().kmbStops : []
-  )
-  const hasCached = cachedStops.length > 0
+  // copy when the stops pane already loaded one. Always revalidate on
+  // mount through the cached fetcher; the store guard skips the write
+  // when the contents are unchanged.
+  const stops = usePaneStore((s) => s.kmbStops)
+  const setStops = usePaneStore((s) => s.setKmbStops)
   React.useEffect(() => {
-    if (hasCached) return
     let cancelled = false
     fetchKmbStops()
       .then((data) => {
-        if (cancelled) return
-        setLocalStops(data)
-        setCachedStops(data)
+        if (!cancelled) setStops(data)
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [hasCached, setCachedStops])
-  return hasCached ? cachedStops : localStops
+  }, [setStops])
+  return stops
 }
 
 function useKmbRouteGeometry(variantKey: string | null, points: GeoPoint[]): GeoPoint[] | null {
@@ -597,11 +592,11 @@ export function KmbRoutesView({
     return () => window.clearTimeout(id)
   }, [query])
 
-  // Load the full route-stop table once for stop-name matching and via lines.
+  // Load the full route-stop table for stop-name matching and via lines.
   // Shared through the pane store so the stops pane and routes view reuse
-  // the same array instead of each fetching and mapping their own copy.
+  // the same array. Always revalidates on mount; the cached fetcher plus
+  // the store guard make repeat loads cheap and render-free.
   React.useEffect(() => {
-    if (routeStopsAll.length) return
     let cancelled = false
     fetchKmbRouteStops()
       .then((data) => {
@@ -611,7 +606,7 @@ export function KmbRoutesView({
     return () => {
       cancelled = true
     }
-  }, [routeStopsAll.length, setRouteStopsAll])
+  }, [setRouteStopsAll])
 
   const searchIndex = React.useMemo(
     () => buildRouteSearchIndex(routes, routeStopsAll, stopsById),

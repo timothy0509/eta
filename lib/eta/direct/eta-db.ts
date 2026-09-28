@@ -16,6 +16,7 @@ import {
 } from '@/lib/eta/direct/eta-db-list'
 import {
   buildEtaDbIndexes,
+  counterpartIds,
   mergedRouteVariantKey,
   normalizeBound,
   normalizeStopId,
@@ -439,24 +440,44 @@ export async function fetchKmbEtasForStop(
   const language = toHkBusEtaLanguage(params.language)
 
   const { stopRoutesIndex, stopEquivalents, routeVariantIndex } = await deps.getIndexes()
-  // KMB and CTB use different stop ids for the same boarding point, so fan
-  // out to every id sharing the requested id's canonical stop. The
-  // union-find groups whole interchanges, so this reaches the true
-  // counterpart (e.g. CTB 001577 for KMB KC713). The official KMB call
-  // stays on the requested id to avoid duplicate calls.
-  const canon = stopEquivalents.get(stopId) ?? stopId
-  const equivalentIds = new Set<string>([stopId])
-  for (const [id, idCanon] of stopEquivalents) {
-    if (idCanon === canon) equivalentIds.add(id)
-  }
-  equivalentIds.add(canon)
-  const routeEntries = Array.from(equivalentIds).flatMap((id) =>
+  // The requested stop keeps its exact prior behavior: every indexed route
+  // at that id. Counterpart ids (same boarding point, other operator's id)
+  // contribute only joint-route legs the requested stop itself serves, and
+  // only when the requested stop has no row for that
+  // co|route|bound|serviceType at all. Without both scopes the fan-out
+  // pulls every variant at a 12-id interchange, which is ~46 upstream
+  // calls for one stop selection and the slowness reported.
+  const requestedEntries = (stopRoutesIndex.get(stopId) ?? []).filter((e) => {
+    if (routeFilter && e.route.toUpperCase() !== routeFilter) return false
+    if (serviceType && String(e.serviceType) !== serviceType) return false
+    return true
+  })
+  const requestedRoutes = new Set(requestedEntries.map((e) => e.route.toUpperCase()))
+  const requestedKeys = new Set(
+    requestedEntries.map((e) =>
+      routeVariantKey({
+        co: e.co,
+        route: e.route,
+        bound: e.bound,
+        serviceType: e.serviceType,
+      })
+    )
+  )
+  const gapEntries = counterpartIds(stopEquivalents, stopId).flatMap((id) =>
     (stopRoutesIndex.get(id) ?? []).filter((e) => {
+      if (!requestedRoutes.has(e.route.toUpperCase())) return false
       if (routeFilter && e.route.toUpperCase() !== routeFilter) return false
       if (serviceType && String(e.serviceType) !== serviceType) return false
-      return true
+      const key = routeVariantKey({
+        co: e.co,
+        route: e.route,
+        bound: e.bound,
+        serviceType: e.serviceType,
+      })
+      return !requestedKeys.has(key)
     })
   )
+  const routeEntries = [...requestedEntries, ...gapEntries]
 
   if (routeEntries.length === 0) return [] as KmbEta[]
 
@@ -554,6 +575,10 @@ export async function fetchKmbEtasForStop(
     for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
   }
 
+  // Same boarding point, two ids: both can yield the identical CTB
+  // departure (same co, route, dir, eta, remark). Dedupe on content, not
+  // on seq/etaSeq, since the two ids report different seq values for the
+  // same bus. KMB rows keep their own keys via co=kmb.
   const deduped = new Map<string, KmbEta>()
   for (const eta of results) {
     const key = etaDedupeKey({
@@ -561,10 +586,11 @@ export async function fetchKmbEtasForStop(
       route: eta.route,
       dir: eta.dir,
       serviceType: eta.serviceType,
-      etaSeq: eta.etaSeq,
+      etaSeq: 0,
       eta: eta.eta ?? '',
     })
-    if (!deduped.has(key)) deduped.set(key, eta)
+    const contentKey = `${key}|${eta.rmk_tc ?? ''}|${eta.rmk_en ?? ''}|${eta.dest_tc ?? ''}`
+    if (!deduped.has(contentKey)) deduped.set(contentKey, eta)
   }
 
   return Array.from(deduped.values())

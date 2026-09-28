@@ -67,16 +67,19 @@ export type GroupEtasOptions = {
 
 function canonicalEntryBound(
   routeVariantIndex: Map<string, { bound: Record<string, string> }> | undefined,
-  entry: KmbEtaEntryWithLeg
+  entry: KmbEtaEntryWithLeg,
+  stopId?: string
 ): string {
   // KMB and CTB spell the same physical direction with opposite letters on
   // some joint routes (ctb O is kmb I on 101), so merge on the KMB letter
-  // when the db entry is known. Falls back to the raw letter. Verified
-  // against the live CTB API: eta rows for 001577 carry dir I while the
-  // same boarding point's KMB rows carry dir O, same seq, same destination.
+  // when the db entry is known. Falls back to the raw letter. The lookup
+  // uses the entry's own stop id, never a group-canonical id from another
+  // operator. A canonical id from the wrong operator resolves the wrong
+  // variant row and silently drops every departure from the group.
   const raw = String(entry.dir ?? '')
   const co = String(entry.co ?? 'kmb')
   if (!routeVariantIndex || !co) return raw
+  void stopId
   const legacyKey = `${co}|${(entry.route ?? '').toUpperCase()}|${raw}|${String(entry.service_type ?? '')}`
   const dbEntry = routeVariantIndex.get(legacyKey)
   if (!dbEntry) return raw

@@ -516,6 +516,22 @@ export async function buildEtaDbIndexes(
 }
 
 /**
+ * Counterpart ids for one boarding point: every id sharing the given id's
+ * canonical stop, excluding the id itself. The union-find behind
+ * stopEquivalents groups whole interchanges, so callers must scope by
+ * route, otherwise one stop selection fans out across a dozen ids.
+ */
+export function counterpartIds(stopEquivalents: Map<string, string>, stopId: string): string[] {
+  const canon = stopEquivalents.get(stopId) ?? stopId
+  const out: string[] = []
+  for (const [id, idCanon] of stopEquivalents) {
+    if (id !== stopId && idCanon === canon) out.push(id)
+  }
+  if (canon !== stopId && !out.includes(canon)) out.push(canon)
+  return out
+}
+
+/**
  * Mutual stopMap pairs (A lists B and B lists A) mean one physical boarding
  * point with two ids. Canonical id prefers KMB ids, else first sorted.
  */

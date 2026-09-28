@@ -6,7 +6,6 @@ import * as React from 'react'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { defaultMergedKey, formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
-import { canonicalStopId } from '@/lib/eta/eta-db-index'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -270,10 +269,10 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stop?: StopInfo
   nameSource?: 'stop' | 'kmb' | 'ctb'
 }) {
-  // Merged key is `route|dir|serviceType|leg` (4 parts); a legacy
-  // `co|route|dir|serviceType|leg` key has 5 parts with the route second.
-  const keyParts = variantKey.split('|')
-  const route = keyParts.length === 5 ? (keyParts[1] ?? '') : (keyParts[0] ?? '')
+  // The group key carries a stop suffix in multi-stop mode and a co
+  // prefix in legacy keys, so positional parsing misreads it. The items
+  // always carry the real route number, which is what the badge shows.
+  const route = (items[0]?.route ?? '').toUpperCase()
   const primaryCo = String(routeInfos[baseKey]?.co ?? items[0]?.co ?? 'kmb')
   const first = items[0]
   // Use baseKey for route info lookup (full key may have leg suffix)
@@ -747,22 +746,18 @@ export const KmbResults = React.memo(function KmbResults({
   const onToggleExpand = React.useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
-  // Canonical bound letters plus physical-stop equivalence for the
-  // multipleStops fallback grouping. Precomputed groups already carry these
-  // from the pane; this only covers the fallback path.
+  // Canonical bound letters for the multipleStops fallback grouping.
+  // Precomputed groups already carry these from the pane; this only
+  // covers the fallback path.
   const [groupRouteVariantIndex, setGroupRouteVariantIndex] = React.useState<
     Map<string, { bound: Record<string, string> }> | undefined
-  >(undefined)
-  const [groupStopEquivalents, setGroupStopEquivalents] = React.useState<
-    Map<string, string> | undefined
   >(undefined)
   React.useEffect(() => {
     let cancelled = false
     void getEtaDbIndexes()
-      .then(({ routeVariantIndex, stopEquivalents }) => {
+      .then(({ routeVariantIndex }) => {
         if (!cancelled) {
           setGroupRouteVariantIndex(routeVariantIndex)
-          setGroupStopEquivalents(stopEquivalents)
         }
       })
       .catch(() => {})
@@ -827,18 +822,27 @@ export const KmbResults = React.memo(function KmbResults({
       .map((idx) => allIds[idx]!)
   }, [loadedStopIds, visibleStopIds])
 
-  // Fallback grouped computation for multipleStops mode only
+  // Fallback grouped computation for multipleStops mode only.
+  // Group one stop at a time and concatenate, exactly like the pane
+  // precompute does. Grouping the flat array with a stop suffix in the
+  // key breaks the 3-item cap (it applies per stop instead of per
+  // route) and splits joint routes across their per-operator stop ids.
   const grouped = React.useMemo(() => {
     if (useStopSections) return []
     if (precomputedFlat && !multipleStops) return []
 
-    const buildKeyWithStop = (entry: KmbEtaEntryWithLeg) => {
-      const stop = entry.stop ?? ''
-      const canon = canonicalStopId(groupStopEquivalents, stop)
-      return `${defaultMergedKey(entry, { routeVariantIndex: groupRouteVariantIndex })}|${canon}`
+    const byStop = new Map<string, KmbEtaEntryWithLeg[]>()
+    for (const entry of eta) {
+      const key = entry.stop ?? ''
+      const list = byStop.get(key) ?? []
+      list.push(entry)
+      byStop.set(key, list)
     }
-
-    return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
+    return Array.from(byStop.values()).flatMap((entries) =>
+      groupEtasByVariant(entries, faresByVariantKey ?? {}, undefined, {
+        routeVariantIndex: groupRouteVariantIndex,
+      })
+    )
   }, [
     eta,
     multipleStops,
@@ -846,7 +850,6 @@ export const KmbResults = React.memo(function KmbResults({
     precomputedFlat,
     faresByVariantKey,
     groupRouteVariantIndex,
-    groupStopEquivalents,
   ])
 
   // Stagger replay key: query identity only, never live ETA arrays (see the

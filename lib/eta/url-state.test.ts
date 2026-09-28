@@ -136,7 +136,7 @@ describe('encodeUrlState', () => {
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {
-          entries: [{ variantKey: '1A|O|1' }],
+          entries: [{ variantKey: '1A|1|1A|1|S1>S2' }],
         },
       },
     }
@@ -305,7 +305,7 @@ describe('decodeUrlState', () => {
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {
-          entries: [{ variantKey: '1A|O|1' }],
+          entries: [{ variantKey: '1A|1|1A|1|S1>S2' }],
         },
       },
     }
@@ -313,16 +313,15 @@ describe('decodeUrlState', () => {
     const decoded = decodeUrlState(encoded)
     expect(decoded.selectedItem).toHaveProperty('routeFilterMode', 'advanced')
     expect(decoded.state.routeFilterMode).toBeUndefined()
+    expect(decoded.selectedItem).toHaveProperty('entries', [{ variantKey: '1A|1|1A|1|S1>S2' }])
   })
 
-  it('decodes legacy co-prefixed entries to the same merged key', () => {
+  it('keeps legacy co-prefixed entries verbatim for pane-side resolution', () => {
     const legacy = decodeUrlState('km=stop&ks=1234&rfm=advanced&ke=kmb|101|O|1')
-    const merged = decodeUrlState('km=stop&ks=1234&rfm=advanced&ke=101|O|1')
-    expect(legacy.selectedItem).toHaveProperty('entries', [{ variantKey: '101|O|1' }])
-    expect(merged.selectedItem).toHaveProperty('entries', [{ variantKey: '101|O|1' }])
+    expect(legacy.selectedItem).toHaveProperty('entries', [{ variantKey: 'kmb|101|O|1' }])
   })
 
-  it('encodes merged entries without the operator prefix', () => {
+  it('encodes canonical entries verbatim', () => {
     const input: UrlEncodeInput = {
       mode: 'kmb',
       subView: 'stops',
@@ -332,11 +331,11 @@ describe('decodeUrlState', () => {
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {
-          entries: [{ variantKey: '101|O|1' }],
+          entries: [{ variantKey: '101|1|101|1|S1>S2' }],
         },
       },
     }
     const encoded = encodeUrlState(input)
-    expect(encoded).toContain('ke=101%7CO%7C1')
+    expect(encoded).toContain('ke=101%7C1%7C101%7C1%7CS1%3ES2')
   })
 })

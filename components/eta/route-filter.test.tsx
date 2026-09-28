@@ -53,13 +53,14 @@ describe('RouteFilter', () => {
 
 describe('parseRouteVariantKey compat', () => {
   it('parses merged and legacy keys to the same route and direction', async () => {
-    const { parseRouteVariantKey } = await import('@/lib/eta/eta-db-index')
+    const { parseLegacyVariantKey, parseRouteVariantKey } = await import('@/lib/eta/eta-db-index')
     const merged = parseRouteVariantKey('101|O|1')
-    const legacy = parseRouteVariantKey('kmb|101|O|1')
+    const legacy = parseLegacyVariantKey('kmb|101|O|1')
     expect(merged?.route).toBe('101')
     expect(legacy?.route).toBe('101')
     expect(merged?.bound).toBe('O')
     expect(legacy?.bound).toBe('O')
     expect(legacy?.co).toBe('kmb')
+    expect(parseRouteVariantKey('kmb|101|O|1')).toBeNull()
   })
 })

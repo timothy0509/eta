@@ -88,20 +88,24 @@ function parseCommaList(value: string | null): string[] {
     .filter(Boolean)
 }
 
+/**
+ * Split the `ke` param into variant keys. Canonical keys contain pipes
+ * but never commas (directionKey joins stops with `>`), so a comma split
+ * is unambiguous.
+ */
+function parseVariantKeyList(value: string | null): string[] {
+  return parseCommaList(value)
+}
+
+/**
+ * Normalize stored filter keys on URL decode. Canonical variant keys
+ * (`route|serviceType|directionKey`) pass through untouched. Legacy
+ * 4-part `co|route|dir|st` and old 3-part `route|dir|st` keys are kept
+ * verbatim for the pane to resolve against the merged index; the letter
+ * is never compared across operators downstream.
+ */
 function normalizeVariantKeys(entries: string[]): string[] {
-  return entries
-    .map((entry) => {
-      if (!entry) return ''
-      const parts = entry.split('|')
-      // Canonical keys are merged `route|dir|serviceType`. Legacy 4-part
-      // `co|route|dir|st` keys strip the operator. Old 3-part route-only
-      // input was ambiguous; treat it as already merged.
-      if (parts.length === 3) return entry
-      if (parts.length === 4) return parts.slice(1).join('|')
-      // Invalid format: ensure this entry is filtered out
-      return ''
-    })
-    .filter(Boolean)
+  return entries.map((entry) => entry.trim()).filter(Boolean)
 }
 
 function buildKmbSelectedItem(input: {
@@ -171,9 +175,11 @@ export function decodeUrlState(search: string): UrlDecodeResult {
 
   const kmbMode = params.get('km')
   const kmbRoute = params.get('kr')
-  const kmbEntries = normalizeVariantKeys(parseCommaList(params.get('ke'))).map((variantKey) => ({
-    variantKey,
-  }))
+  const kmbEntries = normalizeVariantKeys(parseVariantKeyList(params.get('ke'))).map(
+    (variantKey) => ({
+      variantKey,
+    })
+  )
 
   let kmbQuery: KmbQuerySummary | null = null
   if (kmbMode === 'stop') {
@@ -262,13 +268,12 @@ export function encodeUrlState(input: UrlEncodeInput): string {
     if (input.routeFilterMode === 'advanced') {
       const entries = routeFilter?.entries ?? []
       if (entries.length) {
-        const normalized = entries.map((entry) => {
-          const key = entry.variantKey
-          if (!key) return ''
-          const parts = key.split('|')
-          return parts.length === 4 ? parts.slice(1).join('|') : key
-        })
-        const compact = normalized.filter(Boolean).join(',')
+        // Canonical variant keys pass through verbatim. They contain pipes
+        // but no commas, so comma-joining stays unambiguous.
+        const compact = entries
+          .map((entry) => entry.variantKey.trim())
+          .filter(Boolean)
+          .join(',')
         if (compact) params.set('ke', compact)
       }
     } else {

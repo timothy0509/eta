@@ -6,6 +6,7 @@ import * as React from 'react'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
+import type { MergedDbEntry } from '@/lib/eta/eta-db-index'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -236,6 +237,7 @@ function RouteDetailsDialog({
 const RouteDepartureRow = React.memo(function RouteDepartureRow({
   variantKey,
   baseKey,
+  merged,
   items,
   hasEta,
   hasFare,
@@ -251,8 +253,10 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   nameSource,
 }: {
   variantKey: string
-  /** Base variant key without leg suffix (route|dir|service_type) for route info & fare lookup */
+  /** Canonical variant key `route|serviceType|directionKey` for info and fare lookup */
   baseKey: string
+  /** The merged entry backing this group; identity comes from here, never from items[0]. */
+  merged: EtaGroup['merged']
   items: KmbEtaEntryWithLeg[]
   hasEta: boolean
   /** Whether to show fare (false for arriving leg) */
@@ -269,14 +273,20 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stop?: StopInfo
   nameSource?: 'stop' | 'kmb' | 'ctb'
 }) {
-  // The group key carries a stop suffix in multi-stop mode and a co
-  // prefix in legacy keys, so positional parsing misreads it. The items
-  // always carry the real route number, which is what the badge shows.
-  const route = (items[0]?.route ?? '').toUpperCase()
-  const primaryCo = String(routeInfos[baseKey]?.co ?? items[0]?.co ?? 'kmb')
+  // Identity comes from the merged entry, never from whichever departure
+  // sorts first. items[0] is time order, so deriving the badge or label
+  // from it shows the CTB card on a KMB stop whenever CTB leaves first.
+  const route = (merged?.entry.route ?? items[0]?.route ?? '').toUpperCase()
+  const primaryCo = String(
+    routeInfos[baseKey]?.co ??
+      merged?.operators.find((op) => op === 'kmb') ??
+      merged?.operators[0] ??
+      items[0]?.co ??
+      'kmb'
+  )
   const first = items[0]
   // Use baseKey for route info lookup (full key may have leg suffix)
-  const routeInfo = routeInfos[baseKey]
+  const routeInfo = routeInfos[baseKey] ?? null
   const isKmbViewingStop = stop ? isKmbStop(stop) : undefined
   const label = formatRouteVariantLabel(
     routeInfo,
@@ -669,6 +679,7 @@ const StopSection = React.memo(function StopSection({
               key={g.key}
               variantKey={g.key}
               baseKey={g.baseKey}
+              merged={g.merged}
               items={g.items}
               hasEta={g.hasEta}
               hasFare={g.hasFare}
@@ -746,18 +757,18 @@ export const KmbResults = React.memo(function KmbResults({
   const onToggleExpand = React.useCallback((key: string) => {
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
-  // Canonical bound letters for the multipleStops fallback grouping.
+  // Merged entries for the multipleStops fallback grouping.
   // Precomputed groups already carry these from the pane; this only
   // covers the fallback path.
-  const [groupRouteVariantIndex, setGroupRouteVariantIndex] = React.useState<
-    Map<string, { bound: Record<string, string> }> | undefined
+  const [groupMergedByDirection, setGroupMergedByDirection] = React.useState<
+    Map<string, MergedDbEntry> | undefined
   >(undefined)
   React.useEffect(() => {
     let cancelled = false
     void getEtaDbIndexes()
-      .then(({ routeVariantIndex }) => {
+      .then(({ mergedVariantIndex }) => {
         if (!cancelled) {
-          setGroupRouteVariantIndex(routeVariantIndex)
+          setGroupMergedByDirection(mergedVariantIndex)
         }
       })
       .catch(() => {})
@@ -840,7 +851,7 @@ export const KmbResults = React.memo(function KmbResults({
     }
     return Array.from(byStop.values()).flatMap((entries) =>
       groupEtasByVariant(entries, faresByVariantKey ?? {}, undefined, {
-        routeVariantIndex: groupRouteVariantIndex,
+        mergedByDirection: groupMergedByDirection,
       })
     )
   }, [
@@ -849,7 +860,7 @@ export const KmbResults = React.memo(function KmbResults({
     useStopSections,
     precomputedFlat,
     faresByVariantKey,
-    groupRouteVariantIndex,
+    groupMergedByDirection,
   ])
 
   // Stagger replay key: query identity only, never live ETA arrays (see the
@@ -951,6 +962,7 @@ export const KmbResults = React.memo(function KmbResults({
                   key={g.key}
                   variantKey={g.key}
                   baseKey={g.baseKey}
+                  merged={g.merged}
                   items={g.items}
                   hasEta={g.hasEta}
                   hasFare={g.hasFare}
@@ -985,6 +997,7 @@ export const KmbResults = React.memo(function KmbResults({
                   key={g.key}
                   variantKey={g.key}
                   baseKey={g.baseKey}
+                  merged={g.merged}
                   items={g.items}
                   hasEta={g.hasEta}
                   hasFare={g.hasFare}

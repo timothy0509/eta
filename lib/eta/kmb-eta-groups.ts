@@ -14,7 +14,14 @@ export function formatEtaOrdinals(seq: number, lang: UiLanguage): string {
 
 export type EtaGroup = {
   key: string
+  /**
+   * Canonical variant key `route|serviceType|directionKey` identifying the
+   * physical direction. Display code must derive the bound letter from
+   * the merged entry (boundByStopId), never by parsing this key.
+   */
   baseKey: string
+  /** The merged entry backing this group, for identity, labels, and fares. */
+  merged: import('./eta-db-index').MergedDbEntry | null
   items: KmbEtaEntryWithLeg[]
   hasEta: boolean
   hasFare: boolean
@@ -59,39 +66,59 @@ export function buildLegacyKey(entry: KmbEtaEntryWithLeg): string {
 }
 
 export type GroupEtasOptions = {
-  /** Canonical bound per legacy `co|route|bound|st`, so opposite KMB/CTB letters merge. */
+  /**
+   * Merged entries keyed by directionKey. The grouping boundary resolves
+   * each departure to its physical direction through boundByStopId, the
+   * single letter-mapping site. Kept optional so pure unit tests can run
+   * without an index; without it, raw letters are used as-is.
+   */
+  mergedByDirection?: Map<string, import('./eta-db-index').MergedDbEntry>
+  /** @deprecated No longer consulted. Kept so old call sites compile. */
   routeVariantIndex?: Map<string, { bound: Record<string, string> }>
-  /** Canonical physical-stop id per stop id, for multi-stop group keys. */
+  /** @deprecated No longer consulted. Kept so old call sites compile. */
   stopEquivalents?: Map<string, string>
 }
 
-function canonicalEntryBound(
-  routeVariantIndex: Map<string, { bound: Record<string, string> }> | undefined,
-  entry: KmbEtaEntryWithLeg,
-  stopId?: string
-): string {
-  // KMB and CTB spell the same physical direction with opposite letters on
-  // some joint routes (ctb O is kmb I on 101), so merge on the KMB letter
-  // when the db entry is known. Falls back to the raw letter. The lookup
-  // uses the entry's own stop id, never a group-canonical id from another
-  // operator. A canonical id from the wrong operator resolves the wrong
-  // variant row and silently drops every departure from the group.
-  const raw = String(entry.dir ?? '')
-  const co = String(entry.co ?? 'kmb')
-  if (!routeVariantIndex || !co) return raw
-  void stopId
-  const legacyKey = `${co}|${(entry.route ?? '').toUpperCase()}|${raw}|${String(entry.service_type ?? '')}`
-  const dbEntry = routeVariantIndex.get(legacyKey)
-  if (!dbEntry) return raw
-  const ops = Object.keys(dbEntry.bound ?? {})
-  const preferred = ops.includes('kmb') ? 'kmb' : [...ops].sort()[0]
-  if (!preferred) return raw
-  return String(dbEntry.bound[preferred] ?? raw)
+/**
+ * Find the merged entry backing one departure, by route plus service type
+ * plus stop membership. Bound letters never participate: the stop's
+ * presence in the entry's stop set already proves the physical direction.
+ */
+export function findMergedForEntry(
+  mergedByDirection: Map<string, import('./eta-db-index').MergedDbEntry> | undefined,
+  entry: KmbEtaEntryWithLeg
+): import('./eta-db-index').MergedDbEntry | null {
+  const route = (entry.route ?? '').toUpperCase()
+  const serviceType = String(entry.service_type ?? '')
+  const stopId = String(entry.stop ?? '').trim()
+  if (!mergedByDirection || !route || !stopId) return null
+  for (const merged of mergedByDirection.values()) {
+    if (merged.entry.route.toUpperCase() !== route) continue
+    if (String(merged.entry.serviceType ?? '') !== serviceType) continue
+    const canon = merged.stopCanonById.get(stopId)
+    if (!canon) continue
+    if (!merged.orderedStops.includes(canon)) continue
+    return merged
+  }
+  return null
 }
 
+/**
+ * Physical direction key for one departure: `route|serviceType` plus the
+ * merged entry's directionKey plus leg. Two departures share a group if and
+ * only if they run the same physical direction, regardless of which
+ * letters their operators print. Unmatched departures (unknown stop,
+ * unknown route) fall back to the raw letter so they still render instead
+ * of vanishing.
+ */
 export function defaultMergedKey(entry: KmbEtaEntryWithLeg, options?: GroupEtasOptions): string {
-  const bound = canonicalEntryBound(options?.routeVariantIndex, entry)
-  return `${(entry.route ?? '').toUpperCase()}|${bound}|${String(entry.service_type ?? '')}|${entry.leg ?? '_'}`
+  const route = (entry.route ?? '').toUpperCase()
+  const serviceType = String(entry.service_type ?? '')
+  const leg = entry.leg ?? '_'
+  const merged = findMergedForEntry(options?.mergedByDirection, entry)
+  if (merged) return `${route}|${serviceType}|${merged.directionKey}|${leg}`
+  const raw = String(entry.dir ?? '')
+  return `${route}|${serviceType}|${raw}|${leg}`
 }
 
 export function groupEtasByVariant(
@@ -101,16 +128,19 @@ export function groupEtasByVariant(
   options?: GroupEtasOptions
 ): EtaGroup[] {
   const keyFor = buildKey ?? ((entry: KmbEtaEntryWithLeg) => defaultMergedKey(entry, options))
-  const byVariant = new Map<string, KmbEtaEntryWithLeg[]>()
+  const byVariant = new Map<string, { items: KmbEtaEntryWithLeg[]; merged: EtaGroup['merged'] }>()
   for (const entry of eta) {
     const key = keyFor(entry)
-
-    const items = byVariant.get(key) ?? []
-    items.push(entry)
-    byVariant.set(key, items)
+    const slot = byVariant.get(key) ?? { items: [], merged: null }
+    slot.items.push(entry)
+    if (!slot.merged && !buildKey && options?.mergedByDirection) {
+      slot.merged = findMergedForEntry(options.mergedByDirection, entry)
+    }
+    byVariant.set(key, slot)
   }
 
-  const groups = Array.from(byVariant.entries()).map(([key, items]) => {
+  const groups = Array.from(byVariant.entries()).map(([key, slot]) => {
+    const { items } = slot
     // Both operators restart eta_seq at 1, so merged groups sort by time.
     const sorted = [...items]
       .sort((a, b) => {
@@ -124,9 +154,11 @@ export function groupEtasByVariant(
       .slice(0, 3)
     const hasEta = hasValidEta(sorted)
 
-    const parts = key.split('|')
-    const baseKey = parts.slice(0, 3).join('|')
-    const legPart = parts[3]
+    // Key is `route|serviceType|directionKey|leg`, where directionKey
+    // itself contains pipes, so the leg is the last segment and the
+    // baseKey is everything before it.
+    const legPart = key.split('|').pop() ?? '_'
+    const baseKey = key.slice(0, key.length - legPart.length - 1)
     const isArrivingLeg = legPart === 'B'
 
     const hasFare = !isArrivingLeg
@@ -142,7 +174,16 @@ export function groupEtasByVariant(
       )
     ).sort()
 
-    return { key, baseKey, items: sorted, hasEta, hasFare, isArrivingLeg, operators }
+    return {
+      key,
+      baseKey,
+      merged: slot.merged,
+      items: sorted,
+      hasEta,
+      hasFare,
+      isArrivingLeg,
+      operators,
+    }
   })
 
   // Single-pass partition + extract route for sort to avoid repeated split+filter

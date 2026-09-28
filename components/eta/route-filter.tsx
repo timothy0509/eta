@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
-import { parseRouteVariantKey } from '@/lib/eta/eta-db-index'
+import { parseLegacyVariantKey, parseRouteVariantKey } from '@/lib/eta/eta-db-index'
 import { useTranslations } from '@/lib/eta/i18n'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -21,9 +21,12 @@ export type RouteFilterState = {
 }
 
 export type RouteFilterOption = {
-  key: string // `${route}|${direction}|${serviceType}` (legacy `co|...` still parses)
+  /** Canonical variant key `route|serviceType|directionKey`. */
+  key: string
   route: string
   label: string
+  /** Display bound letter for the inbound/outbound hint. Never used for matching. */
+  bound?: string
 }
 
 export function countActiveFilters(state: RouteFilterState): number {
@@ -40,8 +43,9 @@ export function countActiveFilters(state: RouteFilterState): number {
 }
 
 function getCompanyFromVariantKey(key: string) {
-  const parsed = parseRouteVariantKey(key)
-  return parsed?.co || 'kmb'
+  // Canonical keys carry no operator; badge company is display-only and
+  // defaults to kmb. Legacy keys keep their stored operator.
+  return parseLegacyVariantKey(key)?.co || 'kmb'
 }
 
 function getDirectionFromVariantKey(key: string) {
@@ -261,7 +265,7 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
             >
               {focusedVariants.map((opt) => {
                 const active = selectedKeys.has(opt.key)
-                const direction = getDirectionFromVariantKey(opt.key)
+                const direction = opt.bound ?? getDirectionFromVariantKey(opt.key)
                 const directionHint =
                   direction === 'I' ? t.inbound : direction === 'O' ? t.outbound : null
 

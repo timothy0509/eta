@@ -17,16 +17,18 @@ import {
 import {
   buildEtaDbIndexes,
   counterpartIds,
-  mergedRouteVariantKey,
+  directionKeyOf,
   normalizeBound,
   normalizeStopId,
   routeVariantKey,
   serializeEtaDbIndexes,
   deserializeEtaDbIndexes,
+  variantMergeKey,
   type EtaDbIndexes,
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
   type KmbStopSearchItem,
+  type MergedDbEntry,
   type SerializedEtaDbIndexes,
 } from '@/lib/eta/eta-db-index'
 import { fetchJson, getAdaptiveConcurrency } from '@/lib/eta/http'
@@ -205,56 +207,50 @@ function pickPrimaryOperator(operators: Company[]): Company {
 export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
   const { mergedDbEntries } = await getEtaDbIndexes()
 
-  return mergedDbEntries.map((merged) => {
-    const { entry, operators, bound } = merged
-    const sorted = [...operators].sort()
-    const primary = pickPrimaryOperator(sorted)
-    // The raw db row carries a single orig/dest pair, so per-operator
-    // display falls back to the entry strings until hk-bus-eta exposes
-    // per-operator termini.
-    const namesByOperator: Record<
-      string,
-      {
-        origin: { en: string; tc: string; sc: string }
-        destination: { en: string; tc: string; sc: string }
-      }
-    > = {}
-    for (const co of sorted) {
-      namesByOperator[String(co)] = {
-        origin: mapEtaLangToUi(entry.orig),
-        destination: mapEtaLangToUi(entry.dest),
-      }
-    }
-    return {
-      co: primary,
-      route: entry.route,
-      bound,
-      serviceType: entry.serviceType,
-      origin: mapEtaLangToUi(entry.orig),
-      destination: mapEtaLangToUi(entry.dest),
-      routeEntry: entry,
-      operators: sorted,
-      namesByOperator,
-    }
-  })
+  return mergedDbEntries.map((merged) => mergedToInfo(merged))
 }
 
 /** Joint-route stops for one merged variant, in display order (KMB seq first). */
 export async function listMergedRouteStops(params: {
+  directionKey: string
+}): Promise<Array<{ stopId: string; seq: number }>>
+export async function listMergedRouteStops(params: {
   route: string
   bound: string
   serviceType: string
-}): Promise<Array<{ stopId: string; seq: number }>> {
+}): Promise<Array<{ stopId: string; seq: number }>>
+export async function listMergedRouteStops(
+  params: { directionKey: string } | { route: string; bound: string; serviceType: string }
+): Promise<Array<{ stopId: string; seq: number }>> {
   const { mergedVariantIndex } = await getEtaDbIndexes()
-  const merged = mergedVariantIndex.get(
-    mergedRouteVariantKey({
-      route: params.route,
-      bound: params.bound,
-      serviceType: params.serviceType,
-    })
-  )
+  const merged =
+    'directionKey' in params
+      ? mergedVariantIndex.get(params.directionKey)
+      : findMergedByLetter(mergedVariantIndex, params.route, params.bound, params.serviceType)
   if (!merged) return []
   return merged.orderedStops.map((stopId, idx) => ({ stopId, seq: idx + 1 }))
+}
+
+/**
+ * Legacy letter-based lookup: first merged entry whose display bound
+ * matches. Only for call sites that still carry a raw letter (deep links,
+ * old favorites). New code passes directionKey.
+ */
+function findMergedByLetter(
+  mergedVariantIndex: Map<string, MergedDbEntry>,
+  route: string,
+  bound: string,
+  serviceType: string
+): MergedDbEntry | undefined {
+  const routeName = String(route ?? '').toUpperCase()
+  const st = String(serviceType ?? '')
+  const letter = normalizeBound(bound)
+  for (const merged of mergedVariantIndex.values()) {
+    if (merged.entry.route.toUpperCase() !== routeName) continue
+    if (String(merged.entry.serviceType ?? '') !== st) continue
+    if (normalizeBound(merged.bound) === letter) return merged
+  }
+  return undefined
 }
 
 export async function listKmbRouteStops(): Promise<KmbRouteStopLite[]> {
@@ -263,60 +259,46 @@ export async function listKmbRouteStops(): Promise<KmbRouteStopLite[]> {
 }
 
 export async function findKmbRouteInfo(params: {
+  directionKey: string
+}): Promise<KmbRouteInfoLite | null>
+export async function findKmbRouteInfo(params: {
   co?: Company
   route: string
   bound: string
   serviceType: string
-}): Promise<KmbRouteInfoLite | null> {
+}): Promise<KmbRouteInfoLite | null>
+export async function findKmbRouteInfo(
+  params:
+    { directionKey: string } | { co?: Company; route: string; bound: string; serviceType: string }
+): Promise<KmbRouteInfoLite | null> {
   const { mergedVariantIndex, routeVariantIndex } = await getEtaDbIndexes()
+
+  if ('directionKey' in params) {
+    const merged = mergedVariantIndex.get(params.directionKey)
+    if (!merged) return null
+    return mergedToInfo(merged)
+  }
+
+  // Legacy per-operator lookup. Prefer the merged entry whose stop set
+  // contains the raw row's first stop: membership proves the physical
+  // direction without comparing letters across operators.
   const routeName = params.route.toUpperCase()
   const serviceType = String(params.serviceType ?? '')
   const co = (params.co ?? 'kmb') as Company
-
-  // Merged lookup first: the canonical bound resolves opposite KMB/CTB
-  // letters, so a bound from either operator finds the joint entry.
-  const merged = mergedVariantIndex.get(
-    mergedRouteVariantKey({ route: routeName, bound: params.bound, serviceType })
-  )
-  if (merged) {
-    const sorted = [...merged.operators].sort()
-    const primary = pickPrimaryOperator(sorted)
-    const namesByOperator: Record<
-      string,
-      {
-        origin: { en: string; tc: string; sc: string }
-        destination: { en: string; tc: string; sc: string }
-      }
-    > = {}
-    for (const op of sorted) {
-      namesByOperator[String(op)] = {
-        origin: mapEtaLangToUi(merged.entry.orig),
-        destination: mapEtaLangToUi(merged.entry.dest),
-      }
-    }
-    return {
-      co: primary,
-      route: merged.entry.route,
-      bound: merged.bound,
-      serviceType: merged.entry.serviceType,
-      origin: mapEtaLangToUi(merged.entry.orig),
-      destination: mapEtaLangToUi(merged.entry.dest),
-      routeEntry: merged.entry,
-      operators: sorted,
-      namesByOperator,
+  const bound = normalizeBound(params.bound)
+  const rawKey = routeVariantKey({ co, route: routeName, bound, serviceType })
+  const rawEntry = routeVariantIndex.get(rawKey)
+  if (rawEntry) {
+    const stopId = normalizeStopId((rawEntry.stops[co] ?? [])[0] ?? '')
+    for (const merged of mergedVariantIndex.values()) {
+      if (merged.entry.route.toUpperCase() !== routeName) continue
+      if (String(merged.entry.serviceType ?? '') !== serviceType) continue
+      const canon = merged.stopCanonById.get(stopId)
+      if (canon && merged.orderedStops.includes(canon)) return mergedToInfo(merged)
     }
   }
 
-  const bound = normalizeBound(params.bound)
-  const entry = routeVariantIndex.get(
-    routeVariantKey({
-      co,
-      route: routeName,
-      bound,
-      serviceType,
-    })
-  )
-
+  const entry = routeVariantIndex.get(rawKey)
   if (!entry || !entry.co.includes(co)) return null
 
   return {
@@ -324,9 +306,54 @@ export async function findKmbRouteInfo(params: {
     route: entry.route,
     bound: normalizeBound(entry.bound[co]),
     serviceType: entry.serviceType,
+    variantKey: variantMergeKey({
+      route: entry.route,
+      serviceType: entry.serviceType,
+      // Single-operator fallback: no merged entry exists. The variant is
+      // identified by its own raw row so it still carries a stable key.
+      directionKey: directionKeyOf(
+        String(entry.route ?? '').toUpperCase(),
+        String(entry.serviceType ?? ''),
+        (entry.stops[co] ?? []).map((id) => normalizeStopId(id))
+      ),
+    }),
     origin: mapEtaLangToUi(entry.orig),
     destination: mapEtaLangToUi(entry.dest),
     routeEntry: entry,
+  }
+}
+
+function mergedToInfo(merged: MergedDbEntry): KmbRouteInfoLite {
+  const sorted = [...merged.operators].sort()
+  const primary = pickPrimaryOperator(sorted)
+  const namesByOperator: Record<
+    string,
+    {
+      origin: { en: string; tc: string; sc: string }
+      destination: { en: string; tc: string; sc: string }
+    }
+  > = {}
+  for (const op of sorted) {
+    namesByOperator[String(op)] = {
+      origin: mapEtaLangToUi(merged.entry.orig),
+      destination: mapEtaLangToUi(merged.entry.dest),
+    }
+  }
+  return {
+    co: primary,
+    route: merged.entry.route,
+    bound: merged.bound,
+    serviceType: merged.entry.serviceType,
+    variantKey: variantMergeKey({
+      route: merged.entry.route,
+      serviceType: merged.entry.serviceType,
+      directionKey: merged.directionKey,
+    }),
+    origin: mapEtaLangToUi(merged.entry.orig),
+    destination: mapEtaLangToUi(merged.entry.dest),
+    routeEntry: merged.entry,
+    operators: sorted,
+    namesByOperator,
   }
 }
 

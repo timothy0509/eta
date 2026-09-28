@@ -18,42 +18,7 @@ import { promisePool } from '@/lib/eta/promise-pool'
 
 import { getAdaptiveConcurrency } from '@/lib/eta/http'
 import { getCachedValue, normalizeDirection } from '@/lib/eta/direct/shared'
-import {
-  parseRouteVariantKey,
-  type MergedDbEntry,
-  type RouteListEntryLike,
-} from '@/lib/eta/eta-db-index'
-import type { RouteListEntry } from 'hk-bus-eta'
-
-/**
- * Canonical merged keys for a legacy `co|route|bound|st` fare key: every
- * merged variant whose operators include the co and whose raw letter for
- * that co matches. One legacy variant can belong to exactly one merged
- * variant in practice; the loop form keeps lookups total.
- */
-export function toCanonicalMergedKeys(
-  mergedVariantIndex: Map<string, MergedDbEntry> | undefined,
-  routeVariantIndex: Map<string, RouteListEntry> | undefined,
-  legacyKey: string
-): string[] {
-  const parsed = parseRouteVariantKey(legacyKey)
-  if (!parsed?.co) return []
-  const out: string[] = []
-  for (const [key, merged] of mergedVariantIndex ?? []) {
-    const parts = key.split('|')
-    if (
-      parts[0] !== parsed.route ||
-      parts[2] !== parsed.serviceType ||
-      !(merged.operators as string[]).includes(parsed.co)
-    ) {
-      continue
-    }
-    const rawEntry = routeVariantIndex?.get(legacyKey) as RouteListEntryLike | undefined
-    void rawEntry
-    out.push(key)
-  }
-  return out
-}
+import { mergedRouteVariantKey, variantMergeKey, type MergedDbEntry } from '@/lib/eta/eta-db-index'
 
 export type KmbStop = {
   stop: string
@@ -194,6 +159,7 @@ export type KmbRouteInfo = {
   route: string
   bound: 'I' | 'O' | string
   service_type: number | string
+  variantKey: string
   orig_en: string
   orig_tc: string
   orig_sc: string
@@ -215,6 +181,7 @@ export type KmbRouteListEntry = {
   route: string
   bound: 'I' | 'O' | string
   service_type: number | string
+  variantKey: string
   orig_en: string
   orig_tc: string
   orig_sc: string
@@ -244,6 +211,7 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
         route: entry.route,
         bound: entry.bound,
         service_type: entry.serviceType,
+        variantKey: entry.variantKey,
         orig_en: entry.origin.en,
         orig_tc: entry.origin.tc,
         orig_sc: entry.origin.sc,
@@ -259,19 +227,25 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
   return value
 }
 
-export async function getKmbRouteInfo(params: {
-  co?: Company
-  route: string
-  direction: 'I' | 'O' | 'inbound' | 'outbound' | string
-  serviceType: string
-}): Promise<KmbRouteInfo> {
-  const bound = normalizeDirection(params.direction)
-  const info = await findKmbRouteInfo({
-    co: params.co,
-    route: params.route,
-    bound,
-    serviceType: params.serviceType,
-  })
+export async function getKmbRouteInfo(
+  params:
+    | {
+        co?: Company
+        route: string
+        direction: 'I' | 'O' | 'inbound' | 'outbound' | string
+        serviceType: string
+      }
+    | { directionKey: string }
+): Promise<KmbRouteInfo> {
+  const info =
+    'directionKey' in params
+      ? await findKmbRouteInfo({ directionKey: params.directionKey })
+      : await findKmbRouteInfo({
+          co: params.co,
+          route: params.route,
+          bound: normalizeDirection(params.direction),
+          serviceType: params.serviceType,
+        })
 
   if (!info) {
     throw new Error('KMB route info not found')
@@ -282,6 +256,7 @@ export async function getKmbRouteInfo(params: {
     route: info.route,
     bound: info.bound,
     service_type: info.serviceType,
+    variantKey: info.variantKey,
     orig_en: info.origin.en,
     orig_tc: info.origin.tc,
     orig_sc: info.origin.sc,
@@ -466,7 +441,8 @@ export async function fetchKmbStopEtas(
     faresByVariantKey = {}
     const { routeVariantIndex, mergedVariantIndex } = await getEtaDbIndexes()
 
-    // Collect unique fare variants to avoid duplicate lookups
+    // Collect unique fare variants to avoid duplicate lookups. Keyed by
+    // physical direction so both operators share one fare lookup.
     const fareVariants = new Map<
       string,
       {
@@ -484,43 +460,37 @@ export async function fetchKmbStopEtas(
         const route = String(entry.route ?? '').toUpperCase()
         const dir = String(entry.dir ?? '')
         const serviceType = String(entry.service_type ?? '')
-        const vKey = `${co}|${route}|${dir}|${serviceType}`
+        const fareKey = fareKeyForVariant(mergedVariantIndex, {
+          route,
+          bound: dir,
+          serviceType,
+          stopId,
+        })
 
-        if (fareVariants.has(vKey)) continue
+        if (fareVariants.has(fareKey)) continue
 
         const destCandidates = [entry.dest_en, entry.dest_tc, entry.dest_sc]
           .filter(Boolean)
           .map(String)
-        fareVariants.set(vKey, { co, route, dir, serviceType, stopId, destCandidates })
+        fareVariants.set(fareKey, { co, route, dir, serviceType, stopId, destCandidates })
       }
     }
 
     const variantArray = Array.from(fareVariants.entries())
-    const fareResults = await promisePool(variantArray, 5, async ([vKey, variant]) => {
+    const fareResults = await promisePool(variantArray, 5, async ([fareKey, variant]) => {
       const fare = getStopToTerminusFare({
         ...variant,
         etaDestCandidates: variant.destCandidates,
         byVariantStops,
         routeVariantIndex,
       })
-      return { vKey, fare }
+      return { fareKey, fare }
     })
 
     for (const result of fareResults) {
       if (!result) continue
       if (result.status === 'fulfilled' && result.value.fare) {
-        faresByVariantKey[result.value.vKey] = result.value.fare
-        // Emit under every canonical merged key this legacy variant maps to,
-        // so merged groups resolve fares regardless of KMB/CTB letters.
-        for (const mergedKey of toCanonicalMergedKeys(
-          mergedVariantIndex,
-          routeVariantIndex,
-          result.value.vKey
-        )) {
-          if (!(mergedKey in faresByVariantKey)) {
-            faresByVariantKey[mergedKey] = result.value.fare
-          }
-        }
+        faresByVariantKey[result.value.fareKey] = result.value.fare
       }
     }
   }
@@ -568,23 +538,29 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
     getEtaDbIndexes(),
   ])
 
-  // Deduplicate by variant key
-  const uniqueVariants = new Map<string, KmbFareVariant>()
+  // Deduplicate by physical direction: one fare lookup per canonical
+  // variant key covers both operators. The raw co|bound still travels
+  // alongside for the per-operator fare table lookup.
+  const uniqueVariants = new Map<string, KmbFareVariant & { fareKey: string }>()
   for (const v of variants) {
-    const co = String(v.co ?? 'kmb')
     const route = v.route.toUpperCase()
-    const vKey = `${co}|${route}|${v.dir}|${v.serviceType}`
-    if (!uniqueVariants.has(vKey)) {
-      uniqueVariants.set(vKey, v)
+    const serviceType = String(v.serviceType ?? '')
+    const fareKey = fareKeyForVariant(mergedVariantIndex, {
+      route,
+      bound: v.dir,
+      serviceType,
+      stopId: v.stopId,
+    })
+    if (!uniqueVariants.has(fareKey)) {
+      uniqueVariants.set(fareKey, { ...v, fareKey })
     }
   }
 
   const variantArray = Array.from(uniqueVariants.entries())
-  const results = await promisePool(variantArray, 5, async ([vKey, v]) => {
-    const co = String(v.co ?? 'kmb')
+  const results = await promisePool(variantArray, 5, async ([fareKey, v]) => {
     const route = v.route.toUpperCase()
     const fare = getStopToTerminusFare({
-      co,
+      co: String(v.co ?? 'kmb'),
       route,
       dir: v.dir,
       serviceType: v.serviceType,
@@ -593,7 +569,7 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
       byVariantStops,
       routeVariantIndex,
     })
-    return { vKey, fare }
+    return { fareKey, fare }
   })
 
   const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> =
@@ -601,18 +577,36 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
   for (const result of results) {
     if (!result) continue
     if (result.status === 'fulfilled' && result.value.fare) {
-      faresByVariantKey[result.value.vKey] = result.value.fare
-      for (const mergedKey of toCanonicalMergedKeys(
-        mergedVariantIndex,
-        routeVariantIndex,
-        result.value.vKey
-      )) {
-        if (!(mergedKey in faresByVariantKey)) {
-          faresByVariantKey[mergedKey] = result.value.fare
-        }
-      }
+      faresByVariantKey[result.value.fareKey] = result.value.fare
     }
   }
 
   return { faresByVariantKey }
+}
+
+/**
+ * Canonical fare key for one variant: `route|serviceType|directionKey`
+ * resolved through the merged entry's stop set. Falls back to the raw
+ * letter when the stop is unknown. Replaces toCanonicalMergedKeys, which
+ * matched on route plus service type alone and filed one direction's
+ * fare under the other.
+ */
+export function fareKeyForVariant(
+  mergedVariantIndex: Map<string, MergedDbEntry> | undefined,
+  variant: { route: string; bound: string; serviceType: string; stopId: string }
+): string {
+  const route = String(variant.route ?? '').toUpperCase()
+  const serviceType = String(variant.serviceType ?? '')
+  const stopId = String(variant.stopId ?? '').trim()
+  if (mergedVariantIndex && route && stopId) {
+    for (const merged of mergedVariantIndex.values()) {
+      if (merged.entry.route.toUpperCase() !== route) continue
+      if (String(merged.entry.serviceType ?? '') !== serviceType) continue
+      const canon = merged.stopCanonById.get(stopId)
+      if (!canon) continue
+      if (!merged.orderedStops.includes(canon)) continue
+      return variantMergeKey({ route, serviceType, directionKey: merged.directionKey })
+    }
+  }
+  return mergedRouteVariantKey({ route, bound: variant.bound, serviceType })
 }

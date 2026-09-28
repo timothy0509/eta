@@ -26,9 +26,10 @@ import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/km
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import {
   mergedRouteVariantKey,
+  parseLegacyVariantKey,
   parseRouteVariantKey,
-  toCanonicalMergedKey,
-  toMergedKey,
+  variantMergeKey,
+  type MergedDbEntry,
 } from '@/lib/eta/eta-db-index'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -91,15 +92,76 @@ type RouteStopIndex = {
   version: number
 }
 
-function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
+/**
+ * Canonical variant key for one stop: `route|serviceType|directionKey`.
+ * Built from the merged entry whose stop set contains the stop id, so the
+ * key identifies the physical direction and never a raw bound letter.
+ * Unknown stops fall back to the raw letter so they still list instead of
+ * vanishing.
+ */
+function variantKeyForStop(
+  mergedByDirection: Map<string, MergedDbEntry> | undefined,
+  entry: { route: string; bound: string; serviceType: string; stopId: string }
+): string {
+  const route = String(entry.route ?? '').toUpperCase()
+  const serviceType = String(entry.serviceType ?? '')
+  const stopId = String(entry.stopId ?? '').trim()
+  if (mergedByDirection && route && stopId) {
+    for (const merged of mergedByDirection.values()) {
+      if (merged.entry.route.toUpperCase() !== route) continue
+      if (String(merged.entry.serviceType ?? '') !== serviceType) continue
+      const canon = merged.stopCanonById.get(stopId)
+      if (!canon) continue
+      if (!merged.orderedStops.includes(canon)) continue
+      return variantMergeKey({
+        route,
+        serviceType,
+        directionKey: merged.directionKey,
+      })
+    }
+  }
+  return mergedRouteVariantKey({ route, bound: entry.bound, serviceType })
+}
+
+/**
+ * Resolve a stored filter key (canonical or legacy) to its canonical
+ * variant key. Canonical keys pass through; legacy `co|route|bound|st`
+ * keys match by route plus service type plus the row's own bound letter
+ * through boundByStopId at the stops they name. Unresolvable keys return
+ * null so they match nothing, never everything.
+ */
+function resolveFilterKey(
+  mergedByDirection: Map<string, MergedDbEntry> | undefined,
+  storedKey: string
+): string | null {
+  const canonical = parseRouteVariantKey(storedKey)
+  if (canonical) return storedKey
+  const legacy = parseLegacyVariantKey(storedKey)
+  if (!legacy || !mergedByDirection) return null
+  for (const merged of mergedByDirection.values()) {
+    if (merged.entry.route.toUpperCase() !== legacy.route) continue
+    if (String(merged.entry.serviceType ?? '') !== legacy.serviceType) continue
+    for (const [stopId, letters] of merged.boundByStopId) {
+      if (letters[String(legacy.co).toLowerCase()] === legacy.bound) {
+        void stopId
+        return variantMergeKey({
+          route: legacy.route,
+          serviceType: legacy.serviceType,
+          directionKey: merged.directionKey,
+        })
+      }
+    }
+  }
+  return null
+}
+
+function buildRouteStopIndex(
+  routeStops: KmbRouteStopLite[],
+  mergedByDirection?: Map<string, MergedDbEntry>
+): RouteStopIndex {
   const byStopId = new Map<string, Set<string>>()
   for (const entry of routeStops) {
-    // Merged joint-route key, ignoring operator.
-    const key = mergedRouteVariantKey({
-      route: entry.route,
-      bound: entry.bound,
-      serviceType: entry.serviceType,
-    })
+    const key = variantKeyForStop(mergedByDirection, entry)
     let set = byStopId.get(entry.stopId)
     if (!set) {
       set = new Set()
@@ -224,10 +286,27 @@ export function KmbPane({
     return buildStopSearchIndex(kmbStops)
   }, [kmbStops])
 
+  // Merged entries for canonical variant keys. Loaded once alongside
+  // the group index below; both fall back until it arrives.
+  const [mergedByDirection, setMergedByDirection] = React.useState<
+    Map<string, MergedDbEntry> | undefined
+  >(undefined)
+  React.useEffect(() => {
+    let cancelled = false
+    void getEtaDbIndexes()
+      .then(({ mergedVariantIndex }) => {
+        if (!cancelled) setMergedByDirection(mergedVariantIndex)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // ========== OPTIMIZATION: Build route-stop index once when routeStops load ==========
   const routeStopIndex = React.useMemo<RouteStopIndex>(() => {
-    return buildRouteStopIndex(kmbRouteStops)
-  }, [kmbRouteStops])
+    return buildRouteStopIndex(kmbRouteStops, mergedByDirection)
+  }, [kmbRouteStops, mergedByDirection])
 
   // Compute all stop IDs for the current query
   const allStopIds = React.useMemo(() => {
@@ -343,6 +422,10 @@ export function KmbPane({
   )
 
   // ========== OPTIMIZATION: Use index for available route variants ==========
+  // Keys are canonical `route|serviceType|directionKey`. Route and direction
+  // for display come from the fetched info, never by parsing the key: the
+  // directionKey segment itself contains pipes, so positional parsing
+  // misreads it.
   const kmbAvailableRouteVariants: RouteFilterOption[] = React.useMemo(() => {
     if (!availableStopIdsForFilter.length) return []
 
@@ -351,13 +434,14 @@ export function KmbPane({
 
     return variantKeys
       .map((key) => {
-        const parsed = parseRouteVariantKey(key)
-        const route = parsed?.route ?? ''
-        const label = pickRouteVariantLabel(kmbRouteInfos[key])
+        const info = kmbRouteInfos[key]
+        const route = info?.route ?? ''
+        const label = pickRouteVariantLabel(info)
         return {
           key,
           route,
-          label: label || '—',
+          bound: info?.bound,
+          label: label || route || '—',
         }
       })
       .filter((opt) => opt.route)
@@ -377,13 +461,9 @@ export function KmbPane({
     const load = async () => {
       const fetched = await Promise.allSettled(
         missing.map(async (key) => {
-          const parsed = parseRouteVariantKey(key)
-          const route = parsed?.route ?? ''
-          const direction = parsed?.bound ?? ''
-          const serviceType = parsed?.serviceType ?? ''
-          // Fetch once per merged key; the merged listKmbRoutes row carries
-          // the primary operator plus per-operator names.
-          const info = await fetchKmbRouteInfo({ route, direction, serviceType })
+          // Fetch by directionKey: the merged entry carries the primary
+          // operator plus per-operator names. No letters involved.
+          const info = await fetchKmbRouteInfo({ directionKey: key })
           return { key, info }
         })
       )
@@ -469,23 +549,22 @@ export function KmbPane({
         )
       }
 
-      // Apply variant filter client-side when direction-specific entries are selected
+      // Apply variant filter client-side when direction-specific entries are selected.
+      // Both sides are canonical variant keys (`route|serviceType|directionKey`),
+      // so matching is exact string equality. ETA rows resolve to their
+      // physical direction through the merged entry's stop set, never
+      // through the raw bound letter. Legacy stored keys resolve through
+      // the merged index; unresolvable keys match nothing rather than
+      // everything, so a stale saved filter can only narrow, never widen.
       const currentFilterEntries = routeFilterEntriesRef.current ?? []
-      const variantFilterKeys = currentFilterEntries.length
-        ? new Set(currentFilterEntries.map((e) => e.variantKey).filter(Boolean))
-        : null
-
-      // Canonicalize both sides through the variant index so opposite
-      // KMB/CTB letters compare equal. Loaded lazily; falls back to raw
-      // letters until the index arrives.
-      const { routeVariantIndex: filterVariantIndex } = await getEtaDbIndexes().catch(() => ({
-        routeVariantIndex: undefined,
+      const { mergedVariantIndex: filterMerged } = await getEtaDbIndexes().catch(() => ({
+        mergedVariantIndex: undefined as Map<string, MergedDbEntry> | undefined,
       }))
-      const normalizedFilterKeys = variantFilterKeys
+      const normalizedFilterKeys = currentFilterEntries.length
         ? new Set(
-            Array.from(variantFilterKeys).map((key) =>
-              toCanonicalMergedKey(filterVariantIndex, toMergedKey(key))
-            )
+            currentFilterEntries
+              .map((e) => resolveFilterKey(filterMerged, e.variantKey))
+              .filter((key): key is string => Boolean(key))
           )
         : null
       const filteredByStopId: Record<string, KmbEtaEntryWithLeg[]> = {}
@@ -493,15 +572,12 @@ export function KmbPane({
         let etas = result.byStopId[stopId] ?? []
         if (normalizedFilterKeys) {
           etas = etas.filter((eta) => {
-            // Merged base key (without leg or operator) for variant filter matching
-            const key = toCanonicalMergedKey(
-              filterVariantIndex,
-              mergedRouteVariantKey({
-                route: eta.route ?? '',
-                bound: eta.dir ?? '',
-                serviceType: String(eta.service_type ?? ''),
-              })
-            )
+            const key = variantKeyForStop(filterMerged, {
+              route: eta.route ?? '',
+              bound: eta.dir ?? '',
+              serviceType: String(eta.service_type ?? ''),
+              stopId,
+            })
             return normalizedFilterKeys.has(key)
           })
         }
@@ -569,17 +645,19 @@ export function KmbPane({
         const route = (eta.route ?? '').toUpperCase()
         const dir = String(eta.dir ?? '')
         const serviceType = String(eta.service_type ?? '')
-        const vKey = `${co}|${route}|${dir}|${serviceType}`
-        const mergedFareKey = mergedRouteVariantKey({
+        // Fare identity is the physical direction, not the raw letter: one
+        // fare lookup per canonical variant key covers both operators.
+        const fareKey = variantKeyForStop(filterMerged, {
           route,
           bound: dir,
           serviceType,
+          stopId,
         })
 
         // Skip if we already have this fare or already queued it (use ref for latest state)
         const currentFares = etaStateRef.current.faresByVariantKey
-        if (currentFares[vKey] || currentFares[mergedFareKey] || seenVariants.has(vKey)) continue
-        seenVariants.add(vKey)
+        if (currentFares[fareKey] || seenVariants.has(fareKey)) continue
+        seenVariants.add(fareKey)
 
         fareVariants.push({
           co,
@@ -852,10 +930,12 @@ export function KmbPane({
     if (selectedItem.id === lastSelectedIdRef.current) return
 
     const nextRouteFilterMode = selectedItem.routeFilterMode ?? 'simple'
+    // Stored keys pass through verbatim, canonical or legacy. The variant
+    // filter resolves them against the merged index, so no prefixing or
+    // letter fixups here: those silently dropped saved filters before.
     const restoredEntries = (selectedItem.entries ?? []).map((entry, idx) => ({
       id: `restored-${idx}`,
-      variantKey:
-        entry.variantKey.split('|').length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey,
+      variantKey: entry.variantKey,
     }))
 
     const nextDraftSelection =
@@ -984,25 +1064,13 @@ export function KmbPane({
   }, [kmbQuery])
 
   // ========== OPTIMIZATION: Precompute render groups to avoid work during render ==========
-  const [groupIndex, setGroupIndex] = React.useState<{
-    routeVariantIndex?: Map<string, { bound: Record<string, string> }>
-  }>({})
-  React.useEffect(() => {
-    let cancelled = false
-    void getEtaDbIndexes()
-      .then(({ routeVariantIndex }) => {
-        if (!cancelled) setGroupIndex({ routeVariantIndex })
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  // mergedByDirection state above already holds the merged entries; reuse
+  // it here instead of a second copy.
   const precomputedGroups = React.useMemo<PrecomputedGroups>(() => {
     return precomputeRenderGroups(kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey, {
-      routeVariantIndex: groupIndex.routeVariantIndex,
+      mergedByDirection,
     })
-  }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey, groupIndex])
+  }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey, mergedByDirection])
 
   const hasQuery = Boolean(kmbQuery)
   const multipleStops = kmbQuery?.mode === 'stops' || kmbQuery?.mode === 'contains'

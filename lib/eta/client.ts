@@ -190,6 +190,8 @@ export type KmbRouteInfoLite = {
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
+  /** Canonical variant key `route|serviceType|directionKey`. The single identity. */
+  variantKey: string
   origin: {
     en: string
     tc: string
@@ -233,12 +235,16 @@ export async function fetchKmbEtas(
   return errors.length ? { eta, errors } : { eta }
 }
 
-export async function fetchKmbRouteInfo(params: {
-  co?: Company
-  route: string
-  direction: 'I' | 'O' | 'inbound' | 'outbound' | string
-  serviceType: string
-}): Promise<KmbRouteInfoLite> {
+export async function fetchKmbRouteInfo(
+  params:
+    | {
+        co?: Company
+        route: string
+        direction: 'I' | 'O' | 'inbound' | 'outbound' | string
+        serviceType: string
+      }
+    | { directionKey: string }
+): Promise<KmbRouteInfoLite> {
   const info = await getKmbRouteInfo(params)
   const origin = {
     en: (info.orig_en ?? '').trim(),
@@ -250,13 +256,14 @@ export async function fetchKmbRouteInfo(params: {
     tc: (info.dest_tc ?? '').trim(),
     sc: (info.dest_sc ?? '').trim(),
   }
-  const co = info.co ?? params.co ?? 'kmb'
+  const co = info.co ?? ('co' in params ? (params.co ?? 'kmb') : 'kmb')
 
   return {
     co,
     route: info.route,
     bound: info.bound,
     serviceType: String(info.service_type),
+    variantKey: info.variantKey,
     origin,
     destination,
     operators: info.operators,

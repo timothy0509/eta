@@ -24,11 +24,8 @@ import {
   type KmbRouteInfoLite,
   type KmbRouteStopLite,
 } from '@/lib/eta/client'
-import type { Company } from 'hk-bus-eta'
 
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
-import { defaultMergedKey } from '@/lib/eta/kmb-eta-groups'
-import { mergedRouteVariantKey, routeVariantKey } from '@/lib/eta/eta-db-index'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
 import { formatFareHkd } from '@/lib/eta/format'
 import type { GeoPoint } from '@/lib/eta/geo'
@@ -63,6 +60,7 @@ const TransitMap = dynamic(
 )
 
 type RouteVariant = {
+  /** Canonical variant key `route|serviceType|directionKey`. The single identity. */
   key: string
   co: string
   operators: string[]
@@ -77,22 +75,6 @@ type RouteSelection = {
   route: string
   primaryCo: string
   operators: string[]
-}
-
-/** Merged variant key: route plus bound plus service type, ignoring operator. */
-function variantBaseKey(entry: {
-  co?: string
-  route?: string
-  bound?: string
-  dir?: string
-  serviceType?: string
-  service_type?: string | number
-}): string {
-  return mergedRouteVariantKey({
-    route: String(entry.route ?? ''),
-    bound: entry.bound ?? entry.dir ?? '',
-    serviceType: String(entry.serviceType ?? entry.service_type ?? ''),
-  })
 }
 
 function hasDuplicateOperators(variants: RouteVariant[]): boolean {
@@ -253,22 +235,16 @@ function KmbRouteStopList({
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
 }) {
   const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
-  const legacyKeys = (currentVariant.operators ?? [currentVariant.co]).map((co) =>
-    routeVariantKey({
-      co: co as Company,
-      route: currentVariant.route,
-      bound: currentVariant.bound,
-      serviceType: currentVariant.serviceType,
-    })
-  )
   const [faresBySeq, setFaresBySeq] = React.useState<Record<number, number>>({})
 
   React.useEffect(() => {
     let cancelled = false
     getEtaDbIndexes()
-      .then(({ routeVariantIndex }) => {
+      .then(({ mergedVariantIndex }) => {
         if (cancelled) return
-        const entry = legacyKeys.map((key) => routeVariantIndex.get(key)).find(Boolean)
+        // Fare table comes from the merged entry's own raw row, resolved
+        // by directionKey. No letters involved.
+        const entry = mergedVariantIndex.get(currentVariant.key)?.entry
         setFaresBySeq(entry ? getFaresBySeq(entry, currentVariant.co) : {})
       })
       .catch(() => {
@@ -419,6 +395,7 @@ function useKmbRouteList() {
             route: entry.route,
             bound: entry.bound,
             serviceType: String(entry.service_type),
+            variantKey: entry.variantKey,
             origin: {
               en: (entry.orig_en ?? '').trim(),
               tc: (entry.orig_tc ?? '').trim(),
@@ -502,7 +479,13 @@ export function KmbRoutesView({
   onSelectStopGroup,
 }: {
   lang: UiLanguage
-  initialSelection?: { co: string; route: string; bound?: string; serviceType?: string }
+  initialSelection?: {
+    variantKey?: string
+    co: string
+    route: string
+    bound?: string
+    serviceType?: string
+  }
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
 }) {
   const { t, tWithParams } = useTranslations(lang)
@@ -550,17 +533,12 @@ export function KmbRoutesView({
     )
   }, [routes])
 
-  const initialKey = React.useMemo(
-    () =>
-      initialSelection
-        ? mergedRouteVariantKey({
-            route: initialSelection.route,
-            bound: initialSelection.bound ?? '',
-            serviceType: initialSelection.serviceType ?? '',
-          })
-        : '',
-    [initialSelection]
-  )
+  // Deep-link / favorite restore. variantKey is the identity; the
+  // letter fields only disambiguate legacy ids that predate it.
+  // Deep-link identity is the variantKey when present. Legacy letter
+  // selections resolve through the merged rows below, never by comparing
+  // the stored letter against row letters.
+  const initialKey = React.useMemo(() => initialSelection?.variantKey ?? '', [initialSelection])
 
   const autoRouteKey = React.useMemo(() => {
     if (!initialSelection || routes.length === 0) return null
@@ -570,28 +548,40 @@ export function KmbRoutesView({
 
   const autoVariant = React.useMemo(() => {
     if (!initialSelection || !autoRouteKey || routes.length === 0) return null
+    if (initialSelection.variantKey) {
+      const target = routes.find((r) => r.variantKey === initialSelection.variantKey)
+      if (!target) return null
+      const operators = (target.operators ?? [target.co ?? 'kmb']).map((op) =>
+        normalizeOperator(String(op))
+      )
+      return {
+        key: target.variantKey,
+        co: String(target.co ?? 'kmb'),
+        operators,
+        route: target.route,
+        bound: target.bound,
+        serviceType: target.serviceType,
+        origin: target.origin,
+        destination: target.destination,
+      }
+    }
+    // Legacy letter selection without a variantKey: pick the first merged
+    // row for the route (optionally narrowed by service type). The letter
+    // is display-only and never matched, since opposite KMB/CTB letters
+    // for one direction would otherwise resolve the wrong variant.
     const route = initialSelection.route
-    const matchingVariants = routes.filter((r) => r.route === route)
-    if (!matchingVariants.length) return null
-    const matchedVariant =
-      initialSelection.bound !== undefined
-        ? matchingVariants.find(
-            (v) =>
-              v.bound === initialSelection.bound &&
-              (initialSelection.serviceType ? v.serviceType === initialSelection.serviceType : true)
-          )
-        : undefined
-    const target = matchedVariant ?? matchingVariants[0]
+    const matchingVariants = routes.filter(
+      (r) =>
+        r.route === route &&
+        (initialSelection.serviceType ? r.serviceType === initialSelection.serviceType : true)
+    )
+    const target = matchingVariants[0]
     if (!target) return null
     const operators = (target.operators ?? [target.co ?? 'kmb']).map((op) =>
       normalizeOperator(String(op))
     )
     return {
-      key: mergedRouteVariantKey({
-        route: target.route,
-        bound: target.bound,
-        serviceType: target.serviceType,
-      }),
+      key: target.variantKey,
       co: String(target.co ?? 'kmb'),
       operators,
       route: target.route,
@@ -723,26 +713,17 @@ export function KmbRoutesView({
     setOperator(null)
   }, [])
 
+  // Variants are the merged rows themselves, keyed by variantKey. No
+  // re-grouping here: listKmbRoutes already emits one row per physical
+  // direction, so grouping again by letter would re-split joint routes.
   const variantsForRoute = React.useMemo(() => {
     if (!selectedRouteKey) return []
-    const map = new Map<string, RouteVariant>()
+    const list: RouteVariant[] = []
     for (const r of routes) {
       if (r.route !== selectedRouteKey.route) continue
-      const key = mergedRouteVariantKey({
-        route: r.route,
-        bound: r.bound,
-        serviceType: r.serviceType,
-      })
       const operators = (r.operators ?? [r.co ?? 'kmb']).map((op) => normalizeOperator(String(op)))
-      const existing = map.get(key)
-      if (existing) {
-        for (const op of operators) {
-          if (!existing.operators.includes(op)) existing.operators.push(op)
-        }
-        continue
-      }
-      map.set(key, {
-        key,
+      list.push({
+        key: r.variantKey,
         co: String(r.co ?? 'kmb'),
         operators,
         route: r.route,
@@ -752,7 +733,7 @@ export function KmbRoutesView({
         destination: r.destination,
       })
     }
-    return Array.from(map.values()).sort(
+    return list.sort(
       (a, b) => a.bound.localeCompare(b.bound) || a.serviceType.localeCompare(b.serviceType)
     )
   }, [routes, selectedRouteKey])
@@ -774,8 +755,8 @@ export function KmbRoutesView({
     if (!currentVariant) return
     let cancelled = false
     const load = async () => {
-      const { mergedVariantIndex, routeVariantIndex, stopEquivalents } = await getEtaDbIndexes()
-      const variantKey = variantBaseKey(currentVariant)
+      const { mergedVariantIndex, stopEquivalents } = await getEtaDbIndexes()
+      const variantKey = currentVariant.key
       const merged = mergedVariantIndex.get(variantKey)
       if (cancelled) return
       if (!merged) {
@@ -824,16 +805,12 @@ export function KmbRoutesView({
         const canonId = canonOf(stopId)
         const list = filteredEtas[canonId] ?? []
         for (const eta of entries ?? []) {
-          // Same route plus canonical bound; service types stay separate
-          // since short workings are their own variants.
-          if (
-            (eta.route ?? '').toUpperCase() !== currentVariant.route.toUpperCase() ||
-            defaultMergedKey(eta, { routeVariantIndex }).split('|').slice(0, 2).join('|') !==
-              variantKey.split('|').slice(0, 2).join('|') ||
-            String(eta.service_type ?? '') !== String(currentVariant.serviceType ?? '')
-          ) {
-            continue
-          }
+          // Same physical direction: the departure's stop must belong to
+          // this variant's stop set. Letters never participate.
+          if ((eta.route ?? '').toUpperCase() !== currentVariant.route.toUpperCase()) continue
+          if (String(eta.service_type ?? '') !== String(currentVariant.serviceType ?? '')) continue
+          const canon = merged.stopCanonById.get(String(eta.stop ?? '').trim())
+          if (!canon || !merged.orderedStops.includes(canon)) continue
           list.push({ ...eta, stop: canonId })
         }
         if (list.length) filteredEtas[canonId] = list
@@ -885,11 +862,7 @@ export function KmbRoutesView({
   const onSaveRoute = () => {
     if (!currentVariant) return
     const item: FavoritesItem = {
-      id: toMergedRouteFavoriteId(
-        currentVariant.route,
-        currentVariant.bound,
-        currentVariant.serviceType
-      ),
+      id: toMergedRouteFavoriteId(currentVariant.key),
       mode: 'kmb',
       type: 'route',
       title: `${currentVariant.route} ${formatKmbRouteEndpointName(
@@ -897,6 +870,7 @@ export function KmbRoutesView({
         { co: currentVariant.co, lang }
       )}`,
       route: currentVariant.route,
+      variantKey: currentVariant.key,
       co: currentVariant.co,
       operators: currentVariant.operators,
       bound: currentVariant.bound,

@@ -18,6 +18,8 @@ export type KmbRouteInfoLite = {
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
+  /** Canonical variant key `route|serviceType|directionKey`. The single identity. */
+  variantKey: string
   origin: {
     en: string
     tc: string
@@ -79,37 +81,53 @@ export function mergedRouteVariantKey(k: MergedRouteVariantKey): string {
 }
 
 export type ParsedRouteVariantKey = {
-  co?: string
   route: string
   bound: string
   serviceType: string
 }
 
-/** Parse both legacy `co|route|bound|st` and merged `route|bound|st` keys. */
-export function parseRouteVariantKey(key: string): ParsedRouteVariantKey | null {
-  const parts = String(key ?? '').split('|')
-  if (parts.length === 4) {
-    const [co = '', route = '', bound = '', serviceType = ''] = parts
-    if (!route) return null
-    return { co, route: route.toUpperCase(), bound: normalizeBound(bound), serviceType }
-  }
-  if (parts.length === 3) {
-    const [route = '', bound = '', serviceType = ''] = parts
-    if (!route) return null
-    return { route: route.toUpperCase(), bound: normalizeBound(bound), serviceType }
-  }
-  return null
+export type ParsedLegacyVariantKey = ParsedRouteVariantKey & {
+  co: string
 }
 
-/** Strip the operator prefix from a legacy key, pass merged keys through. */
+/**
+ * Parse the single canonical variant key `route|direction|serviceType`.
+ * There is exactly one key shape. Anything else returns null so malformed
+ * keys fail loudly at the call site instead of silently misrouting.
+ */
+export function parseRouteVariantKey(key: string): ParsedRouteVariantKey | null {
+  const parts = String(key ?? '').split('|')
+  if (parts.length !== 3) return null
+  const [route = '', bound = '', serviceType = ''] = parts
+  if (!route) return null
+  return { route: route.toUpperCase(), bound: normalizeBound(bound), serviceType }
+}
+
+/**
+ * Parse a legacy per-operator key `co|route|bound|serviceType` left over
+ * from persisted favorites, shared URLs, and saved filters. New code must
+ * not produce these. Returns null for anything else, including canonical
+ * 3-part keys, so call sites can distinguish legacy from canonical.
+ */
+export function parseLegacyVariantKey(key: string): ParsedLegacyVariantKey | null {
+  const parts = String(key ?? '').split('|')
+  if (parts.length !== 4) return null
+  const [co = '', route = '', bound = '', serviceType = ''] = parts
+  if (!route) return null
+  return { co, route: route.toUpperCase(), bound: normalizeBound(bound), serviceType }
+}
+
+/**
+ * Normalize a stored key for exact-match comparisons. Canonical variant
+ * keys pass through; legacy 4-part keys are returned as-is for
+ * resolveFilterKey to handle against the merged index. Anything else
+ * passes through untouched so unknown shapes never silently alias.
+ *
+ * @deprecated Prefer resolveFilterKey semantics at the call site. Kept
+ * for the few remaining verbatim comparisons.
+ */
 export function toMergedKey(key: string): string {
-  const parsed = parseRouteVariantKey(key)
-  if (!parsed) return key
-  return mergedRouteVariantKey({
-    route: parsed.route,
-    bound: parsed.bound,
-    serviceType: parsed.serviceType,
-  })
+  return String(key ?? '')
 }
 
 export type EtaDbIndexes = {
@@ -134,16 +152,33 @@ export type EtaDbIndexes = {
   stopEquivalents: Map<string, string>
   /** Joint-route entries merged across raw rows and operators. */
   mergedDbEntries: MergedDbEntry[]
-  /** Merged variant key → joint-route entry. */
+  /**
+   * directionKey → joint-route entry. Keyed by route plus service type
+   * plus canonical stop sequence, never by bound letter.
+   */
   mergedVariantIndex: Map<string, MergedDbEntry>
 }
 
 /**
- * Canonical bound letter for a variant: the KMB letter when KMB serves the
- * entry, else the first sorted operator's letter. KMB and CTB use opposite
- * letters on some joint routes (101: ctb O = kmb I) and identical letters on
- * others (N121), so raw letters can never be compared across operators.
- * Returns the raw letter when the entry is unknown.
+ * Merge key for one physical direction: `route|serviceType|directionKey`,
+ * where directionKey is the canonical stop sequence. Bound letters never
+ * appear: KMB and CTB use opposite letters on some joint routes (ctb O is
+ * kmb I on 101) and identical letters on others (N121), so raw letters can
+ * never be compared across operators.
+ */
+export function variantMergeKey(params: {
+  route: string
+  serviceType: unknown
+  directionKey: string
+}): string {
+  return `${String(params.route ?? '').toUpperCase()}|${String(params.serviceType ?? '')}|${params.directionKey}`
+}
+
+/**
+ * Canonical bound letter for DISPLAY ONLY (variant picker labels, inbound /
+ * outbound hints). Never use this for grouping, fetching, or filtering:
+ * those key on directionKey. Returns the KMB letter when KMB serves the
+ * entry, else the first sorted operator's letter, else the raw letter.
  */
 export function canonicalVariantBound(
   routeVariantIndex: Map<string, RouteListEntry>,
@@ -161,23 +196,17 @@ export function canonicalVariantBound(
   return normalizeBound(entry.bound[preferred] ?? raw)
 }
 
-/** Legacy `co|route|bound|st` (canonicalizing the letter) or merged keys to merged form. */
+/**
+ * @deprecated Letters must never be compared, even after normalization.
+ * Use resolveFilterKey semantics (match by stop membership in the merged
+ * entry) instead. Kept so old imports compile until call sites migrate.
+ */
 export function toCanonicalMergedKey(
   routeVariantIndex: Map<string, RouteListEntry> | undefined,
   key: string
 ): string {
-  const parsed = parseRouteVariantKey(key)
-  if (!parsed) return key
-  const bound =
-    parsed.co && routeVariantIndex
-      ? canonicalVariantBound(routeVariantIndex, {
-          co: parsed.co,
-          route: parsed.route,
-          bound: parsed.bound,
-          serviceType: parsed.serviceType,
-        })
-      : parsed.bound
-  return mergedRouteVariantKey({ route: parsed.route, bound, serviceType: parsed.serviceType })
+  void routeVariantIndex
+  return String(key ?? '')
 }
 
 export type BuildEtaDbIndexesOptions = {
@@ -217,12 +246,43 @@ export type RouteListEntryLike = {
   stops: Record<string, string[]>
 }
 
+/**
+ * One physical direction of one route: same road both ways the operators
+ * spell it. KMB and CTB use opposite bound letters on some joint routes
+ * (ctb O is kmb I on 101) and identical letters on others (N121), so the
+ * key is the canonical stop sequence, never a letter. Raw letters survive
+ * only inside per-operator fetch maps keyed `co|route|bound|serviceType`.
+ */
+export type DirectionKey = {
+  route: string
+  serviceType: string
+  stops: string[]
+}
+
+export function directionKeyOf(route: string, serviceType: unknown, stops: string[]): string {
+  return `${String(route ?? '').toUpperCase()}|${String(serviceType ?? '')}|${stops.join('>')}`
+}
+
 export type MergedDbEntry = {
   entry: RouteListEntry
   /** Operators with stops, sorted. */
   operators: Company[]
-  /** Canonical bound letter (KMB letter when KMB serves the entry). */
+  /** Canonical direction key: route plus service type plus canonical stops. */
+  directionKey: string
+  /** Display bound letter: KMB letter when KMB serves the entry. */
   bound: 'I' | 'O' | string
+  /**
+   * Per-operator raw letters for this physical direction, e.g.
+   * `{ kmb: 'I', ctb: 'O' }` on 101. The ONLY place that maps an
+   * operator-relative letter to its physical direction. Everything
+   * downstream keys on directionKey; this map is consulted once at the
+   * ETA-grouping boundary and nowhere else.
+   *
+   * Keyed by RAW stop id (not canonical): the grouping boundary sees
+   * each departure under its own stop id, and two raw ids can share one
+   * canonical stop while serving different directions of the route.
+   */
+  boundByStopId: Map<string, Record<string, string>>
   /** stopId → canonical stopId for cross-operator stop union. */
   stopCanonById: Map<string, string>
   /** Canonical stop ids in display order: KMB seq, then CTB-only extras. */
@@ -262,40 +322,37 @@ export function mergeRouteListEntries(
   for (const group of byRouteSt.values()) {
     // Rows whose termini differ (e.g. short workings) must not merge. KMB
     // and CTB disagree on terminus strings for the same termini and keep
-    // per-operator stop ids, so compare canonical first/last stops per
-    // operator: entry A joins a bucket when every operator they share has
-    // equal canonical termini. Full-sequence compares fail on real joint
-    // routes since each operator lists slightly different intermediate
-    // stops for the same road.
-    const terminiByOp = (entry: RouteListEntry): Map<string, [string, string]> => {
-      const out = new Map<string, [string, string]>()
+    // per-operator stop ids, so compare canonical first/last stops. A
+    // bucket holds one canonical termini pair shared by every row in it,
+    // regardless of which operator each row carries. Requiring a shared
+    // operator split real joint routes: a kmb-only row and a ctb-only row
+    // for the same physical direction share no operator yet must merge.
+    // Full-sequence compares fail on real joint routes since each operator
+    // lists slightly different intermediate stops for the same road.
+    // Phantom rows (an operator listed with zero stops) contribute no
+    // termini and must not create buckets: they previously shadowed real
+    // joint buckets under the same merged key.
+    const terminiOf = (entry: RouteListEntry): [string, string][] => {
+      const out: [string, string][] = []
       for (const co of inScope(entry)) {
         const stops = entry.stops[co] ?? []
-        out.set(co, [canonStop(stops[0] ?? ''), canonStop(stops[stops.length - 1] ?? '')])
+        if (!stops.length) continue
+        out.push([canonStop(stops[0] ?? ''), canonStop(stops[stops.length - 1] ?? '')])
       }
       return out
     }
-    const buckets: Array<{ termini: Map<string, [string, string]>; entries: RouteListEntry[] }> = []
+    const buckets: Array<{ termini: [string, string]; entries: RouteListEntry[] }> = []
     for (const entry of group) {
-      const termini = terminiByOp(entry)
-      const bucket = buckets.find((b) => {
-        let shared = 0
-        for (const [co, [first, last]] of termini) {
-          const other = b.termini.get(co)
-          if (!other) continue
-          shared += 1
-          if (other[0] !== first || other[1] !== last) return false
-        }
-        // Same raw row key shape always shares co; different termini rows
-        // share none and stay separate unless another row bridges them.
-        return shared > 0 || b.entries.includes(entry)
-      })
+      const pairs = terminiOf(entry)
+      if (!pairs.length) continue
+      const bucket = buckets.find((b) =>
+        pairs.some(([first, last]) => b.termini[0] === first && b.termini[1] === last)
+      )
       if (bucket) {
         bucket.entries.push(entry)
-        for (const [co, pair] of termini) {
-          if (!bucket.termini.has(co)) bucket.termini.set(co, pair)
-        }
-      } else buckets.push({ termini, entries: [entry] })
+      } else {
+        buckets.push({ termini: pairs[0]!, entries: [entry] })
+      }
     }
     for (const bucket of buckets) {
       const operators = Array.from(
@@ -350,10 +407,34 @@ export function mergeRouteListEntries(
           }
         }
       }
+      // Raw letter per operator per raw stop id for this physical
+      // direction. Read straight off each row's own bound map, never
+      // inferred across operators. Keyed by raw stop id because the
+      // grouping boundary sees each departure under its own stop id, and
+      // two raw ids can share one canonical stop while serving different
+      // directions (e.g. KC713 serves 101 st1/2/3 from one boarding point;
+      // only st1 has a CTB leg).
+      const boundByStopId = new Map<string, Record<string, string>>()
+      for (const entry of bucket.entries) {
+        for (const co of inScope(entry)) {
+          const raw = normalizeBound(entry.bound[co] ?? co)
+          for (const id of entry.stops[co] ?? []) {
+            const norm = normalizeStopId(id)
+            const prev = boundByStopId.get(norm) ?? {}
+            if (!(String(co) in prev)) {
+              boundByStopId.set(norm, { ...prev, [String(co)]: raw })
+            }
+          }
+        }
+      }
+      const route = String(primaryEntry.route ?? '').toUpperCase()
+      const serviceType = String(primaryEntry.serviceType ?? '')
       merged.push({
         entry: primaryEntry,
         operators,
+        directionKey: directionKeyOf(route, serviceType, orderedStops),
         bound,
+        boundByStopId,
         stopCanonById,
         orderedStops,
         representativeByCanon,
@@ -414,14 +495,15 @@ export async function buildEtaDbIndexes(
         })
       })
   )
+  // Keyed by directionKey (route plus service type plus canonical stop
+  // sequence), never by bound letter. Two buckets for the same physical
+  // direction collapse into one entry here even before the letter mapping
+  // is consulted, so opposite KMB/CTB letters cannot shadow each other.
   const mergedVariantIndex = new Map<string, MergedDbEntry>()
   for (const merged of mergedDbEntries) {
-    const key = mergedRouteVariantKey({
-      route: merged.entry.route,
-      bound: merged.bound,
-      serviceType: merged.entry.serviceType,
-    })
-    if (!mergedVariantIndex.has(key)) mergedVariantIndex.set(key, merged)
+    if (!mergedVariantIndex.has(merged.directionKey)) {
+      mergedVariantIndex.set(merged.directionKey, merged)
+    }
   }
 
   await yieldToMain()
@@ -562,11 +644,27 @@ export function buildStopEquivalents(db: EtaDb): Map<string, string> {
     }
   }
   const groups = new Map<string, string[]>()
+  const seen = new Set<string>()
   for (const id of parent.keys()) {
     const root = find(id)
     const list = groups.get(root) ?? []
     list.push(id)
     groups.set(root, list)
+    seen.add(id)
+  }
+  // Ids that only ever appear as a union target never land in parent.keys,
+  // so without this they silently lose their mapping. 3434 of 12042 live
+  // stopMap ids were dropped this way, splitting joint routes like N691.
+  for (const tuples of Object.values(stopMap)) {
+    for (const tuple of tuples ?? []) {
+      const other = normalizeStopId(tuple?.[1] ?? '')
+      if (!other || seen.has(other)) continue
+      seen.add(other)
+      const root = find(other)
+      const list = groups.get(root) ?? []
+      list.push(other)
+      groups.set(root, list)
+    }
   }
   // KMB stop ids appear in kmb stops arrays; prefer one as canonical.
   const kmbStopIds = new Set<string>()
@@ -612,7 +710,9 @@ function serializeMergedEntry(merged: MergedDbEntry): SerializedMergedDbEntry {
   return {
     entry: merged.entry,
     operators: merged.operators,
+    directionKey: merged.directionKey,
     bound: merged.bound,
+    boundByStopId: Array.from(merged.boundByStopId.entries()),
     stopCanonById: Array.from(merged.stopCanonById.entries()),
     orderedStops: merged.orderedStops,
     representativeByCanon: Array.from(merged.representativeByCanon.entries()),
@@ -620,12 +720,21 @@ function serializeMergedEntry(merged: MergedDbEntry): SerializedMergedDbEntry {
 }
 
 function deserializeMergedEntry(serialized: SerializedMergedDbEntry): MergedDbEntry {
+  const orderedStops = serialized.orderedStops
   return {
     entry: serialized.entry,
     operators: serialized.operators,
+    directionKey:
+      serialized.directionKey ??
+      directionKeyOf(
+        String(serialized.entry.route ?? '').toUpperCase(),
+        String(serialized.entry.serviceType ?? ''),
+        orderedStops
+      ),
     bound: serialized.bound,
+    boundByStopId: new Map(serialized.boundByStopId ?? []),
     stopCanonById: new Map(serialized.stopCanonById),
-    orderedStops: serialized.orderedStops,
+    orderedStops,
     representativeByCanon: new Map(serialized.representativeByCanon),
   }
 }
@@ -633,7 +742,9 @@ function deserializeMergedEntry(serialized: SerializedMergedDbEntry): MergedDbEn
 export type SerializedMergedDbEntry = {
   entry: RouteListEntry
   operators: Company[]
+  directionKey?: string
   bound: 'I' | 'O' | string
+  boundByStopId?: [string, Record<string, string>][]
   stopCanonById: [string, string][]
   orderedStops: string[]
   representativeByCanon: [string, string][]
@@ -661,14 +772,15 @@ export function deserializeEtaDbIndexes(
   serialized: SerializedEtaDbIndexes & { mergedDbEntries?: SerializedMergedDbEntry[] }
 ): EtaDbIndexes {
   const mergedDbEntries = (serialized.mergedDbEntries ?? []).map(deserializeMergedEntry)
+  // Keyed by directionKey (route plus service type plus canonical stop
+  // sequence), never by bound letter. Two buckets for the same physical
+  // direction collapse into one entry here even before the letter mapping
+  // is consulted, so opposite KMB/CTB letters cannot shadow each other.
   const mergedVariantIndex = new Map<string, MergedDbEntry>()
   for (const merged of mergedDbEntries) {
-    const key = mergedRouteVariantKey({
-      route: merged.entry.route,
-      bound: merged.bound,
-      serviceType: merged.entry.serviceType,
-    })
-    if (!mergedVariantIndex.has(key)) mergedVariantIndex.set(key, merged)
+    if (!mergedVariantIndex.has(merged.directionKey)) {
+      mergedVariantIndex.set(merged.directionKey, merged)
+    }
   }
   return {
     kmbRouteListEntries: serialized.kmbRouteListEntries,

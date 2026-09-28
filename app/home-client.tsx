@@ -408,6 +408,7 @@ export default function HomeClient() {
   const kmbRouteInitialSelection = React.useMemo(() => {
     if (selectedItem?.mode === 'kmb' && 'type' in selectedItem && selectedItem.type === 'route') {
       return {
+        variantKey: selectedItem.variantKey,
         co: selectedItem.co ?? 'kmb',
         route: selectedItem.route,
         bound: selectedItem.bound,

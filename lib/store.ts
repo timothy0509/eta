@@ -9,8 +9,16 @@ export type RouteFilterMode = 'simple' | 'advanced'
 
 export type JointRouteNameSource = 'stop' | 'kmb' | 'ctb'
 
-/** New merged id: `kmb:route:{ROUTE}:{BOUND}:{ST}`. Legacy ids carry `co` after `route:`. */
+/**
+ * Saved-route favorite id. Canonical form is `kmb:route:{variantKey}`
+ * where variantKey is `route|serviceType|directionKey`. Two legacy forms
+ * still decode: `kmb:route:{ROUTE}:{BOUND}:{ST}` and
+ * `kmb:route:{co}:{ROUTE}:{BOUND}:{ST}`. Legacy letters resolve to a
+ * directionKey through the merged index at restore time, never by
+ * comparing letters.
+ */
 export function parseRouteFavoriteId(id: string): {
+  variantKey?: string
   route: string
   bound: string
   serviceType: string
@@ -18,6 +26,12 @@ export function parseRouteFavoriteId(id: string): {
 } | null {
   const parts = String(id ?? '').split(':')
   if (parts[0] !== 'kmb' || parts[1] !== 'route') return null
+  if (parts.length >= 4 && parts[2] === 'v1') {
+    const variantKey = parts.slice(3).join(':')
+    if (!variantKey) return null
+    const [route = '', serviceType = ''] = variantKey.split('|')
+    return { variantKey, route: route.toUpperCase(), bound: '', serviceType }
+  }
   if (parts.length === 5) {
     const [, , route = '', bound = '', serviceType = ''] = parts
     if (!route) return null
@@ -31,7 +45,12 @@ export function parseRouteFavoriteId(id: string): {
   return null
 }
 
-export function toMergedRouteFavoriteId(route: string, bound: string, serviceType: string): string {
+export function toMergedRouteFavoriteId(variantKey: string): string {
+  return `kmb:route:v1:${variantKey}`
+}
+
+/** @deprecated Use toMergedRouteFavoriteId(variantKey). Kept for migration. */
+export function toLegacyRouteFavoriteId(route: string, bound: string, serviceType: string): string {
   return `kmb:route:${String(route ?? '').toUpperCase()}:${bound}:${serviceType}`
 }
 
@@ -86,6 +105,8 @@ export type FavoritesItem = FavoritesMeta &
         type: 'route'
         title: string
         route: string
+        /** Canonical variant key `route|serviceType|directionKey`. The identity. */
+        variantKey: string
         co?: string
         operators?: string[]
         bound: string
@@ -338,7 +359,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 6,
+      version: 7,
       // Direct persist write. The previous 300 ms debounced localStorage
       // wrapper plus beforeunload flush could lose the last write on
       // mobile, where beforeunload often never fires. Zustand now writes
@@ -353,13 +374,19 @@ export const useAppStore = create<AppState>()(
             if (withMeta.mode === 'kmb' && 'type' in withMeta && withMeta.type === 'route') {
               const parsed = parseRouteFavoriteId(withMeta.id)
               if (parsed) {
-                const mergedId = toMergedRouteFavoriteId(
-                  parsed.route,
-                  parsed.bound,
-                  parsed.serviceType
-                )
+                // v7: identity moves to variantKey. Legacy letter ids keep
+                // their fields; the drilldown resolves them to a directionKey
+                // at restore time. Already-migrated v1 ids pass through.
                 const operators = withMeta.operators ?? (parsed.co ? [parsed.co] : undefined)
-                return { ...withMeta, id: mergedId, operators }
+                if (parsed.variantKey) {
+                  return {
+                    ...withMeta,
+                    variantKey:
+                      (withMeta as { variantKey?: string }).variantKey ?? parsed.variantKey,
+                    operators,
+                  }
+                }
+                return { ...withMeta, operators }
               }
             }
             return withMeta

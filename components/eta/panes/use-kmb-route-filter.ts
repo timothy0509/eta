@@ -1,7 +1,12 @@
 import type { RouteFilterState } from '@/components/eta/route-filter'
 import type { StopSearchSelection } from '@/components/eta/stop-search'
-import { parseRouteVariantKey } from '@/lib/eta/eta-db-index'
+import { parseLegacyVariantKey, parseRouteVariantKey } from '@/lib/eta/eta-db-index'
 import type { RouteFilterMode } from '@/lib/store'
+
+/** Route number from any stored key shape: canonical 3-part or legacy 4-part. */
+export function routeFromVariantKey(variantKey: string): string {
+  return parseRouteVariantKey(variantKey)?.route ?? parseLegacyVariantKey(variantKey)?.route ?? ''
+}
 
 export type KmbQuery =
   | {
@@ -37,7 +42,7 @@ export function buildRouteFilterString(
 
   if (entries.length) {
     const routesFromEntries = new Set(
-      entries.map((e) => parseRouteVariantKey(e.variantKey)?.route).filter(Boolean)
+      entries.map((e) => routeFromVariantKey(e.variantKey)).filter(Boolean)
     )
     return Array.from(routesFromEntries).join(',')
   } else if (requestedRoutes) {

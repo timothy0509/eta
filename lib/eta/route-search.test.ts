@@ -25,6 +25,7 @@ function makeRoute(
     route,
     bound,
     serviceType,
+    variantKey: `${route}|${serviceType}|${route}|${bound}`,
     origin: { en: origin, tc: `${origin}繁`, sc: `${origin}简` },
     destination: { en: dest, tc: `${dest}繁`, sc: `${dest}简` },
   }

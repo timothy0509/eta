@@ -738,8 +738,14 @@ describe('capFavorites', () => {
 })
 
 describe('route favorite ids', () => {
-  it('parses new merged and legacy co-prefixed ids', async () => {
+  it('parses canonical v1 and legacy letter ids', async () => {
     const { parseRouteFavoriteId, toMergedRouteFavoriteId } = await import('./store')
+    expect(parseRouteFavoriteId('kmb:route:v1:101|1|101|1|S1>S2')).toEqual({
+      variantKey: '101|1|101|1|S1>S2',
+      route: '101',
+      bound: '',
+      serviceType: '1',
+    })
     expect(parseRouteFavoriteId('kmb:route:101:O:1')).toEqual({
       route: '101',
       bound: 'O',
@@ -751,7 +757,7 @@ describe('route favorite ids', () => {
       serviceType: '1',
       co: 'kmb',
     })
-    expect(toMergedRouteFavoriteId('101', 'O', '1')).toBe('kmb:route:101:O:1')
+    expect(toMergedRouteFavoriteId('101|1|101|1|S1>S2')).toBe('kmb:route:v1:101|1|101|1|S1>S2')
     expect(parseRouteFavoriteId('junk')).toBeNull()
   })
 })

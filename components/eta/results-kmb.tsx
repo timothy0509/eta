@@ -4,7 +4,7 @@ import { ChevronDown, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
-import { defaultMergedKey, formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import { formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'

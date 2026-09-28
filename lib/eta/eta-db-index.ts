@@ -51,6 +51,7 @@ export type StopRouteEntry = {
   co: Company
   route: string
   bound: string
+  /** Normalized to String() at index build: raw db rows mix number and string. */
   serviceType: string
   seq: number
 }
@@ -259,17 +260,42 @@ export function mergeRouteListEntries(
 
   const merged: MergedDbEntry[] = []
   for (const group of byRouteSt.values()) {
-    const buckets: Array<{ firstStops: string[]; lastStops: string[]; entries: RouteListEntry[] }> =
-      []
+    // Rows whose termini differ (e.g. short workings) must not merge. KMB
+    // and CTB disagree on terminus strings for the same termini and keep
+    // per-operator stop ids, so compare canonical first/last stops per
+    // operator: entry A joins a bucket when every operator they share has
+    // equal canonical termini. Full-sequence compares fail on real joint
+    // routes since each operator lists slightly different intermediate
+    // stops for the same road.
+    const terminiByOp = (entry: RouteListEntry): Map<string, [string, string]> => {
+      const out = new Map<string, [string, string]>()
+      for (const co of inScope(entry)) {
+        const stops = entry.stops[co] ?? []
+        out.set(co, [canonStop(stops[0] ?? ''), canonStop(stops[stops.length - 1] ?? '')])
+      }
+      return out
+    }
+    const buckets: Array<{ termini: Map<string, [string, string]>; entries: RouteListEntry[] }> = []
     for (const entry of group) {
-      const ops = inScope(entry)
-      const preferred = preferredOp(ops)
-      const stops = entry.stops[preferred] ?? []
-      const first = canonStop(stops[0] ?? '')
-      const last = canonStop(stops[stops.length - 1] ?? '')
-      const bucket = buckets.find((b) => b.firstStops.includes(first) && b.lastStops.includes(last))
-      if (bucket) bucket.entries.push(entry)
-      else buckets.push({ firstStops: [first], lastStops: [last], entries: [entry] })
+      const termini = terminiByOp(entry)
+      const bucket = buckets.find((b) => {
+        let shared = 0
+        for (const [co, [first, last]] of termini) {
+          const other = b.termini.get(co)
+          if (!other) continue
+          shared += 1
+          if (other[0] !== first || other[1] !== last) return false
+        }
+        // Same raw row key shape always shares co; different termini rows
+        // share none and stay separate unless another row bridges them.
+        return shared > 0 || b.entries.includes(entry)
+      })
+      if (bucket) {
+        bucket.entries.push(entry)
+        for (const [co, pair] of termini) {
+          if (!bucket.termini.has(co)) bucket.termini.set(co, pair)
+        }
+      } else buckets.push({ termini, entries: [entry] })
     }
     for (const bucket of buckets) {
       const operators = Array.from(
@@ -280,20 +306,39 @@ export function mergeRouteListEntries(
         bucket.entries[0]!
       const preferred = preferredOp(operators)
       const bound = normalizeBound(primaryEntry.bound[preferred] ?? preferred)
-      // Display order: primary operator's seq, then other operators' canonical
-      // stops not already covered (operator-only termini tails).
+      // Display order follows the preferred operator's own sequence, so
+      // names, coords, and seq all come from one consistent id space. The
+      // representative id is always the preferred operator's own stop id;
+      // other operators' ids map onto it through the canonical map.
       const seen = new Set<string>()
       const orderedStops: string[] = []
       const representativeByCanon = new Map<string, string>()
-      for (const co of [preferred, ...operators.filter((op) => op !== preferred)]) {
+      const preferredIds = new Map<string, string>()
+      for (const entry of bucket.entries) {
+        for (const id of entry.stops[preferred] ?? []) {
+          const canon = canonStop(id)
+          if (!preferredIds.has(canon)) preferredIds.set(canon, id)
+        }
+      }
+      for (const entry of bucket.entries) {
+        for (const id of entry.stops[preferred] ?? []) {
+          const canon = canonStop(id)
+          if (seen.has(canon)) continue
+          seen.add(canon)
+          orderedStops.push(canon)
+          representativeByCanon.set(canon, id)
+        }
+      }
+      // Operator-only canonical stops (e.g. a termini tail the preferred
+      // operator does not serve) append after, represented by their own id.
+      for (const co of operators.filter((op) => op !== preferred)) {
         for (const entry of bucket.entries) {
           for (const id of entry.stops[co] ?? []) {
             const canon = canonStop(id)
-            if (!representativeByCanon.has(canon)) representativeByCanon.set(canon, id)
-            if (!seen.has(canon)) {
-              seen.add(canon)
-              orderedStops.push(canon)
-            }
+            if (seen.has(canon)) continue
+            seen.add(canon)
+            orderedStops.push(canon)
+            representativeByCanon.set(canon, id)
           }
         }
       }
@@ -337,20 +382,22 @@ export async function buildEtaDbIndexes(
 
   const routeStopSeqIndex = new Map<string, number>()
   // Per-operator rows with RAW letters: the fetch, fare, and leg layers all
-  // resolve per co, so their lookups must keep working untouched.
+  // resolve per co, so their lookups must keep working untouched. serviceType
+  // normalizes to String since raw rows mix number and string forms.
   const kmbRouteStops: KmbRouteStopLite[] = kmbRouteListEntries.flatMap((entry) =>
     entry.co
       .filter((co) => busCompanies.includes(co))
       .flatMap((co) => {
         const stops = entry.stops[co] ?? []
         const bound = normalizeBound(entry.bound[co])
+        const serviceType = String(entry.serviceType ?? '')
         return stops.map((stopId, idx) => {
           const normalizedStopId = normalizeStopId(stopId)
           const seqKey = routeStopSeqKey({
             co,
             route: entry.route,
             bound,
-            serviceType: entry.serviceType,
+            serviceType,
             stopId: normalizedStopId,
           })
           if (normalizedStopId && !routeStopSeqIndex.has(seqKey)) {
@@ -360,7 +407,7 @@ export async function buildEtaDbIndexes(
             co,
             route: entry.route,
             bound,
-            serviceType: entry.serviceType,
+            serviceType,
             seq: idx + 1,
             stopId: normalizedStopId,
           }
@@ -436,7 +483,7 @@ export async function buildEtaDbIndexes(
           co,
           route: entry.route,
           bound,
-          serviceType: entry.serviceType,
+          serviceType: String(entry.serviceType ?? ''),
           seq: idx,
         })
         stopRoutesIndex.set(key, routeList)

@@ -69,6 +69,11 @@ function canonicalEntryBound(
   routeVariantIndex: Map<string, { bound: Record<string, string> }> | undefined,
   entry: KmbEtaEntryWithLeg
 ): string {
+  // KMB and CTB spell the same physical direction with opposite letters on
+  // some joint routes (ctb O is kmb I on 101), so merge on the KMB letter
+  // when the db entry is known. Falls back to the raw letter. Verified
+  // against the live CTB API: eta rows for 001577 carry dir I while the
+  // same boarding point's KMB rows carry dir O, same seq, same destination.
   const raw = String(entry.dir ?? '')
   const co = String(entry.co ?? 'kmb')
   if (!routeVariantIndex || !co) return raw

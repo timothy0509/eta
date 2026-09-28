@@ -27,7 +27,6 @@ import {
   parseKmbStopNameCached,
   resolveJointRouteEndpoint,
 } from '@/lib/eta/kmb-stop-name'
-import { parseRouteVariantKey } from '@/lib/eta/eta-db-index'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
@@ -271,11 +270,10 @@ const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stop?: StopInfo
   nameSource?: 'stop' | 'kmb' | 'ctb'
 }) {
-  // Merged key is `route|dir|serviceType|leg`; legacy keys carry a `co|` prefix.
-  const parsedKey = parseRouteVariantKey(variantKey)
-  const legacyParts = variantKey.split('|')
-  const route =
-    parsedKey?.route ?? (legacyParts.length === 5 ? legacyParts[1] : legacyParts[0]) ?? ''
+  // Merged key is `route|dir|serviceType|leg` (4 parts); a legacy
+  // `co|route|dir|serviceType|leg` key has 5 parts with the route second.
+  const keyParts = variantKey.split('|')
+  const route = keyParts.length === 5 ? (keyParts[1] ?? '') : (keyParts[0] ?? '')
   const primaryCo = String(routeInfos[baseKey]?.co ?? items[0]?.co ?? 'kmb')
   const first = items[0]
   // Use baseKey for route info lookup (full key may have leg suffix)

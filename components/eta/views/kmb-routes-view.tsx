@@ -643,9 +643,24 @@ export function KmbRoutesView({
     }
   }, [setRouteStopsAll])
 
+  const [searchEquivalents, setSearchEquivalents] = React.useState<Map<string, string> | undefined>(
+    undefined
+  )
+  React.useEffect(() => {
+    let cancelled = false
+    void getEtaDbIndexes()
+      .then(({ stopEquivalents }) => {
+        if (!cancelled) setSearchEquivalents(stopEquivalents)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   const searchIndex = React.useMemo(
-    () => buildRouteSearchIndex(routes, routeStopsAll, stopsById),
-    [routes, routeStopsAll, stopsById]
+    () => buildRouteSearchIndex(routes, routeStopsAll, stopsById, searchEquivalents),
+    [routes, routeStopsAll, stopsById, searchEquivalents]
   )
 
   // Fuse loads lazily so the fuzzy index stays out of the first paint. The build
@@ -809,7 +824,16 @@ export function KmbRoutesView({
         const canonId = canonOf(stopId)
         const list = filteredEtas[canonId] ?? []
         for (const eta of entries ?? []) {
-          if (defaultMergedKey(eta, { routeVariantIndex }) !== variantKey) continue
+          // Same route plus canonical bound; service types stay separate
+          // since short workings are their own variants.
+          if (
+            (eta.route ?? '').toUpperCase() !== currentVariant.route.toUpperCase() ||
+            defaultMergedKey(eta, { routeVariantIndex }).split('|').slice(0, 2).join('|') !==
+              variantKey.split('|').slice(0, 2).join('|') ||
+            String(eta.service_type ?? '') !== String(currentVariant.serviceType ?? '')
+          ) {
+            continue
+          }
           list.push({ ...eta, stop: canonId })
         }
         if (list.length) filteredEtas[canonId] = list

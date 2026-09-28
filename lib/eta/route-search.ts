@@ -126,8 +126,13 @@ function canonicalRouteSearchKey(_co: unknown, route: unknown): string {
 export function buildRouteSearchIndex(
   routes: KmbRouteInfoLite[],
   routeStops: KmbRouteStopLite[],
-  stopsById: Map<string, KmbStopSearchItem>
+  stopsById: Map<string, KmbStopSearchItem>,
+  stopEquivalents?: Map<string, string>
 ): RouteSearchEntry[] {
+  const canonStopId = (id: string) => {
+    const norm = String(id ?? '').trim()
+    return stopEquivalents?.get(norm) ?? norm
+  }
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {
     const key = canonicalRouteSearchKey(r.co, r.route)
@@ -159,8 +164,12 @@ export function buildRouteSearchIndex(
       bucket = { ids: [], seen: new Set(), total: 0 }
       stopIdsByKey.set(key, bucket)
     }
-    if (bucket.seen.has(rs.stopId)) continue
-    bucket.seen.add(rs.stopId)
+    // KMB and CTB keep per-operator ids for the same boarding point, so
+    // dedupe on the canonical id. Otherwise joint routes double-count
+    // every shared stop in the count and via matching.
+    const canon = canonStopId(rs.stopId)
+    if (bucket.seen.has(canon)) continue
+    bucket.seen.add(canon)
     bucket.total += 1
     if (bucket.ids.length < MAX_STOP_IDS_PER_ROUTE) bucket.ids.push(rs.stopId)
   }

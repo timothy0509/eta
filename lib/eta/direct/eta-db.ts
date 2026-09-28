@@ -440,13 +440,16 @@ export async function fetchKmbEtasForStop(
 
   const { stopRoutesIndex, stopEquivalents, routeVariantIndex } = await deps.getIndexes()
   // KMB and CTB use different stop ids for the same boarding point, so fan
-  // out to equivalent ids. Each id resolves its own variants below; the
-  // official KMB call stays on the requested id to avoid duplicate calls.
+  // out to every id sharing the requested id's canonical stop. The
+  // union-find groups whole interchanges, so this reaches the true
+  // counterpart (e.g. CTB 001577 for KMB KC713). The official KMB call
+  // stays on the requested id to avoid duplicate calls.
+  const canon = stopEquivalents.get(stopId) ?? stopId
   const equivalentIds = new Set<string>([stopId])
-  for (const [id, canon] of stopEquivalents) {
-    if (id === stopId) equivalentIds.add(canon)
-    else if (canon === stopId) equivalentIds.add(id)
+  for (const [id, idCanon] of stopEquivalents) {
+    if (idCanon === canon) equivalentIds.add(id)
   }
+  equivalentIds.add(canon)
   const routeEntries = Array.from(equivalentIds).flatMap((id) =>
     (stopRoutesIndex.get(id) ?? []).filter((e) => {
       if (routeFilter && e.route.toUpperCase() !== routeFilter) return false
@@ -495,15 +498,41 @@ export async function fetchKmbEtasForStop(
           seq: stopIndex,
           language,
         })
-        return etas.map((eta, idx) => ({
-          ...eta,
-          co: eta.co ?? co,
-          route: entry.route,
-          dir: normalizeBound(entry.bound[co]),
-          serviceType: entry.serviceType,
-          seq: stopIndex + 1,
-          etaSeq: idx + 1,
-        })) as KmbEta[]
+        return etas.map((eta, idx) => {
+          // hk-bus-eta per-operator fetchers use different field shapes
+          // than the db rows (e.g. CTB returns remark/dest, no rmk_*/etaSeq),
+          // so normalize everything the UI reads downstream.
+          const raw = eta as Partial<Eta> & {
+            etaSeq?: number
+            rmk_tc?: string
+            rmk_sc?: string
+            rmk_en?: string
+            dest_tc?: string
+            dest_sc?: string
+            dest_en?: string
+          }
+          const remarkZh = raw.remark?.zh ?? ''
+          const remarkEn = raw.remark?.en ?? ''
+          const destZh = raw.dest?.zh ?? ''
+          const destEn = raw.dest?.en ?? ''
+          return {
+            ...eta,
+            co: eta.co ?? co,
+            route: entry.route,
+            dir: normalizeBound(entry.bound[co]),
+            serviceType: entry.serviceType,
+            seq: stopIndex + 1,
+            etaSeq: raw.etaSeq ?? idx + 1,
+            dest: eta.dest ?? { en: destEn, zh: destZh },
+            remark: eta.remark ?? { en: remarkEn, zh: remarkZh },
+            rmk_tc: raw.rmk_tc ?? remarkZh,
+            rmk_sc: raw.rmk_sc ?? remarkZh,
+            rmk_en: raw.rmk_en ?? remarkEn,
+            dest_tc: raw.dest_tc ?? destZh,
+            dest_sc: raw.dest_sc ?? destZh,
+            dest_en: raw.dest_en ?? destEn,
+          }
+        }) as KmbEta[]
       },
       { signal }
     )

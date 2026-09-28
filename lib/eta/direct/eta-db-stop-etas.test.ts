@@ -437,3 +437,41 @@ describe('fetchLrtEtasForStop cache', () => {
     expect(fetchVariantEtas).toHaveBeenCalledTimes(2)
   })
 })
+
+describe('fetchKmbEtasForStop CTB field normalization', () => {
+  it('maps CTB remark and dest onto rmk_* and dest_* fields', async () => {
+    const ctbEntry = makeRouteEntry({
+      route: '101',
+      co: ['ctb'],
+      bound: { ctb: 'I' },
+      stops: { ctb: ['CTB1'] },
+    })
+    const indexes = emptyIndexes()
+    indexes.stopRoutesIndex.set('CTB1', [
+      { stopId: 'CTB1', co: 'ctb', route: '101', bound: 'I', serviceType: '1', seq: 9 },
+    ])
+    indexes.routeVariantIndex.set('ctb|101|I|1', ctbEntry)
+
+    const result = await fetchKmbEtasForStop(
+      { stopId: 'CTB1', language: 'tc' },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta: vi.fn(),
+        fetchVariantEtas: vi.fn().mockResolvedValue([
+          {
+            eta: '',
+            dest: { en: 'Kennedy Town', zh: '堅尼地城' },
+            remark: { en: 'KMB Cycle', zh: '九巴時段' },
+            co: 'ctb',
+          },
+        ]),
+      }
+    )
+
+    expect(result).toHaveLength(1)
+    expect(result[0]?.rmk_tc).toBe('九巴時段')
+    expect(result[0]?.rmk_en).toBe('KMB Cycle')
+    expect(result[0]?.dest_tc).toBe('堅尼地城')
+    expect(result[0]?.etaSeq).toBe(1)
+  })
+})

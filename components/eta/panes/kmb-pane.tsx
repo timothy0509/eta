@@ -24,7 +24,12 @@ import {
 import { isStaleByFlagOrAge } from '@/lib/eta/stale'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
-import { mergedRouteVariantKey, parseRouteVariantKey, toMergedKey } from '@/lib/eta/eta-db-index'
+import {
+  mergedRouteVariantKey,
+  parseRouteVariantKey,
+  toCanonicalMergedKey,
+  toMergedKey,
+} from '@/lib/eta/eta-db-index'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
@@ -470,8 +475,18 @@ export function KmbPane({
         ? new Set(currentFilterEntries.map((e) => e.variantKey).filter(Boolean))
         : null
 
+      // Canonicalize both sides through the variant index so opposite
+      // KMB/CTB letters compare equal. Loaded lazily; falls back to raw
+      // letters until the index arrives.
+      const { routeVariantIndex: filterVariantIndex } = await getEtaDbIndexes().catch(() => ({
+        routeVariantIndex: undefined,
+      }))
       const normalizedFilterKeys = variantFilterKeys
-        ? new Set(Array.from(variantFilterKeys).map((key) => toMergedKey(key)))
+        ? new Set(
+            Array.from(variantFilterKeys).map((key) =>
+              toCanonicalMergedKey(filterVariantIndex, toMergedKey(key))
+            )
+          )
         : null
       const filteredByStopId: Record<string, KmbEtaEntryWithLeg[]> = {}
       for (const stopId of stopIds) {
@@ -479,11 +494,14 @@ export function KmbPane({
         if (normalizedFilterKeys) {
           etas = etas.filter((eta) => {
             // Merged base key (without leg or operator) for variant filter matching
-            const key = mergedRouteVariantKey({
-              route: eta.route ?? '',
-              bound: eta.dir ?? '',
-              serviceType: String(eta.service_type ?? ''),
-            })
+            const key = toCanonicalMergedKey(
+              filterVariantIndex,
+              mergedRouteVariantKey({
+                route: eta.route ?? '',
+                bound: eta.dir ?? '',
+                serviceType: String(eta.service_type ?? ''),
+              })
+            )
             return normalizedFilterKeys.has(key)
           })
         }

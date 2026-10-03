@@ -6,13 +6,33 @@ import {
   KMB_ROUTES_MAPPED_CACHE_KEY,
   KMB_STOPS_MAPPED_CACHE_KEY,
 } from '@/lib/eta/cache/keys'
-import { fetchKmbRoutes, fetchKmbRouteStops, fetchKmbStops } from './client'
-import { getKmbRouteList, getKmbRouteStops, getKmbStops } from '@/lib/eta/direct/kmb'
+import {
+  fetchKmbRouteInfo,
+  fetchKmbRoutes,
+  fetchKmbRouteStops,
+  fetchKmbStopEtas,
+  fetchKmbStops,
+} from './client'
+import {
+  fetchKmbStopEtas as fetchKmbStopEtasDirect,
+  getKmbRouteInfo,
+  getKmbRouteList,
+  getKmbRouteStops,
+  getKmbStops,
+  type KmbStopEtasResponse as DirectKmbStopEtasResponse,
+} from '@/lib/eta/direct/kmb'
 import { getCachedValue } from '@/lib/eta/direct/shared'
 
 vi.mock('@/lib/eta/direct/kmb', async (importOriginal) => {
   const original = await importOriginal<typeof import('@/lib/eta/direct/kmb')>()
-  return { ...original, getKmbStops: vi.fn(), getKmbRouteStops: vi.fn(), getKmbRouteList: vi.fn() }
+  return {
+    ...original,
+    getKmbStops: vi.fn(),
+    getKmbRouteInfo: vi.fn(),
+    getKmbRouteStops: vi.fn(),
+    getKmbRouteList: vi.fn(),
+    fetchKmbStopEtas: vi.fn(),
+  }
 })
 
 vi.mock('@/lib/eta/direct/shared', async (importOriginal) => {
@@ -21,9 +41,25 @@ vi.mock('@/lib/eta/direct/shared', async (importOriginal) => {
 })
 
 const mockGetKmbStops = vi.mocked(getKmbStops)
+const mockGetKmbRouteInfo = vi.mocked(getKmbRouteInfo)
 const mockGetKmbRouteStops = vi.mocked(getKmbRouteStops)
 const mockGetKmbRouteList = vi.mocked(getKmbRouteList)
+const mockFetchKmbStopEtasDirect = vi.mocked(fetchKmbStopEtasDirect)
 const mockGetCachedValue = vi.mocked(getCachedValue)
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function emptyStopEtas(): DirectKmbStopEtasResponse {
+  return { byStopId: {}, errors: [], cached: 0, fetched: 1 }
+}
 
 async function clearMappedKeys() {
   await Promise.all(
@@ -216,6 +252,114 @@ describe('fetchKmbRoutes', () => {
         key: KMB_ROUTES_MAPPED_CACHE_KEY,
         policyKey: 'kmbStaticList',
       })
+    )
+  })
+})
+
+describe('fetchKmbStopEtas dedupe abort handling', () => {
+  beforeEach(() => {
+    mockFetchKmbStopEtasDirect.mockReset()
+  })
+
+  it('joined caller recovers with its own fetch when the originator aborts', async () => {
+    const first = deferred<DirectKmbStopEtasResponse>()
+    mockFetchKmbStopEtasDirect.mockReturnValueOnce(first.promise)
+    const recovered = emptyStopEtas()
+    mockFetchKmbStopEtasDirect.mockResolvedValue(recovered)
+
+    const controllerA = new AbortController()
+    const promiseA = fetchKmbStopEtas(['SJOIN1'], { signal: controllerA.signal })
+    const controllerB = new AbortController()
+    const promiseB = fetchKmbStopEtas(['SJOIN1'], { signal: controllerB.signal })
+    const assertA = expect(promiseA).rejects.toMatchObject({ name: 'AbortError' })
+    const assertB = expect(promiseB).resolves.toEqual(recovered)
+
+    controllerA.abort()
+    first.reject(new DOMException('The operation was aborted.', 'AbortError'))
+
+    await assertA
+    await assertB
+    expect(mockFetchKmbStopEtasDirect).toHaveBeenCalledTimes(2)
+  })
+
+  it('genuine errors propagate to joined callers without refetching', async () => {
+    const first = deferred<DirectKmbStopEtasResponse>()
+    mockFetchKmbStopEtasDirect.mockReturnValueOnce(first.promise)
+
+    const promiseA = fetchKmbStopEtas(['SJOIN2'], { signal: new AbortController().signal })
+    const promiseB = fetchKmbStopEtas(['SJOIN2'], { signal: new AbortController().signal })
+    const assertA = expect(promiseA).rejects.toThrow('boom')
+    const assertB = expect(promiseB).rejects.toThrow('boom')
+
+    first.reject(new Error('boom'))
+
+    await assertA
+    await assertB
+    expect(mockFetchKmbStopEtasDirect).toHaveBeenCalledTimes(1)
+  })
+
+  it('joined caller abort still rejects locally without disturbing the originator', async () => {
+    const done = emptyStopEtas()
+    mockFetchKmbStopEtasDirect.mockResolvedValue(done)
+
+    const controllerA = new AbortController()
+    const promiseA = fetchKmbStopEtas(['SJOIN3'], { signal: controllerA.signal })
+    const controllerB = new AbortController()
+    const promiseB = fetchKmbStopEtas(['SJOIN3'], { signal: controllerB.signal })
+    const assertB = expect(promiseB).rejects.toMatchObject({ name: 'AbortError' })
+
+    controllerB.abort()
+
+    await assertB
+    await expect(promiseA).resolves.toEqual(done)
+    expect(mockFetchKmbStopEtasDirect).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('fetchKmbRouteInfo abort signal', () => {
+  beforeEach(() => {
+    mockGetKmbRouteInfo.mockReset()
+  })
+
+  it('rejects with AbortError without calling getKmbRouteInfo when already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      fetchKmbRouteInfo({
+        route: '1A',
+        direction: 'O',
+        serviceType: '1',
+        signal: controller.signal,
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(mockGetKmbRouteInfo).not.toHaveBeenCalled()
+  })
+
+  it('forwards the signal to getKmbRouteInfo', async () => {
+    mockGetKmbRouteInfo.mockResolvedValue({
+      co: 'kmb',
+      route: '1A',
+      bound: 'O',
+      service_type: '1',
+      orig_en: 'O',
+      orig_tc: 'O',
+      orig_sc: 'O',
+      dest_en: 'D',
+      dest_tc: 'D',
+      dest_sc: 'D',
+    })
+    const controller = new AbortController()
+
+    await fetchKmbRouteInfo({
+      route: '1A',
+      direction: 'O',
+      serviceType: '1',
+      signal: controller.signal,
+    })
+
+    expect(mockGetKmbRouteInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal })
     )
   })
 })

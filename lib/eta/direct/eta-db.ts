@@ -219,8 +219,15 @@ export async function findKmbRouteInfo(params: {
   route: string
   bound: string
   serviceType: string
+  signal?: AbortSignal
 }): Promise<KmbRouteInfoLite | null> {
+  if (params.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
   const { routeVariantIndex } = await getEtaDbIndexes()
+  if (params.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
   const routeName = params.route.toUpperCase()
   const bound = normalizeBound(params.bound)
   const serviceType = String(params.serviceType ?? '')

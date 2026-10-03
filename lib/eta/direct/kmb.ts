@@ -196,14 +196,22 @@ export async function getKmbRouteInfo(params: {
   route: string
   direction: 'I' | 'O' | 'inbound' | 'outbound' | string
   serviceType: string
+  signal?: AbortSignal
 }): Promise<KmbRouteInfo> {
+  if (params.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
   const bound = normalizeDirection(params.direction)
   const info = await findKmbRouteInfo({
     co: params.co,
     route: params.route,
     bound,
     serviceType: params.serviceType,
+    signal: params.signal,
   })
+  if (params.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
 
   if (!info) {
     throw new Error('KMB route info not found')

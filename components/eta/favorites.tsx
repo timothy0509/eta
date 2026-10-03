@@ -5,10 +5,12 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  Eye,
   FolderPlus,
   GripVertical,
   Heart,
   History,
+  MapPin,
   MoreVertical,
   Pin,
   PinOff,
@@ -23,6 +25,7 @@ import { Reorder, useDragControls } from 'framer-motion'
 import * as React from 'react'
 import { useShallow } from 'zustand/shallow'
 
+import { GroupResultsKmb } from '@/components/eta/group-results-kmb'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
 
@@ -41,6 +44,7 @@ import { Input } from '@/components/ui/input'
 import { LRT_STATIONS, type LrtStation } from '@/lib/data/lrt-stations'
 import { MTR_STATIONS, type MtrStation } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
+import { collectKmbGroupMembers, buildGroupStopsItem } from '@/lib/eta/group-view'
 import { useTranslations } from '@/lib/eta/i18n'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang, pickLangZh } from '@/lib/eta/pick-lang'
@@ -54,6 +58,7 @@ import { usePaneStore } from '@/lib/eta/pane-store'
 type Props = {
   lang: UiLanguage
   onSelect: (item: FavoritesItem) => void
+  onOpenInStops?: (item: FavoritesItem) => void
 }
 
 function pickKmbStopTitle(stop: KmbStopSearchItem, lang: UiLanguage) {
@@ -474,16 +479,22 @@ function RecentRow({ item, lang, maps, dateFormatter, onSelect, staggerClass }: 
 
 function GroupsEditor({
   favoritesGroups,
+  favorites,
   t,
   onAdd,
   onRename,
   onDelete,
+  onViewGroup,
+  onOpenInStops,
 }: {
   favoritesGroups: FavoritesGroup[]
+  favorites: FavoritesItem[]
   t: (key: string) => string
   onAdd: (name: string) => void
   onRename: (id: string, name: string) => void
   onDelete: (id: string) => void
+  onViewGroup: (group: FavoritesGroup) => void
+  onOpenInStops: (group: FavoritesGroup) => void
 }) {
   const [open, setOpen] = React.useState(false)
   const [newGroupName, setNewGroupName] = React.useState('')
@@ -593,6 +604,28 @@ function GroupsEditor({
                           variant="ghost"
                           size="icon-sm"
                           className="h-8 w-8 rounded-xl"
+                          aria-label={t('favorites.viewGroup')}
+                          title={t('favorites.viewGroup')}
+                          onClick={() => onViewGroup(group)}
+                          disabled={collectKmbGroupMembers(favorites, group.id).length === 0}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-8 w-8 rounded-xl"
+                          aria-label={t('favorites.openInStops')}
+                          title={t('favorites.openInStops')}
+                          onClick={() => onOpenInStops(group)}
+                          disabled={collectKmbGroupMembers(favorites, group.id).length === 0}
+                        >
+                          <MapPin className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          className="h-8 w-8 rounded-xl"
                           aria-label={t('favorites.rename')}
                           onClick={() => startEdit(group)}
                         >
@@ -620,7 +653,7 @@ function GroupsEditor({
   )
 }
 
-export function FavoritesAndRecents({ lang, onSelect }: Props) {
+export function FavoritesAndRecents({ lang, onSelect, onOpenInStops }: Props) {
   const kmbStops = usePaneStore((s) => s.kmbStops)
   const { favorites, favoritesGroups, recents } = useAppStore(
     useShallow((s) => ({
@@ -742,6 +775,34 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
     [favoritesGroups, t]
   )
 
+  const [viewingGroupId, setViewingGroupId] = React.useState<string | null>(null)
+  const viewingGroup = favoritesGroups.find((group) => group.id === viewingGroupId) ?? null
+  // Memoized so member object identities stay stable across unrelated parent
+  // re-renders; otherwise GroupMemberSection memos/effects refire and abort
+  // in-flight ETA requests on every render.
+  const viewingMembers = React.useMemo(
+    () => (viewingGroup ? collectKmbGroupMembers(favorites, viewingGroup.id) : []),
+    [favorites, viewingGroup]
+  )
+
+  const handleViewGroup = (group: FavoritesGroup) => {
+    setViewingGroupId(group.id)
+  }
+
+  const handleOpenInStops = (group: FavoritesGroup) => {
+    const members = collectKmbGroupMembers(favorites, group.id)
+    const item = buildGroupStopsItem(members, group.name)
+    if (item) onOpenInStops?.(item)
+  }
+
+  const activeGroup =
+    selectedGroup !== 'all' && selectedGroup !== 'unassigned'
+      ? (favoritesGroups.find((group) => group.id === selectedGroup) ?? null)
+      : null
+  const activeGroupStopCount = activeGroup
+    ? collectKmbGroupMembers(favorites, activeGroup.id).length
+    : 0
+
   return (
     <section className="card-m3 p-4 sm:p-5">
       <div className="flex flex-row items-center justify-between gap-3 border-b border-[var(--outline-variant)]/10 pb-4">
@@ -778,164 +839,209 @@ export function FavoritesAndRecents({ lang, onSelect }: Props) {
 
       <div>
         {activeTab === 'favorites' ? (
-          <div className="space-y-4 pt-4">
-            <div className="relative">
-              <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-              <Input
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={t('favorites.searchPlaceholder')}
-                className="h-10 rounded-full pl-9 text-sm"
+          viewingGroup ? (
+            <div className="pt-4">
+              <GroupResultsKmb
+                lang={lang}
+                groupName={viewingGroup.name}
+                members={viewingMembers}
+                onBack={() => setViewingGroupId(null)}
+                onOpenInStops={() => handleOpenInStops(viewingGroup)}
               />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery('')}
-                  className="text-on-surface-variant hover:text-on-surface absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1"
-                  aria-label={t('favorites.clear')}
-                >
-                  <X className="h-4 w-4" />
-                </button>
+            </div>
+          ) : (
+            <div className="space-y-4 pt-4">
+              <div className="relative">
+                <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                <Input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={t('favorites.searchPlaceholder')}
+                  className="h-10 rounded-full pl-9 text-sm"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="text-on-surface-variant hover:text-on-surface absolute top-1/2 right-2 -translate-y-1/2 rounded-full p-1"
+                    aria-label={t('favorites.clear')}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {favoritesGroups.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {groupFilterOptions.map((option) => (
+                    <Button
+                      key={option.id}
+                      variant={selectedGroup === option.id ? 'default' : 'outline'}
+                      size="sm"
+                      className="rounded-full text-xs"
+                      onClick={() => setSelectedGroup(option.id)}
+                    >
+                      {option.label}
+                    </Button>
+                  ))}
+                </div>
+              )}
+
+              <GroupsEditor
+                favoritesGroups={favoritesGroups}
+                favorites={favorites}
+                t={t}
+                onAdd={addFavoriteGroup}
+                onRename={renameFavoriteGroup}
+                onDelete={deleteFavoriteGroup}
+                onViewGroup={handleViewGroup}
+                onOpenInStops={handleOpenInStops}
+              />
+
+              {activeGroup && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => handleViewGroup(activeGroup)}
+                    disabled={activeGroupStopCount === 0}
+                  >
+                    <Eye className="h-4 w-4" />
+                    <span className="ml-1.5">{t('favorites.viewGroup')}</span>
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="rounded-full"
+                    onClick={() => handleOpenInStops(activeGroup)}
+                    disabled={activeGroupStopCount === 0}
+                  >
+                    <MapPin className="h-4 w-4" />
+                    <span className="ml-1.5">{t('favorites.openInStops')}</span>
+                  </Button>
+                  {activeGroupStopCount === 0 && (
+                    <span className="text-on-surface-variant m3-body-md">
+                      {t('favorites.noStopsInGroup')}
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {favorites.length === 0 ? (
+                <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+                  <Heart className="text-on-surface-variant h-10 w-10 opacity-40" />
+                  <div className="m3-body-lg text-on-surface font-medium">
+                    {t('favorites.noFavorites')}
+                  </div>
+                  <div className="text-on-surface-variant m3-body-md max-w-[16rem]">
+                    {t('favorites.noFavoritesHint')}
+                  </div>
+                </div>
+              ) : filteredFavorites.length === 0 ? (
+                <div className="text-on-surface-variant m3-body-md py-8 text-center">
+                  {t('errors.noResults')}
+                </div>
+              ) : isFiltering ? (
+                <StaggerList>
+                  {filteredFavorites.map((f, idx) => (
+                    <FavoriteRow
+                      key={f.id}
+                      item={f}
+                      lang={lang}
+                      maps={maps}
+                      groupName={groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')}
+                      favoritesGroups={favoritesGroups}
+                      t={t}
+                      onSelect={onSelect}
+                      onTogglePin={toggleFavoritePin}
+                      onAssignGroup={assignFavoriteGroup}
+                      onDelete={removeFavorite}
+                      staggerClass={staggerClassForIndex(idx)}
+                    />
+                  ))}
+                </StaggerList>
+              ) : (
+                <div className="space-y-4">
+                  {pinnedItems.length > 0 && (
+                    <div className="ui-cv-auto space-y-2">
+                      <div className="text-on-surface-variant m3-label-md px-1">
+                        {t('favorites.pinned')}
+                      </div>
+                      <Reorder.Group
+                        axis="y"
+                        values={pinnedItems}
+                        onReorder={handleReorderPinned}
+                        className="space-y-2"
+                      >
+                        {pinnedItems.map((f, idx) => (
+                          <FavoriteRow
+                            key={f.id}
+                            item={f}
+                            lang={lang}
+                            maps={maps}
+                            groupName={
+                              groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
+                            }
+                            favoritesGroups={favoritesGroups}
+                            t={t}
+                            onSelect={onSelect}
+                            onTogglePin={toggleFavoritePin}
+                            onAssignGroup={assignFavoriteGroup}
+                            onDelete={removeFavorite}
+                            draggable
+                            staggerClass={staggerClassForIndex(idx)}
+                            onMoveUp={() => moveFavorite(f.id, 'up')}
+                            onMoveDown={() => moveFavorite(f.id, 'down')}
+                            disableMoveUp={idx === 0}
+                            disableMoveDown={idx === pinnedItems.length - 1}
+                          />
+                        ))}
+                      </Reorder.Group>
+                    </div>
+                  )}
+
+                  {unpinnedItems.length > 0 && (
+                    <div className="ui-cv-auto space-y-2">
+                      <div className="text-on-surface-variant m3-label-md px-1">
+                        {t('favorites.unpinned')}
+                      </div>
+                      <Reorder.Group
+                        axis="y"
+                        values={unpinnedItems}
+                        onReorder={handleReorderUnpinned}
+                        className="space-y-2"
+                      >
+                        {unpinnedItems.map((f, idx) => (
+                          <FavoriteRow
+                            key={f.id}
+                            item={f}
+                            lang={lang}
+                            maps={maps}
+                            groupName={
+                              groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
+                            }
+                            favoritesGroups={favoritesGroups}
+                            t={t}
+                            onSelect={onSelect}
+                            onTogglePin={toggleFavoritePin}
+                            onAssignGroup={assignFavoriteGroup}
+                            onDelete={removeFavorite}
+                            draggable
+                            staggerClass={staggerClassForIndex(idx)}
+                            onMoveUp={() => moveFavorite(f.id, 'up')}
+                            onMoveDown={() => moveFavorite(f.id, 'down')}
+                            disableMoveUp={idx === 0}
+                            disableMoveDown={idx === unpinnedItems.length - 1}
+                          />
+                        ))}
+                      </Reorder.Group>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-
-            {favoritesGroups.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {groupFilterOptions.map((option) => (
-                  <Button
-                    key={option.id}
-                    variant={selectedGroup === option.id ? 'default' : 'outline'}
-                    size="sm"
-                    className="rounded-full text-xs"
-                    onClick={() => setSelectedGroup(option.id)}
-                  >
-                    {option.label}
-                  </Button>
-                ))}
-              </div>
-            )}
-
-            <GroupsEditor
-              favoritesGroups={favoritesGroups}
-              t={t}
-              onAdd={addFavoriteGroup}
-              onRename={renameFavoriteGroup}
-              onDelete={deleteFavoriteGroup}
-            />
-
-            {favorites.length === 0 ? (
-              <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
-                <Heart className="text-on-surface-variant h-10 w-10 opacity-40" />
-                <div className="m3-body-lg text-on-surface font-medium">
-                  {t('favorites.noFavorites')}
-                </div>
-                <div className="text-on-surface-variant m3-body-md max-w-[16rem]">
-                  {t('favorites.noFavoritesHint')}
-                </div>
-              </div>
-            ) : filteredFavorites.length === 0 ? (
-              <div className="text-on-surface-variant m3-body-md py-8 text-center">
-                {t('errors.noResults')}
-              </div>
-            ) : isFiltering ? (
-              <StaggerList>
-                {filteredFavorites.map((f, idx) => (
-                  <FavoriteRow
-                    key={f.id}
-                    item={f}
-                    lang={lang}
-                    maps={maps}
-                    groupName={groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')}
-                    favoritesGroups={favoritesGroups}
-                    t={t}
-                    onSelect={onSelect}
-                    onTogglePin={toggleFavoritePin}
-                    onAssignGroup={assignFavoriteGroup}
-                    onDelete={removeFavorite}
-                    staggerClass={staggerClassForIndex(idx)}
-                  />
-                ))}
-              </StaggerList>
-            ) : (
-              <div className="space-y-4">
-                {pinnedItems.length > 0 && (
-                  <div className="ui-cv-auto space-y-2">
-                    <div className="text-on-surface-variant m3-label-md px-1">
-                      {t('favorites.pinned')}
-                    </div>
-                    <Reorder.Group
-                      axis="y"
-                      values={pinnedItems}
-                      onReorder={handleReorderPinned}
-                      className="space-y-2"
-                    >
-                      {pinnedItems.map((f, idx) => (
-                        <FavoriteRow
-                          key={f.id}
-                          item={f}
-                          lang={lang}
-                          maps={maps}
-                          groupName={
-                            groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
-                          }
-                          favoritesGroups={favoritesGroups}
-                          t={t}
-                          onSelect={onSelect}
-                          onTogglePin={toggleFavoritePin}
-                          onAssignGroup={assignFavoriteGroup}
-                          onDelete={removeFavorite}
-                          draggable
-                          staggerClass={staggerClassForIndex(idx)}
-                          onMoveUp={() => moveFavorite(f.id, 'up')}
-                          onMoveDown={() => moveFavorite(f.id, 'down')}
-                          disableMoveUp={idx === 0}
-                          disableMoveDown={idx === pinnedItems.length - 1}
-                        />
-                      ))}
-                    </Reorder.Group>
-                  </div>
-                )}
-
-                {unpinnedItems.length > 0 && (
-                  <div className="ui-cv-auto space-y-2">
-                    <div className="text-on-surface-variant m3-label-md px-1">
-                      {t('favorites.unpinned')}
-                    </div>
-                    <Reorder.Group
-                      axis="y"
-                      values={unpinnedItems}
-                      onReorder={handleReorderUnpinned}
-                      className="space-y-2"
-                    >
-                      {unpinnedItems.map((f, idx) => (
-                        <FavoriteRow
-                          key={f.id}
-                          item={f}
-                          lang={lang}
-                          maps={maps}
-                          groupName={
-                            groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
-                          }
-                          favoritesGroups={favoritesGroups}
-                          t={t}
-                          onSelect={onSelect}
-                          onTogglePin={toggleFavoritePin}
-                          onAssignGroup={assignFavoriteGroup}
-                          onDelete={removeFavorite}
-                          draggable
-                          staggerClass={staggerClassForIndex(idx)}
-                          onMoveUp={() => moveFavorite(f.id, 'up')}
-                          onMoveDown={() => moveFavorite(f.id, 'down')}
-                          disableMoveUp={idx === 0}
-                          disableMoveDown={idx === unpinnedItems.length - 1}
-                        />
-                      ))}
-                    </Reorder.Group>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          )
         ) : (
           <div className="space-y-4 pt-4">
             <div className="flex items-center justify-between gap-2">

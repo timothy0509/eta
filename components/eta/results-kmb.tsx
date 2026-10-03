@@ -117,7 +117,7 @@ function pickStopName(
   return pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
 }
 
-type StopChips = {
+export type StopChips = {
   stopId: string | null
   fullName: string | null
   name: string | null
@@ -215,7 +215,7 @@ function RouteDetailsDialog({
 }
 
 /** Render a single route departure row */
-const RouteDepartureRow = React.memo(function RouteDepartureRow({
+export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   variantKey,
   baseKey,
   items,

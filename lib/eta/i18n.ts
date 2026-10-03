@@ -338,6 +338,13 @@ const favorites: Record<string, TranslationEntry> = {
   earlier: { en: 'Earlier', tc: '更早', sc: '更早' },
   drag: { en: 'Drag to reorder', tc: '拖曳以重新排序', sc: '拖曳以重新排序' },
   assignToGroup: { en: 'Assign to group', tc: '加入分組', sc: '加入分组' },
+  viewGroup: { en: 'View stops', tc: '查看車站', sc: '查看车站' },
+  openInStops: { en: 'Open in Stops', tc: '在車站頁開啟', sc: '在车站页开启' },
+  noStopsInGroup: {
+    en: 'No bus stops in this group yet.',
+    tc: '此分組暫無巴士站。',
+    sc: '此分组暂无巴士站。',
+  },
 }
 
 const errors: Record<string, TranslationEntry> = {

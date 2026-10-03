@@ -568,7 +568,11 @@ export default function HomeClient() {
       case 'saved':
         return (
           <PaneEnter key="saved">
-            <FavoritesAndRecents lang={lang} onSelect={onSelectFromLists} />
+            <FavoritesAndRecents
+              lang={lang}
+              onSelect={onSelectFromLists}
+              onOpenInStops={onSelectFromLists}
+            />
           </PaneEnter>
         )
       case 'settings':

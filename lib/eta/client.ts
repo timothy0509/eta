@@ -64,6 +64,10 @@ function normalizeFareVariantKey(variant: KmbFareVariant) {
   return `${co}|${route}|${dir}|${serviceType}|${stopId}|${destCandidates}`
 }
 
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
+}
+
 async function fetchJsonDedupe<T>(
   key: DedupeKey,
   fetcher: () => Promise<T>,
@@ -75,24 +79,37 @@ async function fetchJsonDedupe<T>(
 
   const existing = inFlightJson.get(key)
   if (existing) {
-    if (options?.signal) {
-      return new Promise((resolve, reject) => {
-        const onAbort = () => {
-          reject(new DOMException('The operation was aborted.', 'AbortError'))
-        }
-        options.signal!.addEventListener('abort', onAbort, { once: true })
-        existing
-          .then((result) => {
-            options.signal!.removeEventListener('abort', onAbort)
-            resolve(result as T)
-          })
-          .catch((err) => {
-            options.signal!.removeEventListener('abort', onAbort)
-            reject(err)
-          })
-      })
+    try {
+      if (options?.signal) {
+        return await new Promise<T>((resolve, reject) => {
+          const onAbort = () => {
+            reject(new DOMException('The operation was aborted.', 'AbortError'))
+          }
+          options.signal!.addEventListener('abort', onAbort, { once: true })
+          existing.then(
+            (result) => {
+              options.signal!.removeEventListener('abort', onAbort)
+              resolve(result as T)
+            },
+            (err) => {
+              options.signal!.removeEventListener('abort', onAbort)
+              reject(err)
+            }
+          )
+        })
+      }
+      return (await existing) as T
+    } catch (err) {
+      // The originator aborted its own request while we were joined to it.
+      // Our signal is still live, so run our own fetch instead of surfacing
+      // their AbortError. The stale entry is already deleted by the
+      // originator's finally, so this either joins another live entry or
+      // starts a fresh fetch; genuine errors propagate untouched.
+      if (!options?.signal?.aborted && isAbortError(err)) {
+        return await fetchJsonDedupe(key, fetcher, options)
+      }
+      throw err
     }
-    return existing as Promise<T>
   }
 
   const promise = fetcher().finally(() => {

@@ -219,7 +219,11 @@ export async function fetchKmbRouteInfo(params: {
   route: string
   direction: 'I' | 'O' | 'inbound' | 'outbound' | string
   serviceType: string
+  signal?: AbortSignal
 }): Promise<KmbRouteInfoLite> {
+  if (params.signal?.aborted) {
+    throw new DOMException('The operation was aborted.', 'AbortError')
+  }
   const info = await getKmbRouteInfo(params)
 
   return {

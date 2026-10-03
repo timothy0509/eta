@@ -1,6 +1,9 @@
 import type { FavoritesItem } from '@/lib/store'
 
-export type KmbGroupMember = Extract<FavoritesItem, { mode: 'kmb' }>
+export type KmbGroupMember = Extract<
+  FavoritesItem,
+  { mode: 'kmb' } & ({ stopId: string } | { stopIds: string[] })
+>
 
 /**
  * Collect the viewable KMB members of a favorites group, in favorites order.
@@ -50,7 +53,7 @@ export function buildGroupStopsItem(
   const seen = new Set<string>()
   const stopIds: string[] = []
   for (const member of members) {
-    const rawIds = 'stopId' in member ? [member.stopId] : 'stopIds' in member ? member.stopIds : []
+    const rawIds = 'stopId' in member ? [member.stopId] : member.stopIds
     for (const raw of rawIds) {
       const id = raw.trim()
       if (!id || seen.has(id)) continue

@@ -6,9 +6,16 @@ import {
   KMB_ROUTES_MAPPED_CACHE_KEY,
   KMB_STOPS_MAPPED_CACHE_KEY,
 } from '@/lib/eta/cache/keys'
-import { fetchKmbRoutes, fetchKmbRouteStops, fetchKmbStopEtas, fetchKmbStops } from './client'
+import {
+  fetchKmbRouteInfo,
+  fetchKmbRoutes,
+  fetchKmbRouteStops,
+  fetchKmbStopEtas,
+  fetchKmbStops,
+} from './client'
 import {
   fetchKmbStopEtas as fetchKmbStopEtasDirect,
+  getKmbRouteInfo,
   getKmbRouteList,
   getKmbRouteStops,
   getKmbStops,
@@ -21,6 +28,7 @@ vi.mock('@/lib/eta/direct/kmb', async (importOriginal) => {
   return {
     ...original,
     getKmbStops: vi.fn(),
+    getKmbRouteInfo: vi.fn(),
     getKmbRouteStops: vi.fn(),
     getKmbRouteList: vi.fn(),
     fetchKmbStopEtas: vi.fn(),
@@ -33,6 +41,7 @@ vi.mock('@/lib/eta/direct/shared', async (importOriginal) => {
 })
 
 const mockGetKmbStops = vi.mocked(getKmbStops)
+const mockGetKmbRouteInfo = vi.mocked(getKmbRouteInfo)
 const mockGetKmbRouteStops = vi.mocked(getKmbRouteStops)
 const mockGetKmbRouteList = vi.mocked(getKmbRouteList)
 const mockFetchKmbStopEtasDirect = vi.mocked(fetchKmbStopEtasDirect)
@@ -304,5 +313,53 @@ describe('fetchKmbStopEtas dedupe abort handling', () => {
     await assertB
     await expect(promiseA).resolves.toEqual(done)
     expect(mockFetchKmbStopEtasDirect).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('fetchKmbRouteInfo abort signal', () => {
+  beforeEach(() => {
+    mockGetKmbRouteInfo.mockReset()
+  })
+
+  it('rejects with AbortError without calling getKmbRouteInfo when already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(
+      fetchKmbRouteInfo({
+        route: '1A',
+        direction: 'O',
+        serviceType: '1',
+        signal: controller.signal,
+      })
+    ).rejects.toMatchObject({ name: 'AbortError' })
+    expect(mockGetKmbRouteInfo).not.toHaveBeenCalled()
+  })
+
+  it('forwards the signal to getKmbRouteInfo', async () => {
+    mockGetKmbRouteInfo.mockResolvedValue({
+      co: 'kmb',
+      route: '1A',
+      bound: 'O',
+      service_type: '1',
+      orig_en: 'O',
+      orig_tc: 'O',
+      orig_sc: 'O',
+      dest_en: 'D',
+      dest_tc: 'D',
+      dest_sc: 'D',
+    })
+    const controller = new AbortController()
+
+    await fetchKmbRouteInfo({
+      route: '1A',
+      direction: 'O',
+      serviceType: '1',
+      signal: controller.signal,
+    })
+
+    expect(mockGetKmbRouteInfo).toHaveBeenCalledWith(
+      expect.objectContaining({ signal: controller.signal })
+    )
   })
 })

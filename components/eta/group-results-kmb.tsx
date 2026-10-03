@@ -1,8 +1,9 @@
 'use client'
 
+import * as React from 'react'
+
 import { ArrowLeft, Clock, Loader2 } from 'lucide-react'
 import type { Company } from 'hk-bus-eta'
-import * as React from 'react'
 
 import { EmptyState } from '@/components/eta/empty-state'
 import { buildRouteFilterString } from '@/components/eta/panes/use-kmb-route-filter'
@@ -30,14 +31,15 @@ import { cn } from '@/lib/utils'
 type FaresByVariantKey = Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
 
 function memberStopIds(member: KmbGroupMember): string[] {
-  if ('stopId' in member) return member.stopId.trim() ? [member.stopId] : []
-  if ('stopIds' in member) return member.stopIds.filter((id) => id.trim())
-  return []
+  if ('stopId' in member) {
+    const stopId = member.stopId.trim()
+    return stopId ? [stopId] : []
+  }
+  return member.stopIds.map((id) => id.trim()).filter((id) => id.length > 0)
 }
 
 /** Route filter string for one saved member, mirroring the KMB pane. */
 function memberRouteFilter(member: KmbGroupMember): string | undefined {
-  if (!('stopId' in member || 'stopIds' in member)) return undefined
   const mode = member.routeFilterMode ?? 'simple'
   const entries = (member.entries ?? []).map((entry, index) => ({
     id: `group-${member.id}-${index}`,
@@ -49,7 +51,6 @@ function memberRouteFilter(member: KmbGroupMember): string | undefined {
 
 /** Exact variant keys for advanced-mode members (client-side filter, like the pane). */
 function memberVariantKeys(member: KmbGroupMember): Set<string> | null {
-  if (!('stopId' in member || 'stopIds' in member)) return null
   const entries = member.entries ?? []
   return entries.length ? new Set(entries.map((entry) => entry.variantKey)) : null
 }
@@ -156,6 +157,7 @@ function GroupMemberSection({
                 route,
                 direction,
                 serviceType,
+                signal: controller.signal,
               })
               return { key, info }
             })
@@ -205,19 +207,15 @@ function GroupMemberSection({
     if ('stopId' in member) {
       return pickStopName(stopsById.get(member.stopId), lang) ?? member.title
     }
-    if ('stopIds' in member) {
-      const first = member.stopIds.map((id) => stopsById.get(id)).find(Boolean)
-      const name = pickStopName(first, lang)
-      if (name) {
-        return parseKmbStopNameCached(name, { isKmb: isKmbStop(first), lang }).name
-      }
-      return member.title
+    const first = member.stopIds.map((id) => stopsById.get(id)).find(Boolean)
+    const name = pickStopName(first, lang)
+    if (name) {
+      return parseKmbStopNameCached(name, { isKmb: isKmbStop(first), lang }).name
     }
     return member.title
   }, [member, stopsById, lang])
 
   const suffix = React.useMemo(() => {
-    if (!('stopId' in member || 'stopIds' in member)) return ''
     if (member.routeFilterMode === 'advanced' && member.entries?.length) {
       const count = member.entries.length
       return ` · ${count} ${count === 1 ? t('kmb.routeSingular') : t('kmb.routes')}`

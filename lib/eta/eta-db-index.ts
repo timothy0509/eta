@@ -263,10 +263,19 @@ export function directionKeyOf(route: string, serviceType: unknown, stops: strin
   return `${String(route ?? '').toUpperCase()}|${String(serviceType ?? '')}|${stops.join('>')}`
 }
 
+export type LocalizedName = { en: string; tc: string; sc: string }
+
 export type MergedDbEntry = {
   entry: RouteListEntry
   /** Operators with stops, sorted. */
   operators: Company[]
+  /**
+   * Each operator's own origin/destination strings for this physical
+   * direction, taken from that operator's own raw row. KMB and CTB name
+   * the same termini differently, so the viewing stop (not the primary
+   * row) decides which one renders.
+   */
+  namesByOperator: Record<string, { origin: LocalizedName; destination: LocalizedName }>
   /** Canonical direction key: route plus service type plus canonical stops. */
   directionKey: string
   /** Display bound letter: KMB letter when KMB serves the entry. */
@@ -429,9 +438,20 @@ export function mergeRouteListEntries(
       }
       const route = String(primaryEntry.route ?? '').toUpperCase()
       const serviceType = String(primaryEntry.serviceType ?? '')
+      const namesByOperator: MergedDbEntry['namesByOperator'] = {}
+      for (const op of operators) {
+        const row = bucket.entries.find((entry) => inScope(entry).includes(op))
+        const orig = row?.orig ?? primaryEntry.orig
+        const dest = row?.dest ?? primaryEntry.dest
+        namesByOperator[String(op)] = {
+          origin: { en: orig.en ?? '', tc: orig.zh ?? '', sc: orig.zh ?? '' },
+          destination: { en: dest.en ?? '', tc: dest.zh ?? '', sc: dest.zh ?? '' },
+        }
+      }
       merged.push({
         entry: primaryEntry,
         operators,
+        namesByOperator,
         directionKey: directionKeyOf(route, serviceType, orderedStops),
         bound,
         boundByStopId,
@@ -710,6 +730,7 @@ function serializeMergedEntry(merged: MergedDbEntry): SerializedMergedDbEntry {
   return {
     entry: merged.entry,
     operators: merged.operators,
+    namesByOperator: merged.namesByOperator,
     directionKey: merged.directionKey,
     bound: merged.bound,
     boundByStopId: Array.from(merged.boundByStopId.entries()),
@@ -721,9 +742,22 @@ function serializeMergedEntry(merged: MergedDbEntry): SerializedMergedDbEntry {
 
 function deserializeMergedEntry(serialized: SerializedMergedDbEntry): MergedDbEntry {
   const orderedStops = serialized.orderedStops
+  const namesByOperator: MergedDbEntry['namesByOperator'] = serialized.namesByOperator ?? {}
+  if (!Object.keys(namesByOperator).length) {
+    // Backfill for caches written before per-operator names existed.
+    const orig = serialized.entry.orig
+    const dest = serialized.entry.dest
+    for (const op of serialized.operators) {
+      namesByOperator[String(op)] = {
+        origin: { en: orig.en ?? '', tc: orig.zh ?? '', sc: orig.zh ?? '' },
+        destination: { en: dest.en ?? '', tc: dest.zh ?? '', sc: dest.zh ?? '' },
+      }
+    }
+  }
   return {
     entry: serialized.entry,
     operators: serialized.operators,
+    namesByOperator,
     directionKey:
       serialized.directionKey ??
       directionKeyOf(
@@ -742,6 +776,7 @@ function deserializeMergedEntry(serialized: SerializedMergedDbEntry): MergedDbEn
 export type SerializedMergedDbEntry = {
   entry: RouteListEntry
   operators: Company[]
+  namesByOperator?: MergedDbEntry['namesByOperator']
   directionKey?: string
   bound: 'I' | 'O' | string
   boundByStopId?: [string, Record<string, string>][]

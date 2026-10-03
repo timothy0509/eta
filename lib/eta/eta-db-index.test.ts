@@ -116,6 +116,53 @@ describe('mergeRouteListEntries', () => {
     expect(merged).toHaveLength(1)
   })
 
+  it('keeps each operator\u2019s own terminus names on the merged entry', async () => {
+    const kmbRow = {
+      ...routeEntry('101', ['kmb'], { kmb: ['K1', 'K2'] }),
+      orig: { en: 'KMB Origin', zh: 'KMB起點' },
+      dest: { en: 'KMB Destination', zh: 'KMB終點' },
+    }
+    const ctbRow = {
+      ...routeEntry('101', ['ctb'], { ctb: ['C1', 'C2'] }),
+      orig: { en: 'CTB Origin', zh: 'CTB起點' },
+      dest: { en: 'CTB Destination', zh: 'CTB終點' },
+    }
+    const db = dbWith([kmbRow, ctbRow], ['K1', 'K2', 'C1', 'C2'])
+    // No mutual stopMap pairs here, so link the boarding points explicitly
+    // and the joint route merges into one entry.
+    const linked = mergeRouteListEntries(
+      Object.values(db.routeList),
+      ['kmb', 'ctb'],
+      new Map([
+        ['K1', 'K1'],
+        ['C1', 'K1'],
+        ['K2', 'K2'],
+        ['C2', 'K2'],
+      ])
+    )
+    expect(linked).toHaveLength(1)
+    expect(linked[0]?.namesByOperator.kmb?.origin.en).toBe('KMB Origin')
+    expect(linked[0]?.namesByOperator.ctb?.origin.en).toBe('CTB Origin')
+    expect(linked[0]?.namesByOperator.kmb?.destination.tc).toBe('KMB終點')
+    expect(linked[0]?.namesByOperator.ctb?.destination.tc).toBe('CTB終點')
+  })
+
+  it('round-trips per-operator names through serialize and deserialize', async () => {
+    const db = dbWith(
+      [
+        {
+          ...routeEntry('101', ['kmb'], { kmb: ['K1', 'K2'] }),
+          orig: { en: 'KMB Origin', zh: 'KMB起點' },
+          dest: { en: 'KMB Destination', zh: 'KMB終點' },
+        },
+      ],
+      ['K1', 'K2']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    const roundTripped = deserializeEtaDbIndexes(serializeEtaDbIndexes(indexes))
+    expect(roundTripped.mergedDbEntries[0]?.namesByOperator.kmb?.origin.en).toBe('KMB Origin')
+  })
+
   it('keeps short workings with different termini separate', async () => {
     const mk = (
       route: string,

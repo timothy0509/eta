@@ -142,13 +142,16 @@ export function buildRouteSearchIndex(
   }
 
   const stopIdsByKey = new Map<string, { ids: string[]; seen: Set<string>; total: number }>()
-  // Group raw rows by co|route plus bound plus service type so each
-  // direction stays separate, keeping seq order for the via line.
+  // Group raw rows by co plus route plus bound plus service type so each
+  // operator-relative direction stays separate, keeping seq order for the
+  // via line. The co matters: KMB and CTB print opposite bound letters on
+  // some joint routes (ctb O is kmb I on 101), so grouping by letter alone
+  // mixes opposite physical directions into one bucket.
   const rowsByVariantKey = new Map<string, KmbRouteStopLite[]>()
   for (const rs of routeStops) {
     const routeKey = canonicalRouteSearchKey(rs.co, rs.route)
     if (!variantsByKey.has(routeKey)) continue
-    const variantKey = `${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
+    const variantKey = `${normalizeOperator(String(rs.co))}|${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
     const list = rowsByVariantKey.get(variantKey)
     if (list) list.push(rs)
     else rowsByVariantKey.set(variantKey, [rs])
@@ -184,12 +187,18 @@ export function buildRouteSearchIndex(
     const bucket = stopIdsByKey.get(key)
     const stopIds = bucket?.ids ?? []
 
-    // Via line uses one representative variant (the longest
+    // Via line uses one representative variant (the longest per-operator
     // bound|serviceType group in seq order) so O and I stops never mix.
+    // Prefer the primary operator's own longest direction so joint routes
+    // show one consistent id space instead of the other operator's tail.
     let viaStopIds: string[] = []
     let viaStopCount = 0
+    let viaRank = 1
+    const rankBucket = (variantKey: string) =>
+      variantKey.startsWith(`${co}|${key}|`) ? 0 : variantKey.includes(`|${key}|`) ? 1 : -1
     for (const [variantKey, rows] of rowsByVariantKey) {
-      if (!variantKey.startsWith(`${key}|`)) continue
+      const rank = rankBucket(variantKey)
+      if (rank < 0) continue
       const ids: string[] = []
       const seen = new Set<string>()
       for (const row of rows) {
@@ -198,9 +207,12 @@ export function buildRouteSearchIndex(
         seen.add(stopId)
         ids.push(stopId)
       }
-      if (ids.length > viaStopIds.length) {
+      // Longest direction wins; ties prefer the primary operator's own
+      // direction, then keep the first winner so the choice is stable.
+      if (ids.length > viaStopIds.length || (ids.length === viaStopIds.length && rank < viaRank)) {
         viaStopIds = ids
         viaStopCount = ids.length
+        viaRank = rank
       }
     }
     if (!viaStopIds.length) viaStopIds = bucket?.ids ?? []

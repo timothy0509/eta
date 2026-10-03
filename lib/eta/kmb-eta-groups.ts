@@ -153,15 +153,10 @@ export function groupEtasByVariant(
       })
       .slice(0, 3)
     const hasEta = hasValidEta(sorted)
-
-    // Key is `route|serviceType|directionKey|leg`, where directionKey
-    // itself contains pipes, so the leg is the last segment and the
-    // baseKey is everything before it.
-    const legPart = key.split('|').pop() ?? '_'
-    const baseKey = key.slice(0, key.length - legPart.length - 1)
-    const isArrivingLeg = legPart === 'B'
-
-    const hasFare = !isArrivingLeg
+    // Ordinals count departures on the card, not per operator: without a
+    // relabel a merged card reads 1st/1st/2nd because each operator
+    // numbers its own buses from 1. Single-operator groups keep the
+    // upstream sequence untouched.
     const operators = Array.from(
       new Set(
         sorted
@@ -173,12 +168,23 @@ export function groupEtasByVariant(
           .filter(Boolean)
       )
     ).sort()
+    const ordered =
+      operators.length > 1 ? sorted.map((entry, idx) => ({ ...entry, eta_seq: idx + 1 })) : sorted
+
+    // Key is `route|serviceType|directionKey|leg`, where directionKey
+    // itself contains pipes, so the leg is the last segment and the
+    // baseKey is everything before it.
+    const legPart = key.split('|').pop() ?? '_'
+    const baseKey = key.slice(0, key.length - legPart.length - 1)
+    const isArrivingLeg = legPart === 'B'
+
+    const hasFare = !isArrivingLeg
 
     return {
       key,
       baseKey,
       merged: slot.merged,
-      items: sorted,
+      items: ordered,
       hasEta,
       hasFare,
       isArrivingLeg,

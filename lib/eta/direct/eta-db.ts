@@ -326,6 +326,11 @@ export async function findKmbRouteInfo(
 function mergedToInfo(merged: MergedDbEntry): KmbRouteInfoLite {
   const sorted = [...merged.operators].sort()
   const primary = pickPrimaryOperator(sorted)
+  // Each operator keeps its own terminus strings from its own raw row.
+  // The merged entry carries them; fall back to the primary row only for
+  // operators without one (e.g. caches written before this existed).
+  const primaryOrigin = mapEtaLangToUi(merged.entry.orig)
+  const primaryDestination = mapEtaLangToUi(merged.entry.dest)
   const namesByOperator: Record<
     string,
     {
@@ -334,9 +339,9 @@ function mergedToInfo(merged: MergedDbEntry): KmbRouteInfoLite {
     }
   > = {}
   for (const op of sorted) {
-    namesByOperator[String(op)] = {
-      origin: mapEtaLangToUi(merged.entry.orig),
-      destination: mapEtaLangToUi(merged.entry.dest),
+    namesByOperator[String(op)] = merged.namesByOperator[String(op)] ?? {
+      origin: primaryOrigin,
+      destination: primaryDestination,
     }
   }
   return {
@@ -508,7 +513,18 @@ export async function fetchKmbEtasForStop(
 
   if (routeEntries.length === 0) return [] as KmbEta[]
 
-  const candidateMap = new Map<string, { entry: RouteListEntry; co: Company; stopIndex: number }>()
+  const candidateMap = new Map<
+    string,
+    { entry: RouteListEntry; co: Company; stopIndex: number; bound: string }
+  >()
+  // Upstream fetch identity: operator plus route plus service type plus stop
+  // sequence. Two rows can share it while carrying different bound strings
+  // (22M has `OI` and `O` rows for the same stop and seq): without this the
+  // same departure is fetched twice and rendered twice, since the content
+  // dedupe keys on dir. One fetch serves both; the standard I/O letter wins
+  // so downstream labels stay consistent.
+  const fetchIdentityToVariant = new Map<string, string>()
+  const boundRank = (bound: string) => (bound === 'I' || bound === 'O' ? 0 : 1)
   for (const re of routeEntries) {
     const variantKey = routeVariantKey({
       co: re.co,
@@ -518,22 +534,39 @@ export async function fetchKmbEtasForStop(
     })
     const entry = routeVariantIndex.get(variantKey)
     if (!entry) continue
+    const fetchKey = `${re.co}|${String(re.route ?? '').toUpperCase()}|${String(re.serviceType ?? '')}|${re.seq}`
+    const priorVariant = fetchIdentityToVariant.get(fetchKey)
+    if (priorVariant && priorVariant !== variantKey) {
+      const prior = candidateMap.get(priorVariant)
+      if (prior && boundRank(normalizeBound(re.bound)) < boundRank(normalizeBound(prior.bound))) {
+        candidateMap.delete(priorVariant)
+        fetchIdentityToVariant.set(fetchKey, variantKey)
+        candidateMap.set(variantKey, { entry, co: re.co, stopIndex: re.seq, bound: re.bound })
+      }
+      continue
+    }
+    if (!priorVariant) fetchIdentityToVariant.set(fetchKey, variantKey)
     const existing = candidateMap.get(variantKey)
     if (!existing || re.seq < existing.stopIndex) {
-      candidateMap.set(variantKey, { entry, co: re.co, stopIndex: re.seq })
+      candidateMap.set(variantKey, { entry, co: re.co, stopIndex: re.seq, bound: re.bound })
     }
   }
 
   const candidates = Array.from(candidateMap.values())
-  const hasKmb = candidates.some((c) => c.co === 'kmb')
+  const kmbCandidates = candidates.filter((c) => c.co === 'kmb')
   const nonKmb = candidates.filter((c) => c.co !== 'kmb')
 
   const results: KmbEta[] = []
   const signal = params.signal
 
-  const fetchNonKmb = () =>
+  // Per-variant fetch shared by every operator, KMB included. KMB prefers
+  // the official stop-eta endpoint (one call), but variants the official
+  // endpoint does not cover fall through to here: the official endpoint
+  // only knows KMB stop ids, so from a CTB stop id it returns nothing and
+  // KMB departures would otherwise vanish from joint routes.
+  const fetchVariants = (list: Array<{ entry: RouteListEntry; co: Company; stopIndex: number }>) =>
     promisePool(
-      nonKmb,
+      list,
       getAdaptiveConcurrency(
         NON_KMB_CONCURRENCY_FAST,
         NON_KMB_CONCURRENCY_MEDIUM,
@@ -585,22 +618,41 @@ export async function fetchKmbEtasForStop(
       { signal }
     )
 
-  if (hasKmb && nonKmb.length > 0) {
-    const [payload, pooled] = await Promise.all([
-      deps.fetchOfficialStopEta(stopId, signal),
-      fetchNonKmb(),
-    ])
-    const rows = Array.isArray(payload.data) ? payload.data : []
-    results.push(...mapOfficialStopEtaRows(rows, { routeFilter, serviceType }))
-    for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
-  } else if (hasKmb) {
-    const payload = await deps.fetchOfficialStopEta(stopId, signal)
-    const rows = Array.isArray(payload.data) ? payload.data : []
-    results.push(...mapOfficialStopEtaRows(rows, { routeFilter, serviceType }))
-  } else if (nonKmb.length > 0) {
-    const pooled = await fetchNonKmb()
-    for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
-  }
+  // Official KMB stop-eta covers the KMB variants it reports; anything it
+  // misses (partial coverage, endpoint failure) falls back to per-variant
+  // fetches so joint routes merge from either side. The endpoint only
+  // knows KMB stop ids, so from a stop with no KMB rows of its own the
+  // call is always empty and skipped outright.
+  const requestedHasKmb = requestedEntries.some((e) => e.co === 'kmb')
+  const officialKmbRows: KmbEta[] =
+    requestedHasKmb && kmbCandidates.length > 0
+      ? await deps
+          .fetchOfficialStopEta(stopId, signal)
+          .then((payload) =>
+            mapOfficialStopEtaRows(Array.isArray(payload.data) ? payload.data : [], {
+              routeFilter,
+              serviceType,
+            })
+          )
+          .catch(() => [])
+      : []
+  results.push(...officialKmbRows)
+
+  const coveredKmbVariants = new Set(
+    officialKmbRows.map(
+      (row) =>
+        `${String(row.route ?? '').toUpperCase()}|${normalizeBound(row.dir)}|${String(row.serviceType ?? '')}`
+    )
+  )
+  const uncoveredKmb = kmbCandidates.filter(
+    (c) =>
+      !coveredKmbVariants.has(
+        `${String(c.entry.route ?? '').toUpperCase()}|${normalizeBound(c.entry.bound[c.co])}|${String(c.entry.serviceType ?? '')}`
+      )
+  )
+
+  const pooled = await fetchVariants([...nonKmb, ...uncoveredKmb])
+  for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
 
   // Same boarding point, two ids: both can yield the identical CTB
   // departure (same co, route, dir, eta, remark). Dedupe on content, not

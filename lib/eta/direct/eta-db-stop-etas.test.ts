@@ -438,6 +438,187 @@ describe('fetchLrtEtasForStop cache', () => {
   })
 })
 
+describe('fetchKmbEtasForStop KMB fallback', () => {
+  function jointIndexes() {
+    const kmbEntry = makeRouteEntry({
+      route: '101',
+      co: ['kmb'],
+      bound: { kmb: 'I' },
+      stops: { kmb: ['KMB1'] },
+    })
+    const ctbEntry = makeRouteEntry({
+      route: '101',
+      co: ['ctb'],
+      bound: { ctb: 'O' },
+      stops: { ctb: ['CTB1'] },
+    })
+    const indexes = emptyIndexes()
+    indexes.stopRoutesIndex.set('CTB1', [
+      { stopId: 'CTB1', co: 'ctb', route: '101', bound: 'O', serviceType: '1', seq: 4 },
+    ])
+    indexes.stopRoutesIndex.set('KMB1', [
+      { stopId: 'KMB1', co: 'kmb', route: '101', bound: 'I', serviceType: '1', seq: 2 },
+    ])
+    indexes.routeVariantIndex.set('kmb|101|I|1', kmbEntry)
+    indexes.routeVariantIndex.set('ctb|101|O|1', ctbEntry)
+    // Same boarding point under two ids.
+    indexes.stopEquivalents.set('CTB1', 'KMB1')
+    indexes.stopEquivalents.set('KMB1', 'KMB1')
+    return indexes
+  }
+
+  function variantEtasFor(co: Company, eta: string) {
+    return [
+      {
+        eta,
+        dest: { en: `${co} dest`, zh: `${co}終點` },
+        remark: { en: '', zh: '' },
+        co,
+      },
+    ]
+  }
+
+  it('fetches KMB per-variant when the official endpoint returns nothing for a CTB stop', async () => {
+    const indexes = jointIndexes()
+    const fetchOfficialStopEta = vi.fn().mockResolvedValue({ data: [] })
+    const fetchVariantEtas = vi
+      .fn()
+      .mockImplementation(async (args: { co: Company[] }) =>
+        variantEtasFor(args.co[0] ?? 'ctb', '2026-08-02T15:26:00+08:00')
+      )
+
+    const result = await fetchKmbEtasForStop(
+      { stopId: 'CTB1', language: 'tc' },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta,
+        fetchVariantEtas,
+      }
+    )
+
+    // Official endpoint only knows KMB ids, so from a CTB stop it is
+    // skipped outright; both legs go through per-variant fetches, the KMB
+    // leg with the KMB stop sequence.
+    expect(fetchOfficialStopEta).not.toHaveBeenCalled()
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(2)
+    expect(fetchVariantEtas).toHaveBeenCalledWith(expect.objectContaining({ co: ['ctb'], seq: 4 }))
+    expect(fetchVariantEtas).toHaveBeenCalledWith(expect.objectContaining({ co: ['kmb'], seq: 2 }))
+    expect(result.map((e) => e.co).sort()).toEqual(['ctb', 'kmb'])
+  })
+
+  it('skips the KMB fallback for variants the official endpoint already covers', async () => {
+    const indexes = jointIndexes()
+    const fetchOfficialStopEta = vi.fn().mockResolvedValue({
+      data: [
+        {
+          co: 'KMB',
+          route: '101',
+          dir: 'I',
+          service_type: 1,
+          seq: 3,
+          dest_tc: '觀塘',
+          dest_sc: '观塘',
+          dest_en: 'Kwun Tong',
+          eta_seq: 1,
+          eta: '2026-08-02T15:25:00+08:00',
+          rmk_tc: '',
+          rmk_sc: '',
+          rmk_en: '',
+          data_timestamp: '2026-08-02T15:15:00+08:00',
+        },
+      ],
+    })
+    const fetchVariantEtas = vi
+      .fn()
+      .mockImplementation(async (args: { co: Company[] }) =>
+        variantEtasFor(args.co[0] ?? 'ctb', '2026-08-02T15:26:00+08:00')
+      )
+
+    const result = await fetchKmbEtasForStop(
+      { stopId: 'KMB1', language: 'tc' },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta,
+        fetchVariantEtas,
+      }
+    )
+
+    // Requested from the KMB id the official endpoint covers KMB; only the
+    // CTB gap leg needs a per-variant fetch.
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+    expect(fetchVariantEtas).toHaveBeenCalledWith(expect.objectContaining({ co: ['ctb'] }))
+    expect(result.map((e) => e.co).sort()).toEqual(['ctb', 'kmb'])
+  })
+
+  it('dedupes rows that share a stop sequence under different bound strings', async () => {
+    // 22M-style data oddity: `OI` and `O` rows for the same stop and seq.
+    // One upstream fetch serves both, and the standard letter wins so the
+    // departure renders once instead of twice.
+    const oiEntry = makeRouteEntry({
+      route: '22M',
+      co: ['ctb'],
+      bound: { ctb: 'OI' },
+      stops: { ctb: ['CTB2'] },
+    })
+    const oEntry = makeRouteEntry({
+      route: '22M',
+      co: ['ctb'],
+      bound: { ctb: 'O' },
+      stops: { ctb: ['CTB2'] },
+    })
+    const indexes = emptyIndexes()
+    indexes.stopRoutesIndex.set('CTB2', [
+      { stopId: 'CTB2', co: 'ctb', route: '22M', bound: 'OI', serviceType: '1', seq: 19 },
+      { stopId: 'CTB2', co: 'ctb', route: '22M', bound: 'O', serviceType: '1', seq: 19 },
+    ])
+    indexes.routeVariantIndex.set('ctb|22M|OI|1', oiEntry)
+    indexes.routeVariantIndex.set('ctb|22M|O|1', oEntry)
+    const fetchVariantEtas = vi.fn().mockResolvedValue([
+      {
+        eta: '2026-08-02T15:30:00+08:00',
+        dest: { en: 'Dest', zh: '終點' },
+        remark: { en: '', zh: '' },
+        co: 'ctb',
+      },
+    ])
+
+    const result = await fetchKmbEtasForStop(
+      { stopId: 'CTB2', language: 'tc' },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta: vi.fn(),
+        fetchVariantEtas,
+      }
+    )
+
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+    expect(result).toHaveLength(1)
+    expect(result[0]?.dir).toBe('O')
+  })
+
+  it('falls back to per-variant KMB fetches when the official endpoint fails', async () => {
+    const indexes = jointIndexes()
+    const fetchOfficialStopEta = vi.fn().mockRejectedValue(new Error('upstream down'))
+    const fetchVariantEtas = vi
+      .fn()
+      .mockImplementation(async (args: { co: Company[] }) =>
+        variantEtasFor(args.co[0] ?? 'ctb', '2026-08-02T15:26:00+08:00')
+      )
+
+    const result = await fetchKmbEtasForStop(
+      { stopId: 'KMB1', language: 'tc' },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta,
+        fetchVariantEtas,
+      }
+    )
+
+    expect(fetchVariantEtas).toHaveBeenCalledWith(expect.objectContaining({ co: ['kmb'] }))
+    expect(result.map((e) => e.co)).toContain('kmb')
+  })
+})
+
 describe('fetchKmbEtasForStop CTB field normalization', () => {
   it('maps CTB remark and dest onto rmk_* and dest_* fields', async () => {
     const ctbEntry = makeRouteEntry({

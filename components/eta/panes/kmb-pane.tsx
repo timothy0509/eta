@@ -762,12 +762,26 @@ export function KmbPane({
 
         // ========== OPTIMIZATION: Use route-stop index for variant key lookup ==========
         if (fetchResult) {
-          const allEtas = Object.values(fetchResult.filteredByStopId).flat()
+          // Route info is keyed by canonical variant key
+          // (`route|serviceType|directionKey`) everywhere it is read
+          // (cards, filters, fares), so missing keys must be resolved the
+          // same way: by stop membership in the merged entry, never by
+          // splitting a raw `co|route|dir|serviceType` key whose letters
+          // mean different directions per operator.
+          const { mergedVariantIndex: refreshMerged } = await getEtaDbIndexes().catch(() => ({
+            mergedVariantIndex: undefined as Map<string, MergedDbEntry> | undefined,
+          }))
           const variantKeysFromEtas = Array.from(
             new Set(
-              allEtas.map(
-                (eta) =>
-                  `${String(eta.co ?? 'kmb')}|${(eta.route ?? '').toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
+              Object.entries(fetchResult.filteredByStopId).flatMap(([stopId, etas]) =>
+                etas.map((eta) =>
+                  variantKeyForStop(refreshMerged, {
+                    route: eta.route ?? '',
+                    bound: eta.dir ?? '',
+                    serviceType: String(eta.service_type ?? ''),
+                    stopId,
+                  })
+                )
               )
             )
           )
@@ -781,13 +795,9 @@ export function KmbPane({
           if (missingKeys.length && !controller.signal.aborted) {
             const fetched = await Promise.allSettled(
               missingKeys.slice(0, 30).map(async (key) => {
-                const [co = 'kmb', route = '', direction = '', serviceType = ''] = key.split('|')
-                const info = await fetchKmbRouteInfo({
-                  co: co as Company,
-                  route,
-                  direction,
-                  serviceType,
-                })
+                // Canonical key: fetch by directionKey so joint routes
+                // resolve to their merged entry directly.
+                const info = await fetchKmbRouteInfo({ directionKey: key })
                 return { key, info }
               })
             )

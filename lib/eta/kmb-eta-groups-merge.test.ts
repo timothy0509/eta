@@ -47,6 +47,16 @@ function makeMerged(overrides?: Partial<MergedDbEntry>): MergedDbEntry {
       dest: { en: 'B', zh: 'B' },
     } as MergedDbEntry['entry'],
     operators: ['ctb', 'kmb'] as MergedDbEntry['operators'],
+    namesByOperator: {
+      kmb: {
+        origin: { en: 'A', tc: 'A', sc: 'A' },
+        destination: { en: 'B', tc: 'B', sc: 'B' },
+      },
+      ctb: {
+        origin: { en: 'A', tc: 'A', sc: 'A' },
+        destination: { en: 'B', tc: 'B', sc: 'B' },
+      },
+    },
     directionKey: '101|1|S1>S2>S3',
     bound: 'O',
     boundByStopId: new Map<string, Record<string, string>>([
@@ -90,6 +100,31 @@ describe('joint route ETA grouping', () => {
     expect(groups[0]?.merged?.bound).toBe('O')
     expect(groups[0]?.operators).toEqual(['ctb', 'kmb'])
     expect(groups[0]?.items.map((entry) => entry.co)).toEqual(['ctb', 'kmb', 'kmb'])
+  })
+
+  it('relabels ordinals by time order in merged multi-operator groups', () => {
+    const mergedByDirection = new Map([['101|1|S1>S2>S3', makeMerged()]])
+    const items = [
+      etaFor('kmb', 'KS1', '2026-09-28T12:10:00+08:00', 1),
+      etaFor('ctb', 'CS1', '2026-09-28T12:05:00+08:00', 1),
+      etaFor('kmb', 'KS1', '2026-09-28T12:20:00+08:00', 2),
+    ]
+    const groups = groupEtasByVariant(items, {}, undefined, { mergedByDirection })
+    expect(groups).toHaveLength(1)
+    // Without the relabel the card would read 1st/1st/2nd.
+    expect(groups[0]?.items.map((entry) => entry.eta_seq)).toEqual([1, 2, 3])
+    expect(groups[0]?.items.map((entry) => entry.co)).toEqual(['ctb', 'kmb', 'kmb'])
+  })
+
+  it('keeps upstream eta_seq in single-operator groups', () => {
+    const mergedByDirection = new Map([['101|1|S1>S2>S3', makeMerged()]])
+    const items = [
+      etaFor('kmb', 'KS1', '2026-09-28T12:10:00+08:00', 2),
+      etaFor('kmb', 'KS1', '2026-09-28T12:20:00+08:00', 3),
+    ]
+    const groups = groupEtasByVariant(items, {}, undefined, { mergedByDirection })
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.items.map((entry) => entry.eta_seq)).toEqual([2, 3])
   })
 
   it('caps merged items at 3 across operators', () => {

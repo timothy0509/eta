@@ -352,6 +352,40 @@ describe('getKeyStops', () => {
     expect(getKeyStops(entry, stops, 'tc', 2)).toHaveLength(2)
   })
 
+  it('keeps opposite-letter joint directions in separate via buckets', () => {
+    // 101-style joint route: KMB prints I where CTB prints O for the same
+    // physical direction. Bucketing by letter alone would merge KMB I with
+    // CTB I (opposite roads) and split KMB I from CTB O (same road).
+    const stops = new Map<string, KmbStopSearchItem>([
+      ['k1', makeStop('k1', 'Stop K1')],
+      ['k2', makeStop('k2', 'Stop K2')],
+      ['k3', makeStop('k3', 'Stop K3')],
+      ['k4', makeStop('k4', 'Stop K4')],
+      ['c1', makeStop('c1', 'Stop C1')],
+      ['c2', makeStop('c2', 'Stop C2')],
+    ])
+    const variants = [
+      makeRoute('kmb', 'J1', 'Stop K1', 'Stop K4', 'I'),
+      makeRoute('ctb', 'J1', 'Stop C1', 'Stop C2', 'O'),
+    ]
+    const rows: KmbRouteStopLite[] = [
+      { co: 'kmb', route: 'J1', bound: 'I', serviceType: '1', seq: 1, stopId: 'k1' },
+      { co: 'kmb', route: 'J1', bound: 'I', serviceType: '1', seq: 2, stopId: 'k2' },
+      { co: 'kmb', route: 'J1', bound: 'I', serviceType: '1', seq: 3, stopId: 'k3' },
+      { co: 'kmb', route: 'J1', bound: 'I', serviceType: '1', seq: 4, stopId: 'k4' },
+      { co: 'ctb', route: 'J1', bound: 'O', serviceType: '1', seq: 1, stopId: 'c1' },
+      { co: 'ctb', route: 'J1', bound: 'O', serviceType: '1', seq: 2, stopId: 'c2' },
+    ]
+    const index = buildRouteSearchIndex(variants, rows, stops)
+    const entry = index.find((e) => e.key === 'J1')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    // Longest single-operator direction wins (KMB I, 4 stops); the via
+    // line stays inside one operator id space instead of mixing roads.
+    expect(entry.viaStopCount).toBe(4)
+    expect(entry.viaStopIds).toEqual(['k1', 'k2', 'k3', 'k4'])
+  })
+
   it('spreads picks across a long route', () => {
     const total = 30
     const stops = new Map<string, KmbStopSearchItem>()

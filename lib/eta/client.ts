@@ -4,11 +4,10 @@ import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 import { isKmbStop } from '@/lib/eta/types'
-import type { KmbEtaEntry, KmbRouteListEntry } from '@/lib/eta/direct/kmb'
+import type { KmbEtaEntryWithLeg, KmbRouteListEntry } from '@/lib/eta/direct/kmb'
 import {
   fetchKmbFares as fetchKmbFaresDirect,
   fetchKmbStopEtas as fetchKmbStopEtasDirect,
-  getKmbEta,
   getKmbRouteInfo,
   getKmbRouteList,
   getKmbRouteStops,
@@ -104,11 +103,7 @@ async function fetchJsonDedupe<T>(
   return promise
 }
 
-/** ETA entry augmented with leg info for circular route disambiguation */
-export type KmbEtaEntryWithLeg = KmbEtaEntry & {
-  /** "A" = departing leg (closer to first stop occurrence), "B" = arriving leg (closer to last stop occurrence), null = not a circular stop */
-  leg: 'A' | 'B' | null
-}
+export type { KmbEtaEntryWithLeg }
 
 export async function fetchKmbStops(): Promise<KmbStopSearchItem[]> {
   const { value } = await getCachedValue<KmbStopSearchItem[]>({
@@ -200,29 +195,6 @@ export type KmbRouteInfoLite = {
     tc: string
     sc: string
   }
-}
-
-export async function fetchKmbEtas(
-  plans: Array<{ stopId: string; route: string; serviceType: string }>
-) {
-  const results = await Promise.allSettled(
-    plans.map(async (plan) => ({ plan, eta: await getKmbEta(plan) }))
-  )
-
-  const eta: KmbEtaEntry[] = []
-  const errors: Array<{ stopId: string; route: string; serviceType: string }> = []
-
-  for (let i = 0; i < results.length; i += 1) {
-    const result = results[i]
-    if (result.status === 'fulfilled') {
-      eta.push(...result.value.eta)
-    } else {
-      const plan = plans[i]
-      if (plan) errors.push(plan)
-    }
-  }
-
-  return errors.length ? { eta, errors } : { eta }
 }
 
 export async function fetchKmbRouteInfo(params: {
@@ -334,12 +306,20 @@ export async function fetchMtrSchedules(
   queries: Array<{ line: string; sta: string; lang: 'EN' | 'TC' }>,
   options?: { signal?: AbortSignal }
 ): Promise<MtrSchedulesResponse> {
-  const body = { queries }
+  // Sort so the same station+lines in different caller order share one
+  // in-flight entry instead of firing duplicate upstream batches.
+  const sorted = [...queries]
+    .map((q) => ({ line: q.line, sta: q.sta, lang: q.lang }))
+    .sort(
+      (a, b) =>
+        a.line.localeCompare(b.line) || a.sta.localeCompare(b.sta) || a.lang.localeCompare(b.lang)
+    )
+  const body = { queries: sorted }
   const key = `mtr:schedules:${JSON.stringify(body)}`
 
   return await fetchJsonDedupe(
     key,
-    async () => fetchMtrSchedulesDirect(queries, { signal: options?.signal }),
+    async () => fetchMtrSchedulesDirect(sorted, { signal: options?.signal }),
     {
       signal: options?.signal,
     }

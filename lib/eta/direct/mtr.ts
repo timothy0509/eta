@@ -182,8 +182,7 @@ export async function fetchMtrSchedules(
   }
 
   const uniqueList = Array.from(uniqueQueries.values())
-  const now = Date.now()
-  const inBackoff = now < getBackoffUntil()
+  const batchInBackoff = Date.now() < getBackoffUntil()
 
   const byKey: Record<string, MtrScheduleResponse> = {}
   const errors: string[] = []
@@ -205,7 +204,9 @@ export async function fetchMtrSchedules(
         allowStale: true,
         signal,
         fetcher: async () => {
-          if (inBackoff) {
+          // Recheck inside the fetcher: a batch that started clean may hit
+          // a 429 mid-batch, so late items must not fire more upstream calls.
+          if (Date.now() < getBackoffUntil()) {
             throw new Error('Rate limited - in backoff')
           }
           return await getMtrSchedule({ ...q, signal })
@@ -249,6 +250,6 @@ export async function fetchMtrSchedules(
     errors,
     cached,
     fetched,
-    backoff: inBackoff || sawRateLimit,
+    backoff: batchInBackoff || sawRateLimit,
   }
 }

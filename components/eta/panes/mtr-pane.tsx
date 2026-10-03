@@ -128,7 +128,9 @@ export function MtrPane({
               sta: station.sta,
             }
             onAddRecent(item)
-            void refresh({ toastOnError: false })
+            // The useMtrSchedule effect fires the fetch on sta change.
+            // Calling refresh() here too would double-fetch (and the
+            // closure would still hold the previous sta).
           }}
         />
       }

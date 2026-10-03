@@ -29,7 +29,12 @@ export function useMtrSchedule(params: { lang: UiLanguage; stations: MtrStationS
     async (options?: { toastOnError?: boolean }) => {
       if (!sta) return
 
-      const station = stationsById.get(sta)
+      // Capture the station at call time. Without this, changing sta while
+      // a fetch is in flight (e.g. rapid selection changes) would abort the
+      // first request and refire the effect, costing two upstream batches
+      // where one suffices.
+      const activeSta = sta
+      const station = stationsById.get(activeSta)
       if (!station) return
 
       // Cancel any in-flight request
@@ -47,7 +52,7 @@ export function useMtrSchedule(params: { lang: UiLanguage; stations: MtrStationS
         // Use the new batched endpoint - one request for all lines at this station
         const queries = station.lines.map((line) => ({
           line,
-          sta,
+          sta: activeSta,
           lang: mtrLang as 'EN' | 'TC',
         }))
 

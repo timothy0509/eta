@@ -124,14 +124,20 @@ export function LrtPane({
           stations={stations}
           selectedStationId={stationId}
           onSelect={(station) => {
-            setStationId(station.stationId)
+            // When the station changes, the useLrtSchedule effect fires the
+            // fetch. Only refresh explicitly when reselecting the same
+            // station, which would not trigger the effect.
+            if (station.stationId === stationId) {
+              void refresh({ toastOnError: false, stationId: station.stationId })
+            } else {
+              setStationId(station.stationId)
+            }
             onAddRecent({
               id: `lrt:${station.stationId}`,
               mode: 'lrt',
               title: `${pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang)} · ${station.stationId}`,
               stationId: station.stationId,
             })
-            void refresh({ toastOnError: false, stationId: station.stationId })
           }}
         />
       }

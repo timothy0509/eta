@@ -10,10 +10,14 @@ export type CacheEntryMeta = {
 }
 
 export const CACHE_POLICIES = {
-  kmbStopEta: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
-  mtrSchedule: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
-  lrtSchedule: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
-  lrtRouteEta: { ttlMs: 8_000, maxStaleMs: 20_000, persist: false },
+  // Live ETA responses stay fresh across the default 15s poll (and 10s
+  // option) so repeat polls are served from memory instead of upstream.
+  // maxStaleMs matches the UI stale thresholds in lib/eta/stale.ts so a
+  // failed refresh can still show stale data rather than erroring.
+  kmbStopEta: { ttlMs: 30_000, maxStaleMs: 60_000, persist: false },
+  mtrSchedule: { ttlMs: 30_000, maxStaleMs: 90_000, persist: false },
+  lrtSchedule: { ttlMs: 30_000, maxStaleMs: 90_000, persist: false },
+  lrtRouteEta: { ttlMs: 30_000, maxStaleMs: 90_000, persist: false },
   etaDb: { ttlMs: 24 * 60 * 60 * 1000, persist: true },
   kmbStaticList: { ttlMs: 24 * 60 * 60 * 1000, persist: true },
   kmbRouteGeometry: {

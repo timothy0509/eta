@@ -96,23 +96,9 @@ export async function getKmbStops(): Promise<KmbStop[]> {
   return value
 }
 
-export async function getKmbEta(params: {
-  stopId: string
-  route: string
-  serviceType: string
-}): Promise<KmbEtaEntry[]> {
-  const etas = await fetchKmbEtasForStop({
-    stopId: params.stopId,
-    route: params.route,
-    serviceType: params.serviceType,
-    language: 'tc',
-  })
-  return etas.map((eta) => mapKmbEtaEntry(eta, params.stopId))
-}
-
 /**
- * Fetch all ETAs at a stop using the Stop ETA API.
- * This returns all routes' ETAs in one call, much more efficient than per-route calls.
+ * Fetch ETAs at a stop using the Stop ETA API (one call returns every
+ * route at the stop). Supersedes the old per-route getKmbEta helper.
  * See: https://data.etabus.gov.hk - Stop ETA API (/v1/transport/kmb/stop-eta/{stop_id})
  */
 export async function getKmbStopEta(stopId: string): Promise<KmbEtaEntry[]> {

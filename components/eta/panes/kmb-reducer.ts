@@ -20,6 +20,8 @@ export type EtaAction =
         loadedStopIds: string[]
         faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
         staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>
+        /** Skip the lastUpdatedAt bump when the refresh was fully served from cache. */
+        keepTimestamp?: boolean
       }
     }
   | { type: 'REFRESH_ERROR'; error: string }
@@ -68,7 +70,10 @@ export function etaReducer(state: EtaState, action: EtaAction): EtaState {
           Object.values(action.payload.staleByStopId).some((entry) => entry.stale)
         ),
         staleByStopId: action.payload.staleByStopId ?? {},
-        lastUpdatedAt: Date.now(),
+        // Cache hits carry data as old as the entry, not this poll tick.
+        // Keep the previous timestamp so "just now" and the age-based
+        // stale check reflect the data, not the poll.
+        lastUpdatedAt: action.payload.keepTimestamp ? state.lastUpdatedAt : Date.now(),
       }
     case 'REFRESH_ERROR':
       return {

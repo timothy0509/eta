@@ -96,23 +96,9 @@ export async function getKmbStops(): Promise<KmbStop[]> {
   return value
 }
 
-export async function getKmbEta(params: {
-  stopId: string
-  route: string
-  serviceType: string
-}): Promise<KmbEtaEntry[]> {
-  const etas = await fetchKmbEtasForStop({
-    stopId: params.stopId,
-    route: params.route,
-    serviceType: params.serviceType,
-    language: 'tc',
-  })
-  return etas.map((eta) => mapKmbEtaEntry(eta, params.stopId))
-}
-
 /**
- * Fetch all ETAs at a stop using the Stop ETA API.
- * This returns all routes' ETAs in one call, much more efficient than per-route calls.
+ * Fetch ETAs at a stop using the Stop ETA API (one call returns every
+ * route at the stop). Supersedes the old per-route getKmbEta helper.
  * See: https://data.etabus.gov.hk - Stop ETA API (/v1/transport/kmb/stop-eta/{stop_id})
  */
 export async function getKmbStopEta(stopId: string): Promise<KmbEtaEntry[]> {
@@ -250,6 +236,12 @@ export type KmbStopEtasResponse = {
   fetched: number
   staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>
   truncatedStopIds?: string[]
+  /**
+   * True when every requested stop was served from cache. Callers use it
+   * to avoid bumping lastUpdatedAt on cache hits, so "just now" and the
+   * age-based stale check reflect the data, not the poll tick.
+   */
+  allCached?: boolean
 }
 
 export async function fetchKmbStopEtas(
@@ -465,6 +457,7 @@ export async function fetchKmbStopEtas(
     cached,
     fetched,
     staleByStopId,
+    allCached: uniqueStopIds.length > 0 && fetched === 0 && errors.length === 0,
     ...(truncatedStopIds.length > 0 ? { truncatedStopIds } : null),
   }
 }

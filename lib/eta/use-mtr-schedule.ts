@@ -26,10 +26,14 @@ export function useMtrSchedule(params: { lang: UiLanguage; stations: MtrStationS
   const abortControllerRef = React.useRef<AbortController | null>(null)
 
   const refresh = React.useCallback(
-    async (options?: { toastOnError?: boolean }) => {
-      if (!sta) return
+    async (options?: { toastOnError?: boolean; sta?: string }) => {
+      // Accept an explicit id so callers can refresh without depending on
+      // closure freshness (e.g. reselecting the current station, where
+      // setSta bails out and the sta-change effect never fires).
+      const activeSta = options?.sta ?? sta
+      if (!activeSta) return
 
-      const station = stationsById.get(sta)
+      const station = stationsById.get(activeSta)
       if (!station) return
 
       // Cancel any in-flight request
@@ -47,13 +51,19 @@ export function useMtrSchedule(params: { lang: UiLanguage; stations: MtrStationS
         // Use the new batched endpoint - one request for all lines at this station
         const queries = station.lines.map((line) => ({
           line,
-          sta,
+          sta: activeSta,
           lang: mtrLang as 'EN' | 'TC',
         }))
 
         const result = await fetchMtrSchedules(queries, { signal: controller.signal })
 
         if (controller.signal.aborted) return
+
+        // result.fetched === 0 means every line was served from cache, so
+        // the data is as old as the entry, not this poll tick. Keep the
+        // previous timestamp so "just now" and the age-based stale check
+        // reflect the data, not the poll.
+        const allCached = result.fetched === 0 && Object.keys(result.byKey).length > 0
 
         // Merge schedules from all lines
         let baseline: MtrScheduleResponse | null = null
@@ -78,7 +88,15 @@ export function useMtrSchedule(params: { lang: UiLanguage; stations: MtrStationS
           status: Object.keys(mergedData).length ? 1 : baseline.status,
           data: Object.keys(mergedData).length ? mergedData : baseline.data,
         })
-        setLastUpdatedAt(Date.now())
+        if (!allCached) {
+          setLastUpdatedAt(Date.now())
+        } else {
+          // Cache hits carry data as old as the entry, not this poll
+          // tick. Keep the previous timestamp so "just now" and the
+          // age-based stale check reflect the data, not the poll, but
+          // still stamp first load (previous timestamp is null).
+          setLastUpdatedAt((prev) => prev ?? Date.now())
+        }
         setStale(hadErrors)
 
         // Warn if we hit rate limiting

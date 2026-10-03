@@ -8,6 +8,11 @@ import { promisePool } from '@/lib/eta/promise-pool'
 
 export type LrtScheduleResponse = {
   system_time?: string
+  /**
+   * True when this payload came from cache rather than a fresh upstream
+   * fetch. Callers use it to avoid bumping lastUpdatedAt on cache hits.
+   */
+  cached?: boolean
   platform_list?: Array<{
     end_service_status?: number | string | boolean
     platform_id: number
@@ -206,5 +211,5 @@ export async function getLrtSchedule(params: {
     fetcher: async () => loadLrtSchedule(params.stationId, params.signal),
   })
 
-  return cachedValue.value
+  return { ...cachedValue.value, cached: cachedValue.cached }
 }

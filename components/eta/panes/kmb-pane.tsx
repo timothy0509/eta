@@ -503,7 +503,10 @@ export function KmbPane({
           },
         })
       } else {
-        // Replace mode: full refresh
+        // Replace mode: full refresh. Cache hits carry data as old as the
+        // entry, not this poll tick. Keep the previous timestamp so "just
+        // now" and the age-based stale check reflect the data, not the
+        // poll, but still stamp first load (previous timestamp is null).
         const mergedByStopId = options.mergeExisting
           ? { ...currentEtaState.byStopId, ...filteredByStopId }
           : filteredByStopId
@@ -514,6 +517,7 @@ export function KmbPane({
             byStopId: mergedByStopId,
             loadedStopIds: nextLoadedStopIds,
             staleByStopId,
+            keepTimestamp: result.allCached === true && currentEtaState.lastUpdatedAt !== null,
           },
         })
       }

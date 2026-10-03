@@ -119,7 +119,14 @@ export function MtrPane({
           stations={stations}
           selectedSta={sta}
           onSelect={(station) => {
-            setSta(station.sta)
+            // New station: setSta fires the fetch via the schedule effect.
+            // Same station: setSta bails out so the effect never fires,
+            // refresh explicitly with the id instead.
+            if (station.sta === sta) {
+              void refresh({ toastOnError: false, sta: station.sta })
+            } else {
+              setSta(station.sta)
+            }
             const item: FavoritesItem = {
               id: `mtr:${station.sta}`,
               mode: 'mtr',
@@ -128,7 +135,6 @@ export function MtrPane({
               sta: station.sta,
             }
             onAddRecent(item)
-            void refresh({ toastOnError: false })
           }}
         />
       }

@@ -204,12 +204,22 @@ export async function fetchMtrSchedules(
         allowStale: true,
         signal,
         fetcher: async () => {
-          // Recheck inside the fetcher: a batch that started clean may hit
-          // a 429 mid-batch, so late items must not fire more upstream calls.
+          // Recheck inside the fetcher for late-starting workers: an
+          // earlier item in this batch may have hit a 429 while this
+          // worker was still queued, so skip firing another upstream call.
           if (Date.now() < getBackoffUntil()) {
             throw new Error('Rate limited - in backoff')
           }
-          return await getMtrSchedule({ ...q, signal })
+          try {
+            return await getMtrSchedule({ ...q, signal })
+          } catch (error) {
+            // Record immediately (rather than after the whole batch) so
+            // workers that start later in this same batch see the backoff
+            // and suppress their own upstream calls.
+            const status = (error as { status?: number } | undefined)?.status
+            if (typeof status === 'number' && status === 429) recordBackoffHit()
+            throw error
+          }
         },
       })
 
@@ -229,9 +239,16 @@ export async function fetchMtrSchedules(
 
     if (result.status === 'rejected') {
       const reason = result.reason as { status?: number } | undefined
-      const rateLimited = reason && typeof reason.status === 'number' && reason.status === 429
+      const rateLimited =
+        (reason && typeof reason.status === 'number' && reason.status === 429) ||
+        (reason instanceof Error && reason.message === 'Rate limited - in backoff')
       if (rateLimited) {
-        recordBackoffHit()
+        // recordBackoffHit already ran inside the fetcher for live 429s;
+        // only record here for the synthetic in-backoff error, which
+        // carries no status.
+        if (reason instanceof Error && reason.message === 'Rate limited - in backoff') {
+          recordBackoffHit()
+        }
         sawRateLimit = true
       }
       errors.push(key)

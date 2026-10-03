@@ -235,6 +235,12 @@ export type KmbStopEtasResponse = {
   fetched: number
   staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>
   truncatedStopIds?: string[]
+  /**
+   * True when every requested stop was served from cache. Callers use it
+   * to avoid bumping lastUpdatedAt on cache hits, so "just now" and the
+   * age-based stale check reflect the data, not the poll tick.
+   */
+  allCached?: boolean
 }
 
 export async function fetchKmbStopEtas(

@@ -27,6 +27,9 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
 
   const refresh = React.useCallback(
     async (options?: { toastOnError?: boolean; stationId?: string }) => {
+      // Accept an explicit id so callers can refresh without depending on
+      // closure freshness (e.g. reselecting the current station, where
+      // setStationId bails out and the stationId-change effect never fires).
       const activeStationId = options?.stationId ?? stationId
       if (!activeStationId) return
 
@@ -52,7 +55,15 @@ export function useLrtSchedule(params: { stations: LrtStationSearchItem[]; lang:
         if (controller.signal.aborted) return
 
         setSchedule(schedule)
-        setLastUpdatedAt(Date.now())
+        // Cache hits carry data as old as the entry, not this poll tick.
+        // Keep the previous timestamp so "just now" and the age-based
+        // stale check reflect the data, not the poll, but still stamp
+        // first load (previous timestamp is null).
+        if (schedule.cached) {
+          setLastUpdatedAt((prev) => prev ?? Date.now())
+        } else {
+          setLastUpdatedAt(Date.now())
+        }
         setStale(false)
       } catch (error) {
         if (controller.signal.aborted) return

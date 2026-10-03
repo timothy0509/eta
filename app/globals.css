@@ -164,7 +164,7 @@
   --popover: var(--surface-container-lowest);
   --popover-foreground: var(--on-surface);
   --primary-foreground: var(--on-primary);
-  --secondary-foreground: var(--on-secondary-container);
+  --secondary-foreground: var(--on-secondary);
   --muted: var(--surface-container-high);
   --muted-foreground: var(--on-surface-variant);
   --accent: var(--primary-fixed);
@@ -242,7 +242,7 @@
   --popover: var(--surface-container-lowest);
   --popover-foreground: var(--on-surface);
   --primary-foreground: var(--on-primary);
-  --secondary-foreground: var(--on-secondary-container);
+  --secondary-foreground: var(--on-secondary);
   --muted: var(--surface-container-high);
   --muted-foreground: var(--on-surface-variant);
   --accent: var(--primary-container);

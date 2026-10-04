@@ -28,7 +28,11 @@ import type { Company } from 'hk-bus-eta'
 
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { routeVariantKey } from '@/lib/eta/eta-db-index'
-import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
+import {
+  getFaresBySeq,
+  groupConsecutiveBy,
+  groupIntoFareSections,
+} from '@/lib/eta/kmb-fare-sections'
 import { FARE_UNKNOWN_COLOR, getFareSectionColor } from '@/lib/eta/fare-colors'
 import { formatFareHkd } from '@/lib/eta/format'
 import type { GeoPoint } from '@/lib/eta/geo'
@@ -101,7 +105,6 @@ function KmbRouteStopCard({
   stopEtas,
   name,
   stopCode,
-  street,
   seq,
   color,
   lang,
@@ -113,7 +116,6 @@ function KmbRouteStopCard({
   stopEtas: KmbEtaEntryWithLeg[]
   name: string
   stopCode: string | null
-  street: string | null
   seq: number
   color?: string
   lang: UiLanguage
@@ -131,9 +133,6 @@ function KmbRouteStopCard({
   )
   const visible = sorted.slice(0, 3)
   const { t: cardT } = useTranslations(lang)
-  // Street sits next to the stop-code line. Stops without a street render
-  // nothing here, the same way fare sections without fare data skip the label.
-  const subtitle = [street, stopCode].filter(Boolean).join(' · ') || null
 
   const panel =
     visible.length === 0 ? (
@@ -201,9 +200,9 @@ function KmbRouteStopCard({
             )
           })}
         </div>
-        {subtitle ? (
+        {stopCode ? (
           <div className="text-on-surface-variant m3-label-sm flex min-w-0 items-center gap-1.5 overflow-hidden">
-            <span className="min-w-0 flex-1 truncate font-mono">{subtitle}</span>
+            <span className="min-w-0 flex-1 truncate font-mono">{stopCode}</span>
           </div>
         ) : null}
       </div>
@@ -216,13 +215,43 @@ function KmbRouteStopCard({
       color={color}
       seq={seq}
       name={name}
-      subtitle={subtitle}
+      subtitle={stopCode}
       eta={<TickingSoonestPill etas={stopEtas} lang={lang} />}
       panel={panel}
       toggleLabel={name}
       selectLabel={selectLabel}
       onSelect={onSelect}
     />
+  )
+}
+
+/**
+ * Vertical section rail copied from the fare display: a colored pill with a
+ * sticky vertical label. Used for both the fare rail and the CTB street rail.
+ * Sections without data render the neutral rail with no label.
+ */
+function SectionRail({ label, color }: { label: string | null; color: string }) {
+  return (
+    <div className="flex w-7 shrink-0 flex-col">
+      <div
+        aria-hidden={!label}
+        title={label ?? undefined}
+        className="flex min-h-16 flex-1 flex-col rounded-full py-2"
+        style={{ backgroundColor: color }}
+      >
+        {label ? (
+          <div className="sticky top-16 flex justify-center">
+            <span
+              aria-hidden
+              className="font-tabular m3-label-md rotate-180 font-semibold whitespace-nowrap text-white"
+              style={{ writingMode: 'vertical-rl' }}
+            >
+              {label}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
@@ -298,78 +327,118 @@ function KmbRouteStopList({
     return map
   }, [variantStops])
 
+  // Street per stop sequence for the CTB street rail. Null when the stop
+  // name has no "{name}, {street}" shape.
+  const streetBySeq = React.useMemo(() => {
+    const map = new Map<number, string | null>()
+    if (!isCtbRoute) return map
+    for (const rs of variantStops) {
+      if (map.has(rs.seq)) continue
+      const stop = stopsById.get(rs.stopId)
+      const fullName = stop
+        ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+        : rs.stopId
+      map.set(rs.seq, parseCtbStopNameCached(fullName).street)
+    }
+    return map
+  }, [variantStops, stopsById, lang, isCtbRoute])
+
+  // Skip the street rail entirely when no stop on the route has a street.
+  const showStreetRail =
+    isCtbRoute && Array.from(streetBySeq.values()).some((street) => street !== null)
+
+  // Street subsections nested inside each fare section, so the street rail
+  // sits next to the fare rail. Consecutive stops on the same street share
+  // one rail; stops without a street get the neutral rail with no label,
+  // the same way fare sections without fare data skip the label.
+  const streetSubsBySection = React.useMemo(() => {
+    if (!showStreetRail) return null
+    let streetIdx = 0
+    return sections.map((section) =>
+      groupConsecutiveBy(section.items, (rs) => streetBySeq.get(rs.seq) ?? null).map((sub) => ({
+        ...sub,
+        colorIdx: streetIdx++,
+      }))
+    )
+  }, [sections, streetBySeq, showStreetRail])
+
+  const renderStopCard = (rs: KmbRouteStopLite) => {
+    const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
+    const stop = stopsById.get(rs.stopId)
+    const stopEtas = etas[rs.stopId] ?? []
+    const fullName = stop
+      ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+      : rs.stopId
+    const parsed = parseKmbStopNameCached(fullName, {
+      isKmb: isKmbStop(stop),
+      lang,
+    })
+    const ctb = isCtbRoute ? parseCtbStopNameCached(fullName) : null
+    const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
+    const cardKey = `${rs.stopId}:${rs.seq}`
+    return (
+      <KmbRouteStopCard
+        key={cardKey}
+        stopEtas={stopEtas}
+        name={ctb ? ctb.name : parsed.name}
+        stopCode={parsed.platform ?? parsed.stopCode}
+        seq={seq}
+        lang={lang}
+        expanded={expandedKey === cardKey}
+        onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
+        selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
+        onSelect={
+          group && onSelectStopGroup
+            ? () =>
+                onSelectStopGroup({
+                  stopIds: group.stopIds,
+                  title: group.title,
+                  route: currentVariant.route,
+                })
+            : undefined
+        }
+      />
+    )
+  }
+
   return (
     <div key={listKey} className="space-y-3">
       {sections.map((section, sectionIdx) => {
         const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
         const sectionColor = sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR
+        const streetSubs = streetSubsBySection?.[sectionIdx]
         return (
           <section
             key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
             aria-label={fareLabel ?? undefined}
             className="flex gap-2"
           >
-            <div className="flex w-7 shrink-0 flex-col">
-              <div
-                aria-hidden={!fareLabel}
-                title={fareLabel ?? undefined}
-                className="flex min-h-16 flex-1 flex-col rounded-full py-2"
-                style={{ backgroundColor: sectionColor }}
-              >
-                {fareLabel ? (
-                  <div className="sticky top-16 flex justify-center">
-                    <span
-                      aria-hidden
-                      className="font-tabular m3-label-md rotate-180 font-semibold whitespace-nowrap text-white"
-                      style={{ writingMode: 'vertical-rl' }}
+            <SectionRail label={fareLabel} color={sectionColor} />
+            {streetSubs ? (
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                {streetSubs.map((sub, subIdx) => {
+                  const streetLabel = sub.key
+                  const streetColor =
+                    streetLabel !== null ? getFareSectionColor(sub.colorIdx) : FARE_UNKNOWN_COLOR
+                  return (
+                    <div
+                      key={`${streetLabel ?? 'unknown'}:${subIdx}`}
+                      aria-label={streetLabel ?? undefined}
+                      className="flex min-w-0 flex-1 gap-2"
                     >
-                      {fareLabel}
-                    </span>
-                  </div>
-                ) : null}
+                      <SectionRail label={streetLabel} color={streetColor} />
+                      <div className="min-w-0 flex-1 space-y-2">
+                        {sub.items.map((rs) => renderStopCard(rs))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            </div>
-            <div className="min-w-0 flex-1 space-y-2">
-              {section.items.map((rs) => {
-                const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
-                const stop = stopsById.get(rs.stopId)
-                const stopEtas = etas[rs.stopId] ?? []
-                const fullName = stop
-                  ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
-                  : rs.stopId
-                const parsed = parseKmbStopNameCached(fullName, {
-                  isKmb: isKmbStop(stop),
-                  lang,
-                })
-                const ctb = isCtbRoute ? parseCtbStopNameCached(fullName) : null
-                const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
-                const cardKey = `${rs.stopId}:${rs.seq}`
-                return (
-                  <KmbRouteStopCard
-                    key={cardKey}
-                    stopEtas={stopEtas}
-                    name={ctb ? ctb.name : parsed.name}
-                    stopCode={parsed.platform ?? parsed.stopCode}
-                    street={ctb?.street ?? null}
-                    seq={seq}
-                    lang={lang}
-                    expanded={expandedKey === cardKey}
-                    onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
-                    selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
-                    onSelect={
-                      group && onSelectStopGroup
-                        ? () =>
-                            onSelectStopGroup({
-                              stopIds: group.stopIds,
-                              title: group.title,
-                              route: currentVariant.route,
-                            })
-                        : undefined
-                    }
-                  />
-                )
-              })}
-            </div>
+            ) : (
+              <div className="min-w-0 flex-1 space-y-2">
+                {section.items.map((rs) => renderStopCard(rs))}
+              </div>
+            )}
           </section>
         )
       })}

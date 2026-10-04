@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getFaresBySeq, groupIntoFareSections } from './kmb-fare-sections'
+import { getFaresBySeq, groupConsecutiveBy, groupIntoFareSections } from './kmb-fare-sections'
 
 describe('getFaresBySeq', () => {
   it('maps 1-indexed sequences from array fares', () => {
@@ -36,5 +36,33 @@ describe('groupIntoFareSections', () => {
   it('keeps unknown fares in their own section', () => {
     const sections = groupIntoFareSections(['a', 'b'], () => null)
     expect(sections).toEqual([{ fare: null, items: ['a', 'b'] }])
+  })
+})
+
+describe('groupConsecutiveBy', () => {
+  it('groups consecutive stops with the same street', () => {
+    const sections = groupConsecutiveBy(['a', 'b', 'c'], (item) =>
+      item === 'c' ? 'Second St' : 'Main St'
+    )
+    expect(sections).toEqual([
+      { key: 'Main St', items: ['a', 'b'] },
+      { key: 'Second St', items: ['c'] },
+    ])
+  })
+
+  it('starts a new section when a street repeats non-consecutively', () => {
+    const sections = groupConsecutiveBy(['a', 'b', 'c'], (item) =>
+      item === 'b' ? 'Second St' : 'Main St'
+    )
+    expect(sections).toEqual([
+      { key: 'Main St', items: ['a'] },
+      { key: 'Second St', items: ['b'] },
+      { key: 'Main St', items: ['c'] },
+    ])
+  })
+
+  it('groups unknown streets together', () => {
+    const sections = groupConsecutiveBy(['a', 'b'], () => null)
+    expect(sections).toEqual([{ key: null, items: ['a', 'b'] }])
   })
 })

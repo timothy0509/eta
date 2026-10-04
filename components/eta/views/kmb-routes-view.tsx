@@ -33,6 +33,7 @@ import { FARE_UNKNOWN_COLOR, getFareSectionColor } from '@/lib/eta/fare-colors'
 import { formatFareHkd } from '@/lib/eta/format'
 import type { GeoPoint } from '@/lib/eta/geo'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { parseCtbStopNameCached } from '@/lib/eta/ctb-stop-street'
 import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import {
@@ -100,6 +101,7 @@ function KmbRouteStopCard({
   stopEtas,
   name,
   stopCode,
+  street,
   seq,
   color,
   lang,
@@ -111,6 +113,7 @@ function KmbRouteStopCard({
   stopEtas: KmbEtaEntryWithLeg[]
   name: string
   stopCode: string | null
+  street: string | null
   seq: number
   color?: string
   lang: UiLanguage
@@ -128,6 +131,9 @@ function KmbRouteStopCard({
   )
   const visible = sorted.slice(0, 3)
   const { t: cardT } = useTranslations(lang)
+  // Street sits next to the stop-code line. Stops without a street render
+  // nothing here, the same way fare sections without fare data skip the label.
+  const subtitle = [street, stopCode].filter(Boolean).join(' · ') || null
 
   const panel =
     visible.length === 0 ? (
@@ -195,9 +201,9 @@ function KmbRouteStopCard({
             )
           })}
         </div>
-        {stopCode ? (
+        {subtitle ? (
           <div className="text-on-surface-variant m3-label-sm flex min-w-0 items-center gap-1.5 overflow-hidden">
-            <span className="min-w-0 flex-1 truncate font-mono">{stopCode}</span>
+            <span className="min-w-0 flex-1 truncate font-mono">{subtitle}</span>
           </div>
         ) : null}
       </div>
@@ -210,7 +216,7 @@ function KmbRouteStopCard({
       color={color}
       seq={seq}
       name={name}
-      subtitle={stopCode}
+      subtitle={subtitle}
       eta={<TickingSoonestPill etas={stopEtas} lang={lang} />}
       panel={panel}
       toggleLabel={name}
@@ -266,6 +272,10 @@ function KmbRouteStopList({
   }, [listKey])
 
   const { t } = useTranslations(lang)
+
+  // Only CTB route stops split "{name}, {street}". Other operators keep
+  // the existing stop-name parsing untouched.
+  const isCtbRoute = normalizeOperator(currentVariant.co) === 'ctb'
 
   const sections = React.useMemo(
     () => groupIntoFareSections(variantStops, (rs) => faresBySeq[rs.seq] ?? null),
@@ -331,14 +341,16 @@ function KmbRouteStopList({
                   isKmb: isKmbStop(stop),
                   lang,
                 })
+                const ctb = isCtbRoute ? parseCtbStopNameCached(fullName) : null
                 const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
                 const cardKey = `${rs.stopId}:${rs.seq}`
                 return (
                   <KmbRouteStopCard
                     key={cardKey}
                     stopEtas={stopEtas}
-                    name={parsed.name}
+                    name={ctb ? ctb.name : parsed.name}
                     stopCode={parsed.platform ?? parsed.stopCode}
+                    street={ctb?.street ?? null}
                     seq={seq}
                     lang={lang}
                     expanded={expandedKey === cardKey}

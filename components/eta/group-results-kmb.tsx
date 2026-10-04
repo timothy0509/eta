@@ -19,7 +19,6 @@ import {
 import { type KmbGroupMember } from '@/lib/eta/group-view'
 import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
-import { parseCtbStopStreetCached } from '@/lib/eta/ctb-stop-street'
 import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { pickLang } from '@/lib/eta/pick-lang'
@@ -76,7 +75,6 @@ function buildStopChips(
     name: parsed?.name ?? fullName ?? null,
     platform: parsed?.platform ?? null,
     stopCode: parsed?.stopCode ?? null,
-    street: fullName ? parseCtbStopStreetCached(fullName) : null,
   }
 }
 

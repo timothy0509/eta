@@ -20,7 +20,6 @@ import {
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
-import { parseCtbStopStreetCached } from '@/lib/eta/ctb-stop-street'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
@@ -124,7 +123,6 @@ export type StopChips = {
   name: string | null
   platform: string | null
   stopCode: string | null
-  street: string | null
 }
 
 function getStopChips(
@@ -158,7 +156,6 @@ function getStopChips(
     name: parsed?.name ?? fullName ?? null,
     platform: parsed?.platform ?? null,
     stopCode: parsed?.stopCode ?? null,
-    street: fullName ? parseCtbStopStreetCached(fullName) : null,
   }
 
   return result
@@ -286,8 +283,6 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const fareLabel = fare ? formatFareHkd(fare.hkd) : null
   const codeLabel = [stopChips.platform, stopChips.stopCode].filter(Boolean).join(' · ') || null
-  const isCtbRoute = String(first?.co ?? co).toLowerCase() === 'ctb'
-  const streetLabel = isCtbRoute ? stopChips.street : null
 
   const detailsContent = (
     <>
@@ -375,16 +370,10 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   )
 
   const fareCodeNode =
-    fareLabel || streetLabel || codeLabel ? (
+    fareLabel || codeLabel ? (
       <div className="text-on-surface-variant m3-label-sm flex min-w-0 items-center gap-1.5 overflow-hidden">
         {fareLabel ? <span className="font-tabular shrink-0">{fareLabel}</span> : null}
-        {fareLabel && (streetLabel || codeLabel) ? (
-          <span aria-hidden="true" className="shrink-0 opacity-60">
-            ·
-          </span>
-        ) : null}
-        {streetLabel ? <span className="min-w-0 flex-1 truncate">{streetLabel}</span> : null}
-        {streetLabel && codeLabel ? (
+        {fareLabel && codeLabel ? (
           <span aria-hidden="true" className="shrink-0 opacity-60">
             ·
           </span>
@@ -723,7 +712,6 @@ export const KmbResults = React.memo(function KmbResults({
         name: parsed.name ?? fullName,
         platform: parsed.platform ?? null,
         stopCode: parsed.stopCode ?? null,
-        street: parseCtbStopStreetCached(fullName),
       })
     }
     return next

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   clearCtbStopStreetCache,
+  parseCtbStopName,
+  parseCtbStopNameCached,
   parseCtbStopStreet,
   parseCtbStopStreetCached,
 } from './ctb-stop-street'
@@ -46,5 +48,27 @@ describe('parseCtbStopStreetCached', () => {
     expect(first).toBe('Des Voeux Road Central')
     expect(parseCtbStopStreetCached('Rumsey Street, Des Voeux Road Central')).toBe(first)
     expect(parseCtbStopStreetCached('Green Lane')).toBeNull()
+  })
+})
+
+describe('parseCtbStopName', () => {
+  it('splits name and street', () => {
+    expect(parseCtbStopName('Rumsey Street, Des Voeux Road Central')).toEqual({
+      name: 'Rumsey Street',
+      street: 'Des Voeux Road Central',
+    })
+  })
+
+  it('keeps the full name when there is no street', () => {
+    expect(parseCtbStopName('Central (Macao Ferry)')).toEqual({
+      name: 'Central (Macao Ferry)',
+      street: null,
+    })
+  })
+
+  it('caches results per input', () => {
+    const first = parseCtbStopNameCached('林士街, 德輔道中')
+    expect(first).toEqual({ name: '林士街', street: '德輔道中' })
+    expect(parseCtbStopNameCached('林士街, 德輔道中')).toBe(first)
   })
 })

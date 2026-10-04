@@ -359,20 +359,30 @@ function KmbRouteStopList({
   const showStreetRail =
     isCtbRoute && Array.from(streetBySeq.values()).some((street) => street !== null)
 
-  // Street subsections nested inside each fare section, so the street rail
-  // sits next to the fare rail. Consecutive stops on the same street share
-  // one rail; stops without a street get the neutral rail with no label,
-  // the same way fare sections without fare data skip the label.
-  const streetSubsBySection = React.useMemo(() => {
+  // Street sections span the whole route, so a road never splits at a fare
+  // boundary. Fare subsections nest inside each street section instead.
+  // Stops without a street get the neutral rail with no label, the same way
+  // fare sections without fare data skip the label.
+  const streetSections = React.useMemo(() => {
     if (!showStreetRail) return null
+    const fareIdxBySeq = new Map<number, number>()
+    sections.forEach((section, idx) => {
+      for (const rs of section.items) {
+        if (!fareIdxBySeq.has(rs.seq)) fareIdxBySeq.set(rs.seq, idx)
+      }
+    })
     let streetIdx = 0
-    return sections.map((section) =>
-      groupConsecutiveBy(section.items, (rs) => streetBySeq.get(rs.seq) ?? null).map((sub) => ({
-        ...sub,
-        colorIdx: streetIdx++,
-      }))
-    )
-  }, [sections, streetBySeq, showStreetRail])
+    return groupConsecutiveBy(variantStops, (rs) => streetBySeq.get(rs.seq) ?? null).map((sub) => ({
+      ...sub,
+      colorIdx: streetIdx++,
+      fareSubs: groupIntoFareSections(sub.items, (rs) => faresBySeq[rs.seq] ?? null).map(
+        (fareSub) => ({
+          ...fareSub,
+          colorIdx: fareIdxBySeq.get(fareSub.items[0]?.seq ?? -1) ?? 0,
+        })
+      ),
+    }))
+  }, [sections, variantStops, faresBySeq, streetBySeq, showStreetRail])
 
   const renderStopCard = (rs: KmbRouteStopLite) => {
     const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
@@ -415,46 +425,59 @@ function KmbRouteStopList({
 
   return (
     <div key={listKey} className="space-y-3">
-      {sections.map((section, sectionIdx) => {
-        const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
-        const sectionColor = sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR
-        const streetSubs = streetSubsBySection?.[sectionIdx]
-        return (
-          <section
-            key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
-            aria-label={fareLabel ?? undefined}
-            className="flex gap-2"
-          >
-            <SectionRail label={fareLabel} color={sectionColor} />
-            {streetSubs ? (
-              <div className="flex min-w-0 flex-1 flex-col gap-2">
-                {streetSubs.map((sub, subIdx) => {
-                  const streetLabel = sub.key
-                  const streetColor =
-                    streetLabel !== null ? getFareSectionColor(sub.colorIdx) : FARE_UNKNOWN_COLOR
-                  return (
-                    <div
-                      key={`${streetLabel ?? 'unknown'}:${subIdx}`}
-                      aria-label={streetLabel ?? undefined}
-                      className="flex min-w-0 flex-1 gap-2"
-                    >
-                      {/* Chinese reads upright vertically with no rotation; English keeps the fare rail style. */}
-                      <SectionRail label={streetLabel} color={streetColor} flip={lang === 'en'} />
-                      <div className="min-w-0 flex-1 space-y-2">
-                        {sub.items.map((rs) => renderStopCard(rs))}
+      {streetSections
+        ? streetSections.map((streetSection, streetIdx) => {
+            const streetLabel = streetSection.key
+            const streetColor =
+              streetLabel !== null
+                ? getFareSectionColor(streetSection.colorIdx)
+                : FARE_UNKNOWN_COLOR
+            return (
+              <section
+                key={`street:${streetLabel ?? 'unknown'}:${streetIdx}`}
+                aria-label={streetLabel ?? undefined}
+                className="flex gap-2"
+              >
+                {/* Chinese reads upright vertically with no rotation; English keeps the fare rail style. */}
+                <SectionRail label={streetLabel} color={streetColor} flip={lang === 'en'} />
+                <div className="flex min-w-0 flex-1 flex-col gap-2">
+                  {streetSection.fareSubs.map((sub, subIdx) => {
+                    const fareLabel = sub.fare !== null ? formatFareHkd(sub.fare) : null
+                    const fareColor =
+                      sub.fare !== null ? getFareSectionColor(sub.colorIdx) : FARE_UNKNOWN_COLOR
+                    return (
+                      <div
+                        key={`fare:${sub.fare ?? 'unknown'}:${subIdx}`}
+                        aria-label={fareLabel ?? undefined}
+                        className="flex min-w-0 flex-1 gap-2"
+                      >
+                        <SectionRail label={fareLabel} color={fareColor} />
+                        <div className="min-w-0 flex-1 space-y-2">
+                          {sub.items.map((rs) => renderStopCard(rs))}
+                        </div>
                       </div>
-                    </div>
-                  )
-                })}
-              </div>
-            ) : (
-              <div className="min-w-0 flex-1 space-y-2">
-                {section.items.map((rs) => renderStopCard(rs))}
-              </div>
-            )}
-          </section>
-        )
-      })}
+                    )
+                  })}
+                </div>
+              </section>
+            )
+          })
+        : sections.map((section, sectionIdx) => {
+            const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
+            const sectionColor = sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR
+            return (
+              <section
+                key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
+                aria-label={fareLabel ?? undefined}
+                className="flex gap-2"
+              >
+                <SectionRail label={fareLabel} color={sectionColor} />
+                <div className="min-w-0 flex-1 space-y-2">
+                  {section.items.map((rs) => renderStopCard(rs))}
+                </div>
+              </section>
+            )
+          })}
     </div>
   )
 }

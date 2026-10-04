@@ -411,6 +411,7 @@ export default function HomeClient() {
         bound: selectedItem.bound,
         serviceType: selectedItem.serviceType,
         gtfsId: selectedItem.gtfsId,
+        regionId: selectedItem.regionId,
       }
     }
     return undefined

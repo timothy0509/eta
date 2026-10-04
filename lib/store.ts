@@ -63,6 +63,8 @@ export type FavoritesItem = FavoritesMeta &
         serviceType: string
         /** GMB region identifier. Same number can mean three routes. */
         gtfsId?: string
+        /** GMB region group, so reopening lands on the right regional route. */
+        regionId?: string
         origin?: { en: string; tc: string; sc: string }
         destination?: { en: string; tc: string; sc: string }
       }

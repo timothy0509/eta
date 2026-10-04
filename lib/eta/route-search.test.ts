@@ -120,6 +120,52 @@ describe('buildRouteSearchIndex', () => {
     expect(keys).toEqual(['gmb|1|2002337', 'gmb|1|2006408'])
   })
 
+  it('merges same-region service variants that share stops', () => {
+    const gmbRoutes: KmbRouteInfoLite[] = [
+      {
+        co: 'gmb',
+        route: '2',
+        bound: 'O',
+        serviceType: '1',
+        gtfsId: '2006474',
+        origin: { en: 'Central', tc: '中環', sc: '中环' },
+        destination: { en: 'Old Peak Road', tc: '舊山頂道', sc: '旧山顶道' },
+      },
+      {
+        co: 'gmb',
+        route: '2',
+        bound: 'O',
+        serviceType: '2',
+        gtfsId: '2006475',
+        origin: { en: 'Central', tc: '中環', sc: '中环' },
+        destination: { en: 'Old Peak Road', tc: '舊山頂道', sc: '旧山顶道' },
+      },
+    ]
+    const gmbStops: KmbRouteStopLite[] = [
+      {
+        co: 'gmb',
+        route: '2',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 's1',
+        gtfsId: '2006474',
+      },
+      {
+        co: 'gmb',
+        route: '2',
+        bound: 'O',
+        serviceType: '2',
+        seq: 1,
+        stopId: 's1',
+        gtfsId: '2006475',
+      },
+    ]
+    const index = buildRouteSearchIndex(gmbRoutes, gmbStops, stopsById)
+    expect(index.map((e) => e.key)).toEqual(['gmb|2|2006474'])
+    expect(index[0]?.variantCount).toBe(2)
+  })
+
   it('sorts empty results numerically', () => {
     const index = buildRouteSearchIndex(routes, routeStops, stopsById)
     expect(index.map((e) => `${e.co}:${e.route}`).slice(0, 2)).toEqual(['ctb:1', 'kmb:1'])

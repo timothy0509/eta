@@ -1,4 +1,5 @@
 import type { KmbRouteInfoLite, KmbRouteStopLite } from '@/lib/eta/client'
+import { buildGmbRegionLookup, gmbRegionId } from '@/lib/eta/gmb-regions'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
@@ -113,29 +114,34 @@ function entryDisplayText(
   return pickLang(entry[field], lang)
 }
 
-function canonicalRouteSearchKey(co: unknown, route: unknown, gtfsId?: unknown): string {
+function canonicalRouteSearchKey(co: unknown, route: unknown, regionId?: unknown): string {
   const base = `${normalizeOperator(String(co ?? ''))}|${String(route ?? '').toUpperCase()}`
   // GMB numbers repeat across HK Island, Kowloon and NT. Keep each region
-  // as its own search entry via gtfsId.
+  // as its own search entry. The id is the region from shared-stop
+  // clustering, so service variants of one regional route stay together.
   if (normalizeOperator(String(co ?? '')) === 'gmb') {
-    const region = String(gtfsId ?? '').trim()
+    const region = String(regionId ?? '').trim()
     if (region) return `${base}|${region}`
   }
   return base
 }
 
 /**
- * Build one search entry per co|route from the variant list plus the full
- * route-stop table joined with stop names. Pure and memo-friendly.
+ * Build one search entry per co|route (per region for GMB, whose numbers
+ * repeat across HK Island, Kowloon and NT) from the variant list plus the
+ * full route-stop table joined with stop names. Pure and memo-friendly.
  */
 export function buildRouteSearchIndex(
   routes: KmbRouteInfoLite[],
   routeStops: KmbRouteStopLite[],
   stopsById: Map<string, KmbStopSearchItem>
 ): RouteSearchEntry[] {
+  const regionLookup = buildGmbRegionLookup(routeStops)
+  const regionOf = (route: unknown, gtfsId: unknown) =>
+    gmbRegionId(regionLookup, String(route ?? ''), gtfsId)
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {
-    const key = canonicalRouteSearchKey(r.co, r.route, (r as { gtfsId?: unknown }).gtfsId)
+    const key = canonicalRouteSearchKey(r.co, r.route, regionOf(r.route, r.gtfsId))
     const list = variantsByKey.get(key)
     if (list) list.push(r)
     else variantsByKey.set(key, [r])
@@ -146,7 +152,7 @@ export function buildRouteSearchIndex(
   // direction stays separate, keeping seq order for the via line.
   const rowsByVariantKey = new Map<string, KmbRouteStopLite[]>()
   for (const rs of routeStops) {
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.gtfsId)
+    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, regionOf(rs.route, rs.gtfsId))
     if (!variantsByKey.has(routeKey)) continue
     const variantKey = `${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
     const list = rowsByVariantKey.get(variantKey)
@@ -157,7 +163,7 @@ export function buildRouteSearchIndex(
     rows.sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0))
   }
   for (const rs of routeStops) {
-    const key = canonicalRouteSearchKey(rs.co, rs.route, rs.gtfsId)
+    const key = canonicalRouteSearchKey(rs.co, rs.route, regionOf(rs.route, rs.gtfsId))
     if (!variantsByKey.has(key)) continue
     let bucket = stopIdsByKey.get(key)
     if (!bucket) {
@@ -466,12 +472,17 @@ export function countRoutesByStopName(
     if (key) nameByStopId.set(stopId, key)
   }
   const byName = new Map<string, Set<string>>()
+  const regionLookup = buildGmbRegionLookup(routeStops)
   for (const rs of routeStops) {
     const stopId = String(rs.stopId ?? '').trim()
     if (!stopId) continue
     const key = nameByStopId.get(stopId)
     if (!key) continue
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.gtfsId)
+    const routeKey = canonicalRouteSearchKey(
+      rs.co,
+      rs.route,
+      gmbRegionId(regionLookup, String(rs.route ?? ''), rs.gtfsId)
+    )
     let set = byName.get(key)
     if (!set) {
       set = new Set()

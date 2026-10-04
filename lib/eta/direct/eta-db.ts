@@ -16,7 +16,9 @@ import {
 } from '@/lib/eta/direct/eta-db-list'
 import {
   buildEtaDbIndexes,
+  isGmbCompany,
   normalizeBound,
+  normalizeGtfsId,
   normalizeStopId,
   routeVariantKey,
   serializeEtaDbIndexes,
@@ -202,6 +204,7 @@ export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
         route: entry.route,
         bound: normalizeBound(entry.bound[co]),
         serviceType: entry.serviceType,
+        gtfsId: isGmbCompany(co) ? normalizeGtfsId(entry.gtfsId) : '',
         origin: mapEtaLangToUi(entry.orig),
         destination: mapEtaLangToUi(entry.dest),
         routeEntry: entry,
@@ -214,11 +217,81 @@ export async function listKmbRouteStops(): Promise<KmbRouteStopLite[]> {
   return kmbRouteStops
 }
 
+/** Pure lookup over a prebuilt variant index. Split out for tests. */
+export function findKmbRouteInfoFromIndex(
+  routeVariantIndex: Map<string, import('hk-bus-eta').RouteListEntry>,
+  params: {
+    co?: Company
+    route: string
+    bound: string
+    serviceType: string
+    gtfsId?: string
+  }
+): KmbRouteInfoLite | null {
+  const routeName = params.route.toUpperCase()
+  const bound = normalizeBound(params.bound)
+  const serviceType = String(params.serviceType ?? '')
+  const co = (params.co ?? 'kmb') as Company
+  const gtfsId = isGmbCompany(co) ? normalizeGtfsId(params.gtfsId) : ''
+
+  if (isGmbCompany(co) && gtfsId) {
+    const entry = routeVariantIndex.get(
+      routeVariantKey({ co, route: routeName, bound, serviceType, gtfsId })
+    )
+    if (!entry || !entry.co.includes(co)) return null
+    return {
+      co,
+      route: entry.route,
+      bound: normalizeBound(entry.bound[co]),
+      serviceType: entry.serviceType,
+      gtfsId: normalizeGtfsId(entry.gtfsId),
+      origin: mapEtaLangToUi(entry.orig),
+      destination: mapEtaLangToUi(entry.dest),
+      routeEntry: entry,
+    }
+  }
+
+  if (isGmbCompany(co) && !gtfsId) {
+    // Ambiguous without region. Fall back to the first matching GMB entry
+    // so old favorites and links without gtfsId keep working.
+    const prefix = routeVariantKey({ co, route: routeName, bound, serviceType })
+    for (const [key, entry] of routeVariantIndex) {
+      if (!key.startsWith(`${prefix}|`)) continue
+      if (!entry.co.includes(co)) continue
+      return {
+        co,
+        route: entry.route,
+        bound: normalizeBound(entry.bound[co]),
+        serviceType: entry.serviceType,
+        gtfsId: normalizeGtfsId(entry.gtfsId),
+        origin: mapEtaLangToUi(entry.orig),
+        destination: mapEtaLangToUi(entry.dest),
+        routeEntry: entry,
+      }
+    }
+    return null
+  }
+
+  const entry = routeVariantIndex.get(routeVariantKey({ co, route: routeName, bound, serviceType }))
+  if (!entry || !entry.co.includes(co)) return null
+  return {
+    co,
+    route: entry.route,
+    bound: normalizeBound(entry.bound[co]),
+    serviceType: entry.serviceType,
+    gtfsId: '',
+    origin: mapEtaLangToUi(entry.orig),
+    destination: mapEtaLangToUi(entry.dest),
+    routeEntry: entry,
+  }
+}
+
 export async function findKmbRouteInfo(params: {
   co?: Company
   route: string
   bound: string
   serviceType: string
+  gtfsId?: string
   signal?: AbortSignal
 }): Promise<KmbRouteInfoLite | null> {
   if (params.signal?.aborted) {
@@ -228,31 +301,7 @@ export async function findKmbRouteInfo(params: {
   if (params.signal?.aborted) {
     throw new DOMException('The operation was aborted.', 'AbortError')
   }
-  const routeName = params.route.toUpperCase()
-  const bound = normalizeBound(params.bound)
-  const serviceType = String(params.serviceType ?? '')
-  const co = (params.co ?? 'kmb') as Company
-
-  const entry = routeVariantIndex.get(
-    routeVariantKey({
-      co,
-      route: routeName,
-      bound,
-      serviceType,
-    })
-  )
-
-  if (!entry || !entry.co.includes(co)) return null
-
-  return {
-    co,
-    route: entry.route,
-    bound: normalizeBound(entry.bound[co]),
-    serviceType: entry.serviceType,
-    origin: mapEtaLangToUi(entry.orig),
-    destination: mapEtaLangToUi(entry.dest),
-    routeEntry: entry,
-  }
+  return findKmbRouteInfoFromIndex(routeVariantIndex, params)
 }
 
 export type KmbEta = Eta & {
@@ -260,6 +309,8 @@ export type KmbEta = Eta & {
   route: string
   dir: string
   serviceType: string
+  /** GMB region identifier. Empty for other operators. */
+  gtfsId?: string
   seq: number
   etaSeq: number
   data_timestamp?: string
@@ -280,10 +331,12 @@ function etaDedupeKey(eta: {
   route: string
   dir: string
   serviceType: string
+  gtfsId?: string
   etaSeq: number
   eta: string
 }) {
-  return `${eta.co}|${eta.route}|${eta.dir}|${eta.serviceType}|${eta.etaSeq}|${eta.eta}`
+  const region = isGmbCompany(eta.co) ? normalizeGtfsId(eta.gtfsId) : ''
+  return `${eta.co}|${eta.route}|${eta.dir}|${eta.serviceType}|${region}|${eta.etaSeq}|${eta.eta}`
 }
 
 function mapOfficialStopEtaRows(
@@ -380,6 +433,7 @@ export async function fetchKmbEtasForStop(
       route: re.route,
       bound: re.bound,
       serviceType: re.serviceType,
+      gtfsId: re.gtfsId,
     })
     const entry = routeVariantIndex.get(variantKey)
     if (!entry) continue
@@ -411,12 +465,14 @@ export async function fetchKmbEtasForStop(
           seq: stopIndex,
           language,
         })
+        const gtfsId = isGmbCompany(co) ? normalizeGtfsId(entry.gtfsId) : ''
         return etas.map((eta, idx) => ({
           ...eta,
           co: eta.co ?? co,
           route: entry.route,
           dir: normalizeBound(entry.bound[co]),
           serviceType: entry.serviceType,
+          gtfsId,
           seq: stopIndex + 1,
           etaSeq: idx + 1,
         })) as KmbEta[]
@@ -448,6 +504,7 @@ export async function fetchKmbEtasForStop(
       route: eta.route,
       dir: eta.dir,
       serviceType: eta.serviceType,
+      gtfsId: eta.gtfsId,
       etaSeq: eta.etaSeq,
       eta: eta.eta ?? '',
     })

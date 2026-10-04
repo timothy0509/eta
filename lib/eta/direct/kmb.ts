@@ -35,6 +35,8 @@ export type KmbEtaEntry = {
   route: string
   dir: 'I' | 'O' | string
   service_type: number | string
+  /** GMB region identifier. Empty for other operators. */
+  gtfsId?: string
   seq: number
   stop: string
   dest_en: string
@@ -60,6 +62,7 @@ function mapKmbEtaEntry(eta: KmbEta, stopId: string): KmbEtaEntry {
     route: eta.route,
     dir: eta.dir,
     service_type: eta.serviceType,
+    gtfsId: eta.gtfsId ?? '',
     seq: eta.seq,
     stop: stopId,
     dest_en: eta.dest_en ?? eta.dest?.en ?? '',
@@ -116,11 +119,13 @@ export type KmbRouteStopEntry = {
   service_type: number | string
   seq: number | string
   stop: string
+  gtfsId?: string
 }
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:route-stops',
+    // v2: entries carry the GMB gtfsId region. v1 payloads merge regions.
+    key: 'kmb:route-stops:v2',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -132,6 +137,7 @@ export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
         service_type: entry.serviceType,
         seq: entry.seq,
         stop: entry.stopId,
+        gtfsId: entry.gtfsId ?? '',
       }))
     },
   })
@@ -144,6 +150,7 @@ export type KmbRouteInfo = {
   route: string
   bound: 'I' | 'O' | string
   service_type: number | string
+  gtfsId?: string
   orig_en: string
   orig_tc: string
   orig_sc: string
@@ -157,6 +164,7 @@ export type KmbRouteListEntry = {
   route: string
   bound: 'I' | 'O' | string
   service_type: number | string
+  gtfsId?: string
   orig_en: string
   orig_tc: string
   orig_sc: string
@@ -168,7 +176,8 @@ export type KmbRouteListEntry = {
 
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:routes',
+    // v2: entries carry the GMB gtfsId region. v1 payloads merge regions.
+    key: 'kmb:routes:v2',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -178,6 +187,7 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
         route: entry.route,
         bound: entry.bound,
         service_type: entry.serviceType,
+        gtfsId: entry.gtfsId ?? '',
         orig_en: entry.origin.en,
         orig_tc: entry.origin.tc,
         orig_sc: entry.origin.sc,
@@ -196,6 +206,7 @@ export async function getKmbRouteInfo(params: {
   route: string
   direction: 'I' | 'O' | 'inbound' | 'outbound' | string
   serviceType: string
+  gtfsId?: string
   signal?: AbortSignal
 }): Promise<KmbRouteInfo> {
   if (params.signal?.aborted) {
@@ -207,6 +218,7 @@ export async function getKmbRouteInfo(params: {
     route: params.route,
     bound,
     serviceType: params.serviceType,
+    gtfsId: params.gtfsId,
     signal: params.signal,
   })
   if (params.signal?.aborted) {
@@ -222,6 +234,7 @@ export async function getKmbRouteInfo(params: {
     route: info.route,
     bound: info.bound,
     service_type: info.serviceType,
+    gtfsId: info.gtfsId ?? '',
     orig_en: info.origin.en,
     orig_tc: info.origin.tc,
     orig_sc: info.origin.sc,
@@ -281,6 +294,7 @@ export async function fetchKmbStopEtas(
         serviceType: String(entry.serviceType),
         seq: entry.seq,
         stopId: entry.stopId,
+        gtfsId: entry.gtfsId ?? '',
       }))
       .filter((entry) => entry.route && entry.stopId)
     return lite
@@ -360,6 +374,7 @@ export async function fetchKmbStopEtas(
       const dir = String(entry.dir ?? '')
       const serviceType = String(entry.service_type ?? '')
       const co = String(entry.co ?? 'kmb')
+      const gtfsId = String((entry as { gtfsId?: unknown }).gtfsId ?? '')
 
       const etaSeq = entry.seq
       const leg = computeEtaLeg({
@@ -367,13 +382,18 @@ export async function fetchKmbStopEtas(
         route,
         dir,
         serviceType,
+        gtfsId,
         stopId,
         etaSeq,
         byVariantStops,
       })
 
       const legSuffix = leg ?? '_'
-      const key = `${co}|${route}|${dir}|${serviceType}|${legSuffix}`
+      const base = `${co}|${route}|${dir}|${serviceType}`
+      const key =
+        String(co).toLowerCase() === 'gmb' && gtfsId
+          ? `${base}|${gtfsId}|${legSuffix}`
+          : `${base}|${legSuffix}`
 
       const existing = byVariant.get(key) ?? []
       if (existing.length < MAX_ETAS_PER_VARIANT) {
@@ -418,6 +438,7 @@ export async function fetchKmbStopEtas(
         route: string
         dir: string
         serviceType: string
+        gtfsId: string
         stopId: string
         destCandidates: string[]
       }
@@ -428,14 +449,18 @@ export async function fetchKmbStopEtas(
         const route = String(entry.route ?? '').toUpperCase()
         const dir = String(entry.dir ?? '')
         const serviceType = String(entry.service_type ?? '')
-        const vKey = `${co}|${route}|${dir}|${serviceType}`
+        const gtfsId = String((entry as { gtfsId?: unknown }).gtfsId ?? '')
+        const vKey =
+          co.toLowerCase() === 'gmb' && gtfsId
+            ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}`
+            : `${co}|${route}|${dir}|${serviceType}`
 
         if (fareVariants.has(vKey)) continue
 
         const destCandidates = [entry.dest_en, entry.dest_tc, entry.dest_sc]
           .filter(Boolean)
           .map(String)
-        fareVariants.set(vKey, { co, route, dir, serviceType, stopId, destCandidates })
+        fareVariants.set(vKey, { co, route, dir, serviceType, gtfsId, stopId, destCandidates })
       }
     }
 
@@ -475,6 +500,7 @@ export type KmbFareVariant = {
   route: string
   dir: string
   serviceType: string
+  gtfsId?: string
   stopId: string
   destCandidates?: string[]
 }
@@ -495,6 +521,7 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
           serviceType: String(entry.serviceType),
           seq: entry.seq,
           stopId: entry.stopId,
+          gtfsId: entry.gtfsId ?? '',
         }))
         .filter((entry) => entry.route && entry.stopId)
       return lite
@@ -507,7 +534,11 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
   for (const v of variants) {
     const co = String(v.co ?? 'kmb')
     const route = v.route.toUpperCase()
-    const vKey = `${co}|${route}|${v.dir}|${v.serviceType}`
+    const gtfsId = String((v as { gtfsId?: unknown }).gtfsId ?? '')
+    const vKey =
+      co.toLowerCase() === 'gmb' && gtfsId
+        ? `${co}|${route}|${v.dir}|${v.serviceType}|${gtfsId}`
+        : `${co}|${route}|${v.dir}|${v.serviceType}`
     if (!uniqueVariants.has(vKey)) {
       uniqueVariants.set(vKey, v)
     }
@@ -522,6 +553,7 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
       route,
       dir: v.dir,
       serviceType: v.serviceType,
+      gtfsId: v.gtfsId,
       stopId: v.stopId,
       etaDestCandidates: v.destCandidates ?? [],
       byVariantStops,

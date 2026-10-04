@@ -55,13 +55,14 @@ function normalizeFareVariantKey(variant: KmbFareVariant) {
   const route = String(variant.route ?? '').toUpperCase()
   const dir = String(variant.dir ?? '')
   const serviceType = String(variant.serviceType ?? '')
+  const gtfsId = co === 'gmb' ? String(variant.gtfsId ?? '').trim() : ''
   const stopId = String(variant.stopId ?? '').trim()
   const destCandidates = (variant.destCandidates ?? [])
     .map((dest) => String(dest ?? '').trim())
     .filter(Boolean)
     .sort()
     .join('~')
-  return `${co}|${route}|${dir}|${serviceType}|${stopId}|${destCandidates}`
+  return `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${stopId}|${destCandidates}`
 }
 
 function isAbortError(error: unknown): boolean {
@@ -172,6 +173,7 @@ export type KmbRouteStopLite = {
   serviceType: string
   seq: number
   stopId: string
+  gtfsId?: string
 }
 
 export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
@@ -190,6 +192,7 @@ export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
           serviceType: String(entry.service_type),
           seq: typeof entry.seq === 'string' ? Number(entry.seq) : entry.seq,
           stopId: entry.stop,
+          gtfsId: String((entry as { gtfsId?: unknown }).gtfsId ?? ''),
         }))
         .filter((entry) => entry.route && entry.stopId)
     },
@@ -202,6 +205,7 @@ export type KmbRouteInfoLite = {
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
+  gtfsId?: string
   origin: {
     en: string
     tc: string
@@ -219,6 +223,7 @@ export async function fetchKmbRouteInfo(params: {
   route: string
   direction: 'I' | 'O' | 'inbound' | 'outbound' | string
   serviceType: string
+  gtfsId?: string
   signal?: AbortSignal
 }): Promise<KmbRouteInfoLite> {
   if (params.signal?.aborted) {
@@ -231,6 +236,7 @@ export async function fetchKmbRouteInfo(params: {
     route: info.route,
     bound: info.bound,
     serviceType: String(info.service_type),
+    gtfsId: String((info as { gtfsId?: unknown }).gtfsId ?? params.gtfsId ?? ''),
     origin: {
       en: (info.orig_en ?? '').trim(),
       tc: (info.orig_tc ?? '').trim(),
@@ -296,6 +302,7 @@ export type KmbFareVariant = {
   route: string
   dir: string
   serviceType: string
+  gtfsId?: string
   stopId: string
   destCandidates?: string[]
 }

@@ -29,10 +29,37 @@ function routeEntry(route: string, co: Company[], stopsByCo: Partial<Record<Comp
   }
 }
 
+function gmbRouteEntry(
+  route: string,
+  gtfsId: string,
+  stops: string[],
+  orig = 'Origin',
+  dest = 'Destination'
+) {
+  return {
+    route,
+    co: ['gmb'] as Company[],
+    orig: { en: orig, zh: orig },
+    dest: { en: dest, zh: dest },
+    fares: null,
+    faresHoliday: null,
+    freq: null,
+    jt: null,
+    seq: 1,
+    serviceType: '1',
+    stops: { gmb: stops } as Record<Company, string[]>,
+    bound: { gmb: 'O' } as Record<Company, 'O'>,
+    gtfsId,
+    nlbId: '',
+  }
+}
+
 function dbWith(entries: Array<ReturnType<typeof routeEntry>>, stopIds: string[]): EtaDb {
   const routeList: EtaDb['routeList'] = {}
   for (const entry of entries) {
-    routeList[`${entry.route}-${entry.co.join('+')}`] =
+    const gtfsId = String((entry as { gtfsId?: unknown }).gtfsId ?? '')
+    const suffix = gtfsId ? `-${gtfsId}` : ''
+    routeList[`${entry.route}-${entry.co.join('+')}${suffix}-${Object.keys(routeList).length}`] =
       entry as unknown as EtaDb['routeList'][string]
   }
   const stopList: EtaDb['stopList'] = {}
@@ -82,5 +109,34 @@ describe('buildEtaDbIndexes isKmb derivation', () => {
         ?.map((e) => e.co)
         .sort()
     ).toEqual(['ctb', 'kmb'])
+  })
+})
+
+describe('buildEtaDbIndexes GMB regions', () => {
+  it('keeps the same GMB number in different regions as distinct variants', async () => {
+    const db = dbWith(
+      [
+        gmbRouteEntry('1', '2006408', ['HKI_STOP'], 'Central', 'The Peak'),
+        gmbRouteEntry('1', '2002337', ['KLN_STOP'], 'Kowloon Bay', 'Sai Kung'),
+      ],
+      ['HKI_STOP', 'KLN_STOP']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['gmb'] })
+    expect(indexes.routeVariantIndex.has('gmb|1|O|1|2006408')).toBe(true)
+    expect(indexes.routeVariantIndex.has('gmb|1|O|1|2002337')).toBe(true)
+    expect(indexes.routeVariantIndex.get('gmb|1|O|1|2006408')?.gtfsId).toBe('2006408')
+    expect(indexes.routeVariantIndex.get('gmb|1|O|1|2002337')?.gtfsId).toBe('2002337')
+    expect(indexes.stopRoutesIndex.get('HKI_STOP')?.[0]?.gtfsId).toBe('2006408')
+    expect(indexes.stopRoutesIndex.get('KLN_STOP')?.[0]?.gtfsId).toBe('2002337')
+    expect(indexes.kmbRouteStops).toMatchObject([
+      { route: '1', gtfsId: '2006408', stopId: 'HKI_STOP' },
+      { route: '1', gtfsId: '2002337', stopId: 'KLN_STOP' },
+    ])
+  })
+
+  it('keeps non-GMB variant keys on the legacy 4-part shape', async () => {
+    const db = dbWith([routeEntry('1A', ['kmb'], { kmb: ['S1'] })], ['S1'])
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb'] })
+    expect(indexes.routeVariantIndex.has('kmb|1A|O|1')).toBe(true)
   })
 })

@@ -84,10 +84,45 @@ type RouteStopIndex = {
   version: number
 }
 
+function variantKeyForStop(entry: KmbRouteStopLite): string {
+  const base = `${entry.co}|${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`
+  if (String(entry.co ?? '').toLowerCase() === 'gmb') {
+    const gtfsId = String(entry.gtfsId ?? '').trim()
+    if (gtfsId) return `${base}|${gtfsId}`
+  }
+  return base
+}
+
+function variantKeyForEta(entry: {
+  co?: string
+  route?: string
+  dir?: string
+  service_type?: string | number
+  gtfsId?: string
+}): string {
+  const co = String(entry.co ?? 'kmb')
+  const base = `${co}|${String(entry.route ?? '').toUpperCase()}|${String(entry.dir ?? '')}|${String(entry.service_type ?? '')}`
+  if (co.toLowerCase() === 'gmb') {
+    const gtfsId = String(entry.gtfsId ?? '').trim()
+    if (gtfsId) return `${base}|${gtfsId}`
+  }
+  return base
+}
+
+/** Old 4-part GMB keys match any region, so saved filters keep working. */
+function variantFilterMatches(filterKey: string, etaKey: string): boolean {
+  if (filterKey === etaKey) return true
+  const filterParts = filterKey.split('|')
+  if (filterParts.length === 4 && filterParts[0]?.toLowerCase() === 'gmb') {
+    return etaKey.startsWith(`${filterKey}|`)
+  }
+  return false
+}
+
 function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
   const byStopId = new Map<string, Set<string>>()
   for (const entry of routeStops) {
-    const key = `${entry.co}|${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`
+    const key = variantKeyForStop(entry)
     let set = byStopId.get(entry.stopId)
     if (!set) {
       set = new Set()
@@ -364,8 +399,15 @@ export function KmbPane({
     const load = async () => {
       const fetched = await Promise.allSettled(
         missing.map(async (key) => {
-          const [co = 'kmb', route = '', direction = '', serviceType = ''] = key.split('|')
-          const info = await fetchKmbRouteInfo({ co: co as Company, route, direction, serviceType })
+          const [co = 'kmb', route = '', direction = '', serviceType = '', gtfsId = ''] =
+            key.split('|')
+          const info = await fetchKmbRouteInfo({
+            co: co as Company,
+            route,
+            direction,
+            serviceType,
+            gtfsId: co.toLowerCase() === 'gmb' ? gtfsId : undefined,
+          })
           return { key, info }
         })
       )
@@ -394,7 +436,9 @@ export function KmbPane({
     if (!kmbRouteStops.length) return
 
     const nextEntries = (routeFilter.entries ?? []).filter((entry) =>
-      kmbAvailableRouteVariants.some((opt) => opt.key === entry.variantKey)
+      kmbAvailableRouteVariants.some(
+        (opt) => opt.key === entry.variantKey || variantFilterMatches(entry.variantKey, opt.key)
+      )
     )
 
     if (nextEntries.length === (routeFilter.entries ?? []).length) return
@@ -463,8 +507,11 @@ export function KmbPane({
         if (variantFilterKeys) {
           etas = etas.filter((eta) => {
             // Use base key (without leg) for variant filter matching
-            const key = `${String(eta.co ?? 'kmb')}|${(eta.route ?? '').toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
-            return variantFilterKeys.has(key)
+            const key = variantKeyForEta(eta)
+            for (const filterKey of variantFilterKeys) {
+              if (variantFilterMatches(filterKey, key)) return true
+            }
+            return false
           })
         }
         filteredByStopId[stopId] = etas
@@ -535,7 +582,11 @@ export function KmbPane({
         const route = (eta.route ?? '').toUpperCase()
         const dir = String(eta.dir ?? '')
         const serviceType = String(eta.service_type ?? '')
-        const vKey = `${co}|${route}|${dir}|${serviceType}`
+        const gtfsId = String(eta.gtfsId ?? '')
+        const vKey =
+          co.toLowerCase() === 'gmb' && gtfsId
+            ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}`
+            : `${co}|${route}|${dir}|${serviceType}`
 
         // Skip if we already have this fare or already queued it (use ref for latest state)
         const currentFares = etaStateRef.current.faresByVariantKey
@@ -547,6 +598,7 @@ export function KmbPane({
           route,
           dir,
           serviceType,
+          gtfsId,
           stopId,
           destCandidates: [eta.dest_en, eta.dest_tc, eta.dest_sc].filter(Boolean) as string[],
         })
@@ -647,12 +699,7 @@ export function KmbPane({
         if (fetchResult) {
           const allEtas = Object.values(fetchResult.filteredByStopId).flat()
           const variantKeysFromEtas = Array.from(
-            new Set(
-              allEtas.map(
-                (eta) =>
-                  `${String(eta.co ?? 'kmb')}|${(eta.route ?? '').toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
-              )
-            )
+            new Set(allEtas.map((eta) => variantKeyForEta(eta)))
           )
 
           // Use index instead of filtering entire kmbRouteStops array
@@ -664,12 +711,14 @@ export function KmbPane({
           if (missingKeys.length && !controller.signal.aborted) {
             const fetched = await Promise.allSettled(
               missingKeys.slice(0, 30).map(async (key) => {
-                const [co = 'kmb', route = '', direction = '', serviceType = ''] = key.split('|')
+                const [co = 'kmb', route = '', direction = '', serviceType = '', gtfsId = ''] =
+                  key.split('|')
                 const info = await fetchKmbRouteInfo({
                   co: co as Company,
                   route,
                   direction,
                   serviceType,
+                  gtfsId: co.toLowerCase() === 'gmb' ? gtfsId : undefined,
                 })
                 return { key, info }
               })

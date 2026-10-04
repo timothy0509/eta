@@ -231,7 +231,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   onToggleExpand,
 }: {
   variantKey: string
-  /** Base variant key without leg suffix (co|route|dir|service_type) for route info & fare lookup */
+  /** Base variant key without leg suffix (co|route|dir|service_type, plus gtfsId for GMB) for route info & fare lookup */
   baseKey: string
   items: KmbEtaEntryWithLeg[]
   hasEta: boolean

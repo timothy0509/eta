@@ -11,7 +11,7 @@ import { OperatorFilter } from '@/components/eta/operator-filter'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
 import { Input } from '@/components/ui/input'
-import { RouteStopCard, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
+import { RouteStopCard } from '@/components/eta/route-stop-timeline'
 import { TickingKmbMinutes, TickingSoonestPill } from '@/components/eta/ticking-eta'
 import { formatEtaOrdinals } from '@/lib/eta/kmb-eta-groups'
 import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
@@ -29,12 +29,12 @@ import type { Company } from 'hk-bus-eta'
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { routeVariantKey } from '@/lib/eta/eta-db-index'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
+import { FARE_UNKNOWN_COLOR, getFareSectionColor } from '@/lib/eta/fare-colors'
 import { formatFareHkd } from '@/lib/eta/format'
 import type { GeoPoint } from '@/lib/eta/geo'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
-import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
 import {
   buildRouteSearchIndex,
   countRoutesByStopName,
@@ -112,7 +112,7 @@ function KmbRouteStopCard({
   name: string
   stopCode: string | null
   seq: number
-  color: string
+  color?: string
   lang: UiLanguage
   expanded: boolean
   onToggle: () => void
@@ -266,11 +266,18 @@ function KmbRouteStopList({
   }, [listKey])
 
   const { t } = useTranslations(lang)
-  const color = getRouteBadgeStyle(currentVariant.route, currentVariant.co).bgColor
 
   const sections = React.useMemo(
     () => groupIntoFareSections(variantStops, (rs) => faresBySeq[rs.seq] ?? null),
     [variantStops, faresBySeq]
+  )
+
+  const sectionColors = React.useMemo(
+    () =>
+      sections.map((section, idx) =>
+        section.fare !== null ? getFareSectionColor(idx) : FARE_UNKNOWN_COLOR
+      ),
+    [sections]
   )
 
   const seqByStopSeq = React.useMemo(() => {
@@ -281,31 +288,33 @@ function KmbRouteStopList({
     return map
   }, [variantStops])
 
+  const totalStops = variantStops.length
+  const sectionOffsets = React.useMemo(() => {
+    const offsets: number[] = []
+    let acc = 0
+    for (const section of sections) {
+      offsets.push(acc)
+      acc += section.items.length
+    }
+    return offsets
+  }, [sections])
+
   return (
-    <div key={listKey} className="space-y-4">
-      {sections.map((section, sectionIdx) => {
-        const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
-        return (
-          <section
-            key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
-            aria-label={fareLabel ?? undefined}
-            className={
-              sectionIdx % 2 === 0
-                ? 'bg-surface-container overflow-hidden rounded-3xl px-3 py-3'
-                : 'bg-surface-container-high overflow-hidden rounded-3xl px-3 py-3'
-            }
-          >
-            {fareLabel ? (
-              <div className="text-on-surface-variant font-tabular m3-label-lg flex items-center gap-3 px-1 pt-1 pb-3">
-                <span aria-hidden className="bg-outline-variant h-px flex-1 opacity-60" />
-                <span className="shrink-0 rounded-full border border-[var(--outline-variant)]/40 px-3 py-0.5">
-                  {fareLabel}
-                </span>
-                <span aria-hidden className="bg-outline-variant h-px flex-1 opacity-60" />
-              </div>
-            ) : null}
-            <RouteStopTimeline>
-              {section.items.map((rs) => {
+    <div key={listKey} className="relative">
+      <ol className="relative">
+        {sections.map((section, sectionIdx) => {
+          const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
+          const sectionColor = sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR
+          const prevColor =
+            sectionIdx > 0 ? (sectionColors[sectionIdx - 1] ?? FARE_UNKNOWN_COLOR) : null
+          return (
+            <React.Fragment key={`${section.fare ?? 'unknown'}:${sectionIdx}`}>
+              {section.items.map((rs, itemIdx) => {
+                const rowIdx = (sectionOffsets[sectionIdx] ?? 0) + itemIdx
+                const isFirstOverall = rowIdx === 0
+                const isLastOverall = rowIdx === totalStops - 1
+                const isFirstInSection = itemIdx === 0
+                const topColor = isFirstOverall ? null : isFirstInSection ? prevColor : sectionColor
                 const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
                 const stop = stopsById.get(rs.stopId)
                 const stopEtas = etas[rs.stopId] ?? []
@@ -319,34 +328,82 @@ function KmbRouteStopList({
                 const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
                 const cardKey = `${rs.stopId}:${rs.seq}`
                 return (
-                  <KmbRouteStopCard
+                  <li
                     key={cardKey}
-                    stopEtas={stopEtas}
-                    name={parsed.name}
-                    stopCode={parsed.platform ?? parsed.stopCode}
-                    seq={seq}
-                    color={color}
-                    lang={lang}
-                    expanded={expandedKey === cardKey}
-                    onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
-                    selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
-                    onSelect={
-                      group && onSelectStopGroup
-                        ? () =>
-                            onSelectStopGroup({
-                              stopIds: group.stopIds,
-                              title: group.title,
-                              route: currentVariant.route,
-                            })
-                        : undefined
-                    }
-                  />
+                    aria-label={isFirstInSection && fareLabel ? fareLabel : undefined}
+                    className="relative flex gap-2"
+                  >
+                    <div aria-hidden className="flex w-5 shrink-0 flex-col items-center">
+                      {topColor ? (
+                        <span
+                          className="min-h-2 w-[3px] flex-1 rounded-full"
+                          style={{ backgroundColor: topColor }}
+                        />
+                      ) : (
+                        <span className="h-2 shrink-0" />
+                      )}
+                      <span
+                        className="my-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{
+                          backgroundColor: sectionColor,
+                          boxShadow: `0 0 0 3px ${sectionColor}26`,
+                        }}
+                      />
+                      {isLastOverall ? (
+                        <span className="h-2 shrink-0" />
+                      ) : (
+                        <span
+                          className="min-h-2 w-[3px] flex-1 rounded-full"
+                          style={{ backgroundColor: sectionColor }}
+                        />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1 pb-2.5">
+                      {isFirstInSection && fareLabel ? (
+                        <div className="mb-1.5 flex items-center gap-2">
+                          <span
+                            className="font-tabular m3-label-md shrink-0 rounded-full px-2.5 py-0.5 font-semibold text-white"
+                            style={{ backgroundColor: sectionColor }}
+                          >
+                            {fareLabel}
+                          </span>
+                          <span
+                            aria-hidden
+                            className="h-px flex-1 opacity-40"
+                            style={{ backgroundColor: sectionColor }}
+                          />
+                        </div>
+                      ) : null}
+                      <KmbRouteStopCard
+                        stopEtas={stopEtas}
+                        name={parsed.name}
+                        stopCode={parsed.platform ?? parsed.stopCode}
+                        seq={seq}
+                        lang={lang}
+                        expanded={expandedKey === cardKey}
+                        onToggle={() =>
+                          setExpandedKey((prev) => (prev === cardKey ? null : cardKey))
+                        }
+                        selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
+                        onSelect={
+                          group && onSelectStopGroup
+                            ? () =>
+                                onSelectStopGroup({
+                                  stopIds: group.stopIds,
+                                  title: group.title,
+                                  route: currentVariant.route,
+                                })
+                            : undefined
+                        }
+                      />
+                    </div>
+                  </li>
                 )
               })}
-            </RouteStopTimeline>
-          </section>
-        )
-      })}
+            </React.Fragment>
+          )
+        })}
+      </ol>
     </div>
   )
 }

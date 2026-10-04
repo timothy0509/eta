@@ -230,7 +230,16 @@ function KmbRouteStopCard({
  * sticky vertical label. Used for both the fare rail and the CTB street rail.
  * Sections without data render the neutral rail with no label.
  */
-function SectionRail({ label, color }: { label: string | null; color: string }) {
+function SectionRail({
+  label,
+  color,
+  flip = true,
+}: {
+  label: string | null
+  color: string
+  /** False renders the label upright instead of upside down. */
+  flip?: boolean
+}) {
   return (
     <div className="flex w-7 shrink-0 flex-col">
       <div
@@ -243,7 +252,10 @@ function SectionRail({ label, color }: { label: string | null; color: string }) 
           <div className="sticky top-16 flex justify-center">
             <span
               aria-hidden
-              className="font-tabular m3-label-md rotate-180 font-semibold whitespace-nowrap text-white"
+              className={cn(
+                'font-tabular m3-label-md font-semibold whitespace-nowrap text-white',
+                flip && 'rotate-180'
+              )}
               style={{ writingMode: 'vertical-rl' }}
             >
               {label}
@@ -426,7 +438,7 @@ function KmbRouteStopList({
                       aria-label={streetLabel ?? undefined}
                       className="flex min-w-0 flex-1 gap-2"
                     >
-                      <SectionRail label={streetLabel} color={streetColor} />
+                      <SectionRail label={streetLabel} color={streetColor} flip={false} />
                       <div className="min-w-0 flex-1 space-y-2">
                         {sub.items.map((rs) => renderStopCard(rs))}
                       </div>

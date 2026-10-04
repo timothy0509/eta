@@ -226,6 +226,52 @@ function KmbRouteStopCard({
 }
 
 /**
+ * Colored pill with a sticky vertical label. The building block of the fare
+ * rail and the CTB street rail. Sections without data render the neutral
+ * rail with no label. Renders as a grid item spanning its run in timeline
+ * mode, or stretched inside a SectionRail in section mode.
+ */
+function RailPill({
+  label,
+  color,
+  flip = true,
+  className,
+  style,
+}: {
+  label: string | null
+  color: string
+  /** False renders the label upright instead of upside down. */
+  flip?: boolean
+  className?: string
+  style?: React.CSSProperties
+}) {
+  return (
+    <div
+      aria-hidden={!label}
+      aria-label={label ?? undefined}
+      title={label ?? undefined}
+      className={cn('flex min-h-16 flex-col rounded-full py-2', className)}
+      style={{ backgroundColor: color, ...style }}
+    >
+      {label ? (
+        <div className="sticky top-16 flex justify-center">
+          <span
+            aria-hidden
+            className={cn(
+              'font-tabular m3-label-md font-semibold whitespace-nowrap text-white',
+              flip && 'rotate-180'
+            )}
+            style={{ writingMode: 'vertical-rl' }}
+          >
+            {label}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/**
  * Vertical section rail copied from the fare display: a colored pill with a
  * sticky vertical label. Used for both the fare rail and the CTB street rail.
  * Sections without data render the neutral rail with no label.
@@ -242,27 +288,7 @@ function SectionRail({
 }) {
   return (
     <div className="flex w-7 shrink-0 flex-col">
-      <div
-        aria-hidden={!label}
-        title={label ?? undefined}
-        className="flex min-h-16 flex-1 flex-col rounded-full py-2"
-        style={{ backgroundColor: color }}
-      >
-        {label ? (
-          <div className="sticky top-16 flex justify-center">
-            <span
-              aria-hidden
-              className={cn(
-                'font-tabular m3-label-md font-semibold whitespace-nowrap text-white',
-                flip && 'rotate-180'
-              )}
-              style={{ writingMode: 'vertical-rl' }}
-            >
-              {label}
-            </span>
-          </div>
-        ) : null}
-      </div>
+      <RailPill label={label} color={color} flip={flip} className="flex-1" />
     </div>
   )
 }
@@ -359,30 +385,50 @@ function KmbRouteStopList({
   const showStreetRail =
     isCtbRoute && Array.from(streetBySeq.values()).some((street) => street !== null)
 
-  // Street sections span the whole route, so a road never splits at a fare
-  // boundary. Fare subsections nest inside each street section instead.
-  // Stops without a street get the neutral rail with no label, the same way
-  // fare sections without fare data skip the label.
+  // Global street runs across the whole route. A road never splits at a fare
+  // boundary; consecutive stops on the same street share one rail. Stops
+  // without a street get the neutral rail with no label, the same way fare
+  // sections without fare data skip the label.
   const streetSections = React.useMemo(() => {
     if (!showStreetRail) return null
-    const fareIdxBySeq = new Map<number, number>()
-    sections.forEach((section, idx) => {
-      for (const rs of section.items) {
-        if (!fareIdxBySeq.has(rs.seq)) fareIdxBySeq.set(rs.seq, idx)
-      }
-    })
     let streetIdx = 0
     return groupConsecutiveBy(variantStops, (rs) => streetBySeq.get(rs.seq) ?? null).map((sub) => ({
       ...sub,
       colorIdx: streetIdx++,
-      fareSubs: groupIntoFareSections(sub.items, (rs) => faresBySeq[rs.seq] ?? null).map(
-        (fareSub) => ({
-          ...fareSub,
-          colorIdx: fareIdxBySeq.get(fareSub.items[0]?.seq ?? -1) ?? 0,
-        })
-      ),
     }))
-  }, [sections, variantStops, faresBySeq, streetBySeq, showStreetRail])
+  }, [variantStops, streetBySeq, showStreetRail])
+
+  // Row timeline for grid mode: one row per stop, fare runs in column 1 and
+  // street runs in column 2, each spanning exactly its own rows. Both rails
+  // stay continuous with independent breaks, so neither splits the other.
+  const timeline = React.useMemo(() => {
+    if (!streetSections) return null
+    const rowOf = new Map<KmbRouteStopLite, number>()
+    variantStops.forEach((rs, index) => rowOf.set(rs, index + 1))
+    const runStart = (items: KmbRouteStopLite[]): number => {
+      const first = items[0]
+      return first ? (rowOf.get(first) ?? 1) : 1
+    }
+    return {
+      fareRuns: sections.map((section, sectionIdx) => ({
+        key: `fare:${section.fare ?? 'unknown'}:${sectionIdx}`,
+        label: section.fare !== null ? formatFareHkd(section.fare) : null,
+        color: section.fare !== null ? getFareSectionColor(sectionIdx) : FARE_UNKNOWN_COLOR,
+        start: runStart(section.items),
+        span: section.items.length,
+      })),
+      streetRuns: streetSections.map((streetSection, streetIdx) => ({
+        key: `street:${streetSection.key ?? 'unknown'}:${streetIdx}`,
+        label: streetSection.key,
+        color:
+          streetSection.key !== null
+            ? getFareSectionColor(streetSection.colorIdx)
+            : FARE_UNKNOWN_COLOR,
+        start: runStart(streetSection.items),
+        span: streetSection.items.length,
+      })),
+    }
+  }, [streetSections, sections, variantStops])
 
   const renderStopCard = (rs: KmbRouteStopLite) => {
     const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
@@ -425,59 +471,55 @@ function KmbRouteStopList({
 
   return (
     <div key={listKey} className="space-y-3">
-      {streetSections
-        ? streetSections.map((streetSection, streetIdx) => {
-            const streetLabel = streetSection.key
-            const streetColor =
-              streetLabel !== null
-                ? getFareSectionColor(streetSection.colorIdx)
-                : FARE_UNKNOWN_COLOR
-            return (
-              <section
-                key={`street:${streetLabel ?? 'unknown'}:${streetIdx}`}
-                aria-label={streetLabel ?? undefined}
-                className="flex gap-2"
-              >
-                {/* Chinese reads upright vertically with no rotation; English keeps the fare rail style. */}
-                <SectionRail label={streetLabel} color={streetColor} flip={lang === 'en'} />
-                <div className="flex min-w-0 flex-1 flex-col gap-2">
-                  {streetSection.fareSubs.map((sub, subIdx) => {
-                    const fareLabel = sub.fare !== null ? formatFareHkd(sub.fare) : null
-                    const fareColor =
-                      sub.fare !== null ? getFareSectionColor(sub.colorIdx) : FARE_UNKNOWN_COLOR
-                    return (
-                      <div
-                        key={`fare:${sub.fare ?? 'unknown'}:${subIdx}`}
-                        aria-label={fareLabel ?? undefined}
-                        className="flex min-w-0 flex-1 gap-2"
-                      >
-                        <SectionRail label={fareLabel} color={fareColor} />
-                        <div className="min-w-0 flex-1 space-y-2">
-                          {sub.items.map((rs) => renderStopCard(rs))}
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              </section>
-            )
-          })
-        : sections.map((section, sectionIdx) => {
-            const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
-            const sectionColor = sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR
-            return (
-              <section
-                key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
-                aria-label={fareLabel ?? undefined}
-                className="flex gap-2"
-              >
-                <SectionRail label={fareLabel} color={sectionColor} />
-                <div className="min-w-0 flex-1 space-y-2">
-                  {section.items.map((rs) => renderStopCard(rs))}
-                </div>
-              </section>
-            )
-          })}
+      {timeline ? (
+        <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2">
+          {timeline.fareRuns.map((run) => (
+            <RailPill
+              key={run.key}
+              label={run.label}
+              color={run.color}
+              className="w-7"
+              style={{ gridColumn: 1, gridRow: `${run.start} / span ${run.span}` }}
+            />
+          ))}
+          {timeline.streetRuns.map((run) => (
+            <RailPill
+              key={run.key}
+              label={run.label}
+              color={run.color}
+              flip={lang === 'en'}
+              className="w-7"
+              style={{ gridColumn: 2, gridRow: `${run.start} / span ${run.span}` }}
+            />
+          ))}
+          {variantStops.map((rs, index) => (
+            <div
+              key={`${rs.stopId}:${rs.seq}`}
+              className="min-w-0 py-1"
+              style={{ gridColumn: 3, gridRow: index + 1 }}
+            >
+              {renderStopCard(rs)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        sections.map((section, sectionIdx) => {
+          const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
+          const sectionColor = sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR
+          return (
+            <section
+              key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
+              aria-label={fareLabel ?? undefined}
+              className="flex gap-2"
+            >
+              <SectionRail label={fareLabel} color={sectionColor} />
+              <div className="min-w-0 flex-1 space-y-2">
+                {section.items.map((rs) => renderStopCard(rs))}
+              </div>
+            </section>
+          )
+        })
+      )}
     </div>
   )
 }

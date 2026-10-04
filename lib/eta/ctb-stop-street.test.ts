@@ -1,11 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
+  buildStreetRuns,
   clearCtbStopStreetCache,
   parseCtbStopName,
   parseCtbStopNameCached,
   parseCtbStopStreet,
   parseCtbStopStreetCached,
+  pickCtbDisplayName,
 } from './ctb-stop-street'
 
 beforeEach(() => {
@@ -40,6 +42,11 @@ describe('parseCtbStopStreet', () => {
   it('keeps everything after the first comma', () => {
     expect(parseCtbStopStreet('A, B, C')).toBe('B, C')
   })
+
+  it('returns null when the name part is blank', () => {
+    expect(parseCtbStopStreet(', Foo')).toBeNull()
+    expect(parseCtbStopStreet(' , Foo')).toBeNull()
+  })
 })
 
 describe('parseCtbStopStreetCached', () => {
@@ -66,9 +73,61 @@ describe('parseCtbStopName', () => {
     })
   })
 
+  it('trims whitespace-only names', () => {
+    expect(parseCtbStopName('   ')).toEqual({ name: '', street: null })
+  })
+
+  it('keeps the full name when the name part is blank', () => {
+    expect(parseCtbStopName(', Foo')).toEqual({ name: ', Foo', street: null })
+    expect(parseCtbStopName(' , Foo')).toEqual({ name: ', Foo', street: null })
+  })
+
   it('caches results per input', () => {
     const first = parseCtbStopNameCached('林士街, 德輔道中')
     expect(first).toEqual({ name: '林士街', street: '德輔道中' })
     expect(parseCtbStopNameCached('林士街, 德輔道中')).toBe(first)
+  })
+})
+
+describe('pickCtbDisplayName', () => {
+  it('prefers the CTB name part', () => {
+    expect(pickCtbDisplayName('Rumsey Street', 'Full Name')).toBe('Rumsey Street')
+  })
+
+  it('falls back when the CTB name part is blank', () => {
+    expect(pickCtbDisplayName('', 'Full Name')).toBe('Full Name')
+    expect(pickCtbDisplayName(null, 'Full Name')).toBe('Full Name')
+    expect(pickCtbDisplayName(undefined, 'Full Name')).toBe('Full Name')
+  })
+})
+
+describe('buildStreetRuns', () => {
+  it('groups consecutive stops on the same street', () => {
+    expect(
+      buildStreetRuns(['a', 'b', 'c'], (item) => (item === 'c' ? 'Second St' : 'Main St'))
+    ).toEqual([
+      { street: 'Main St', items: ['a', 'b'], colorIdx: 0 },
+      { street: 'Second St', items: ['c'], colorIdx: 1 },
+    ])
+  })
+
+  it('starts a new run when a street repeats non-consecutively', () => {
+    const runs = buildStreetRuns(['a', 'b', 'c'], (item) =>
+      item === 'b' ? 'Second St' : 'Main St'
+    )
+    expect(runs?.map((run) => run.street)).toEqual(['Main St', 'Second St', 'Main St'])
+    expect(runs?.map((run) => run.colorIdx)).toEqual([0, 1, 2])
+  })
+
+  it('groups unknown streets without consuming palette indices', () => {
+    expect(buildStreetRuns(['a', 'b', 'c'], (item) => (item === 'b' ? null : 'Main St'))).toEqual([
+      { street: 'Main St', items: ['a'], colorIdx: 0 },
+      { street: null, items: ['b'], colorIdx: -1 },
+      { street: 'Main St', items: ['c'], colorIdx: 1 },
+    ])
+  })
+
+  it('returns null when no stop has a street', () => {
+    expect(buildStreetRuns(['a', 'b'], () => null)).toBeNull()
   })
 })

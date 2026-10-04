@@ -23,3 +23,23 @@ export function getFareSectionColor(sectionIndex: number): string {
     FARE_SECTION_COLORS.length
   return FARE_SECTION_COLORS[idx]!
 }
+
+/**
+ * Distinct colors for street sections along a CTB route. Kept separate from
+ * the fare palette so a street rail never shares a color meaning with the
+ * fare rail next to it.
+ */
+export const STREET_SECTION_COLORS = [
+  '#00796b',
+  '#795548',
+  '#546e7a',
+  '#827717',
+  '#ad1457',
+] as const
+
+export function getStreetSectionColor(sectionIndex: number): string {
+  const idx =
+    ((sectionIndex % STREET_SECTION_COLORS.length) + STREET_SECTION_COLORS.length) %
+    STREET_SECTION_COLORS.length
+  return STREET_SECTION_COLORS[idx]!
+}

@@ -299,6 +299,78 @@ describe('fetchKmbEtasForStop hybrid', () => {
 
     expect(fetchOfficialStopEta).toHaveBeenCalledWith('STOP1', controller.signal)
   })
+
+  it('fetches each GMB region with its own gtfsId instead of merging them', async () => {
+    const hkiEntry = makeRouteEntry({
+      route: '1',
+      co: ['gmb'],
+      bound: { gmb: 'O' },
+      stops: { gmb: ['HKI_STOP'] },
+      gtfsId: '2006408',
+    })
+    const klnEntry = makeRouteEntry({
+      route: '1',
+      co: ['gmb'],
+      bound: { gmb: 'O' },
+      stops: { gmb: ['KLN_STOP'] },
+      gtfsId: '2002337',
+    })
+    const indexes = emptyIndexes()
+    indexes.stopRoutesIndex.set('HKI_STOP', [
+      {
+        stopId: 'HKI_STOP',
+        co: 'gmb',
+        route: '1',
+        bound: 'O',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '2006408',
+      },
+    ])
+    indexes.stopRoutesIndex.set('KLN_STOP', [
+      {
+        stopId: 'KLN_STOP',
+        co: 'gmb',
+        route: '1',
+        bound: 'O',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '2002337',
+      },
+    ])
+    indexes.routeVariantIndex.set('gmb|1|O|1|2006408', hkiEntry)
+    indexes.routeVariantIndex.set('gmb|1|O|1|2002337', klnEntry)
+
+    const fetchOfficialStopEta = vi.fn()
+    const fetchVariantEtas = vi.fn().mockResolvedValue([
+      {
+        eta: '2026-08-02T15:30:00+08:00',
+        dest: { en: '', zh: '' },
+        remark: { en: '', zh: '' },
+        co: 'gmb',
+      },
+    ])
+
+    const hkiResult = await fetchKmbEtasForStop(
+      { stopId: 'HKI_STOP', language: 'tc' },
+      { getIndexes: async () => indexes, fetchOfficialStopEta, fetchVariantEtas }
+    )
+    expect(fetchVariantEtas).toHaveBeenCalledWith(
+      expect.objectContaining({ gtfsId: '2006408', seq: 0 })
+    )
+    expect(hkiResult[0]?.gtfsId).toBe('2006408')
+
+    fetchVariantEtas.mockClear()
+    const klnResult = await fetchKmbEtasForStop(
+      { stopId: 'KLN_STOP', language: 'tc' },
+      { getIndexes: async () => indexes, fetchOfficialStopEta, fetchVariantEtas }
+    )
+    expect(fetchVariantEtas).toHaveBeenCalledWith(
+      expect.objectContaining({ gtfsId: '2002337', seq: 0 })
+    )
+    expect(klnResult[0]?.gtfsId).toBe('2002337')
+    expect(fetchOfficialStopEta).not.toHaveBeenCalled()
+  })
 })
 
 describe('fetchLrtEtasForStop cache', () => {

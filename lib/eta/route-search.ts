@@ -98,7 +98,11 @@ export function normalizeRouteQuery(query: string): {
 }
 
 export function compareRouteEntries(a: RouteSearchEntry, b: RouteSearchEntry): number {
-  return a.route.localeCompare(b.route, undefined, { numeric: true }) || a.co.localeCompare(b.co)
+  return (
+    a.route.localeCompare(b.route, undefined, { numeric: true }) ||
+    a.co.localeCompare(b.co) ||
+    a.key.localeCompare(b.key)
+  )
 }
 
 function entryDisplayText(
@@ -109,8 +113,15 @@ function entryDisplayText(
   return pickLang(entry[field], lang)
 }
 
-function canonicalRouteSearchKey(co: unknown, route: unknown): string {
-  return `${normalizeOperator(String(co ?? ''))}|${String(route ?? '').toUpperCase()}`
+function canonicalRouteSearchKey(co: unknown, route: unknown, gtfsId?: unknown): string {
+  const base = `${normalizeOperator(String(co ?? ''))}|${String(route ?? '').toUpperCase()}`
+  // GMB numbers repeat across HK Island, Kowloon and NT. Keep each region
+  // as its own search entry via gtfsId.
+  if (normalizeOperator(String(co ?? '')) === 'gmb') {
+    const region = String(gtfsId ?? '').trim()
+    if (region) return `${base}|${region}`
+  }
+  return base
 }
 
 /**
@@ -124,7 +135,7 @@ export function buildRouteSearchIndex(
 ): RouteSearchEntry[] {
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {
-    const key = canonicalRouteSearchKey(r.co, r.route)
+    const key = canonicalRouteSearchKey(r.co, r.route, (r as { gtfsId?: unknown }).gtfsId)
     const list = variantsByKey.get(key)
     if (list) list.push(r)
     else variantsByKey.set(key, [r])
@@ -135,7 +146,7 @@ export function buildRouteSearchIndex(
   // direction stays separate, keeping seq order for the via line.
   const rowsByVariantKey = new Map<string, KmbRouteStopLite[]>()
   for (const rs of routeStops) {
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route)
+    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.gtfsId)
     if (!variantsByKey.has(routeKey)) continue
     const variantKey = `${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
     const list = rowsByVariantKey.get(variantKey)
@@ -146,7 +157,7 @@ export function buildRouteSearchIndex(
     rows.sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0))
   }
   for (const rs of routeStops) {
-    const key = canonicalRouteSearchKey(rs.co, rs.route)
+    const key = canonicalRouteSearchKey(rs.co, rs.route, rs.gtfsId)
     if (!variantsByKey.has(key)) continue
     let bucket = stopIdsByKey.get(key)
     if (!bucket) {
@@ -443,7 +454,7 @@ export function operatorCounts(index: RouteSearchEntry[]): Array<{ code: string;
  * so busy interchanges win over quiet stops.
  */
 export function countRoutesByStopName(
-  routeStops: Array<{ co: string; route: string; stopId: string }>,
+  routeStops: Array<{ co: string; route: string; stopId: string; gtfsId?: string }>,
   stopsById: Map<string, KmbStopSearchItem>,
   lang: UiLanguage
 ): Map<string, number> {
@@ -460,7 +471,7 @@ export function countRoutesByStopName(
     if (!stopId) continue
     const key = nameByStopId.get(stopId)
     if (!key) continue
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route)
+    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.gtfsId)
     let set = byName.get(key)
     if (!set) {
       set = new Set()

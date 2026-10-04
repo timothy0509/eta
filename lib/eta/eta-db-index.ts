@@ -11,6 +11,9 @@ export type KmbRouteStopLite = {
   serviceType: string
   seq: number
   stopId: string
+  /** GMB region identifier. Empty for other operators. Same number can mean
+   *  three routes (HK Island, Kowloon, NT), distinguished by gtfsId. */
+  gtfsId?: string
 }
 
 export type KmbRouteInfoLite = {
@@ -18,6 +21,8 @@ export type KmbRouteInfoLite = {
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
+  /** GMB region identifier, see KmbRouteStopLite. */
+  gtfsId?: string
   origin: {
     en: string
     tc: string
@@ -43,6 +48,7 @@ export type StopRouteEntry = {
   bound: string
   serviceType: string
   seq: number
+  gtfsId?: string
 }
 
 export type RouteVariantKey = {
@@ -50,10 +56,39 @@ export type RouteVariantKey = {
   route: string
   bound: string
   serviceType: string
+  /** Only set for GMB. Other operators keep the legacy 4-part key. */
+  gtfsId?: string
+}
+
+export function isGmbCompany(co: unknown): boolean {
+  return String(co ?? '').toLowerCase() === 'gmb'
+}
+
+export function normalizeGtfsId(gtfsId: unknown): string {
+  return String(gtfsId ?? '').trim()
 }
 
 export function routeVariantKey(k: RouteVariantKey): string {
-  return `${k.co}|${k.route.toUpperCase()}|${k.bound}|${k.serviceType}`
+  const base = `${k.co}|${k.route.toUpperCase()}|${k.bound}|${k.serviceType}`
+  if (isGmbCompany(k.co)) {
+    const gtfsId = normalizeGtfsId(k.gtfsId)
+    if (gtfsId) return `${base}|${gtfsId}`
+  }
+  return base
+}
+
+/** Parse a variant key back into parts. GMB keys carry a 5th gtfsId part. */
+export function parseRouteVariantKey(key: string): {
+  co: string
+  route: string
+  bound: string
+  serviceType: string
+  gtfsId: string
+} {
+  const parts = String(key ?? '').split('|')
+  const [co = '', route = '', bound = '', serviceType = ''] = parts
+  const gtfsId = isGmbCompany(co) && parts.length > 4 ? (parts[4] ?? '') : ''
+  return { co, route, bound, serviceType, gtfsId }
 }
 
 export type EtaDbIndexes = {
@@ -90,10 +125,13 @@ export function routeStopSeqKey(params: {
   bound: string
   serviceType: string
   stopId: string
+  gtfsId?: string
 }): string {
-  return `${params.co}|${params.route.toUpperCase()}|${normalizeBound(params.bound)}|${String(
+  const base = `${params.co}|${params.route.toUpperCase()}|${normalizeBound(params.bound)}|${String(
     params.serviceType ?? ''
-  )}|${normalizeStopId(params.stopId)}`
+  )}`
+  const suffix = isGmbCompany(params.co) ? `|${normalizeGtfsId(params.gtfsId)}` : ''
+  return `${base}${suffix}|${normalizeStopId(params.stopId)}`
 }
 
 function yieldToMain(): Promise<void> {
@@ -119,6 +157,7 @@ export async function buildEtaDbIndexes(
       .flatMap((co) => {
         const stops = entry.stops[co] ?? []
         const bound = normalizeBound(entry.bound[co])
+        const gtfsId = isGmbCompany(co) ? normalizeGtfsId(entry.gtfsId) : ''
         return stops.map((stopId, idx) => {
           const normalizedStopId = normalizeStopId(stopId)
           const seqKey = routeStopSeqKey({
@@ -127,6 +166,7 @@ export async function buildEtaDbIndexes(
             bound,
             serviceType: entry.serviceType,
             stopId: normalizedStopId,
+            gtfsId,
           })
           if (normalizedStopId && !routeStopSeqIndex.has(seqKey)) {
             routeStopSeqIndex.set(seqKey, idx)
@@ -138,6 +178,7 @@ export async function buildEtaDbIndexes(
             serviceType: entry.serviceType,
             seq: idx + 1,
             stopId: normalizedStopId,
+            gtfsId,
           }
         })
       })
@@ -174,11 +215,13 @@ export async function buildEtaDbIndexes(
       if (!busCompanies.includes(co)) continue
       const stops = entry.stops[co] ?? []
       const bound = normalizeBound(entry.bound[co])
+      const gtfsId = isGmbCompany(co) ? normalizeGtfsId(entry.gtfsId) : ''
       const variantKey = routeVariantKey({
         co,
         route: entry.route,
         bound,
         serviceType: entry.serviceType,
+        gtfsId,
       })
       if (!routeVariantIndex.has(variantKey)) {
         routeVariantIndex.set(variantKey, entry)
@@ -204,6 +247,7 @@ export async function buildEtaDbIndexes(
           bound,
           serviceType: entry.serviceType,
           seq: idx,
+          gtfsId,
         })
         stopRoutesIndex.set(key, routeList)
       }

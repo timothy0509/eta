@@ -1,7 +1,7 @@
 import type { Company, RouteListEntry } from 'hk-bus-eta'
 
 import type { KmbRouteStopLite } from '@/lib/eta/client'
-import { routeVariantKey } from '@/lib/eta/eta-db-index'
+import { isGmbCompany, normalizeGtfsId, routeVariantKey } from '@/lib/eta/eta-db-index'
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from '@/lib/eta/kmb-cache'
 
 export type KmbFareInfo = {
@@ -10,7 +10,7 @@ export type KmbFareInfo = {
   source: 'hk-bus-eta'
 }
 
-type VariantKey = `${string}|${string}|${string}|${string}`
+type VariantKey = string
 
 export type VariantStops = {
   variantKey: VariantKey
@@ -32,17 +32,28 @@ function normalizeRouteName(route: string): string {
     .toUpperCase()
 }
 
-function variantKey(co: string, route: string, bound: string, serviceType: string): VariantKey {
-  return `${String(co ?? 'kmb')}|${normalizeRouteName(route)}|${String(bound ?? '')}|${String(
+function variantKey(
+  co: string,
+  route: string,
+  bound: string,
+  serviceType: string,
+  gtfsId?: string
+): VariantKey {
+  const base = `${String(co ?? 'kmb')}|${normalizeRouteName(route)}|${String(bound ?? '')}|${String(
     serviceType ?? ''
   )}`
+  if (isGmbCompany(co)) {
+    const region = normalizeGtfsId(gtfsId)
+    if (region) return `${base}|${region}`
+  }
+  return base
 }
 
 export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]) {
   const byVariantKey = new Map<VariantKey, VariantStops>()
 
   for (const rs of routeStops) {
-    const key = variantKey(rs.co, rs.route, rs.bound, rs.serviceType)
+    const key = variantKey(rs.co, rs.route, rs.bound, rs.serviceType, rs.gtfsId)
     const existing = byVariantKey.get(key)
     const stopId = String(rs.stopId ?? '').trim()
     if (!stopId) continue
@@ -119,6 +130,7 @@ export function getStopToTerminusFare(params: {
   route: string
   dir: string
   serviceType: string
+  gtfsId?: string
   stopId: string
   // For disambiguation: KMB ETA provides destination strings; use them if possible.
   etaDestCandidates?: string[]
@@ -126,7 +138,7 @@ export function getStopToTerminusFare(params: {
   routeVariantIndex: Map<string, RouteListEntry>
 }): KmbFareInfo | null {
   const routeName = normalizeRouteName(params.route)
-  const key = variantKey(params.co, routeName, params.dir, params.serviceType)
+  const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
   const variant = params.byVariantStops.get(key)
   if (!variant) return null
 
@@ -141,6 +153,7 @@ export function getStopToTerminusFare(params: {
       route: routeName,
       bound: params.dir,
       serviceType: params.serviceType,
+      gtfsId: params.gtfsId,
     })
   )
 
@@ -182,12 +195,13 @@ export function computeEtaLeg(params: {
   route: string
   dir: string
   serviceType: string
+  gtfsId?: string
   stopId: string
   etaSeq: number
   byVariantStops: Map<VariantKey, VariantStops>
 }): 'A' | 'B' | null {
   const routeName = normalizeRouteName(params.route)
-  const key = variantKey(params.co, routeName, params.dir, params.serviceType)
+  const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
   const variant = params.byVariantStops.get(key)
   if (!variant) return null
 

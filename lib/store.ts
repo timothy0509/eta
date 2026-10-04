@@ -61,6 +61,8 @@ export type FavoritesItem = FavoritesMeta &
         co?: string
         bound: string
         serviceType: string
+        /** GMB region identifier. Same number can mean three routes. */
+        gtfsId?: string
         origin?: { en: string; tc: string; sc: string }
         destination?: { en: string; tc: string; sc: string }
       }

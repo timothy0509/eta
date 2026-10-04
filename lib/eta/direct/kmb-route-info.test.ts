@@ -126,3 +126,55 @@ describe('findKmbRouteInfo abort signal', () => {
     indexesSpy.mockRestore()
   })
 })
+
+describe('findKmbRouteInfo GMB regions', () => {
+  function gmbEntry(gtfsId: string, route = '1'): RouteListEntry {
+    const entry = makeRouteListEntry()
+    return {
+      ...entry,
+      route,
+      co: ['gmb'],
+      orig: { en: `Orig ${gtfsId}`, zh: `起點 ${gtfsId}` },
+      dest: { en: `Dest ${gtfsId}`, zh: `終點 ${gtfsId}` },
+      gtfsId,
+    }
+  }
+
+  function gmbIndex(): Map<string, RouteListEntry> {
+    return new Map([
+      ['gmb|1|O|1|2006408', gmbEntry('2006408')],
+      ['gmb|1|O|1|2002337', gmbEntry('2002337')],
+    ])
+  }
+
+  it('resolves each region by gtfsId', async () => {
+    const index = gmbIndex()
+    const hki = etaDb.findKmbRouteInfoFromIndex(index, {
+      co: 'gmb',
+      route: '1',
+      bound: 'O',
+      serviceType: '1',
+      gtfsId: '2006408',
+    })
+    const kln = etaDb.findKmbRouteInfoFromIndex(index, {
+      co: 'gmb',
+      route: '1',
+      bound: 'O',
+      serviceType: '1',
+      gtfsId: '2002337',
+    })
+    expect(hki?.gtfsId).toBe('2006408')
+    expect(kln?.gtfsId).toBe('2002337')
+    expect(hki?.routeEntry.gtfsId).not.toBe(kln?.routeEntry.gtfsId)
+  })
+
+  it('falls back to the first region when gtfsId is omitted', async () => {
+    const info = etaDb.findKmbRouteInfoFromIndex(gmbIndex(), {
+      co: 'gmb',
+      route: '1',
+      bound: 'O',
+      serviceType: '1',
+    })
+    expect(info?.gtfsId).toBe('2006408')
+  })
+})

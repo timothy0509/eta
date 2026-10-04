@@ -1,4 +1,5 @@
 import type { KmbEtaEntryWithLeg } from '@/lib/eta/client'
+import { isGmbCompany, normalizeGtfsId } from '@/lib/eta/eta-db-index'
 import type { UiLanguage } from '@/lib/eta/types'
 
 /** Ordinal label for the nth departure: 1st/2nd/3rd or 第N班. */
@@ -41,7 +42,12 @@ function buildDefaultKey(entry: KmbEtaEntryWithLeg): string {
   const dir = String(entry.dir ?? '')
   const serviceType = String(entry.service_type ?? '')
   const legSuffix = entry.leg ?? '_'
-  return `${co}|${route}|${dir}|${serviceType}|${legSuffix}`
+  const base = `${co}|${route}|${dir}|${serviceType}`
+  if (isGmbCompany(co)) {
+    const gtfsId = normalizeGtfsId((entry as { gtfsId?: unknown }).gtfsId)
+    if (gtfsId) return `${base}|${gtfsId}|${legSuffix}`
+  }
+  return `${base}|${legSuffix}`
 }
 
 export function groupEtasByVariant(
@@ -62,9 +68,11 @@ export function groupEtasByVariant(
     const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq)
     const hasEta = hasValidEta(sorted)
 
-    const parts = key.split('|')
-    const baseKey = parts.slice(0, 4).join('|')
-    const legPart = parts[4]
+    // Base key is everything but the trailing leg suffix, so GMB keys
+    // (co|route|dir|serviceType|gtfsId|leg) keep their region part.
+    const lastSep = key.lastIndexOf('|')
+    const baseKey = lastSep >= 0 ? key.slice(0, lastSep) : key
+    const legPart = lastSep >= 0 ? key.slice(lastSep + 1) : ''
     const isArrivingLeg = legPart === 'B'
 
     const hasFare = !isArrivingLeg

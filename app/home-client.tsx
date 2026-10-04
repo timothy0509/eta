@@ -410,6 +410,7 @@ export default function HomeClient() {
         route: selectedItem.route,
         bound: selectedItem.bound,
         serviceType: selectedItem.serviceType,
+        gtfsId: selectedItem.gtfsId,
       }
     }
     return undefined

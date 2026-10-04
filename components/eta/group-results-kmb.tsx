@@ -55,6 +55,25 @@ function memberVariantKeys(member: KmbGroupMember): Set<string> | null {
   return entries.length ? new Set(entries.map((entry) => entry.variantKey)) : null
 }
 
+function etaBaseKey(entry: KmbEtaEntryWithLeg): string {
+  const co = String(entry.co ?? 'kmb')
+  const base = `${co}|${(entry.route ?? '').toUpperCase()}|${entry.dir}|${String(entry.service_type)}`
+  if (co.toLowerCase() === 'gmb') {
+    const gtfsId = String(entry.gtfsId ?? '').trim()
+    if (gtfsId) return `${base}|${gtfsId}`
+  }
+  return base
+}
+
+function variantFilterMatches(filterKey: string, etaKey: string): boolean {
+  if (filterKey === etaKey) return true
+  const parts = filterKey.split('|')
+  if (parts.length === 4 && parts[0]?.toLowerCase() === 'gmb') {
+    return etaKey.startsWith(`${filterKey}|`)
+  }
+  return false
+}
+
 function pickStopName(stop: KmbStopSearchItem | undefined, lang: UiLanguage): string | null {
   if (!stop) return null
   return pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
@@ -131,32 +150,30 @@ function GroupMemberSection({
         let etas = stopIds.flatMap((id) => result.byStopId[id] ?? [])
         if (variantKeys && variantKeys.size > 0) {
           etas = etas.filter((entry) => {
-            const key = `${String(entry.co ?? 'kmb')}|${(entry.route ?? '').toUpperCase()}|${entry.dir}|${String(entry.service_type)}`
-            return variantKeys.has(key)
+            const key = etaBaseKey(entry)
+            for (const filterKey of variantKeys) {
+              if (variantFilterMatches(filterKey, key)) return true
+            }
+            return false
           })
         }
         setEta(etas)
         setFares(result.faresByVariantKey ?? {})
 
-        const missing = Array.from(
-          new Set(
-            etas.map(
-              (entry) =>
-                `${String(entry.co ?? 'kmb')}|${(entry.route ?? '').toUpperCase()}|${entry.dir}|${String(entry.service_type)}`
-            )
-          )
-        )
+        const missing = Array.from(new Set(etas.map((entry) => etaBaseKey(entry))))
           .filter((key) => !fetchedInfoKeys.current.has(key))
           .slice(0, 30)
         if (missing.length > 0) {
           const fetched = await Promise.allSettled(
             missing.map(async (key) => {
-              const [co = 'kmb', route = '', direction = '', serviceType = ''] = key.split('|')
+              const [co = 'kmb', route = '', direction = '', serviceType = '', gtfsId = ''] =
+                key.split('|')
               const info = await fetchKmbRouteInfo({
                 co: co as Company,
                 route,
                 direction,
                 serviceType,
+                gtfsId: co.toLowerCase() === 'gmb' ? gtfsId || undefined : undefined,
                 signal: controller.signal,
               })
               return { key, info }

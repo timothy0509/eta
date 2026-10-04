@@ -303,17 +303,19 @@ function KmbRouteStopList({
               <div
                 aria-hidden={!fareLabel}
                 title={fareLabel ?? undefined}
-                className="flex min-h-16 flex-1 items-center justify-center rounded-full py-3"
+                className="flex min-h-16 flex-1 flex-col rounded-full py-2"
                 style={{ backgroundColor: sectionColor }}
               >
                 {fareLabel ? (
-                  <span
-                    aria-hidden
-                    className="font-tabular m3-label-md rotate-180 font-semibold whitespace-nowrap text-white"
-                    style={{ writingMode: 'vertical-rl' }}
-                  >
-                    {fareLabel}
-                  </span>
+                  <div className="sticky top-16 flex justify-center">
+                    <span
+                      aria-hidden
+                      className="font-tabular m3-label-md rotate-180 font-semibold whitespace-nowrap text-white"
+                      style={{ writingMode: 'vertical-rl' }}
+                    >
+                      {fareLabel}
+                    </span>
+                  </div>
                 ) : null}
               </div>
             </div>

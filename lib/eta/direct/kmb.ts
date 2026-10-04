@@ -124,7 +124,8 @@ export type KmbRouteStopEntry = {
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:route-stops',
+    // v2: entries carry the GMB gtfsId region. v1 payloads merge regions.
+    key: 'kmb:route-stops:v2',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -175,7 +176,8 @@ export type KmbRouteListEntry = {
 
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:routes',
+    // v2: entries carry the GMB gtfsId region. v1 payloads merge regions.
+    key: 'kmb:routes:v2',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {

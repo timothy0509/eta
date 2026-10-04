@@ -438,7 +438,8 @@ function KmbRouteStopList({
                       aria-label={streetLabel ?? undefined}
                       className="flex min-w-0 flex-1 gap-2"
                     >
-                      <SectionRail label={streetLabel} color={streetColor} flip={false} />
+                      {/* Chinese reads upright vertically with no rotation; English keeps the fare rail style. */}
+                      <SectionRail label={streetLabel} color={streetColor} flip={lang === 'en'} />
                       <div className="min-w-0 flex-1 space-y-2">
                         {sub.items.map((rs) => renderStopCard(rs))}
                       </div>

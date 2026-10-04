@@ -18,8 +18,9 @@ describe('getFareSectionColor', () => {
     expect(getFareSectionColor(FARE_SECTION_COLORS.length)).toBe(FARE_SECTION_COLORS[0])
   })
 
-  it('exposes a neutral unknown color', () => {
-    expect(typeof FARE_UNKNOWN_COLOR).toBe('string')
+  it('uses a valid hex color distinct from the palette', () => {
+    expect(FARE_UNKNOWN_COLOR).toMatch(/^#[0-9a-f]{6}$/i)
+    expect(FARE_SECTION_COLORS).not.toContain(FARE_UNKNOWN_COLOR)
   })
 })
 

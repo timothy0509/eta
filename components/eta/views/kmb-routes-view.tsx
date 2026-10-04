@@ -12,6 +12,7 @@ import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
 import { Input } from '@/components/ui/input'
 import { RouteStopCard } from '@/components/eta/route-stop-timeline'
+import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes, TickingSoonestPill } from '@/components/eta/ticking-eta'
 import { formatEtaOrdinals } from '@/lib/eta/kmb-eta-groups'
 import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
@@ -44,6 +45,7 @@ import {
 } from '@/lib/eta/ctb-stop-street'
 import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
+import { getReadableForeground } from '@/lib/ui/color'
 import {
   buildRouteSearchIndex,
   countRoutesByStopName,
@@ -110,7 +112,6 @@ function KmbRouteStopCard({
   name,
   stopCode,
   seq,
-  color,
   lang,
   expanded,
   onToggle,
@@ -121,7 +122,6 @@ function KmbRouteStopCard({
   name: string
   stopCode: string | null
   seq: number
-  color?: string
   lang: UiLanguage
   expanded: boolean
   onToggle: () => void
@@ -216,7 +216,6 @@ function KmbRouteStopCard({
     <RouteStopCard
       expanded={expanded}
       onToggle={onToggle}
-      color={color}
       seq={seq}
       name={name}
       subtitle={stopCode}
@@ -266,7 +265,8 @@ function RailPill({
           <span
             aria-hidden
             className={cn(
-              'font-tabular m3-label-md font-semibold whitespace-nowrap text-white',
+              'font-tabular m3-label-md font-semibold whitespace-nowrap',
+              getReadableForeground(color),
               flip && 'rotate-180'
             )}
             style={{ writingMode: 'vertical-rl' }}
@@ -361,11 +361,16 @@ function KmbRouteStopList({
     [variantStops, faresBySeq]
   )
 
+  // Known fare sections consume palette indices in order; unknown
+  // sections render the neutral rail without shifting later colors.
+  // Shared with the timeline grid below so both modes agree.
   const sectionColors = React.useMemo(
     () =>
-      sections.map((section, idx) =>
-        section.fare !== null ? getFareSectionColor(idx) : FARE_UNKNOWN_COLOR
-      ),
+      sections.map((section, idx) => {
+        if (section.fare === null) return FARE_UNKNOWN_COLOR
+        const knownIdx = sections.slice(0, idx).filter((s) => s.fare !== null).length
+        return getFareSectionColor(knownIdx)
+      }),
     [sections]
   )
 
@@ -376,6 +381,14 @@ function KmbRouteStopList({
     })
     return map
   }, [variantStops])
+
+  // First stop row per section, so entrance stagger stays global
+  // across sections. The list remounts on `listKey`, which replays the
+  // stagger on variant change but keeps rows still on refresh.
+  const sectionStartRows = React.useMemo(() => {
+    const counts = sections.map((section) => section.items.length)
+    return counts.map((_, idx) => counts.slice(0, idx).reduce((a, b) => a + b, 0))
+  }, [sections])
 
   // Street per stop sequence for the CTB street rail. Null when the stop
   // name has no "{name}, {street}" shape. Splits off the already-parsed
@@ -430,7 +443,7 @@ function KmbRouteStopList({
         sections.map((section, sectionIdx) => ({
           key: `fare:${section.fare ?? 'unknown'}:${sectionIdx}`,
           label: section.fare !== null ? formatFareHkd(section.fare) : null,
-          color: section.fare !== null ? getFareSectionColor(sectionIdx) : FARE_UNKNOWN_COLOR,
+          color: sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR,
           items: section.items,
         }))
       ),
@@ -446,7 +459,7 @@ function KmbRouteStopList({
         }))
       ),
     }
-  }, [streetSections, sections])
+  }, [streetSections, sections, sectionColors])
 
   const renderStopCard = (rs: KmbRouteStopLite) => {
     const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
@@ -466,7 +479,6 @@ function KmbRouteStopList({
     const cardKey = `${rs.stopId}:${rs.seq}`
     return (
       <KmbRouteStopCard
-        key={cardKey}
         stopEtas={stopEtas}
         name={pickCtbDisplayName(ctb?.name, parsed.name)}
         stopCode={parsed.platform ?? parsed.stopCode}
@@ -515,7 +527,7 @@ function KmbRouteStopList({
           {variantStops.map((rs, index) => (
             <div
               key={`${rs.stopId}:${rs.seq}`}
-              className="min-w-0 py-1"
+              className={cn('ui-cv-row min-w-0 py-1', staggerClassForIndex(index))}
               style={{ gridColumn: 3, gridRow: index + 1 }}
             >
               {renderStopCard(rs)}
@@ -534,7 +546,17 @@ function KmbRouteStopList({
             >
               <SectionRail label={fareLabel} color={sectionColor} />
               <div className="min-w-0 flex-1 space-y-2">
-                {section.items.map((rs) => renderStopCard(rs))}
+                {section.items.map((rs, itemIdx) => (
+                  <div
+                    key={`${rs.stopId}:${rs.seq}`}
+                    className={cn(
+                      'ui-cv-row',
+                      staggerClassForIndex((sectionStartRows[sectionIdx] ?? 0) + itemIdx)
+                    )}
+                  >
+                    {renderStopCard(rs)}
+                  </div>
+                ))}
               </div>
             </section>
           )

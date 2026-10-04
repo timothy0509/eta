@@ -17,11 +17,10 @@ export const FARE_SECTION_COLORS = [
 /** Neutral rail color for stops with no usable fare. */
 export const FARE_UNKNOWN_COLOR = '#a1a1aa'
 
-export function getFareSectionColor(sectionIndex: number): string {
-  const idx =
-    ((sectionIndex % FARE_SECTION_COLORS.length) + FARE_SECTION_COLORS.length) %
-    FARE_SECTION_COLORS.length
-  return FARE_SECTION_COLORS[idx]!
+export function getFareSectionColor(sectionIndex: number): (typeof FARE_SECTION_COLORS)[number] {
+  const count = FARE_SECTION_COLORS.length
+  const safe = Number.isFinite(sectionIndex) ? Math.floor(sectionIndex) : 0
+  return FARE_SECTION_COLORS[((safe % count) + count) % count] ?? FARE_SECTION_COLORS[0]
 }
 
 /**
@@ -37,9 +36,10 @@ export const STREET_SECTION_COLORS = [
   '#ad1457',
 ] as const
 
-export function getStreetSectionColor(sectionIndex: number): string {
-  const idx =
-    ((sectionIndex % STREET_SECTION_COLORS.length) + STREET_SECTION_COLORS.length) %
-    STREET_SECTION_COLORS.length
-  return STREET_SECTION_COLORS[idx]!
+export function getStreetSectionColor(
+  sectionIndex: number
+): (typeof STREET_SECTION_COLORS)[number] {
+  const count = STREET_SECTION_COLORS.length
+  const safe = Number.isFinite(sectionIndex) ? Math.floor(sectionIndex) : 0
+  return STREET_SECTION_COLORS[((safe % count) + count) % count] ?? STREET_SECTION_COLORS[0]
 }

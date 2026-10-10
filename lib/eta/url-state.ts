@@ -1,4 +1,4 @@
-import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
+import type { BusRoutesTab, SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 
 const SUB_VIEWS = new Set<SubView>(['routes', 'stops', 'nearby', 'saved', 'settings'])
@@ -41,6 +41,9 @@ export type UrlEncodeInput = {
   lrt?: {
     stationId: string | null
   } | null
+  // Bus routes-view tab. Encoded only as bt=gmb on the bus routes view;
+  // the default bus list encodes nothing so old links keep working.
+  busRoutesTab?: BusRoutesTab | null
 }
 
 export type UrlDecodeResult = {
@@ -53,6 +56,7 @@ export type UrlDecodeResult = {
     lang?: UiLanguage
     routeFilterMode?: RouteFilterMode
     autoRefreshSeconds?: number
+    busRoutesTab?: BusRoutesTab
   }
   selectedItem: FavoritesItem | null
 }
@@ -186,6 +190,7 @@ export function decodeUrlState(search: string): UrlDecodeResult {
 
   const mtrSta = params.get('ms')
   const lrtStationId = params.get('ls')
+  const busRoutesTab: BusRoutesTab | null = params.get('bt') === 'gmb' ? 'gmb' : null
 
   const inferredMode: TransportMode | null =
     explicitMode ?? (mtrSta ? 'mtr' : lrtStationId ? 'lrt' : kmbQuery ? 'kmb' : null)
@@ -193,6 +198,7 @@ export function decodeUrlState(search: string): UrlDecodeResult {
   const state: UrlDecodeResult['state'] = {}
   if (inferredMode) state.mode = inferredMode
   if (subView) state.subView = subView
+  if (busRoutesTab) state.busRoutesTab = busRoutesTab
 
   const derivedRouteFilterMode = routeFilterModeParam ?? (kmbEntries.length ? 'advanced' : null)
 
@@ -280,6 +286,10 @@ export function encodeUrlState(input: UrlEncodeInput): string {
 
   if (input.mode === 'lrt' && input.lrt?.stationId) {
     params.set('ls', input.lrt.stationId)
+  }
+
+  if (input.mode === 'kmb' && input.subView === 'routes' && input.busRoutesTab === 'gmb') {
+    params.set('bt', 'gmb')
   }
 
   return params.toString()

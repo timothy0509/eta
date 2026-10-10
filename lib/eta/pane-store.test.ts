@@ -157,3 +157,18 @@ describe('setKmbPaneState', () => {
     expect(next?.loading).toBe(true)
   })
 })
+
+describe('setBusRoutesTab', () => {
+  beforeEach(() => {
+    usePaneStore.setState({ busRoutesTab: 'bus' })
+  })
+
+  it('switches tabs and skips no-op writes', () => {
+    const { setBusRoutesTab } = usePaneStore.getState()
+    setBusRoutesTab('gmb')
+    expect(usePaneStore.getState().busRoutesTab).toBe('gmb')
+    const first = usePaneStore.getState()
+    setBusRoutesTab('gmb')
+    expect(usePaneStore.getState()).toBe(first)
+  })
+})

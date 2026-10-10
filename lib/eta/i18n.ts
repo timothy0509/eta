@@ -294,6 +294,57 @@ const lrt: Record<string, TranslationEntry> = {
   departingLabel: { en: 'Departing', tc: '離開', sc: '离开' },
 }
 
+const gmb: Record<string, TranslationEntry> = {
+  title: { en: 'Green Minibus', tc: '綠色小巴', sc: '绿色小巴' },
+  tabBus: { en: 'Bus routes', tc: '巴士路線', sc: '巴士路线' },
+  tabGmb: { en: 'Minibus', tc: '小巴', sc: '小巴' },
+  routesTabLabel: { en: 'Route lists', tc: '路線列表', sc: '路线列表' },
+  searchPlaceholder: {
+    en: 'Search minibus route number or place…',
+    tc: '搜尋小巴路線編號或地點…',
+    sc: '搜索小巴路线编号或地点…',
+  },
+  searchRoutes: { en: 'Search minibus routes', tc: '搜尋小巴路線', sc: '搜索小巴路线' },
+  clearFilters: { en: 'Clear search and filters', tc: '清除搜尋及篩選', sc: '清除搜索及筛选' },
+  routesFound: { en: '{count} routes', tc: '{count} 條路線', sc: '{count} 条路线' },
+  noRoutesMatch: {
+    en: 'No minibus routes match "{query}".',
+    tc: '沒有符合「{query}」的小巴路線。',
+    sc: '没有符合“{query}”的小巴路线。',
+  },
+  district: { en: 'District', tc: '地區', sc: '地区' },
+  districtHKI: { en: 'HK Island', tc: '港島', sc: '港岛' },
+  districtKLN: { en: 'Kowloon', tc: '九龍', sc: '九龙' },
+  districtNT: { en: 'New Territories', tc: '新界', sc: '新界' },
+  serviceA: { en: 'Whole day', tc: '全日', sc: '全日' },
+  serviceR: { en: 'Daytime', tc: '日間', sc: '日间' },
+  serviceT: { en: 'Daytime, specific times', tc: '日間及特定時間', sc: '日间及特定时间' },
+  serviceN: { en: 'Overnight', tc: '通宵', sc: '通宵' },
+  serviceNT: { en: 'Overnight, specific times', tc: '通宵及特定時間', sc: '通宵及特定时间' },
+  special1: {
+    en: 'Specific times/days only',
+    tc: '只在特定時間或日子服務',
+    sc: '只在特定时间或日子服务',
+  },
+  special2: { en: 'Weekend/holiday fare differs', tc: '假日收費不同', sc: '假日收费不同' },
+  special3: {
+    en: 'Specific times/days, weekend/holiday fare differs',
+    tc: '特定時間或日子服務，假日收費不同',
+    sc: '特定时间或日子服务，假日收费不同',
+  },
+  journeyTime: { en: 'Journey {count} min', tc: '車程 {count} 分鐘', sc: '车程 {count} 分钟' },
+  officialDetails: {
+    en: 'TD timetable and fares',
+    tc: '運輸署時間表及收費',
+    sc: '运输署时间表及收费',
+  },
+  dataRevised: {
+    en: 'TD data revised {date}',
+    tc: '運輸署資料修正至 {date}',
+    sc: '运输署资料修正至 {date}',
+  },
+}
+
 const favorites: Record<string, TranslationEntry> = {
   saved: { en: 'Saved', tc: '已儲存', sc: '已储存' },
   favorites: { en: 'Favorites', tc: '收藏', sc: '收藏' },
@@ -357,6 +408,7 @@ export const translations = {
   kmb,
   mtr,
   lrt,
+  gmb,
   favorites,
   errors,
 }

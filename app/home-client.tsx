@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 
 import { HomeLayout, StopsLayout } from '@/components/eta/home-layout'
 import { PaneEnter } from '@/components/m3/motion'
+import { BusRoutesTabs } from '@/components/eta/views/bus-routes-tabs'
 import { useRefreshRegistry } from '@/components/eta/hooks/use-refresh-registry'
 import { useUrlSync } from '@/components/eta/hooks/use-url-sync'
 import { PaneSkeleton } from '@/components/eta/pane-skeleton'
@@ -70,6 +71,13 @@ const MtrRoutesView = dynamic(
   () =>
     import('@/components/eta/views/mtr-routes-view').then((mod) => ({
       default: mod.MtrRoutesView,
+    })),
+  { loading: () => <ResultsSkeleton />, ssr: false }
+)
+const GmbRoutesView = dynamic(
+  () =>
+    import('@/components/eta/views/gmb-routes-view').then((mod) => ({
+      default: mod.GmbRoutesView,
     })),
   { loading: () => <ResultsSkeleton />, ssr: false }
 )
@@ -266,6 +274,8 @@ export default function HomeClient() {
   const kmbRouteFilter = usePaneStore((s) => s.kmb?.routeFilter ?? null)
   const mtrSta = usePaneStore((s) => s.mtr?.sta ?? null)
   const lrtStationId = usePaneStore((s) => s.lrt?.stationId ?? null)
+  const busRoutesTab = usePaneStore((s) => s.busRoutesTab)
+  const setBusRoutesTab = usePaneStore((s) => s.setBusRoutesTab)
 
   // Pane-store snapshots are read-only here. Panes write their own
   // snapshots, and the URL hook below only reads them for encoding.
@@ -276,6 +286,7 @@ export default function HomeClient() {
     kmbRouteFilter,
     mtrSta,
     lrtStationId,
+    busRoutesTab,
   })
 
   const { onRegisterRefresh } = useRefreshRegistry({ mode, subView, autoRefreshSeconds })
@@ -524,16 +535,27 @@ export default function HomeClient() {
   }
 
   const renderRoutes = () => {
-    if (mode === 'kmb')
+    if (mode === 'kmb') {
+      // A saved bus route favorite opens straight into the bus list
+      // drilldown, so the GMB tab never hides a deep-linked selection.
+      const effectiveTab = kmbRouteInitialSelection ? 'bus' : busRoutesTab
       return (
         <PaneEnter key="routes:kmb">
-          <KmbRoutesView
-            lang={lang}
-            initialSelection={kmbRouteInitialSelection}
-            onSelectStopGroup={onSelectStopGroupFromRoute}
-          />
+          <div className="space-y-4">
+            <BusRoutesTabs lang={lang} tab={effectiveTab} onTabChange={setBusRoutesTab} />
+            {effectiveTab === 'gmb' ? (
+              <GmbRoutesView lang={lang} />
+            ) : (
+              <KmbRoutesView
+                lang={lang}
+                initialSelection={kmbRouteInitialSelection}
+                onSelectStopGroup={onSelectStopGroupFromRoute}
+              />
+            )}
+          </div>
         </PaneEnter>
       )
+    }
     if (mode === 'mtr')
       return (
         <PaneEnter key="routes:mtr">

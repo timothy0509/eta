@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "analyze": "ANALYZE=true next build",
+    "data:gmb": "bun scripts/build-gmb-routes.ts",
     "prepare": "husky"
   },
   "dependencies": {

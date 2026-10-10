@@ -5,3 +5,5 @@ build
 dist
 *.lock
 bun.lock
+# Generated TD extract (scripts/build-gmb-routes.ts). Kept compact single-line.
+public/data/

@@ -123,6 +123,14 @@ Each ETA shows:
 2. Your favorites appear in the "Saved" panel on the right
 3. Favorites are stored locally in your browser
 
+### Green Minibus Directory
+
+1. Switch to the **Bus** tab, then the **Routes** section
+2. Select the **Minibus** tab to browse all green minibus (GMB) routes
+3. Search by route number or place, or filter by district (HK Island, Kowloon, New Territories)
+4. Each route shows its termini, service pattern, journey time, and full fare
+5. Click the **TD timetable and fares** link to open the official Transport Department detail page
+
 ---
 
 ## MTR Next Train

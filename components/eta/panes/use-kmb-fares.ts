@@ -1,6 +1,7 @@
 import * as React from 'react'
 
 import { fetchKmbFares, type KmbEtaEntryWithLeg } from '@/lib/eta/client'
+import type { KmbFareInfo } from '@/lib/eta/kmb-fares'
 import type { Company } from 'hk-bus-eta'
 
 /**
@@ -11,12 +12,10 @@ export function useKmbFares(
   dispatchEta: React.Dispatch<{
     type: 'FARES_SUCCESS'
     payload: {
-      faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+      faresByVariantKey: Record<string, KmbFareInfo>
     }
   }>,
-  faresByVariantKeyRef: React.MutableRefObject<
-    Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
-  >
+  faresByVariantKeyRef: React.MutableRefObject<Record<string, KmbFareInfo>>
 ) {
   return React.useCallback(
     (filteredByStopId: Record<string, KmbEtaEntryWithLeg[]>, signal?: AbortSignal) => {

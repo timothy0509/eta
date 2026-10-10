@@ -1,9 +1,10 @@
 import type { KmbEtaEntryWithLeg } from '@/lib/eta/client'
+import type { KmbFareInfo } from '@/lib/eta/kmb-fares'
 
 export type EtaState = {
   byStopId: Record<string, KmbEtaEntryWithLeg[]>
   loadedStopIds: string[]
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey: Record<string, KmbFareInfo>
   loading: boolean
   error: string | null
   stale: boolean
@@ -18,7 +19,7 @@ export type EtaAction =
       payload: {
         byStopId: Record<string, KmbEtaEntryWithLeg[]>
         loadedStopIds: string[]
-        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+        faresByVariantKey?: Record<string, KmbFareInfo>
         staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>
         /** Skip the lastUpdatedAt bump when the refresh was fully served from cache. */
         keepTimestamp?: boolean
@@ -30,14 +31,14 @@ export type EtaAction =
       payload: {
         byStopId: Record<string, KmbEtaEntryWithLeg[]>
         newStopIds: string[]
-        faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+        faresByVariantKey?: Record<string, KmbFareInfo>
         staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>
       }
     }
   | {
       type: 'FARES_SUCCESS'
       payload: {
-        faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+        faresByVariantKey: Record<string, KmbFareInfo>
       }
     }
   | { type: 'RESET' }

@@ -3,12 +3,18 @@ import type { Company, RouteListEntry } from 'hk-bus-eta'
 import type { KmbRouteStopLite } from '@/lib/eta/client'
 import { routeVariantKey } from '@/lib/eta/eta-db-index'
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from '@/lib/eta/kmb-cache'
+import { resolveTdFullFare } from '@/lib/eta/td-bus'
+
+export type KmbFareSource = 'hk-bus-eta' | 'td-full-fare'
 
 export type KmbFareInfo = {
   hkd: number
   dayCode?: number
-  source: 'hk-bus-eta'
+  source: KmbFareSource
 }
+
+/** Fare lookup result keyed by base variant key (`co|route|dir|serviceType`). */
+export type KmbFaresByVariantKey = Record<string, KmbFareInfo>
 
 type VariantKey = `${string}|${string}|${string}|${string}`
 
@@ -113,6 +119,11 @@ export function kmbFareCacheControlHeader() {
  * Get fare from current stop to terminus using hk-bus-eta data.
  * The fare arrays in hk-bus-eta are indexed by stop sequence (0-indexed),
  * where each entry represents the fare from that stop to the terminus.
+ *
+ * When the hk-bus-eta per-section lookup has nothing for the variant, falls
+ * back to the Transport Department scheduled full-journey fare
+ * (`source: 'td-full-fare'`). Callers label it as a full-journey fare
+ * because it is not a per-section fare from this stop.
  */
 export function getStopToTerminusFare(params: {
   co: string
@@ -144,7 +155,9 @@ export function getStopToTerminusFare(params: {
     })
   )
 
-  if (!entry) return null
+  if (!entry) {
+    return tdFullFareFallback(params)
+  }
 
   // fares array is 0-indexed, so subtract 1 from the 1-indexed sequence
   const fareIndex = onSeq - 1
@@ -154,18 +167,44 @@ export function getStopToTerminusFare(params: {
       ? (entry.fares as Record<string, string[] | undefined>)[params.co]
       : undefined
 
-  if (!fares || fareIndex < 0 || fareIndex >= fares.length) return null
+  if (!fares || fareIndex < 0 || fareIndex >= fares.length) {
+    return tdFullFareFallback(params)
+  }
 
   const fareStr = fares[fareIndex]
-  if (!fareStr) return null
+  if (!fareStr) {
+    return tdFullFareFallback(params)
+  }
 
   const fare = Number(fareStr)
-  if (!Number.isFinite(fare) || fare < 0) return null
+  if (!Number.isFinite(fare) || fare < 0) {
+    return tdFullFareFallback(params)
+  }
 
   return {
     hkd: fare,
     source: 'hk-bus-eta',
   }
+}
+
+/**
+ * Transport Department scheduled full-journey fare for the variant, used
+ * only when the hk-bus-eta per-section fare lookup returns nothing.
+ */
+function tdFullFareFallback(params: {
+  co: string
+  route: string
+  dir: string
+  serviceType: string
+}): KmbFareInfo | null {
+  const fullFare = resolveTdFullFare({
+    co: params.co,
+    route: params.route,
+    bound: params.dir,
+    serviceType: params.serviceType,
+  })
+  if (fullFare === null) return null
+  return { hkd: fullFare, source: 'td-full-fare' }
 }
 
 /**

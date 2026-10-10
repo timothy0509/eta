@@ -26,9 +26,10 @@ import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
 import { useAppStore } from '@/lib/store'
+import type { KmbFareInfo } from '@/lib/eta/kmb-fares'
 import { cn } from '@/lib/utils'
 
-type FaresByVariantKey = Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+type FaresByVariantKey = Record<string, KmbFareInfo>
 
 function memberStopIds(member: KmbGroupMember): string[] {
   if ('stopId' in member) {

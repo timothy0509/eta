@@ -31,6 +31,14 @@ import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { routeVariantKey } from '@/lib/eta/eta-db-index'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
 import {
+  getTdStopPickDrop,
+  getTdVariantInfo,
+  resolveTdFullFare,
+  tdVariantTagKeys,
+  tdVariantTags,
+  type TdPickDrop,
+} from '@/lib/eta/td-bus'
+import {
   FARE_UNKNOWN_COLOR,
   getFareSectionColor,
   getStreetSectionColor,
@@ -112,6 +120,7 @@ function KmbRouteStopCard({
   name,
   stopCode,
   seq,
+  pickDrop,
   lang,
   expanded,
   onToggle,
@@ -122,6 +131,7 @@ function KmbRouteStopCard({
   name: string
   stopCode: string | null
   seq: number
+  pickDrop: TdPickDrop | null
   lang: UiLanguage
   expanded: boolean
   onToggle: () => void
@@ -219,12 +229,28 @@ function KmbRouteStopCard({
       seq={seq}
       name={name}
       subtitle={stopCode}
+      badge={<PickDropBadge pickDrop={pickDrop} lang={lang} />}
       eta={<TickingSoonestPill etas={stopEtas} lang={lang} />}
       panel={panel}
       toggleLabel={name}
       selectLabel={selectLabel}
       onSelect={onSelect}
     />
+  )
+}
+
+/**
+ * Boarding/alighting badge from the TD `stopPickDrop` field: 1 is
+ * drop-off only, 2 is pick-up only. Stops open both ways (3) and unknown
+ * stops render no badge; that is the common case and stays quiet.
+ */
+function PickDropBadge({ pickDrop, lang }: { pickDrop: TdPickDrop | null; lang: UiLanguage }) {
+  const { t } = useTranslations(lang)
+  if (pickDrop !== 1 && pickDrop !== 2) return null
+  return (
+    <span className="bg-surface-container-high text-on-surface-variant m3-label-sm inline-flex shrink-0 items-center rounded-full px-2 py-0.5">
+      {pickDrop === 1 ? t('kmb.dropOffOnly') : t('kmb.pickUpOnly')}
+    </span>
   )
 }
 
@@ -352,13 +378,37 @@ function KmbRouteStopList({
 
   const { t } = useTranslations(lang)
 
+  const tdVariant = React.useMemo(
+    () => ({
+      co: currentVariant.co,
+      route: currentVariant.route,
+      bound: currentVariant.bound,
+      serviceType: currentVariant.serviceType,
+    }),
+    [currentVariant.co, currentVariant.route, currentVariant.bound, currentVariant.serviceType]
+  )
+
+  // TD full-journey fare fallback: when the hk-bus-eta per-section lookup
+  // has nothing for this variant, every stop shares the scheduled full
+  // fare and the list carries a full-journey caption.
+  const tdFullFare = React.useMemo(() => resolveTdFullFare(tdVariant), [tdVariant])
+  const effectiveFaresBySeq = React.useMemo(() => {
+    if (Object.keys(faresBySeq).length > 0) return faresBySeq
+    if (tdFullFare === null) return faresBySeq
+    const filled: Record<number, number> = {}
+    for (const rs of variantStops) filled[rs.seq] = tdFullFare
+    return filled
+  }, [faresBySeq, tdFullFare, variantStops])
+  const usingFullFareFallback =
+    Object.keys(faresBySeq).length === 0 && tdFullFare !== null && variantStops.length > 0
+
   // Only CTB route stops split "{name}, {street}". Other operators keep
   // the existing stop-name parsing untouched.
   const isCtbRoute = normalizeOperator(currentVariant.co) === 'ctb'
 
   const sections = React.useMemo(
-    () => groupIntoFareSections(variantStops, (rs) => faresBySeq[rs.seq] ?? null),
-    [variantStops, faresBySeq]
+    () => groupIntoFareSections(variantStops, (rs) => effectiveFaresBySeq[rs.seq] ?? null),
+    [variantStops, effectiveFaresBySeq]
   )
 
   // Known fare sections consume palette indices in order; unknown
@@ -483,6 +533,7 @@ function KmbRouteStopList({
         name={pickCtbDisplayName(ctb?.name, parsed.name)}
         stopCode={parsed.platform ?? parsed.stopCode}
         seq={seq}
+        pickDrop={getTdStopPickDrop(tdVariant, rs.seq)}
         lang={lang}
         expanded={expandedKey === cardKey}
         onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
@@ -503,6 +554,11 @@ function KmbRouteStopList({
 
   return (
     <div key={listKey} className="space-y-3">
+      {usingFullFareFallback ? (
+        <p className="text-on-surface-variant m3-label-md" role="note">
+          {t('kmb.fullJourneyFare')}
+        </p>
+      ) : null}
       {timeline ? (
         <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2">
           {timeline.fareRuns.map((run) => (
@@ -928,6 +984,37 @@ export function KmbRoutesView({
     return variantsForRoute[0] ?? null
   }, [selectedRouteKey, selectedVariant, variantsForRoute])
 
+  const currentTdInfo = React.useMemo(
+    () =>
+      currentVariant
+        ? getTdVariantInfo({
+            co: currentVariant.co,
+            route: currentVariant.route,
+            bound: currentVariant.bound,
+            serviceType: currentVariant.serviceType,
+          })
+        : null,
+    [currentVariant]
+  )
+
+  // TD service tags per variant so variants that look identical (same
+  // direction and destination) still read apart, e.g. night vs day.
+  const tdTagsByVariantKey = React.useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const v of variantsForRoute) {
+      const info = getTdVariantInfo({
+        co: v.co,
+        route: v.route,
+        bound: v.bound,
+        serviceType: v.serviceType,
+      })
+      if (!info) continue
+      const tags = tdVariantTagKeys(tdVariantTags(info.serviceMode, info.specialType))
+      if (tags.length) map.set(v.key, tags)
+    }
+    return map
+  }, [variantsForRoute])
+
   React.useEffect(() => {
     if (!currentVariant) return
     let cancelled = false
@@ -1203,6 +1290,11 @@ export function KmbRoutesView({
                     {v.serviceType !== '1' ? (
                       <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
                     ) : null}
+                    {(tdTagsByVariantKey.get(v.key) ?? []).map((tagKey) => (
+                      <span key={tagKey} className="m3-label-sm opacity-80">
+                        · {t(tagKey)}
+                      </span>
+                    ))}
                   </button>
                 ))}
               </div>
@@ -1220,6 +1312,14 @@ export function KmbRoutesView({
                     co: currentVariant.co,
                     lang,
                   })}
+                  {currentTdInfo?.journeyTimeMinutes != null ? (
+                    <span className="m3-label-md ml-2 whitespace-nowrap opacity-80">
+                      ·{' '}
+                      {tWithParams('kmb.journeyTime', {
+                        count: currentTdInfo.journeyTimeMinutes,
+                      })}
+                    </span>
+                  ) : null}
                 </div>
                 <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
               </div>

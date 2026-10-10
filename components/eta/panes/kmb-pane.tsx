@@ -27,6 +27,7 @@ import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
+import type { KmbFareInfo } from '@/lib/eta/kmb-fares'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 import { precomputeRenderGroups, type PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { initialEtaState, etaReducer } from '@/components/eta/panes/kmb-reducer'
@@ -44,6 +45,7 @@ import {
   type StopSearchIndex,
 } from '@/components/eta/panes/kmb-stop-search'
 import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
+import { getTdVariantInfo, tdVariantTagKeys, tdVariantTags } from '@/lib/eta/td-bus'
 import { setKmbPaneState, usePaneStore } from '@/lib/eta/pane-store'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { useTranslations } from '@/lib/eta/i18n'
@@ -98,6 +100,18 @@ function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
   return { byStopId, version: routeStops.length }
 }
 
+/**
+ * TD service tags for a route-filter variant key, so variants that look
+ * identical (same direction and destination) still read apart.
+ */
+function tdTagKeysForVariantKey(variantKey: string): string[] {
+  const [co = 'kmb', route = '', bound = '', serviceType = ''] = variantKey.split('|')
+  if (!route) return []
+  const info = getTdVariantInfo({ co, route, bound, serviceType })
+  if (!info) return []
+  return tdVariantTagKeys(tdVariantTags(info.serviceMode, info.specialType))
+}
+
 export type KmbPaneState = {
   lang: UiLanguage
   routeFilter: RouteFilterState
@@ -107,7 +121,7 @@ export type KmbPaneState = {
     | { mode: 'contains'; query: string }
     | null
   routeInfos: Record<string, KmbRouteInfoLite>
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey: Record<string, KmbFareInfo>
   eta: KmbEtaEntryWithLeg[]
   /** ETAs grouped by stop ID for sectioned rendering */
   etaByStopId: Record<string, KmbEtaEntryWithLeg[]>
@@ -314,7 +328,7 @@ export function KmbPane({
   }, [kmbDraftStopSelection, kmbStops, stopSearchIndex])
 
   const pickRouteVariantLabel = React.useCallback(
-    (info: KmbRouteInfoLite | undefined) => {
+    (variantKey: string, info: KmbRouteInfoLite | undefined) => {
       if (!info) return ''
       const origin = formatKmbRouteEndpointName(pickLang(info.origin, lang), {
         co: info.co,
@@ -325,9 +339,13 @@ export function KmbPane({
         lang,
       })
       if (!origin || !destination) return ''
-      return `${origin} → ${destination}`
+      const base = `${origin} → ${destination}`
+      const tags = tdTagKeysForVariantKey(variantKey)
+        .map((tagKey) => t(tagKey))
+        .join(' · ')
+      return tags ? `${base} · ${tags}` : base
     },
-    [lang]
+    [lang, t]
   )
 
   // ========== OPTIMIZATION: Use index for available route variants ==========
@@ -340,7 +358,7 @@ export function KmbPane({
     return variantKeys
       .map((key) => {
         const [, route = ''] = key.split('|')
-        const label = pickRouteVariantLabel(kmbRouteInfos[key])
+        const label = pickRouteVariantLabel(key, kmbRouteInfos[key])
         return {
           key,
           route,
@@ -931,6 +949,7 @@ export function KmbPane({
     kmbQuery,
     kmbDraftStopSelection,
     kmbStopsById,
+    routeStops: kmbRouteStops,
     canFavorite: Boolean(canFavorite),
     onAddFavorite,
     onAddRecent,

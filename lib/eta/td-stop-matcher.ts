@@ -100,6 +100,7 @@ export type TdUnresolvedReason =
   | 'no-variant'
   | 'no-candidate-in-range'
   | 'ambiguous'
+  | 'name-mismatch'
   | 'override-forced'
   | 'stale-override'
 
@@ -137,19 +138,18 @@ const DEFAULT_EXACT_DISTANCE_KM = 0.03
 const DEFAULT_MAX_DISTANCE_KM = 0.15
 const DEFAULT_AMBIGUITY_MARGIN_KM = 0.03
 
-const KNOWN_ETA_COMPANIES: ReadonlySet<string> = new Set([
-  'kmb',
-  'ctb',
-  'nlb',
-  'gmb',
-  'lrtfeeder',
-  'lightrail',
-  'mtr',
-  'nwfb',
-  'sunferry',
-  'hkkf',
-  'fortuneferry',
-])
+const ETA_COMPANY_BY_LOWERCASE: Readonly<Record<string, Company>> = {
+  kmb: 'kmb',
+  ctb: 'ctb',
+  nlb: 'nlb',
+  gmb: 'gmb',
+  lrtfeeder: 'lrtfeeder',
+  lightrail: 'lightRail',
+  mtr: 'mtr',
+  sunferry: 'sunferry',
+  hkkf: 'hkkf',
+  fortuneferry: 'fortuneferry',
+}
 
 /**
  * Maps one TD company token to hk-bus-eta companies. Long Win Bus has no
@@ -353,6 +353,18 @@ function isFiniteCoord(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+/**
+ * TD routeSeq 1 covers outbound and circular legs, routeSeq 2 is inbound,
+ * matching the hk-bus-eta O/I bound convention.
+ */
+export function tdRouteSeqMatchesBound(routeSeq: number, bound: string): boolean {
+  const b = String(bound ?? '').toUpperCase()
+  if (!b) return true
+  if (routeSeq === 2) return b === 'I'
+  if (routeSeq === 1) return b !== 'I'
+  return true
+}
+
 /** Links one TD stop point to its hk-bus-eta route variant and stop sequence. */
 export function matchTdStopPoint(point: TdStopPoint, ctx: TdMatcherContext): TdStopMatch {
   const td = tdRefOf(point)
@@ -421,15 +433,34 @@ export function matchTdStopPoint(point: TdStopPoint, ctx: TdMatcherContext): TdS
   }
 
   const routeName = point.routeName.trim().toUpperCase()
-  const variants = ctx.variants.filter(
+  const routeVariants = ctx.variants.filter(
     (variant) => variant.entry.route.trim().toUpperCase() === routeName && cos.includes(variant.co)
+  )
+  if (routeVariants.length === 0) {
+    return {
+      status: 'unresolved',
+      td,
+      reason: 'no-variant',
+      detail: `No hk-bus-eta variant for route "${point.routeName}" under ${cos.join('/')}.`,
+      distanceKm: null,
+      nameMatched: false,
+    }
+  }
+
+  // TD routeSeq 1 covers outbound and circular legs, routeSeq 2 is inbound.
+  // Filter candidates by direction so opposite-carriageway stops sharing a
+  // corridor cannot cross-link when they fall outside the ambiguity margin.
+  const variants = routeVariants.filter((variant) =>
+    tdRouteSeqMatchesBound(point.routeSeq, variant.bound)
   )
   if (variants.length === 0) {
     return {
       status: 'unresolved',
       td,
       reason: 'no-variant',
-      detail: `No hk-bus-eta variant for route "${point.routeName}" under ${cos.join('/')}.`,
+      detail:
+        `Route "${point.routeName}" exists under ${cos.join('/')} but no variant ` +
+        `runs the TD leg direction (routeSeq ${point.routeSeq}).`,
       distanceKm: null,
       nameMatched: false,
     }
@@ -500,8 +531,24 @@ export function matchTdStopPoint(point: TdStopPoint, ctx: TdMatcherContext): TdS
         zh: stopEntry.name?.zh ?? '',
       })
     : false
-  const confidence: TdMatchConfidence =
-    best.distanceKm <= exactKm ? 'exact' : nameMatched ? 'high' : 'medium'
+
+  // Past exact range a match needs name agreement. A bare coordinate hit
+  // inside the ceiling stays unresolved so neighbouring stops never link
+  // on proximity alone.
+  if (best.distanceKm > exactKm && !nameMatched) {
+    return {
+      status: 'unresolved',
+      td,
+      reason: 'name-mismatch',
+      detail:
+        `Nearest candidate ${best.stopId} is ${best.distanceKm.toFixed(3)} km away ` +
+        'with no name agreement. Needs a reviewed override.',
+      distanceKm: best.distanceKm,
+      nameMatched: false,
+    }
+  }
+
+  const confidence: TdMatchConfidence = best.distanceKm <= exactKm ? 'exact' : 'high'
 
   return {
     status: 'matched',
@@ -643,7 +690,7 @@ export function parseTdFeatureCollection(data: unknown): TdStopPoint[] {
 function parseEtaStopRef(value: unknown): EtaStopRef | null {
   const record = asRecord(value)
   if (!record) return null
-  const co = asNonEmptyString(record.co)?.toLowerCase() ?? null
+  const co = ETA_COMPANY_BY_LOWERCASE[asNonEmptyString(record.co)?.toLowerCase() ?? ''] ?? null
   const route = asNonEmptyString(record.route)
   const bound = typeof record.bound === 'string' ? record.bound : null
   const serviceType =
@@ -652,11 +699,11 @@ function parseEtaStopRef(value: unknown): EtaStopRef | null {
       : null
   const stopId = asNonEmptyString(record.stopId)
   const seq = asFiniteNumber(record.seq)
-  if (!co || !KNOWN_ETA_COMPANIES.has(co) || !route || bound === null || serviceType === null) {
+  if (!co || !route || bound === null || serviceType === null) {
     return null
   }
   if (!stopId || seq === null || !Number.isInteger(seq) || seq < 0) return null
-  return { co: co as Company, route, bound, serviceType, stopId, seq }
+  return { co, route, bound, serviceType, stopId, seq }
 }
 
 function parseTdStopOverride(value: unknown): TdStopOverride | null {

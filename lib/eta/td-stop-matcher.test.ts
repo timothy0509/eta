@@ -136,7 +136,7 @@ describe('near-coordinate plus name matches', () => {
     expect(match.nameMatched).toBe(true)
   })
 
-  it('still matches without a name hit, at lower confidence', () => {
+  it('leaves a nearby point without a name hit unresolved', () => {
     const { ctx } = route1Context()
     const match = matchTdStopPoint(
       makeTdPoint({
@@ -147,10 +147,9 @@ describe('near-coordinate plus name matches', () => {
       }),
       ctx
     )
-    expect(match.status).toBe('matched')
-    if (match.status !== 'matched') return
-    expect(match.eta.stopId).toBe('S1')
-    expect(match.confidence).toBe('medium')
+    expect(match.status).toBe('unresolved')
+    if (match.status !== 'unresolved') return
+    expect(match.reason).toBe('name-mismatch')
     expect(match.nameMatched).toBe(false)
   })
 })

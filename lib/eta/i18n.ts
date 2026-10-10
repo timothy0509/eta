@@ -229,6 +229,18 @@ const kmb: Record<string, TranslationEntry> = {
     tc: '包含「{query}」的車站',
     sc: '包含“{query}”的车站',
   },
+  pickUpOnly: { en: 'Pick-up only', tc: '只可上車', sc: '只可上车' },
+  dropOffOnly: { en: 'Drop-off only', tc: '只可落車', sc: '只可下车' },
+  dropOffOnlySaveWarning: {
+    en: 'This stop is drop-off only on the selected route. Saved, but boarding ETAs will stay empty there.',
+    tc: '此站在所選路線只可落車。已收藏，但該處不會有上車班次。',
+    sc: '此站在所选路线只可下车。已收藏，但该处不会有上车班次。',
+  },
+  journeyTime: { en: 'About {count} min', tc: '車程約 {count} 分鐘', sc: '车程约 {count} 分钟' },
+  fullJourneyFare: { en: 'Full-journey fare', tc: '全程車費', sc: '全程车费' },
+  tagNight: { en: 'Night', tc: '通宵', sc: '通宵' },
+  tagSpecialTimes: { en: 'Special times', tc: '特別班次', sc: '特别班次' },
+  tagWeekendFare: { en: 'Weekend fare', tc: '假日收費', sc: '假日收费' },
 }
 
 const mtr: Record<string, TranslationEntry> = {
@@ -294,6 +306,92 @@ const lrt: Record<string, TranslationEntry> = {
   departingLabel: { en: 'Departing', tc: '離開', sc: '离开' },
 }
 
+const gmb: Record<string, TranslationEntry> = {
+  title: { en: 'Green Minibus', tc: '綠色小巴', sc: '绿色小巴' },
+  tabBus: { en: 'Bus routes', tc: '巴士路線', sc: '巴士路线' },
+  tabGmb: { en: 'Minibus', tc: '小巴', sc: '小巴' },
+  routesTabLabel: { en: 'Route lists', tc: '路線列表', sc: '路线列表' },
+  searchPlaceholder: {
+    en: 'Search minibus route number or place…',
+    tc: '搜尋小巴路線編號或地點…',
+    sc: '搜索小巴路线编号或地点…',
+  },
+  searchRoutes: { en: 'Search minibus routes', tc: '搜尋小巴路線', sc: '搜索小巴路线' },
+  clearFilters: { en: 'Clear search and filters', tc: '清除搜尋及篩選', sc: '清除搜索及筛选' },
+  routesFound: { en: '{count} routes', tc: '{count} 條路線', sc: '{count} 条路线' },
+  viewStops: { en: 'Stops & ETAs', tc: '車站及到站預報', sc: '车站及到站预报' },
+  noRoutesMatch: {
+    en: 'No minibus routes match "{query}".',
+    tc: '沒有符合「{query}」的小巴路線。',
+    sc: '没有符合“{query}”的小巴路线。',
+  },
+  district: { en: 'District', tc: '地區', sc: '地区' },
+  districtHKI: { en: 'HK Island', tc: '港島', sc: '港岛' },
+  districtKLN: { en: 'Kowloon', tc: '九龍', sc: '九龙' },
+  districtNT: { en: 'New Territories', tc: '新界', sc: '新界' },
+  serviceA: { en: 'Whole day', tc: '全日', sc: '全日' },
+  serviceR: { en: 'Daytime', tc: '日間', sc: '日间' },
+  serviceT: { en: 'Daytime, specific times', tc: '日間及特定時間', sc: '日间及特定时间' },
+  serviceN: { en: 'Overnight', tc: '通宵', sc: '通宵' },
+  serviceNT: { en: 'Overnight, specific times', tc: '通宵及特定時間', sc: '通宵及特定时间' },
+  special1: {
+    en: 'Specific times/days only',
+    tc: '只在特定時間或日子服務',
+    sc: '只在特定时间或日子服务',
+  },
+  special2: { en: 'Weekend/holiday fare differs', tc: '假日收費不同', sc: '假日收费不同' },
+  special3: {
+    en: 'Specific times/days, weekend/holiday fare differs',
+    tc: '特定時間或日子服務，假日收費不同',
+    sc: '特定时间或日子服务，假日收费不同',
+  },
+  journeyTime: { en: 'Journey {count} min', tc: '車程 {count} 分鐘', sc: '车程 {count} 分钟' },
+  officialDetails: {
+    en: 'TD timetable and fares',
+    tc: '運輸署時間表及收費',
+    sc: '运输署时间表及收费',
+  },
+  dataRevised: {
+    en: 'TD data revised {date}',
+    tc: '運輸署資料修正至 {date}',
+    sc: '运输署资料修正至 {date}',
+  },
+  routeDetails: { en: 'GMB route details', tc: '專線小巴路線詳情', sc: '专线小巴路线详情' },
+  outbound: { en: 'Outbound', tc: '去程', sc: '去程' },
+  circular: { en: 'Circular', tc: '循環線', sc: '循环线' },
+  inbound: { en: 'Inbound', tc: '回程', sc: '回程' },
+  fullFare: { en: 'Full fare', tc: '全程車費', sc: '全程车费' },
+  stopsCount: { en: '{count} stops', tc: '{count} 個站', sc: '{count} 个站' },
+  pickUpOnly: { en: 'Pick-up only', tc: '只可上車', sc: '只可上车' },
+  dropOffOnly: { en: 'Drop-off only', tc: '只可下車', sc: '只可下车' },
+  pickUpDropOff: { en: 'Pick-up / drop-off', tc: '可上落車', sc: '可上落车' },
+  unresolvedStop: {
+    en: 'Not in the realtime index, live ETA unavailable.',
+    tc: '實時索引中沒有此站，未能提供到站預報。',
+    sc: '实时索引中没有此站，未能提供到站预报。',
+  },
+  ambiguousMatch: {
+    en: 'Several realtime variants match this route. ETAs follow the closest one.',
+    tc: '有多個實時路線變體符合此路線，到站預報採用最接近的一個。',
+    sc: '有多个实时路线变体符合此路线，到站预报采用最接近的一个。',
+  },
+  noRealtimeVariant: {
+    en: 'No realtime variant found for this route. Showing static stops only.',
+    tc: '找不到此路線的實時變體，只顯示靜態車站資料。',
+    sc: '找不到此路线的实时变体，只显示静态车站资料。',
+  },
+  sourceNote: {
+    en: 'Stops, fares and journey time: Transport Department GMB dataset.',
+    tc: '車站、車費及車程：運輸署專線小巴資料集。',
+    sc: '车站、车费及车程：运输署专线小巴数据集。',
+  },
+  loadFailed: {
+    en: 'Could not load the GMB dataset.',
+    tc: '未能載入專線小巴資料集。',
+    sc: '未能载入专线小巴数据集。',
+  },
+}
+
 const favorites: Record<string, TranslationEntry> = {
   saved: { en: 'Saved', tc: '已儲存', sc: '已储存' },
   favorites: { en: 'Favorites', tc: '收藏', sc: '收藏' },
@@ -357,6 +455,7 @@ export const translations = {
   kmb,
   mtr,
   lrt,
+  gmb,
   favorites,
   errors,
 }

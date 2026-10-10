@@ -3,7 +3,9 @@
 import * as React from 'react'
 
 import { decodeUrlState, encodeUrlState, type KmbQuerySummary } from '@/lib/eta/url-state'
+import type { BusRoutesTab } from '@/lib/eta/types'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
+import { usePaneStore } from '@/lib/eta/pane-store'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useShallow } from 'zustand/shallow'
 
@@ -15,6 +17,8 @@ export type UrlSyncPaneBits = {
   } | null
   mtrSta: string | null | undefined
   lrtStationId: string | null | undefined
+  busRoutesTab: BusRoutesTab | null
+  gmbRouteId: number | null
 }
 
 /**
@@ -25,7 +29,14 @@ export type UrlSyncPaneBits = {
  * arrive as arguments so this hook is the only place that couples pane
  * state to the URL.
  */
-export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: UrlSyncPaneBits) {
+export function useUrlSync({
+  kmbQuery,
+  kmbRouteFilter,
+  mtrSta,
+  lrtStationId,
+  busRoutesTab,
+  gmbRouteId,
+}: UrlSyncPaneBits) {
   // lang, routeFilterMode, and autoRefreshSeconds are read only to satisfy
   // the encode input shape. They are never written from the URL and never
   // encoded without includePrefs, so prefs stay out of the address bar.
@@ -70,6 +81,25 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
       const nextMode = decoded.state.mode ?? decoded.selectedItem?.mode
       if (nextMode) setMode(nextMode)
       if (decoded.state.subView) setSubView(decoded.state.subView)
+      // The bus routes tab is transient pane state, restored only on the
+      // bus routes view; anything else resets to the bus list.
+      const nextTab: BusRoutesTab =
+        (decoded.state.mode ?? nextMode) === 'kmb' &&
+        (decoded.state.subView ?? subView) === 'routes' &&
+        (decoded.state.busRoutesTab === 'gmb' || decoded.state.gmbRouteId != null)
+          ? 'gmb'
+          : 'bus'
+      usePaneStore.getState().setBusRoutesTab(nextTab)
+      // Same rule for the open GMB route: only the bus routes view keeps
+      // it, anywhere else it resets so stale detail never lingers.
+      const onRoutesView =
+        (decoded.state.mode ?? nextMode) === 'kmb' &&
+        (decoded.state.subView ?? subView) === 'routes'
+      usePaneStore
+        .getState()
+        .setGmbRouteId(
+          onRoutesView && nextTab === 'gmb' ? (decoded.state.gmbRouteId ?? null) : null
+        )
       // decode never populates lang, routeFilterMode, or autoRefreshSeconds:
       // hydrate applies nav only so a shared link never overwrites prefs.
       // Decoded ids are deterministic, so re-hydrating the same URL keeps
@@ -88,6 +118,8 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
         kmb: null,
         mtr: { sta: null },
         lrt: { stationId: null },
+        busRoutesTab: decoded.state.busRoutesTab ?? null,
+        gmbRouteId: decoded.state.gmbRouteId ?? null,
       })
       didHydrateFromUrlRef.current = true
     },
@@ -131,6 +163,8 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
         : null,
       mtr: { sta: mtrSta ?? null },
       lrt: { stationId: lrtStationId ?? null },
+      busRoutesTab: busRoutesTab ?? null,
+      gmbRouteId: gmbRouteId ?? null,
     })
 
     if (query === lastEncodedRef.current) return
@@ -141,6 +175,8 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
     router.replace(nextUrl, { scroll: false })
   }, [
     autoRefreshSeconds,
+    busRoutesTab,
+    gmbRouteId,
     kmbQuery,
     kmbRouteFilter,
     lang,

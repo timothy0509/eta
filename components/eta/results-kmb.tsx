@@ -5,6 +5,7 @@ import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import type { KmbFareInfo } from '@/lib/eta/kmb-fares'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -170,7 +171,7 @@ type Props = {
   routesFilter?: string
   eta: KmbEtaEntryWithLeg[]
   routeInfos: Record<string, KmbRouteInfoLite>
-  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey?: Record<string, KmbFareInfo>
   hasQuery: boolean
   lastUpdatedAt?: number
   stale?: boolean
@@ -240,7 +241,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   /** Whether this is the arriving/returning leg (leg B) */
   isArrivingLeg: boolean
   routeInfos: Record<string, KmbRouteInfoLite>
-  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey?: Record<string, KmbFareInfo>
   lang: UiLanguage
   staggerClass?: string
   stopChips: StopChips
@@ -282,6 +283,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const isExpanded = expandable && Boolean(expanded)
 
   const fareLabel = fare ? formatFareHkd(fare.hkd) : null
+  const isFullJourneyFare = fare?.source === 'td-full-fare'
   const codeLabel = [stopChips.platform, stopChips.stopCode].filter(Boolean).join(' · ') || null
 
   const detailsContent = (
@@ -332,7 +334,14 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
         {fareLabel ? (
           <div className="space-y-1">
             <div className="text-on-surface-variant m3-label-md">{t('common.fare')}</div>
-            <div className="text-on-surface m3-body-md font-medium">{fareLabel}</div>
+            <div className="text-on-surface m3-body-md font-medium">
+              {fareLabel}
+              {isFullJourneyFare ? (
+                <span className="text-on-surface-variant m3-label-md ml-1.5">
+                  · {t('kmb.fullJourneyFare')}
+                </span>
+              ) : null}
+            </div>
           </div>
         ) : null}
       </div>
@@ -373,6 +382,9 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
     fareLabel || codeLabel ? (
       <div className="text-on-surface-variant m3-label-sm flex min-w-0 items-center gap-1.5 overflow-hidden">
         {fareLabel ? <span className="font-tabular shrink-0">{fareLabel}</span> : null}
+        {isFullJourneyFare && fareLabel ? (
+          <span className="shrink-0">· {t('kmb.fullJourneyFare')}</span>
+        ) : null}
         {fareLabel && codeLabel ? (
           <span aria-hidden="true" className="shrink-0 opacity-60">
             ·
@@ -581,7 +593,7 @@ const StopSection = React.memo(function StopSection({
   stopInfo?: StopInfo
   groups: EtaGroup[]
   routeInfos: Record<string, KmbRouteInfoLite>
-  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey?: Record<string, KmbFareInfo>
   lang: UiLanguage
   isFirst?: boolean
   stopLookup: Map<string, StopInfo>

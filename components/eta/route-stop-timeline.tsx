@@ -84,6 +84,7 @@ export function RouteStopCard({
   seq,
   name,
   subtitle,
+  badge,
   eta,
   panel,
   toggleLabel,
@@ -96,6 +97,8 @@ export function RouteStopCard({
   seq?: React.ReactNode
   name: React.ReactNode
   subtitle?: React.ReactNode
+  /** Small boarding/alighting badge shown next to the stop name. */
+  badge?: React.ReactNode
   eta?: React.ReactNode
   panel: React.ReactNode
   toggleLabel?: string
@@ -116,7 +119,10 @@ export function RouteStopCard({
         </span>
       ) : null}
       <div className="min-w-0 flex-1 overflow-hidden">
-        <div className="m3-body-md text-on-surface truncate font-medium">{name}</div>
+        <div className="m3-body-md text-on-surface flex min-w-0 items-center gap-1.5 font-medium">
+          <span className="min-w-0 truncate">{name}</span>
+          {badge}
+        </div>
         {subtitle && !isExpanded ? (
           <div className="text-on-surface-variant m3-label-md truncate font-mono">{subtitle}</div>
         ) : null}

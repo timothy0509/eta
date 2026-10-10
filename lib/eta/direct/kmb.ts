@@ -14,6 +14,7 @@ import {
   type KmbEta,
 } from '@/lib/eta/direct/eta-db'
 import { computeEtaLeg, getCachedKmbVariantStops, getStopToTerminusFare } from '@/lib/eta/kmb-fares'
+import type { KmbFareInfo } from '@/lib/eta/kmb-fares'
 import { promisePool } from '@/lib/eta/promise-pool'
 
 import { getAdaptiveConcurrency } from '@/lib/eta/http'
@@ -238,7 +239,7 @@ const MAX_ETAS_PER_VARIANT = 3
 
 export type KmbStopEtasResponse = {
   byStopId: Record<string, KmbEtaEntryWithLeg[]>
-  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey?: Record<string, KmbFareInfo>
   errors: string[]
   cached: number
   fetched: number
@@ -403,8 +404,7 @@ export async function fetchKmbStopEtas(
     byStopId[stopId] = trimmed
   }
 
-  let faresByVariantKey:
-    Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> | undefined
+  let faresByVariantKey: Record<string, KmbFareInfo> | undefined
 
   if (options?.includeFares) {
     faresByVariantKey = {}
@@ -480,7 +480,7 @@ export type KmbFareVariant = {
 }
 
 export type KmbFaresResponse = {
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey: Record<string, KmbFareInfo>
 }
 
 export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFaresResponse> {
@@ -530,8 +530,7 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
     return { vKey, fare }
   })
 
-  const faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }> =
-    {}
+  const faresByVariantKey: Record<string, KmbFareInfo> = {}
   for (const result of results) {
     if (!result) continue
     if (result.status === 'fulfilled' && result.value.fare) {

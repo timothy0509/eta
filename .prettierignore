@@ -5,3 +5,7 @@ build
 dist
 *.lock
 bun.lock
+# Generated TD extract (scripts/build-gmb-routes.ts). Kept compact single-line.
+public/data/
+# Generated TD bus enrichment (scripts/extract-td-bus.ts). Keep as written.
+lib/data/td-bus-variants.json

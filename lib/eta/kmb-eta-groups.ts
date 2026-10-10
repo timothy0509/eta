@@ -1,4 +1,5 @@
 import type { KmbEtaEntryWithLeg } from '@/lib/eta/client'
+import type { KmbFareInfo } from '@/lib/eta/kmb-fares'
 import type { UiLanguage } from '@/lib/eta/types'
 
 /** Ordinal label for the nth departure: 1st/2nd/3rd or 第N班. */
@@ -46,7 +47,7 @@ function buildDefaultKey(entry: KmbEtaEntryWithLeg): string {
 
 export function groupEtasByVariant(
   eta: KmbEtaEntryWithLeg[],
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>,
+  faresByVariantKey: Record<string, KmbFareInfo>,
   buildKey: (entry: KmbEtaEntryWithLeg) => string = buildDefaultKey
 ): EtaGroup[] {
   const byVariant = new Map<string, KmbEtaEntryWithLeg[]>()
@@ -101,7 +102,7 @@ export function groupEtasByVariant(
 export function precomputeRenderGroups(
   etaByStopId: Record<string, KmbEtaEntryWithLeg[]>,
   loadedStopIds: string[],
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey: Record<string, KmbFareInfo>
 ): PrecomputedGroups {
   const byStopId: Record<string, EtaGroup[]> = {}
   for (const stopId of loadedStopIds) {

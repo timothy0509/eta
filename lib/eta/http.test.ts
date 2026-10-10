@@ -138,6 +138,17 @@ describe('fetchJson', () => {
     await expect(fetchJson('/api/bad-json')).rejects.toThrow()
   })
 
+  it('parses JSON bodies with a UTF-8 BOM', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(`﻿{"data":"bom"}`, {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    )
+
+    await expect(fetchJson<{ data: string }>('/api/bom')).resolves.toEqual({ data: 'bom' })
+  })
+
   it('uses default timeout when not specified', async () => {
     // Verify default timeout is set by checking it doesn't immediately timeout
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response('{}', { status: 200 }))

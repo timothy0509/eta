@@ -4,6 +4,9 @@ export type UiLanguage = 'en' | 'tc' | 'sc'
 
 export type SubView = 'routes' | 'stops' | 'nearby' | 'saved' | 'settings'
 
+/** Route-list tab inside the bus mode routes view. */
+export type BusRoutesTab = 'bus' | 'gmb'
+
 export function isLanguageSupported(mode: TransportMode, lang: UiLanguage) {
   if (lang === 'sc') {
     return mode === 'kmb'

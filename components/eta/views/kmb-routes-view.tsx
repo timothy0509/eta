@@ -11,7 +11,8 @@ import { OperatorFilter } from '@/components/eta/operator-filter'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
 import { Input } from '@/components/ui/input'
-import { RouteStopCard, RouteStopTimeline } from '@/components/eta/route-stop-timeline'
+import { RouteStopCard } from '@/components/eta/route-stop-timeline'
+import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes, TickingSoonestPill } from '@/components/eta/ticking-eta'
 import { formatEtaOrdinals } from '@/lib/eta/kmb-eta-groups'
 import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
@@ -29,12 +30,22 @@ import type { Company } from 'hk-bus-eta'
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { routeVariantKey } from '@/lib/eta/eta-db-index'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
+import {
+  FARE_UNKNOWN_COLOR,
+  getFareSectionColor,
+  getStreetSectionColor,
+} from '@/lib/eta/fare-colors'
 import { formatFareHkd } from '@/lib/eta/format'
 import type { GeoPoint } from '@/lib/eta/geo'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import {
+  buildStreetRuns,
+  parseCtbStopNameCached,
+  pickCtbDisplayName,
+} from '@/lib/eta/ctb-stop-street'
 import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
-import { getRouteBadgeStyle } from '@/lib/eta/route-badge'
+import { getReadableForeground } from '@/lib/ui/color'
 import {
   buildRouteSearchIndex,
   countRoutesByStopName,
@@ -101,7 +112,6 @@ function KmbRouteStopCard({
   name,
   stopCode,
   seq,
-  color,
   lang,
   expanded,
   onToggle,
@@ -112,7 +122,6 @@ function KmbRouteStopCard({
   name: string
   stopCode: string | null
   seq: number
-  color: string
   lang: UiLanguage
   expanded: boolean
   onToggle: () => void
@@ -207,7 +216,6 @@ function KmbRouteStopCard({
     <RouteStopCard
       expanded={expanded}
       onToggle={onToggle}
-      color={color}
       seq={seq}
       name={name}
       subtitle={stopCode}
@@ -217,6 +225,83 @@ function KmbRouteStopCard({
       selectLabel={selectLabel}
       onSelect={onSelect}
     />
+  )
+}
+
+/**
+ * Colored pill with a sticky vertical label. The building block of the fare
+ * rail and the CTB street rail. Sections without data render the neutral
+ * rail with no label. Renders as a grid item spanning its run in timeline
+ * mode, or stretched inside a SectionRail in section mode.
+ */
+function RailPill({
+  label,
+  color,
+  flip = true,
+  className,
+  style,
+}: {
+  label: string | null
+  color: string
+  /**
+   * False renders the label upright instead of upside down. The street rail
+   * passes this for Chinese, which conventionally reads top to bottom with
+   * no rotation; Latin keeps the fare rail style.
+   */
+  flip?: boolean
+  className?: string
+  style?: React.CSSProperties
+}) {
+  return (
+    <div
+      aria-hidden={!label}
+      aria-label={label ?? undefined}
+      title={label ?? undefined}
+      className={cn('flex min-h-16 flex-col rounded-full py-2', className)}
+      style={{ backgroundColor: color, ...style }}
+    >
+      {label ? (
+        <div className="sticky top-16 flex justify-center">
+          <span
+            aria-hidden
+            className={cn(
+              'font-tabular m3-label-md font-semibold whitespace-nowrap',
+              getReadableForeground(color),
+              flip && 'rotate-180'
+            )}
+            style={{ writingMode: 'vertical-rl' }}
+          >
+            {label}
+          </span>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Vertical section rail copied from the fare display: a colored pill with a
+ * sticky vertical label. Used for both the fare rail and the CTB street rail.
+ * Sections without data render the neutral rail with no label.
+ */
+function SectionRail({
+  label,
+  color,
+  flip = true,
+}: {
+  label: string | null
+  color: string
+  /**
+   * False renders the label upright instead of upside down. The street rail
+   * passes this for Chinese, which conventionally reads top to bottom with
+   * no rotation; Latin keeps the fare rail style.
+   */
+  flip?: boolean
+}) {
+  return (
+    <div className="flex w-7 shrink-0 flex-col">
+      <RailPill label={label} color={color} flip={flip} className="flex-1" />
+    </div>
   )
 }
 
@@ -266,11 +351,27 @@ function KmbRouteStopList({
   }, [listKey])
 
   const { t } = useTranslations(lang)
-  const color = getRouteBadgeStyle(currentVariant.route, currentVariant.co).bgColor
+
+  // Only CTB route stops split "{name}, {street}". Other operators keep
+  // the existing stop-name parsing untouched.
+  const isCtbRoute = normalizeOperator(currentVariant.co) === 'ctb'
 
   const sections = React.useMemo(
     () => groupIntoFareSections(variantStops, (rs) => faresBySeq[rs.seq] ?? null),
     [variantStops, faresBySeq]
+  )
+
+  // Known fare sections consume palette indices in order; unknown
+  // sections render the neutral rail without shifting later colors.
+  // Shared with the timeline grid below so both modes agree.
+  const sectionColors = React.useMemo(
+    () =>
+      sections.map((section, idx) => {
+        if (section.fare === null) return FARE_UNKNOWN_COLOR
+        const knownIdx = sections.slice(0, idx).filter((s) => s.fare !== null).length
+        return getFareSectionColor(knownIdx)
+      }),
+    [sections]
   )
 
   const seqByStopSeq = React.useMemo(() => {
@@ -281,72 +382,186 @@ function KmbRouteStopList({
     return map
   }, [variantStops])
 
-  return (
-    <div key={listKey} className="space-y-4">
-      {sections.map((section, sectionIdx) => {
-        const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
-        return (
-          <section
-            key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
-            aria-label={fareLabel ?? undefined}
-            className={
-              sectionIdx % 2 === 0
-                ? 'bg-surface-container overflow-hidden rounded-3xl px-3 py-3'
-                : 'bg-surface-container-high overflow-hidden rounded-3xl px-3 py-3'
-            }
-          >
-            {fareLabel ? (
-              <div className="text-on-surface-variant font-tabular m3-label-lg flex items-center gap-3 px-1 pt-1 pb-3">
-                <span aria-hidden className="bg-outline-variant h-px flex-1 opacity-60" />
-                <span className="shrink-0 rounded-full border border-[var(--outline-variant)]/40 px-3 py-0.5">
-                  {fareLabel}
-                </span>
-                <span aria-hidden className="bg-outline-variant h-px flex-1 opacity-60" />
-              </div>
-            ) : null}
-            <RouteStopTimeline>
-              {section.items.map((rs) => {
-                const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
-                const stop = stopsById.get(rs.stopId)
-                const stopEtas = etas[rs.stopId] ?? []
-                const fullName = stop
-                  ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
-                  : rs.stopId
-                const parsed = parseKmbStopNameCached(fullName, {
-                  isKmb: isKmbStop(stop),
-                  lang,
+  // First stop row per section, so entrance stagger stays global
+  // across sections. The list remounts on `listKey`, which replays the
+  // stagger on variant change but keeps rows still on refresh.
+  const sectionStartRows = React.useMemo(() => {
+    const counts = sections.map((section) => section.items.length)
+    return counts.map((_, idx) => counts.slice(0, idx).reduce((a, b) => a + b, 0))
+  }, [sections])
+
+  // Street per stop sequence for the CTB street rail. Null when the stop
+  // name has no "{name}, {street}" shape. Splits off the already-parsed
+  // name so joint KMB/CTB stops keep the EN title-casing.
+  const streetBySeq = React.useMemo(() => {
+    const map = new Map<number, string | null>()
+    if (!isCtbRoute) return map
+    for (const rs of variantStops) {
+      if (map.has(rs.seq)) continue
+      const stop = stopsById.get(rs.stopId)
+      const fullName = stop
+        ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+        : rs.stopId
+      const parsed = parseKmbStopNameCached(fullName, {
+        isKmb: isKmbStop(stop),
+        lang,
+      })
+      map.set(rs.seq, parseCtbStopNameCached(parsed.name).street)
+    }
+    return map
+  }, [variantStops, stopsById, lang, isCtbRoute])
+
+  // Skip the street rail entirely when no stop on the route has a street.
+  const showStreetRail =
+    isCtbRoute && Array.from(streetBySeq.values()).some((street) => street !== null)
+
+  // Global street runs across the whole route. A road never splits at a fare
+  // boundary; consecutive stops on the same street share one rail. Stops
+  // without a street get the neutral rail with no label, the same way fare
+  // sections without fare data skip the label.
+  const streetSections = React.useMemo(() => {
+    if (!showStreetRail) return null
+    return buildStreetRuns(variantStops, (rs) => streetBySeq.get(rs.seq) ?? null)
+  }, [variantStops, streetBySeq, showStreetRail])
+
+  // Row timeline for grid mode: one row per stop, fare runs in column 1 and
+  // street runs in column 2, each spanning exactly its own rows. Both rails
+  // stay continuous with independent breaks, so neither splits the other.
+  // Runs partition the stop list in order, so starts are cumulative offsets.
+  const timeline = React.useMemo(() => {
+    if (!streetSections) return null
+    const withRows = <R extends { key: string; items: readonly unknown[] }>(runs: R[]) => {
+      let row = 1
+      return runs.map((run) => {
+        const start = row
+        row += run.items.length
+        return { ...run, start, span: run.items.length }
+      })
+    }
+    return {
+      fareRuns: withRows(
+        sections.map((section, sectionIdx) => ({
+          key: `fare:${section.fare ?? 'unknown'}:${sectionIdx}`,
+          label: section.fare !== null ? formatFareHkd(section.fare) : null,
+          color: sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR,
+          items: section.items,
+        }))
+      ),
+      streetRuns: withRows(
+        streetSections.map((streetSection, streetIdx) => ({
+          key: `street:${streetSection.street ?? 'unknown'}:${streetIdx}`,
+          label: streetSection.street,
+          color:
+            streetSection.street !== null
+              ? getStreetSectionColor(streetSection.colorIdx)
+              : FARE_UNKNOWN_COLOR,
+          items: streetSection.items,
+        }))
+      ),
+    }
+  }, [streetSections, sections, sectionColors])
+
+  const renderStopCard = (rs: KmbRouteStopLite) => {
+    const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
+    const stop = stopsById.get(rs.stopId)
+    const stopEtas = etas[rs.stopId] ?? []
+    const fullName = stop
+      ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+      : rs.stopId
+    const parsed = parseKmbStopNameCached(fullName, {
+      isKmb: isKmbStop(stop),
+      lang,
+    })
+    // Split the street off the already-parsed name so joint KMB/CTB stops
+    // keep the EN title-casing.
+    const ctb = isCtbRoute ? parseCtbStopNameCached(parsed.name) : null
+    const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
+    const cardKey = `${rs.stopId}:${rs.seq}`
+    return (
+      <KmbRouteStopCard
+        stopEtas={stopEtas}
+        name={pickCtbDisplayName(ctb?.name, parsed.name)}
+        stopCode={parsed.platform ?? parsed.stopCode}
+        seq={seq}
+        lang={lang}
+        expanded={expandedKey === cardKey}
+        onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
+        selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
+        onSelect={
+          group && onSelectStopGroup
+            ? () =>
+                onSelectStopGroup({
+                  stopIds: group.stopIds,
+                  title: group.title,
+                  route: currentVariant.route,
                 })
-                const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
-                const cardKey = `${rs.stopId}:${rs.seq}`
-                return (
-                  <KmbRouteStopCard
-                    key={cardKey}
-                    stopEtas={stopEtas}
-                    name={parsed.name}
-                    stopCode={parsed.platform ?? parsed.stopCode}
-                    seq={seq}
-                    color={color}
-                    lang={lang}
-                    expanded={expandedKey === cardKey}
-                    onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
-                    selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
-                    onSelect={
-                      group && onSelectStopGroup
-                        ? () =>
-                            onSelectStopGroup({
-                              stopIds: group.stopIds,
-                              title: group.title,
-                              route: currentVariant.route,
-                            })
-                        : undefined
-                    }
-                  />
-                )
-              })}
-            </RouteStopTimeline>
-          </section>
-        )
-      })}
+            : undefined
+        }
+      />
+    )
+  }
+
+  return (
+    <div key={listKey} className="space-y-3">
+      {timeline ? (
+        <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2">
+          {timeline.fareRuns.map((run) => (
+            <RailPill
+              key={run.key}
+              label={run.label}
+              color={run.color}
+              className="w-7"
+              style={{ gridColumn: 1, gridRow: `${run.start} / span ${run.span}` }}
+            />
+          ))}
+          {timeline.streetRuns.map((run) => (
+            <RailPill
+              key={run.key}
+              label={run.label}
+              color={run.color}
+              flip={lang === 'en'}
+              className="w-7"
+              style={{ gridColumn: 2, gridRow: `${run.start} / span ${run.span}` }}
+            />
+          ))}
+          {variantStops.map((rs, index) => (
+            <div
+              key={`${rs.stopId}:${rs.seq}`}
+              className={cn('ui-cv-row min-w-0 py-1', staggerClassForIndex(index))}
+              style={{ gridColumn: 3, gridRow: index + 1 }}
+            >
+              {renderStopCard(rs)}
+            </div>
+          ))}
+        </div>
+      ) : (
+        sections.map((section, sectionIdx) => {
+          const fareLabel = section.fare !== null ? formatFareHkd(section.fare) : null
+          const sectionColor = sectionColors[sectionIdx] ?? FARE_UNKNOWN_COLOR
+          return (
+            <section
+              key={`${section.fare ?? 'unknown'}:${sectionIdx}`}
+              aria-label={fareLabel ?? undefined}
+              className="flex gap-2"
+            >
+              <SectionRail label={fareLabel} color={sectionColor} />
+              <div className="min-w-0 flex-1 space-y-2">
+                {section.items.map((rs, itemIdx) => (
+                  <div
+                    key={`${rs.stopId}:${rs.seq}`}
+                    className={cn(
+                      'ui-cv-row',
+                      staggerClassForIndex((sectionStartRows[sectionIdx] ?? 0) + itemIdx)
+                    )}
+                  >
+                    {renderStopCard(rs)}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )
+        })
+      )}
     </div>
   )
 }

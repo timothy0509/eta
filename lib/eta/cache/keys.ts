@@ -29,6 +29,7 @@ export function kmbRouteGeometryKey(variantKey: string): string {
 }
 
 export const GMB_TD_GROUPS_CACHE_KEY = 'gmb-td:groups:v1'
+export const TD_ROUTE_LINES_CACHE_KEY = 'td-route-lines:v1'
 
 export function tdRouteShapesKey(dataset: string): string {
   return `td-route-shapes:${String(dataset ?? '')

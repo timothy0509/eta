@@ -62,7 +62,7 @@ import {
   searchRouteIndex,
   type RouteFuseInstance,
 } from '@/lib/eta/route-search'
-import { getRoutedGeometry } from '@/lib/eta/routing'
+import { resolveTdRouteLine } from '@/lib/eta/direct/td-route-lines'
 import { resolveTdInstantPath } from '@/lib/eta/direct/td-shapes'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
@@ -727,26 +727,37 @@ function useKmbStops() {
   return stops
 }
 
-function useKmbRouteGeometry(variantKey: string | null, points: GeoPoint[]): GeoPoint[] | null {
+/**
+ * True road-following shape from the CSDI bus route lines, matched by route
+ * name, company, and bound direction. Replaces the old car-profile OSRM
+ * routing, which drew buses along the wrong roads.
+ */
+function useTdRouteLine(variant: RouteVariant | null, points: GeoPoint[]): GeoPoint[] | null {
   const [result, setResult] = React.useState<{
     variantKey: string
-    geometry: GeoPoint[]
+    path: GeoPoint[]
   } | null>(null)
 
   React.useEffect(() => {
-    if (!variantKey || points.length < 2) return
+    if (!variant || points.length < 2) return
     let cancelled = false
-    getRoutedGeometry(variantKey, points)
-      .then((geometry) => {
-        if (!cancelled && geometry) setResult({ variantKey, geometry })
+    const variantKey = variant.key
+    resolveTdRouteLine({
+      route: variant.route,
+      co: variant.co,
+      bound: variant.bound,
+      variantPoints: points,
+    })
+      .then((line) => {
+        if (!cancelled && line) setResult({ variantKey, path: line.points })
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [variantKey, points])
+  }, [variant, points])
 
-  return result && result.variantKey === variantKey ? result.geometry : null
+  return result && variant && result.variantKey === variant.key ? result.path : null
 }
 
 /**
@@ -1104,20 +1115,14 @@ export function KmbRoutesView({
     () => (stopsVariantKey === currentVariant?.key ? routePath : []),
     [stopsVariantKey, currentVariant, routePath]
   )
-  // GMB routes have no OSRM upgrade today, so the TD shape is their whole
-  // map. Other operators keep the TD stop-sequence shape as the persistent
-  // line: OSRM routes buses like cars and regularly draws the wrong roads,
-  // while the TD shape follows the true stop order. OSRM geometry stays as
-  // the fallback for variants with no TD match.
-  const isGmbRoute = currentVariant ? normalizeOperator(currentVariant.co) === 'gmb' : false
-  const routedGeometry = useKmbRouteGeometry(
-    isGmbRoute ? null : (currentVariant?.key ?? null),
-    geometryPoints
-  )
+  // The CSDI route line is the persistent map shape: true road-following
+  // geometry in travel order. Variants with no line (GMB, DB/PI/XB, or a
+  // TD miss) fall back to straight stop-sequence segments, then bare stop
+  // points. GMB routes never had OSRM routing; nothing else still uses it
+  // for route maps.
+  const tdRouteLine = useTdRouteLine(currentVariant, geometryPoints)
   const tdInstantPath = useTdInstantPath(currentVariant, geometryPoints)
-  // Straight segments between stops cut corners versus road geometry, but
-  // the line always visits the stops in travel order.
-  const displayPath = tdInstantPath ?? routedGeometry ?? routePath
+  const displayPath = tdRouteLine ?? tdInstantPath ?? routePath
 
   const mapCenter = React.useMemo(() => {
     if (routePath.length) return routePath[Math.floor(routePath.length / 2)]

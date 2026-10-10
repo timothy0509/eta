@@ -16,6 +16,7 @@
     "analyze": "ANALYZE=true next build",
     "data:gmb": "bun scripts/build-gmb-routes.ts",
     "data:td-shapes": "bun scripts/build-td-shapes.ts",
+    "data:route-lines": "bun scripts/build-td-route-lines.ts",
     "extract:td-bus": "bun scripts/extract-td-bus.ts",
     "prepare": "husky"
   },

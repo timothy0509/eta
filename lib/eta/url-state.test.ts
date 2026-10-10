@@ -314,4 +314,30 @@ describe('decodeUrlState', () => {
     expect(decoded.selectedItem).toHaveProperty('routeFilterMode', 'advanced')
     expect(decoded.state.routeFilterMode).toBeUndefined()
   })
+
+  it('encodes the GMB directory tab only on the bus routes view', () => {
+    const base: UrlEncodeInput = {
+      mode: 'kmb',
+      subView: 'routes',
+      lang: 'tc',
+      routeFilterMode: 'simple',
+      autoRefreshSeconds: 15,
+      busRoutesTab: 'gmb',
+    }
+    expect(encodeUrlState(base)).toContain('bt=gmb')
+    expect(encodeUrlState({ ...base, busRoutesTab: 'bus' })).not.toContain('bt=')
+    expect(encodeUrlState({ ...base, subView: 'stops' })).not.toContain('bt=')
+  })
+
+  it('decodes the GMB directory tab without touching other state', () => {
+    const result = decodeUrlState('m=kmb&v=routes&bt=gmb')
+    expect(result.state.busRoutesTab).toBe('gmb')
+    expect(result.state.mode).toBe('kmb')
+    expect(result.state.subView).toBe('routes')
+  })
+
+  it('leaves the tab unset for old links without bt', () => {
+    expect(decodeUrlState('m=kmb&v=routes').state.busRoutesTab).toBeUndefined()
+    expect(decodeUrlState('m=kmb&v=routes&bt=bus').state.busRoutesTab).toBeUndefined()
+  })
 })

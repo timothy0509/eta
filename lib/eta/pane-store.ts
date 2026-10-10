@@ -5,7 +5,7 @@ import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
 import type { MtrPaneState } from '@/components/eta/panes/mtr-pane'
 import type { LrtPaneState } from '@/components/eta/panes/lrt-pane'
 import type { KmbRouteStopLite } from '@/lib/eta/client'
-import type { KmbStopSearchItem } from '@/lib/eta/types'
+import type { BusRoutesTab, KmbStopSearchItem } from '@/lib/eta/types'
 
 type PaneStore = {
   kmb: KmbPaneState | null
@@ -15,6 +15,11 @@ type PaneStore = {
   setKmbStops: (stops: KmbStopSearchItem[]) => void
   kmbRouteStops: KmbRouteStopLite[]
   setKmbRouteStops: (stops: KmbRouteStopLite[]) => void
+  // Transient routes-view tab (bus list vs GMB directory). URL-synced
+  // through useUrlSync, never persisted, defaults to the bus list so old
+  // links land where they always did.
+  busRoutesTab: BusRoutesTab
+  setBusRoutesTab: (tab: BusRoutesTab) => void
 }
 
 function isSameRouteStop(
@@ -49,6 +54,9 @@ export const usePaneStore = create<PaneStore>()((set) => ({
   kmb: null,
   mtr: null,
   lrt: null,
+  busRoutesTab: 'bus',
+  setBusRoutesTab: (busRoutesTab) =>
+    set((prev) => (prev.busRoutesTab === busRoutesTab ? prev : { busRoutesTab })),
   kmbStops: [],
   // The full stop list is ~6k entries. Only replace it when the contents
   // actually changed so refetches never rewrite the last query's list

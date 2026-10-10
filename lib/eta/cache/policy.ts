@@ -20,6 +20,9 @@ export const CACHE_POLICIES = {
   lrtRouteEta: { ttlMs: 30_000, maxStaleMs: 90_000, persist: false },
   etaDb: { ttlMs: 24 * 60 * 60 * 1000, persist: true },
   kmbStaticList: { ttlMs: 24 * 60 * 60 * 1000, persist: true },
+  // Compact TD extract served same-origin from public/data. Same daily
+  // rhythm as the other static lists; the source refreshes biweekly.
+  gmbStaticList: { ttlMs: 24 * 60 * 60 * 1000, persist: true },
   kmbRouteGeometry: {
     ttlMs: 30 * 24 * 60 * 60 * 1000,
     maxStaleMs: 90 * 24 * 60 * 60 * 1000,

@@ -3,7 +3,9 @@ import * as React from 'react'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { translations } from '@/lib/eta/i18n'
 import { pickLang } from '@/lib/eta/pick-lang'
+import { isStopDropOffOnlyForVariants } from '@/lib/eta/td-bus'
 import { isKmbStop } from '@/lib/eta/types'
+import type { KmbRouteStopLite } from '@/lib/eta/client'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
 import type { RouteFilterState } from '@/components/eta/route-filter'
@@ -25,9 +27,35 @@ type UseKmbSaveOptions = {
   kmbQuery: KmbQuery | null
   kmbDraftStopSelection: StopSearchSelection | undefined
   kmbStopsById: Map<string, KmbStopSearchItem>
+  /** Route-stop table for drop-off-only checks. Empty means no warning. */
+  routeStops?: readonly KmbRouteStopLite[]
   canFavorite: boolean
   onAddFavorite: (item: FavoritesItem) => void
   onAddRecent: (item: FavoritesItem) => void
+}
+
+/**
+ * Variant keys serving a stop, optionally restricted to the simple-mode
+ * route filter. Used to decide whether the stop is drop-off only in the
+ * saved context.
+ */
+function variantKeysForStop(
+  stopId: string,
+  routeStops: readonly KmbRouteStopLite[],
+  entryKeys: string[] | null,
+  routeFilterRoutes: Set<string> | null
+): string[] {
+  if (entryKeys) return entryKeys
+  const needle = String(stopId ?? '').trim()
+  const keys = new Set<string>()
+  for (const rs of routeStops) {
+    if (String(rs.stopId ?? '').trim() !== needle) continue
+    if (routeFilterRoutes && !routeFilterRoutes.has(String(rs.route ?? '').toUpperCase())) {
+      continue
+    }
+    keys.add(`${rs.co}|${String(rs.route).toUpperCase()}|${rs.bound}|${rs.serviceType}`)
+  }
+  return Array.from(keys)
 }
 
 export function useKmbSave({
@@ -37,6 +65,7 @@ export function useKmbSave({
   kmbQuery,
   kmbDraftStopSelection,
   kmbStopsById,
+  routeStops = [],
   canFavorite,
   onAddFavorite,
   onAddRecent,
@@ -147,6 +176,37 @@ export function useKmbSave({
 
     onAddFavorite(item)
     onAddRecent(item)
+
+    // Warn when every saved stop is drop-off only on the saved routes:
+    // boarding is impossible there, so the favorite would stay empty.
+    const entryKeys =
+      isAdvanced && routeFilter.entries?.length
+        ? routeFilter.entries.map((e) => e.variantKey)
+        : null
+    const routeFilterRoutes =
+      !isAdvanced && route
+        ? new Set(
+            route
+              .split(',')
+              .map((r) => r.trim().toUpperCase())
+              .filter(Boolean)
+          )
+        : null
+    const savedStopIds = stopId ? [stopId] : (stopIds ?? [])
+    const allDropOffOnly =
+      savedStopIds.length > 0 &&
+      savedStopIds.every((id) =>
+        isStopDropOffOnlyForVariants(
+          id,
+          variantKeysForStop(id, routeStops, entryKeys, routeFilterRoutes),
+          routeStops
+        )
+      )
+    if (allDropOffOnly) {
+      void import('sonner').then(({ toast }) =>
+        toast.warning(translations.kmb.dropOffOnlySaveWarning[lang])
+      )
+    }
   }, [
     lang,
     routeFilterMode,
@@ -154,6 +214,7 @@ export function useKmbSave({
     kmbQuery,
     kmbDraftStopSelection,
     kmbStopsById,
+    routeStops,
     canFavorite,
     onAddFavorite,
     onAddRecent,

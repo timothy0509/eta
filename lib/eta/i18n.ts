@@ -229,6 +229,18 @@ const kmb: Record<string, TranslationEntry> = {
     tc: '包含「{query}」的車站',
     sc: '包含“{query}”的车站',
   },
+  pickUpOnly: { en: 'Pick-up only', tc: '只可上車', sc: '只可上车' },
+  dropOffOnly: { en: 'Drop-off only', tc: '只可落車', sc: '只可下车' },
+  dropOffOnlySaveWarning: {
+    en: 'This stop is drop-off only on the selected route. Saved, but boarding ETAs will stay empty there.',
+    tc: '此站在所選路線只可落車。已收藏，但該處不會有上車班次。',
+    sc: '此站在所选路线只可下车。已收藏，但该处不会有上车班次。',
+  },
+  journeyTime: { en: 'About {count} min', tc: '車程約 {count} 分鐘', sc: '车程约 {count} 分钟' },
+  fullJourneyFare: { en: 'Full-journey fare', tc: '全程車費', sc: '全程车费' },
+  tagNight: { en: 'Night', tc: '通宵', sc: '通宵' },
+  tagSpecialTimes: { en: 'Special times', tc: '特別班次', sc: '特别班次' },
+  tagWeekendFare: { en: 'Weekend fare', tc: '假日收費', sc: '假日收费' },
 }
 
 const mtr: Record<string, TranslationEntry> = {

@@ -27,6 +27,7 @@ import { getLrtSchedule } from '@/lib/eta/direct/lrt'
 import { fetchMtrSchedules as fetchMtrSchedulesDirect } from '@/lib/eta/direct/mtr'
 import { getCachedValue } from '@/lib/eta/direct/shared'
 import { lrtStopIdToStationId } from '@/lib/eta/lrt-stop-id'
+import type { KmbFareInfo } from '@/lib/eta/kmb-fares'
 import type { UiLanguage } from '@/lib/eta/types'
 
 type DedupeKey = string
@@ -250,7 +251,7 @@ export async function fetchKmbRouteInfo(params: {
  */
 export type KmbStopEtasResponse = {
   byStopId: Record<string, KmbEtaEntryWithLeg[]>
-  faresByVariantKey?: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey?: Record<string, KmbFareInfo>
   errors: string[]
   cached: number
   fetched: number
@@ -301,7 +302,7 @@ export type KmbFareVariant = {
 }
 
 export type KmbFaresResponse = {
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey: Record<string, KmbFareInfo>
 }
 
 export async function fetchKmbFares(

@@ -55,6 +55,7 @@ import {
   type RouteFuseInstance,
 } from '@/lib/eta/route-search'
 import { getRoutedGeometry } from '@/lib/eta/routing'
+import { resolveTdInstantPath } from '@/lib/eta/direct/td-shapes'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
 import { isKmbStop } from '@/lib/eta/types'
@@ -692,6 +693,42 @@ function useKmbRouteGeometry(variantKey: string | null, points: GeoPoint[]): Geo
   return result && result.variantKey === variantKey ? result.geometry : null
 }
 
+/**
+ * Instant route shape from Transport Department stop coordinates. The TD
+ * datasets already order stops by stopSeq per routeSeq direction, so the
+ * selected shape draws with no per-route fetch once the dataset is cached.
+ * The shared dataset download is never aborted by one view unmounting;
+ * late results are dropped by the cancelled flag instead.
+ */
+function useTdInstantPath(variant: RouteVariant | null, points: GeoPoint[]): GeoPoint[] | null {
+  const [result, setResult] = React.useState<{
+    variantKey: string
+    path: GeoPoint[]
+  } | null>(null)
+
+  React.useEffect(() => {
+    if (!variant || points.length < 2) return
+    let cancelled = false
+    const variantKey = variant.key
+    const dataset = normalizeOperator(variant.co) === 'gmb' ? 'gmb' : 'bus'
+    resolveTdInstantPath({
+      dataset,
+      route: variant.route,
+      co: variant.co,
+      variantPoints: points,
+    })
+      .then((shape) => {
+        if (!cancelled && shape) setResult({ variantKey, path: shape.points })
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [variant, points])
+
+  return result && variant && result.variantKey === variant.key ? result.path : null
+}
+
 export function KmbRoutesView({
   lang,
   initialSelection,
@@ -980,8 +1017,18 @@ export function KmbRoutesView({
     () => (stopsVariantKey === currentVariant?.key ? routePath : []),
     [stopsVariantKey, currentVariant, routePath]
   )
-  const routedGeometry = useKmbRouteGeometry(currentVariant?.key ?? null, geometryPoints)
-  const displayPath = routedGeometry ?? routePath
+  // GMB routes have no OSRM upgrade today, so the TD shape is their whole
+  // map. Other operators paint the TD shape first, then swap in the cached
+  // road-following geometry when it resolves.
+  const isGmbRoute = currentVariant ? normalizeOperator(currentVariant.co) === 'gmb' : false
+  const routedGeometry = useKmbRouteGeometry(
+    isGmbRoute ? null : (currentVariant?.key ?? null),
+    geometryPoints
+  )
+  const tdInstantPath = useTdInstantPath(currentVariant, geometryPoints)
+  // Straight segments between stops cut corners versus the road geometry,
+  // so this instant line is a placeholder until the OSRM upgrade lands.
+  const displayPath = routedGeometry ?? tdInstantPath ?? routePath
 
   const mapCenter = React.useMemo(() => {
     if (routePath.length) return routePath[Math.floor(routePath.length / 2)]

@@ -27,6 +27,12 @@ export function kmbRouteGeometryKey(variantKey: string): string {
   return `kmb-route-geometry:${variantKey}`
 }
 
+export function tdRouteShapesKey(dataset: string): string {
+  return `td-route-shapes:${String(dataset ?? '')
+    .trim()
+    .toLowerCase()}`
+}
+
 export function lrtRouteEtaKey(params: {
   route: string
   bound: string

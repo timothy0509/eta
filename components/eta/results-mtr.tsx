@@ -1,7 +1,14 @@
 'use client'
 
 import * as React from 'react'
-import { ChevronDown, ExternalLink, TrainFront, TriangleAlert } from 'lucide-react'
+import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  ExternalLink,
+  TrainFront,
+  TriangleAlert,
+} from 'lucide-react'
 
 import { LivePulse } from '@/components/m3/motion'
 import { EmptyState } from '@/components/eta/empty-state'
@@ -105,6 +112,56 @@ function formatPlatform(plat: unknown) {
   return raw
 }
 
+type TrainRowModel = {
+  dest: string
+  platform: string
+  eta: { text: string; arriving: boolean }
+  minutes: number
+  key: string
+}
+
+type MtrDirectionContext = {
+  line: string
+  sta: string
+  lang: UiLanguage
+  viaRacecourseSuffix: string
+  arrivingText: string
+  minutesUnit: string
+}
+
+function buildRowModel(
+  train: MtrTrainEntry,
+  dir: MtrDirection,
+  ctx: MtrDirectionContext
+): TrainRowModel {
+  const route = String((train as { route?: unknown }).route ?? '')
+  const showViaRacecourse = shouldShowViaRacecourse({
+    line: ctx.line,
+    currentSta: ctx.sta,
+    dir,
+    route: route || undefined,
+  })
+  const dest = formatDestWithRacecourse(
+    train.dest,
+    ctx.lang,
+    ctx.viaRacecourseSuffix,
+    showViaRacecourse
+  )
+  const rawMinutes = String(train.ttnt ?? '').trim()
+  const parsedMinutes = Number(rawMinutes)
+  const minutes =
+    rawMinutes === '' || Number.isNaN(parsedMinutes)
+      ? Number.POSITIVE_INFINITY
+      : Math.max(parsedMinutes, 0)
+  return {
+    dest,
+    platform: formatPlatform(train.plat),
+    eta: formatMinutes(train.ttnt, ctx.arrivingText, ctx.minutesUnit),
+    minutes,
+    key: `${dest}-${route}-${dir}`,
+  }
+}
+
 type MtrLineCardProps = {
   payload: {
     UP?: MtrTrainEntry[]
@@ -144,118 +201,62 @@ function MtrLineCard({
   const totalTrains = upTrains.length + downTrains.length
   const expandable = totalTrains > 1
 
-  const computeUniqueDestEtas = React.useCallback(
-    (trains: MtrTrainEntry[], dir: MtrDirection) => {
-      const seenDests = new Set<string>()
-      return (trains ?? [])
-        .map((train) => {
-          const route = String((train as { route?: unknown }).route ?? '')
-          const showViaRacecourse = shouldShowViaRacecourse({
-            line,
-            currentSta: sta,
-            dir,
-            route: route || undefined,
-          })
-          const dest = formatDestWithRacecourse(
-            train.dest,
-            lang,
-            viaRacecourseSuffix,
-            showViaRacecourse
-          )
-          const platform = formatPlatform(train.plat)
-          const eta = formatMinutes(train.ttnt, arrivingText, minutesUnit)
-          return { dest, platform, eta, key: `${dest}-${route}` }
-        })
-        .filter((item) => {
-          if (!item.dest || seenDests.has(item.dest)) return false
-          seenDests.add(item.dest)
-          return true
-        })
-    },
-    [line, sta, lang, viaRacecourseSuffix, arrivingText, minutesUnit]
-  )
+  const rowFor = (train: MtrTrainEntry, dir: MtrDirection): TrainRowModel =>
+    buildRowModel(train, dir, {
+      line,
+      sta,
+      lang,
+      viaRacecourseSuffix,
+      arrivingText,
+      minutesUnit,
+    })
 
+  // Mobile collapsed summary: dedupe by destination across both directions.
+  const seenDests = new Set<string>()
   const collapsedItems = [
-    ...computeUniqueDestEtas(upTrains, 'UP'),
-    ...computeUniqueDestEtas(downTrains, 'DOWN'),
-  ]
+    ...upTrains.map((train) => rowFor(train, 'UP')),
+    ...downTrains.map((train) => rowFor(train, 'DOWN')),
+  ].filter((item) => {
+    if (!item.dest || seenDests.has(item.dest)) return false
+    seenDests.add(item.dest)
+    return true
+  })
+
+  const rowContent = (item: TrainRowModel, dense: boolean) => (
+    <div
+      key={item.key}
+      className={cn('flex items-center justify-between gap-3', dense ? 'py-0.5' : 'py-1.5')}
+    >
+      <Marquee title={item.dest} className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
+        {item.dest}
+      </Marquee>
+      <div className="flex shrink-0 items-center gap-2">
+        {item.platform ? (
+          <span className="text-on-surface-variant m3-label-md font-mono">P{item.platform}</span>
+        ) : null}
+        {item.eta.arriving ? (
+          <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
+            <LivePulse />
+            {item.eta.text}
+          </span>
+        ) : (
+          <span className="text-on-surface font-tabular m3-body-md font-semibold">
+            {item.eta.text}
+          </span>
+        )}
+      </div>
+    </div>
+  )
 
   const collapsedSummary = (
     <div className="space-y-1">
       {collapsedItems.length === 0 ? (
         <div className="text-on-surface-variant m3-body-md">—</div>
       ) : (
-        collapsedItems.map((item) => (
-          <div key={item.key} className="flex items-center justify-between gap-3 py-0.5">
-            <Marquee
-              title={item.dest}
-              className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
-            >
-              {item.dest}
-            </Marquee>
-            <div className="flex shrink-0 items-center gap-2">
-              {item.platform ? (
-                <span className="text-on-surface-variant m3-label-md font-mono">
-                  P{item.platform}
-                </span>
-              ) : null}
-              {item.eta.arriving ? (
-                <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
-                  <LivePulse />
-                  {item.eta.text}
-                </span>
-              ) : (
-                <span className="text-on-surface font-tabular m3-body-md font-semibold">
-                  {item.eta.text}
-                </span>
-              )}
-            </div>
-          </div>
-        ))
+        collapsedItems.map((item) => rowContent(item, true))
       )}
     </div>
   )
-
-  const trainRow = (train: MtrTrainEntry, dir: MtrDirection, trainIdx: number) => {
-    const route = String((train as { route?: unknown }).route ?? '')
-    const showViaRacecourse = shouldShowViaRacecourse({
-      line,
-      currentSta: sta,
-      dir,
-      route: route || undefined,
-    })
-    const destText = formatDestWithRacecourse(
-      train.dest,
-      lang,
-      viaRacecourseSuffix,
-      showViaRacecourse
-    )
-    const platform = formatPlatform(train.plat)
-    const eta = formatMinutes(train.ttnt, arrivingText, minutesUnit)
-
-    return (
-      <div key={`${dir}-${trainIdx}`} className="flex items-center justify-between gap-3 py-1.5">
-        <Marquee title={destText} className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
-          {destText}
-        </Marquee>
-        <div className="flex shrink-0 items-center gap-2">
-          {platform ? (
-            <span className="text-on-surface-variant m3-label-md font-mono">P{platform}</span>
-          ) : null}
-          {eta.arriving ? (
-            <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
-              <LivePulse />
-              {eta.text}
-            </span>
-          ) : (
-            <span className="text-on-surface font-tabular m3-body-md font-semibold">
-              {eta.text}
-            </span>
-          )}
-        </div>
-      </div>
-    )
-  }
 
   const expandedPanel = (
     <div className="space-y-4">
@@ -265,7 +266,10 @@ function MtrLineCard({
           {upTrains.length === 0 ? (
             <div className="text-on-surface-variant m3-body-md">—</div>
           ) : (
-            upTrains.slice(0, 4).map((train, idx) => trainRow(train, 'UP', idx))
+            upTrains.slice(0, 4).map((train, idx) => {
+              const row = { ...rowFor(train, 'UP'), key: `UP-${idx}` }
+              return rowContent(row, false)
+            })
           )}
         </div>
       </div>
@@ -275,7 +279,10 @@ function MtrLineCard({
           {downTrains.length === 0 ? (
             <div className="text-on-surface-variant m3-body-md">—</div>
           ) : (
-            downTrains.slice(0, 4).map((train, idx) => trainRow(train, 'DOWN', idx))
+            downTrains.slice(0, 4).map((train, idx) => {
+              const row = { ...rowFor(train, 'DOWN'), key: `DOWN-${idx}` }
+              return rowContent(row, false)
+            })
           )}
         </div>
       </div>
@@ -298,25 +305,11 @@ function MtrLineCard({
       </div>
     ) : null
 
-  if (!expandable) {
-    return (
-      <div
-        className={cn(
-          'overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm',
-          staggerClass
-        )}
-      >
-        {header(false)}
-        <div className="bg-surface-container p-4">{collapsedSummary}</div>
-      </div>
-    )
-  }
-
-  return (
+  const mobileCard = expandable ? (
     <ExpandableEtaRow
       expanded={expanded}
       onToggle={onToggle}
-      className="ui-lift"
+      className="ui-lift lg:hidden"
       flush
       panel={expandedPanel}
       toggleLabel={line ? getMtrLineName(line, lang) : 'MTR'}
@@ -324,6 +317,63 @@ function MtrLineCard({
       {header(true)}
       {expanded ? null : <div className="p-4">{collapsedSummary}</div>}
     </ExpandableEtaRow>
+  ) : (
+    <div
+      className={cn(
+        'overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm lg:hidden',
+        staggerClass
+      )}
+    >
+      {header(false)}
+      <div className="bg-surface-container p-4">{collapsedSummary}</div>
+    </div>
+  )
+
+  // Desktop: full-width card, one column per direction. Each column gets
+  // half the panel, so long names fit without scrolling text.
+  const directionColumn = (dir: MtrDirection, label: string) => {
+    const trains = dir === 'UP' ? upTrains : downTrains
+    const Icon = dir === 'UP' ? ArrowUp : ArrowDown
+    return (
+      <div className="min-w-0 p-4">
+        <div className="text-on-surface-variant m3-label-md mb-1 flex items-center gap-1.5 font-medium">
+          <Icon className="h-3.5 w-3.5" />
+          {label}
+        </div>
+        <div className="space-y-1">
+          {trains.length === 0 ? (
+            <div className="text-on-surface-variant m3-body-md">—</div>
+          ) : (
+            trains.slice(0, 4).map((train, idx) => {
+              const row = { ...rowFor(train, dir), key: `${dir}-${idx}` }
+              return rowContent(row, false)
+            })
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  const desktopCard = (
+    <div
+      className={cn(
+        'hidden overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm lg:block',
+        staggerClass
+      )}
+    >
+      {header(false)}
+      <div className="bg-surface-container grid grid-cols-2 divide-x divide-[var(--outline-variant)]/10">
+        {directionColumn('UP', upLabel)}
+        {directionColumn('DOWN', downLabel)}
+      </div>
+    </div>
+  )
+
+  return (
+    <>
+      {mobileCard}
+      {desktopCard}
+    </>
   )
 }
 
@@ -345,6 +395,8 @@ export const MtrResults = React.memo(function MtrResults({
     setExpandedKey((prev) => (prev === key ? null : key))
   }, [])
   const listSignature = React.useMemo(() => `mtr:${sta ?? title}`, [sta, title])
+
+  const lineEntries = schedule && schedule.status !== 0 ? Object.entries(schedule.data ?? {}) : []
 
   return (
     <div>
@@ -399,31 +451,34 @@ export const MtrResults = React.memo(function MtrResults({
             ) : null}
           </div>
         ) : (
-          Object.entries(schedule.data ?? {}).map(([key, payload], idx) => {
-            const [line, sta] = key.split('-')
-            const lineColor = line ? getLineColor(line) : undefined
+          <>
+            {/* Each card renders its own phone/desktop variant. */}
+            <div className="space-y-4">
+              {lineEntries.map(([key, payload], idx) => {
+                const [line, sta] = key.split('-')
+                const lineColor = line ? getLineColor(line) : undefined
 
-            const staggerClass = staggerClassForIndex(idx)
-
-            return (
-              <MtrLineCard
-                key={key}
-                payload={payload}
-                line={line}
-                sta={sta}
-                lang={lang}
-                lineColor={lineColor}
-                upLabel={t('mtr.up')}
-                downLabel={t('mtr.down')}
-                viaRacecourseSuffix={t('mtr.viaRacecourse')}
-                arrivingText={t('common.now')}
-                minutesUnit={t('common.minutesUnit')}
-                expanded={expandedKey === key}
-                onToggle={() => onToggleExpand(key)}
-                staggerClass={staggerClass}
-              />
-            )
-          })
+                return (
+                  <MtrLineCard
+                    key={key}
+                    payload={payload}
+                    line={line}
+                    sta={sta}
+                    lang={lang}
+                    lineColor={lineColor}
+                    upLabel={t('mtr.up')}
+                    downLabel={t('mtr.down')}
+                    viaRacecourseSuffix={t('mtr.viaRacecourse')}
+                    arrivingText={t('common.now')}
+                    minutesUnit={t('common.minutesUnit')}
+                    expanded={expandedKey === key}
+                    onToggle={() => onToggleExpand(key)}
+                    staggerClass={staggerClassForIndex(idx)}
+                  />
+                )
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   extractGmbRoutes,
+  extractGmbStops,
   filterGmbRoutes,
   gmbDetailUrl,
   parseGmbCutoffDate,
@@ -85,6 +86,57 @@ describe('extractGmbRoutes', () => {
       extractGmbRoutes({ features: [null, { properties: null }, { properties: {} }] })
     ).toEqual([])
     expect(extractGmbRoutes({ features: [feature(1, 1, { district: 'XX' })] })).toEqual([])
+  })
+})
+
+describe('extractGmbStops', () => {
+  const stopProps = (overrides: Record<string, unknown> = {}) => ({
+    stopPickDrop: 3,
+    stopNameC: '第一站',
+    stopNameS: '第一站',
+    stopNameE: 'First',
+    ...overrides,
+  })
+
+  it('groups stops by route id and routeSeq in stopSeq order', () => {
+    const routes = extractGmbStops({
+      type: 'FeatureCollection',
+      features: [
+        feature(2000410, 1, stopProps({ stopSeq: 2, stopId: 20007719 })),
+        feature(2000410, 1, stopProps({ stopSeq: 1, stopId: 20003337 })),
+        feature(2000410, 2, stopProps({ stopSeq: 1, stopId: 20009999 })),
+      ],
+    })
+    expect(routes).toHaveLength(1)
+    expect(routes[0]?.v.map((v) => v.q)).toEqual([1, 2])
+    expect(routes[0]?.v[0]?.s.map((s) => s[0])).toEqual([1, 2])
+    expect(routes[0]?.v[0]?.s[0]).toEqual([
+      1,
+      20003337,
+      3,
+      22.2,
+      114.1,
+      'First',
+      '第一站',
+      '第一站',
+    ])
+    expect(routes[0]?.n).toEqual(['69', '69', '69'])
+    expect(routes[0]?.v[0]?.o).toEqual(['Cyberport', '數碼港', '数码港'])
+  })
+
+  it('skips malformed features without throwing', () => {
+    expect(extractGmbStops(null)).toEqual([])
+    expect(
+      extractGmbStops({
+        features: [
+          null,
+          { properties: null },
+          feature(1, 1, stopProps({ routeSeq: 9 })),
+          feature(1, 1, stopProps({ stopPickDrop: 9 })),
+          feature(1, 1, { ...stopProps(), stopId: null }),
+        ],
+      })
+    ).toEqual([])
   })
 })
 

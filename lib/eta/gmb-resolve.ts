@@ -6,6 +6,7 @@ import {
   type GmbTdStopPoint,
 } from '@/lib/eta/direct/gmb-td'
 import { normalizeBound, type EtaDbIndexes } from '@/lib/eta/eta-db-index'
+import { normalizeOperator } from '@/lib/eta/operator-colors'
 
 export type GmbEtaResolution = {
   entry: RouteListEntry
@@ -80,6 +81,12 @@ export function resolveGmbEtaVariant(params: {
  * Map TD stops (already in stopSeq order) onto realtime queries by sequence
  * position. Stops past the end of the realtime stop list are flagged
  * unresolved instead of guessed.
+ *
+ * Positional mapping assumes both datasets list the same stops in the same
+ * order. If either side inserts or drops a mid-sequence stop, every stop
+ * after the gap misaligns by one. Per-stop coordinate cross-checks via
+ * lib/eta/td-stop-matcher.ts are the future fix; until then overflow stops
+ * stay flagged rather than guessed.
  */
 export function resolveGmbStopQueries(
   tdStops: GmbTdStopPoint[],
@@ -97,7 +104,23 @@ export function resolveGmbStopQueries(
   })
 }
 
-/** Variant key shared with the KMB ETA filter (`co|route|bound|serviceType`). */
-export function gmbVariantBaseKey(resolution: GmbEtaResolution, routeName: string): string {
-  return `gmb|${routeName.trim().toUpperCase()}|${resolution.bound}|${resolution.serviceType}`
+/**
+ * Variant key shared with the KMB ETA filter (`co|route|bound|serviceType`).
+ * Accepts either a resolved variant plus route name or a raw ETA entry (which
+ * carries `dir`/`service_type` aliases), so call sites share one builder.
+ */
+export function gmbVariantBaseKey(entry: {
+  co?: unknown
+  route?: unknown
+  bound?: unknown
+  dir?: unknown
+  serviceType?: unknown
+  service_type?: unknown
+}): string {
+  const bound = entry.bound ?? entry.dir ?? ''
+  const serviceType = entry.serviceType ?? entry.service_type ?? ''
+  const co = typeof entry.co === 'string' ? entry.co : undefined
+  return `${normalizeOperator(co)}|${String(entry.route ?? '')
+    .trim()
+    .toUpperCase()}|${String(bound ?? '')}|${String(serviceType ?? '')}`
 }

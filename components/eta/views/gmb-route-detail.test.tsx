@@ -1,5 +1,3 @@
-'use client'
-
 import { describe, expect, it, vi } from 'vitest'
 
 import { fireEvent, render, within } from '@/lib/test-utils'
@@ -161,7 +159,7 @@ describe('GmbRouteDetail', () => {
 
     expect(await rendered.findByText('第一站')).not.toBeNull()
     expect(rendered.getByText(/HK\$ 12\.5/)).not.toBeNull()
-    expect(rendered.getByText(/車程約 20 分鐘/)).not.toBeNull()
+    expect(rendered.getByText(/車程 20 分鐘/)).not.toBeNull()
     expect(await rendered.findByTestId('transit-map-stub')).not.toBeNull()
 
     const timeline = (await rendered.findByText('第一站')).closest('.space-y-2')

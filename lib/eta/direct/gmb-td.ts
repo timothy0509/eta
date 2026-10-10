@@ -1,9 +1,12 @@
 import { GMB_TD_GROUPS_CACHE_KEY } from '@/lib/eta/cache/keys'
 import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import { getCachedValue } from '@/lib/eta/direct/shared'
+import type { GmbStopsFileStop, GmbStopsTuple } from '@/lib/eta/gmb'
 import { fetchJson } from '@/lib/eta/http'
 
-export const GMB_TD_GEOJSON_URL = 'https://static.data.gov.hk/td/routes-fares-geojson/JSON_GMB.json'
+// Same-origin compact extract built by scripts/build-gmb-routes.ts. Served
+// from public/, so no connect-src CSP addition is needed.
+const GMB_STOPS_URL = '/data/gmb-stops.json'
 
 /** TD stopPickDrop: 1 drop-off only, 2 pick-up only, 3 both. */
 export type GmbTdPickDrop = 1 | 2 | 3
@@ -43,39 +46,8 @@ export type GmbTdRouteGroup = {
   variants: GmbTdRouteVariant[]
 }
 
-type RawProperties = {
-  routeId?: unknown
-  routeNameC?: unknown
-  routeNameS?: unknown
-  routeNameE?: unknown
-  district?: unknown
-  serviceMode?: unknown
-  journeyTime?: unknown
-  locStartNameC?: unknown
-  locStartNameS?: unknown
-  locStartNameE?: unknown
-  locEndNameC?: unknown
-  locEndNameS?: unknown
-  locEndNameE?: unknown
-  fullFare?: unknown
-  lastUpdateDate?: unknown
-  routeSeq?: unknown
-  stopSeq?: unknown
-  stopId?: unknown
-  stopPickDrop?: unknown
-  stopNameC?: unknown
-  stopNameS?: unknown
-  stopNameE?: unknown
-}
-
-type RawFeature = {
-  type?: unknown
-  geometry?: { type?: unknown; coordinates?: unknown }
-  properties?: RawProperties
-}
-
-function toTrimmedString(value: unknown): string {
-  return typeof value === 'string' ? value.trim() : ''
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -102,30 +74,32 @@ function toPickDrop(value: unknown): GmbTdPickDrop | null {
   return null
 }
 
-function parseFeature(feature: RawFeature): GmbTdStopPoint | null {
-  const props = feature?.properties
-  if (!props) return null
-
-  const routeId = toFiniteNumber(props.routeId)
-  const routeSeq = toRouteSeq(props.routeSeq)
-  const stopSeq = toFiniteNumber(props.stopSeq)
-  const stopId = toFiniteNumber(props.stopId)
-  const stopPickDrop = toPickDrop(props.stopPickDrop)
-  if (routeId === null || routeSeq === null || stopSeq === null || stopId === null) return null
-  if (stopPickDrop === null) return null
-
-  const coords = feature?.geometry?.coordinates
-  const lng = Array.isArray(coords) ? toFiniteNumber(coords[0]) : null
-  const lat = Array.isArray(coords) ? toFiniteNumber(coords[1]) : null
-  if (lat === null || lng === null) return null
-
-  const routeName = {
-    en: toTrimmedString(props.routeNameE),
-    tc: toTrimmedString(props.routeNameC),
-    sc: toTrimmedString(props.routeNameS),
+function toLang(value: unknown): { en: string; tc: string; sc: string } {
+  const tuple = value as Partial<GmbStopsTuple> | null
+  const at = (index: number): string => {
+    const text = Array.isArray(tuple) ? tuple[index] : null
+    return typeof text === 'string' ? text : ''
   }
-  if (!routeName.en && !routeName.tc) return null
+  return { en: at(0), tc: at(1), sc: at(2) }
+}
 
+function decodeStop(
+  routeId: number,
+  routeName: GmbTdStopPoint['routeName'],
+  routeSeq: GmbTdRouteSeq,
+  entry: unknown
+): GmbTdStopPoint | null {
+  if (!Array.isArray(entry) || entry.length < 8) return null
+  const tuple = entry as Partial<GmbStopsFileStop> & Array<unknown>
+  const stopSeq = toFiniteNumber(tuple[0])
+  const stopId = toFiniteNumber(tuple[1])
+  const stopPickDrop = toPickDrop(tuple[2])
+  const lat = toFiniteNumber(tuple[3])
+  const lng = toFiniteNumber(tuple[4])
+  if (stopSeq === null || stopId === null || stopPickDrop === null) return null
+  if (lat === null || lng === null) return null
+  const nameAt = (index: number): string =>
+    typeof tuple[index] === 'string' ? (tuple[index] as string) : ''
   return {
     routeId,
     routeName,
@@ -133,134 +107,87 @@ function parseFeature(feature: RawFeature): GmbTdStopPoint | null {
     stopSeq,
     stopId,
     stopPickDrop,
-    stopName: {
-      en: toTrimmedString(props.stopNameE),
-      tc: toTrimmedString(props.stopNameC),
-      sc: toTrimmedString(props.stopNameS),
-    },
+    stopName: { en: nameAt(5), tc: nameAt(6), sc: nameAt(7) },
     lat,
     lng,
   }
 }
 
-/**
- * Parse a TD GMB GeoJSON FeatureCollection into flat stop points.
- * Skips malformed features instead of failing the whole file.
- */
-export function parseGmbTdCollection(json: unknown): GmbTdStopPoint[] {
-  if (!json || typeof json !== 'object') return []
-  const features = (json as { features?: unknown }).features
-  if (!Array.isArray(features)) return []
+function decodeVariant(
+  routeId: number,
+  routeName: GmbTdRouteVariant['routeName'],
+  entry: unknown
+): GmbTdRouteVariant | null {
+  if (!isRecord(entry)) return null
+  const routeSeq = toRouteSeq(entry['q'])
+  if (routeSeq === null) return null
+  if (!Array.isArray(entry['s'])) return null
   const stops: GmbTdStopPoint[] = []
-  for (const feature of features) {
-    const parsed = parseFeature(feature as RawFeature)
-    if (parsed) stops.push(parsed)
+  for (const stop of entry['s']) {
+    const decoded = decodeStop(routeId, routeName, routeSeq, stop)
+    if (decoded) stops.push(decoded)
   }
-  return stops
+  if (stops.length === 0) return null
+  stops.sort((a, b) => a.stopSeq - b.stopSeq)
+  const finiteOrNull = (value: unknown): number | null => toFiniteNumber(value)
+  return {
+    routeId,
+    routeName,
+    routeSeq,
+    district: typeof entry['d'] === 'string' ? entry['d'] : '',
+    serviceMode: typeof entry['m'] === 'string' ? entry['m'] : '',
+    origin: toLang(entry['o']),
+    destination: toLang(entry['e']),
+    journeyTime: finiteOrNull(entry['j']),
+    fullFare: finiteOrNull(entry['f']),
+    lastUpdateDate: typeof entry['u'] === 'string' ? entry['u'] : null,
+    stops,
+  }
 }
 
-function variantKey(routeId: number, routeSeq: GmbTdRouteSeq): string {
-  return `${routeId}|${routeSeq}`
+function decodeRoute(entry: unknown): GmbTdRouteGroup | null {
+  if (!isRecord(entry)) return null
+  const routeId = toFiniteNumber(entry['i'])
+  if (routeId === null) return null
+  if (!Array.isArray(entry['n']) || !Array.isArray(entry['v'])) return null
+  const routeName = toLang(entry['n'])
+  const variants: GmbTdRouteVariant[] = []
+  for (const variant of entry['v']) {
+    const decoded = decodeVariant(routeId, routeName, variant)
+    if (decoded) variants.push(decoded)
+  }
+  if (variants.length === 0) return null
+  variants.sort((a, b) => a.routeSeq - b.routeSeq)
+  return { routeId, routeName, variants }
 }
 
 /**
- * Group flat stop points by routeId then routeSeq, ordering stops by
- * stopSeq. Variant-level fields (origin, destination, fare, journey time)
- * repeat on every feature, so the first stop in sequence order provides them.
+ * Validate the committed compact stop table and map it onto the route-group
+ * types. Structural problems (not an object, missing meta/routes) throw so a
+ * corrupt download fails loudly; malformed route, variant and stop entries
+ * are skipped so one bad row cannot blank the whole dataset.
  */
-export function groupGmbTdStops(
-  stops: GmbTdStopPoint[],
-  metaByVariantKey?: Map<
-    string,
-    Omit<GmbTdRouteVariant, 'stops' | 'routeId' | 'routeSeq' | 'routeName'>
-  >
-): GmbTdRouteGroup[] {
-  const byVariant = new Map<string, GmbTdStopPoint[]>()
-  for (const stop of stops) {
-    const key = variantKey(stop.routeId, stop.routeSeq)
-    const list = byVariant.get(key) ?? []
-    list.push(stop)
-    byVariant.set(key, list)
+export function parseGmbStopsFile(data: unknown): GmbTdRouteGroup[] {
+  if (!isRecord(data)) throw new Error('GMB stops file is not an object')
+  const meta = data['meta']
+  const routes = data['routes']
+  if (!isRecord(meta)) throw new Error('GMB stops file is missing meta')
+  if (!Array.isArray(routes)) throw new Error('GMB stops file is missing routes')
+  if (
+    typeof meta['source'] !== 'string' ||
+    typeof meta['dataset'] !== 'string' ||
+    typeof meta['cutoffDate'] !== 'string' ||
+    typeof meta['generatedAt'] !== 'string' ||
+    typeof meta['count'] !== 'number'
+  ) {
+    throw new Error('GMB stops file has invalid meta')
   }
-
-  const groups = new Map<number, GmbTdRouteGroup>()
-  for (const [key, list] of byVariant) {
-    const ordered = [...list].sort((a, b) => a.stopSeq - b.stopSeq)
-    const first = ordered[0]
-    if (!first) continue
-    const meta = metaByVariantKey?.get(key)
-    const variant: GmbTdRouteVariant = {
-      routeId: first.routeId,
-      routeName: first.routeName,
-      routeSeq: first.routeSeq,
-      district: meta?.district ?? '',
-      serviceMode: meta?.serviceMode ?? '',
-      origin: meta?.origin ?? { en: '', tc: '', sc: '' },
-      destination: meta?.destination ?? { en: '', tc: '', sc: '' },
-      journeyTime: meta?.journeyTime ?? null,
-      fullFare: meta?.fullFare ?? null,
-      lastUpdateDate: meta?.lastUpdateDate ?? null,
-      stops: ordered,
-    }
-    const group = groups.get(first.routeId) ?? {
-      routeId: first.routeId,
-      routeName: first.routeName,
-      variants: [],
-    }
-    group.variants.push(variant)
-    groups.set(first.routeId, group)
+  const groups: GmbTdRouteGroup[] = []
+  for (const route of routes) {
+    const decoded = decodeRoute(route)
+    if (decoded) groups.push(decoded)
   }
-
-  return Array.from(groups.values())
-    .map((group) => ({
-      ...group,
-      variants: group.variants.sort((a, b) => a.routeSeq - b.routeSeq),
-    }))
-    .sort((a, b) => a.routeId - b.routeId)
-}
-
-type RawCollection = {
-  features?: Array<{
-    properties?: RawProperties
-  }>
-}
-
-function buildVariantMeta(
-  json: unknown
-): Map<string, Omit<GmbTdRouteVariant, 'stops' | 'routeId' | 'routeSeq' | 'routeName'>> {
-  const meta = new Map<
-    string,
-    Omit<GmbTdRouteVariant, 'stops' | 'routeId' | 'routeSeq' | 'routeName'>
-  >()
-  const features = (json as RawCollection)?.features
-  if (!Array.isArray(features)) return meta
-  for (const feature of features) {
-    const props = feature?.properties
-    if (!props) continue
-    const routeId = toFiniteNumber(props.routeId)
-    const routeSeq = toRouteSeq(props.routeSeq)
-    if (routeId === null || routeSeq === null) continue
-    const key = variantKey(routeId, routeSeq)
-    if (meta.has(key)) continue
-    meta.set(key, {
-      district: toTrimmedString(props.district),
-      serviceMode: toTrimmedString(props.serviceMode),
-      origin: {
-        en: toTrimmedString(props.locStartNameE),
-        tc: toTrimmedString(props.locStartNameC),
-        sc: toTrimmedString(props.locStartNameS),
-      },
-      destination: {
-        en: toTrimmedString(props.locEndNameE),
-        tc: toTrimmedString(props.locEndNameC),
-        sc: toTrimmedString(props.locEndNameS),
-      },
-      journeyTime: toFiniteNumber(props.journeyTime),
-      fullFare: toFiniteNumber(props.fullFare),
-      lastUpdateDate: typeof props.lastUpdateDate === 'string' ? props.lastUpdateDate : null,
-    })
-  }
-  return meta
+  return groups.sort((a, b) => a.routeId - b.routeId)
 }
 
 /** TD routeSeq 1 is the outbound/circular leg, 2 is the inbound leg. */
@@ -275,13 +202,9 @@ export function gmbPickDropKey(pickDrop: GmbTdPickDrop): string {
   return 'gmb.pickUpDropOff'
 }
 
-async function fetchGmbTdGroups(): Promise<GmbTdRouteGroup[]> {
-  const json: unknown = await fetchJson<unknown>(GMB_TD_GEOJSON_URL, {
-    timeoutMs: 15_000,
-    retries: 1,
-  })
-  const stops = parseGmbTdCollection(json)
-  return groupGmbTdStops(stops, buildVariantMeta(json))
+async function fetchGmbTdGroups(signal?: AbortSignal): Promise<GmbTdRouteGroup[]> {
+  const json: unknown = await fetchJson<unknown>(GMB_STOPS_URL, { signal })
+  return parseGmbStopsFile(json)
 }
 
 /**
@@ -299,7 +222,7 @@ export async function listGmbTdRouteGroups(options?: {
     policyKey: 'kmbStaticList',
     policy: CACHE_POLICIES.kmbStaticList,
     signal: options?.signal,
-    fetcher: fetchGmbTdGroups,
+    fetcher: () => fetchGmbTdGroups(options?.signal),
   })
   return value
 }

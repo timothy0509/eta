@@ -8,8 +8,12 @@ import { normalizeOperator } from '@/lib/eta/operator-colors'
 
 export type TdRouteDataset = 'bus' | 'gmb'
 
-export const TD_BUS_SHAPES_URL = 'https://static.data.gov.hk/td/routes-fares-geojson/JSON_BUS.json'
-export const TD_GMB_SHAPES_URL = 'https://static.data.gov.hk/td/routes-fares-geojson/JSON_GMB.json'
+// Compact per-variant extracts built by scripts/build-td-shapes.ts and served
+// same-origin. The raw TD routes-fares GeoJSON files (~78 MB bus plus ~20 MB
+// GMB) are never downloaded in the browser; the extracts carry the same stop
+// coordinates in stopSeq order as rounded [lng, lat] pairs.
+export const TD_BUS_SHAPES_URL = '/data/td-shapes-bus.json'
+export const TD_GMB_SHAPES_URL = '/data/td-shapes-gmb.json'
 
 const TD_DATASET_URLS: Record<TdRouteDataset, string> = {
   bus: TD_BUS_SHAPES_URL,
@@ -34,7 +38,7 @@ export type TdRouteShape = {
   routeId: number
   /** Directional shape sequence. 1 and 2 are the two directions of a route. */
   routeSeq: number
-  /** Upper-cased company codes, split from TD companyCode values like KMB+CTB. */
+  /** Upper-cased company codes, split from compact `co` values like KMB+CTB. */
   companies: string[]
   /** Stop coordinates in stopSeq order. */
   points: GeoPoint[]
@@ -59,125 +63,103 @@ function isValidTdPoint(lat: number, lng: number): boolean {
   )
 }
 
-function parseTdPoint(geometry: unknown): GeoPoint | null {
-  if (typeof geometry !== 'object' || geometry === null) return null
-  const { type, coordinates } = geometry as { type?: unknown; coordinates?: unknown }
-  if (type !== 'Point' || !Array.isArray(coordinates) || coordinates.length < 2) return null
-  const lng = Number(coordinates[0])
-  const lat = Number(coordinates[1])
-  if (!isValidTdPoint(lat, lng)) return null
-  return { lat, lng }
-}
-
-type TdShapeProperties = {
-  routeName: string
-  routeId: number
-  routeSeq: number
-  stopSeq: number
-  companies: string[]
-}
-
-function parseTdProperties(properties: unknown): TdShapeProperties | null {
-  if (typeof properties !== 'object' || properties === null) return null
-  const props = properties as Record<string, unknown>
-  const routeName = String(props.routeNameE ?? '')
-    .trim()
-    .toUpperCase()
-  const routeId = Number(props.routeId)
-  const routeSeq = Number(props.routeSeq)
-  const stopSeq = Number(props.stopSeq)
-  const companies = String(props.companyCode ?? '')
+function parseTdCompactEntry(routeName: string, entry: unknown): TdRouteShape | null {
+  if (typeof entry !== 'object' || entry === null) return null
+  const record = entry as Record<string, unknown>
+  const routeId = Number(record.id)
+  const routeSeq = Number(record.seq)
+  const companies = String(record.co ?? '')
     .toUpperCase()
     .split('+')
     .map((part) => part.trim())
     .filter(Boolean)
-  if (!routeName) return null
-  if (!Number.isFinite(routeId) || !Number.isFinite(routeSeq) || !Number.isFinite(stopSeq)) {
-    return null
+  const rawPts = record.pts
+  if (!routeName || !Number.isFinite(routeId) || !Number.isFinite(routeSeq)) return null
+  if (companies.length === 0 || !Array.isArray(rawPts)) return null
+
+  const points: GeoPoint[] = []
+  for (const pair of rawPts) {
+    if (!Array.isArray(pair) || pair.length < 2) continue
+    const lng = Number(pair[0])
+    const lat = Number(pair[1])
+    if (!isValidTdPoint(lat, lng)) continue
+    points.push({ lat, lng })
   }
-  if (companies.length === 0) return null
-  return { routeName, routeId, routeSeq, stopSeq, companies }
+  const deduped = dedupeConsecutive(points)
+  if (deduped.length < 2) return null
+  return { routeName, routeId, routeSeq, companies, points: deduped }
 }
 
 /**
- * Reduce a TD routes-fares GeoJSON collection to per-route directional
- * shapes. Every feature carries one stop, so features group by route plus
- * routeId plus routeSeq, then sort by stopSeq. routeSeq 1 and 2 stay
- * separate entries because they trace opposite directions. Invalid
- * features are skipped without failing the whole file.
+ * Expand a compact shapes extract to per-route directional shapes. Entries
+ * arrive grouped by route name with points already in stopSeq order, so this
+ * only validates and converts [lng, lat] pairs to GeoPoints. routeSeq 1 and
+ * 2 stay separate entries because they trace opposite directions. Invalid
+ * entries are skipped without failing the whole file.
  */
-export function parseTdRouteShapesJson(json: unknown): TdRouteShapeIndex {
+export function parseTdCompactShapesJson(json: unknown): TdRouteShapeIndex {
   const index: TdRouteShapeIndex = {}
   if (typeof json !== 'object' || json === null) return index
-  const features = (json as { features?: unknown }).features
-  if (!Array.isArray(features)) return index
+  const shapes = (json as { shapes?: unknown }).shapes
+  if (typeof shapes !== 'object' || shapes === null || Array.isArray(shapes)) return index
 
-  const groups = new Map<string, { shape: TdRouteShape; stopSeqs: number[] }>()
-  for (const feature of features) {
-    if (typeof feature !== 'object' || feature === null) continue
-    const { geometry, properties } = feature as { geometry?: unknown; properties?: unknown }
-    const point = parseTdPoint(geometry)
-    const parsed = parseTdProperties(properties)
-    if (!point || !parsed) continue
-    const key = `${parsed.routeName}|${parsed.routeId}|${parsed.routeSeq}`
-    let group = groups.get(key)
-    if (!group) {
-      group = {
-        shape: {
-          routeName: parsed.routeName,
-          routeId: parsed.routeId,
-          routeSeq: parsed.routeSeq,
-          companies: parsed.companies,
-          points: [],
-        },
-        stopSeqs: [],
-      }
-      groups.set(key, group)
+  for (const [key, entries] of Object.entries(shapes)) {
+    const routeName = String(key ?? '')
+      .trim()
+      .toUpperCase()
+    if (!routeName || !Array.isArray(entries)) continue
+    for (const entry of entries) {
+      const shape = parseTdCompactEntry(routeName, entry)
+      if (!shape) continue
+      const bucket = index[routeName] ?? []
+      bucket.push(shape)
+      index[routeName] = bucket
     }
-    group.shape.points.push(point)
-    group.stopSeqs.push(parsed.stopSeq)
-  }
-
-  for (const group of groups.values()) {
-    const order = group.stopSeqs
-      .map((stopSeq, idx) => ({ stopSeq, idx }))
-      .sort((a, b) => a.stopSeq - b.stopSeq)
-    const ordered = order.map((entry) => group.shape.points[entry.idx])
-    const deduped = dedupeConsecutive(ordered.filter(Boolean))
-    if (deduped.length < 2) continue
-    group.shape.points = deduped
-    const bucket = index[group.shape.routeName] ?? []
-    bucket.push(group.shape)
-    index[group.shape.routeName] = bucket
   }
   return index
 }
 
 /**
- * Fetch one TD dataset and keep the parsed shape index in memory plus
- * IndexedDB under the existing kmbRouteGeometry policy. The file is large
- * and changes biweekly, so callers share one cached copy per dataset and
- * derive every route shape from it with no further network calls.
+ * Fetch one compact shapes extract and keep the parsed shape index in memory
+ * plus IndexedDB under the existing kmbRouteGeometry policy. The extracts
+ * change biweekly, so callers share one cached copy per dataset and derive
+ * every route shape from it with no further network calls. Only the dataset
+ * for the requested variant is ever fetched.
  */
 export async function getTdRouteShapeIndex(
   dataset: TdRouteDataset,
   options?: { signal?: AbortSignal }
 ): Promise<TdRouteShapeIndex> {
-  const { value } = await getCachedValue<TdRouteShapeIndex>({
-    key: tdRouteShapesKey(dataset),
-    policyKey: 'tdRouteShapes',
-    policy: CACHE_POLICIES.kmbRouteGeometry,
-    allowStale: true,
-    signal: options?.signal,
-    fetcher: async () => {
-      const json = await fetchJson<unknown>(TD_DATASET_URLS[dataset], {
-        cache: 'no-store',
-        signal: options?.signal,
-      })
-      return parseTdRouteShapesJson(json)
-    },
-  })
-  return value
+  const url = TD_DATASET_URLS[dataset]
+  const fetchShapes = async (): Promise<TdRouteShapeIndex> => {
+    const json = await fetchJson<unknown>(url, {
+      cache: 'no-store',
+      signal: options?.signal,
+    })
+    return parseTdCompactShapesJson(json)
+  }
+  try {
+    const { value } = await getCachedValue<TdRouteShapeIndex>({
+      key: tdRouteShapesKey(dataset),
+      policyKey: 'tdRouteShapes',
+      policy: CACHE_POLICIES.kmbRouteGeometry,
+      allowStale: true,
+      signal: options?.signal,
+      fetcher: fetchShapes,
+    })
+    return value
+  } catch (error) {
+    if (options?.signal?.aborted) throw error
+    if (error instanceof DOMException && error.name === 'AbortError') throw error
+    // The cache path persists to IndexedDB after a good download, so a quota
+    // failure rejects even though the data is fine. Retry once without the
+    // cache rather than failing a good fetch.
+    const json = await fetchJson<unknown>(url, {
+      cache: 'no-store',
+      signal: options?.signal,
+    })
+    return parseTdCompactShapesJson(json)
+  }
 }
 
 function countNearby(points: GeoPoint[], anchors: GeoPoint[], radiusM: number): number {
@@ -197,7 +179,10 @@ function countNearby(points: GeoPoint[], anchors: GeoPoint[], radiusM: number): 
  * Pick the TD shape that best matches a route variant. Candidates share the
  * route number and a compatible company; the winner needs enough stop
  * overlap, then the same-orientation endpoint distance decides the
- * direction. Returns null when nothing matches, so callers fall back to
+ * direction. Loop routes start and end at the same stop, so the endpoint
+ * tie-break cannot tell the two directions apart and the pick falls through
+ * to coverage comparison, which may select the wrong direction's shape.
+ * Returns null when nothing matches, so callers fall back to
  * their own stop coordinates.
  */
 export function selectTdShape(

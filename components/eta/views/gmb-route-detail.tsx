@@ -27,7 +27,7 @@ import {
   type GmbStopQuery,
 } from '@/lib/eta/gmb-resolve'
 import { useTranslations } from '@/lib/eta/i18n'
-import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
+import { getOperatorColor } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
@@ -39,17 +39,6 @@ const TransitMap = dynamic(
     loading: () => <div className="bg-surface-container ui-shimmer h-56 rounded-2xl" />,
   }
 )
-
-function variantBaseKey(entry: {
-  co?: string
-  route?: string
-  bound?: string
-  dir?: string
-  serviceType?: string
-  service_type?: string | number
-}): string {
-  return `${normalizeOperator(entry.co)}|${String(entry.route ?? '').toUpperCase()}|${entry.bound ?? entry.dir ?? ''}|${String(entry.serviceType ?? entry.service_type ?? '')}`
-}
 
 function GmbStopCard({
   query,
@@ -304,7 +293,7 @@ export function GmbRouteDetail({
     if (!activeVariant || !routeName || !resolution || !resolutionKey) return null
     const resolvable = queries.filter((q) => !q.unresolved && q.etaStopId !== null)
     if (resolvable.length === 0) return null
-    const wantedKey = gmbVariantBaseKey(resolution, routeName)
+    const wantedKey = gmbVariantBaseKey({ ...resolution, route: routeName })
     const stopIds = resolvable.map((q) => q.etaStopId as string)
     return {
       key: `${resolutionKey}|${wantedKey}|${stopIds.length}`,
@@ -329,7 +318,7 @@ export function GmbRouteDetail({
           const seq = etaRequest.seqs[i]
           if (stopId === undefined || seq === undefined) continue
           next[seq] = (res.byStopId[stopId] ?? []).filter(
-            (eta) => variantBaseKey(eta) === etaRequest.wantedKey
+            (eta) => gmbVariantBaseKey(eta) === etaRequest.wantedKey
           )
         }
         setEtasState({ key, bySeq: next })

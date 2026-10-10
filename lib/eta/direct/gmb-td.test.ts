@@ -1,89 +1,140 @@
 import { describe, expect, it } from 'vitest'
 
-import { gmbPickDropKey, gmbRouteSeqToBound, groupGmbTdStops, parseGmbTdCollection } from './gmb-td'
+import { gmbPickDropKey, gmbRouteSeqToBound, parseGmbStopsFile } from './gmb-td'
 
-function feature(props: Record<string, unknown>, coordinates: [number, number]) {
+function stop(
+  overrides: Partial<{
+    seq: number
+    id: number
+    pickDrop: number
+    lat: number
+    lng: number
+    en: string
+    tc: string
+    sc: string
+  }> = {}
+): unknown {
+  const {
+    seq = 1,
+    id = 20003337,
+    pickDrop = 3,
+    lat = 22.25,
+    lng = 114.12,
+    en = 'First',
+    tc = '第一站',
+    sc = '第一站',
+  } = overrides
+  return [seq, id, pickDrop, lat, lng, en, tc, sc]
+}
+
+function variant(routeSeq: number, stops: unknown[], overrides: Record<string, unknown> = {}) {
   return {
-    type: 'Feature',
-    geometry: { type: 'Point', coordinates },
-    properties: {
-      routeId: 2000511,
-      routeNameC: '69X',
-      routeNameS: '69X',
-      routeNameE: '69X',
-      district: 'HKI',
-      serviceMode: 'R',
-      journeyTime: 20,
-      locStartNameC: '數碼港',
-      locStartNameS: '数码港',
-      locStartNameE: 'Cyberport',
-      locEndNameC: '銅鑼灣(駱克道)',
-      locEndNameS: '铜锣湾(骆克道)',
-      locEndNameE: 'Causeway Bay (Lockhart Road)',
-      fullFare: 12.5,
-      lastUpdateDate: '2026-09-28T00:00:00',
-      ...props,
-    },
+    q: routeSeq,
+    d: 'HKI',
+    m: 'R',
+    o: ['Cyberport', '數碼港', '数码港'],
+    e: ['Causeway Bay', '銅鑼灣', '铜锣湾'],
+    j: 20,
+    f: 12.5,
+    u: '2026-09-28T00:00:00',
+    s: stops,
+    ...overrides,
   }
 }
 
-const collection = {
-  type: 'FeatureCollection',
-  features: [
-    feature(
-      { routeSeq: 1, stopSeq: 2, stopId: 20007719, stopPickDrop: 3, stopNameE: 'Second' },
-      [114.13, 22.26]
-    ),
-    feature(
-      { routeSeq: 1, stopSeq: 1, stopId: 20003337, stopPickDrop: 2, stopNameE: 'First' },
-      [114.12, 22.25]
-    ),
-    feature(
-      { routeSeq: 2, stopSeq: 1, stopId: 20009999, stopPickDrop: 1, stopNameE: 'Back' },
-      [114.14, 22.27]
-    ),
-    // Malformed: missing coordinates and bad routeSeq, both skipped.
-    { type: 'Feature', geometry: { type: 'Point', coordinates: [] }, properties: {} },
-    feature(
-      { routeSeq: 9, stopSeq: 1, stopId: 1, stopPickDrop: 3, stopNameE: 'Bad' },
-      [114.0, 22.0]
-    ),
-  ],
+function file(routes: unknown[]) {
+  return {
+    meta: {
+      source: 's',
+      dataset: 'd',
+      cutoffDate: '2026-09-30',
+      generatedAt: 'g',
+      count: routes.length,
+    },
+    routes,
+  }
 }
 
-describe('parseGmbTdCollection', () => {
-  it('keeps valid point features and skips malformed ones', () => {
-    const stops = parseGmbTdCollection(collection)
-    expect(stops).toHaveLength(3)
-    expect(stops.map((s) => s.stopId).sort()).toEqual([20003337, 20007719, 20009999])
-  })
+function route(routeId: number, variants: unknown[]) {
+  return { i: routeId, n: ['69X', '69X', '69X'], v: variants }
+}
 
-  it('maps GeoJSON coordinates as lng then lat', () => {
-    const stops = parseGmbTdCollection(collection)
-    const first = stops.find((s) => s.stopId === 20003337)
-    expect(first?.lng).toBe(114.12)
-    expect(first?.lat).toBe(22.25)
-  })
-
-  it('returns empty for non-collections', () => {
-    expect(parseGmbTdCollection(null)).toEqual([])
-    expect(parseGmbTdCollection({})).toEqual([])
-    expect(parseGmbTdCollection({ features: 'nope' })).toEqual([])
-  })
-})
-
-describe('groupGmbTdStops', () => {
+describe('parseGmbStopsFile', () => {
   it('splits routeSeq legs and orders stops by stopSeq', () => {
-    const stops = parseGmbTdCollection(collection)
-    const groups = groupGmbTdStops(stops)
+    const groups = parseGmbStopsFile(
+      file([
+        route(2000511, [
+          variant(1, [stop({ seq: 2, id: 20007719, en: 'Second' }), stop({ seq: 1, en: 'First' })]),
+          variant(2, [stop({ seq: 1, id: 20009999, en: 'Back' })]),
+        ]),
+      ])
+    )
     expect(groups).toHaveLength(1)
+    expect(groups[0]?.routeId).toBe(2000511)
     expect(groups[0]?.variants).toHaveLength(2)
     const outbound = groups[0]?.variants[0]
     expect(outbound?.routeSeq).toBe(1)
     expect(outbound?.stops.map((s) => s.stopSeq)).toEqual([1, 2])
+    expect(outbound?.origin.en).toBe('Cyberport')
+    expect(outbound?.fullFare).toBe(12.5)
     const inbound = groups[0]?.variants[1]
     expect(inbound?.routeSeq).toBe(2)
     expect(inbound?.stops).toHaveLength(1)
+  })
+
+  it('maps stop tuples onto stop points with trilingual names', () => {
+    const groups = parseGmbStopsFile(file([route(2000511, [variant(1, [stop()])])]))
+    const point = groups[0]?.variants[0]?.stops[0]
+    expect(point).toMatchObject({
+      routeId: 2000511,
+      routeSeq: 1,
+      stopSeq: 1,
+      stopId: 20003337,
+      stopPickDrop: 3,
+      lat: 22.25,
+      lng: 114.12,
+    })
+    expect(point?.routeName).toEqual({ en: '69X', tc: '69X', sc: '69X' })
+    expect(point?.stopName).toEqual({ en: 'First', tc: '第一站', sc: '第一站' })
+  })
+
+  it('skips malformed entries without failing the whole file', () => {
+    const groups = parseGmbStopsFile(
+      file([
+        route(2000511, [
+          variant(1, [
+            stop(),
+            // Bad coordinates, bad pickDrop and truncated tuples are skipped.
+            [2, 20007719, 3, null, 114.13, 'Bad', '壞', '坏'],
+            [3, 20008888, 9, 22.26, 114.14, 'Bad', '壞', '坏'],
+            ['x'],
+          ]),
+          // Unknown routeSeq legs are skipped.
+          variant(9, [stop({ seq: 1, id: 1 })]),
+          // Variants with no usable stops are skipped.
+          variant(2, [['x']]),
+        ]),
+        // Malformed routes are skipped.
+        { i: 'nope', n: [], v: [] },
+        null,
+      ])
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.variants).toHaveLength(1)
+    expect(groups[0]?.variants[0]?.stops.map((s) => s.stopId)).toEqual([20003337])
+  })
+
+  it('rejects structural mismatches loudly', () => {
+    expect(() => parseGmbStopsFile(null)).toThrow()
+    expect(() => parseGmbStopsFile({})).toThrow()
+    expect(() => parseGmbStopsFile(file('nope' as unknown as never[]))).toThrow()
+    expect(() => parseGmbStopsFile({ meta: {}, routes: [] })).toThrow()
+    expect(() =>
+      parseGmbStopsFile({
+        meta: { source: 's', dataset: 'd', cutoffDate: 'c', generatedAt: 'g', count: 'x' },
+        routes: [],
+      })
+    ).toThrow()
   })
 })
 

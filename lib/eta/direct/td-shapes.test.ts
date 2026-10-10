@@ -5,7 +5,7 @@ import type { GeoPoint } from '@/lib/eta/geo'
 
 import {
   getTdRouteShapeIndex,
-  parseTdRouteShapesJson,
+  parseTdCompactShapesJson,
   resolveTdInstantPath,
   selectTdShape,
   TD_BUS_SHAPES_URL,
@@ -26,67 +26,87 @@ const B: GeoPoint = { lat: 22.34, lng: 114.19 }
 const C: GeoPoint = { lat: 22.33, lng: 114.19 }
 const FAR: GeoPoint = { lat: 22.5, lng: 114.05 }
 
-function feature(
-  properties: Record<string, unknown>,
-  coordinates: unknown,
-  geometryType = 'Point'
+function entry(
+  id: number,
+  seq: number,
+  co: string,
+  pts: Array<[number, number] | [string, string] | [number]>
 ): unknown {
-  return {
-    type: 'Feature',
-    geometry: { type: geometryType, coordinates },
-    properties,
-  }
+  return { id, seq, co, pts }
 }
 
-function stopProps(
-  routeNameE: string,
-  companyCode: string,
-  routeId: number,
-  routeSeq: number,
-  stopSeq: number
-): Record<string, unknown> {
-  return { routeNameE, companyCode, routeId, routeSeq, stopSeq }
+// Compact extract fixtures as written by scripts/build-td-shapes.ts: points
+// are [lng, lat] pairs in stopSeq order, companies stay joined with '+'.
+const BUS_FIXTURE = {
+  meta: { source: 'test', generatedAt: '2026-01-01T00:00:00.000Z', variants: 7 },
+  shapes: {
+    '1': [
+      entry(1001, 1, 'KMB', [
+        [114.19, 22.35],
+        [114.19, 22.34],
+        [114.19, 22.33],
+      ]),
+      entry(1001, 2, 'KMB', [
+        [114.19, 22.33],
+        [114.19, 22.34],
+        [114.19, 22.35],
+      ]),
+      // Route 1 short working under another routeId.
+      entry(1480, 1, 'KMB', [
+        [114.19, 22.35],
+        [114.19, 22.34],
+      ]),
+    ],
+    // Route 10 split by operator, like the real KMB/CTB joint route.
+    '10': [
+      entry(1002, 1, 'KMB', [
+        [114.15, 22.28],
+        [114.16, 22.28],
+      ]),
+      entry(1000295, 1, 'CTB', [
+        [114.2, 22.29],
+        [114.21, 22.29],
+      ]),
+    ],
+    // Jointly operated route shares one shape for both companies.
+    '101': [
+      entry(1042, 1, 'KMB+CTB', [
+        [114.17, 22.3],
+        [114.18, 22.3],
+      ]),
+    ],
+    // Route 2 carries a swapped lng/lat pair in the middle, which the
+    // bounds guard drops while keeping the valid stops around it.
+    '2': [
+      entry(2001, 1, 'KMB', [
+        [114.25, 22.31],
+        [22.32, 114.26],
+        [114.27, 22.33],
+      ]),
+    ],
+    // Route 3 entries are malformed and never produce a shape.
+    '3': [
+      entry(3001, 1, 'KMB', [[114.19, 22.35]]),
+      entry(3001, 2, '', [
+        [114.19, 22.35],
+        [114.19, 22.34],
+      ]),
+      entry(3001, 3, 'KMB', [[114.19]]),
+    ],
+  },
 }
 
-function collection(features: unknown[]): unknown {
-  return { type: 'FeatureCollection', features }
+const GMB_FIXTURE = {
+  meta: { source: 'test', generatedAt: '2026-01-01T00:00:00.000Z', variants: 1 },
+  shapes: {
+    '69': [
+      entry(2000410, 1, 'GMB', [
+        [114.13, 22.26],
+        [114.14, 22.26],
+      ]),
+    ],
+  },
 }
-
-const BUS_FIXTURE = collection([
-  // Route 1 seq 1, deliberately out of stopSeq order to test sorting.
-  feature(stopProps('1', 'KMB', 1001, 1, 2), [114.19, 22.34]),
-  feature(stopProps('1', 'KMB', 1001, 1, 1), [114.19, 22.35]),
-  feature(stopProps('1', 'KMB', 1001, 1, 3), [114.19, 22.33]),
-  // Route 1 seq 2 runs the opposite direction.
-  feature(stopProps('1', 'KMB', 1001, 2, 1), [114.19, 22.33]),
-  feature(stopProps('1', 'KMB', 1001, 2, 2), [114.19, 22.34]),
-  feature(stopProps('1', 'KMB', 1001, 2, 3), [114.19, 22.35]),
-  // Route 1 short working under another routeId.
-  feature(stopProps('1', 'KMB', 1480, 1, 1), [114.19, 22.35]),
-  feature(stopProps('1', 'KMB', 1480, 1, 2), [114.19, 22.34]),
-  // Route 10 split by operator, like the real KMB/CTB joint route.
-  feature(stopProps('10', 'KMB', 1002, 1, 1), [114.15, 22.28]),
-  feature(stopProps('10', 'KMB', 1002, 1, 2), [114.16, 22.28]),
-  feature(stopProps('10', 'CTB', 1000295, 1, 1), [114.2, 22.29]),
-  feature(stopProps('10', 'CTB', 1000295, 1, 2), [114.21, 22.29]),
-  // Jointly operated route shares one shape for both companies.
-  feature(stopProps('101', 'KMB+CTB', 1042, 1, 1), [114.17, 22.3]),
-  feature(stopProps('101', 'KMB+CTB', 1042, 1, 2), [114.18, 22.3]),
-  // Invalid features never fail the whole file.
-  feature(stopProps('1', 'KMB', 1001, 1, 4), [114.19, 22.32], 'LineString'),
-  feature(stopProps('1', 'KMB', 1001, 1, 5), ['x', 'y']),
-  feature(stopProps('', 'KMB', 1001, 1, 1), [114.19, 22.35]),
-  // Route 2 has a swapped lng/lat pair in the middle, which the bounds
-  // guard drops while keeping the valid stops around it.
-  feature(stopProps('2', 'KMB', 2001, 1, 1), [114.25, 22.31]),
-  feature(stopProps('2', 'KMB', 2001, 1, 2), [22.32, 114.26]),
-  feature(stopProps('2', 'KMB', 2001, 1, 3), [114.27, 22.33]),
-])
-
-const GMB_FIXTURE = collection([
-  feature(stopProps('69', 'GMB', 2000410, 1, 1), [114.13, 22.26]),
-  feature(stopProps('69', 'GMB', 2000410, 1, 2), [114.14, 22.26]),
-])
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
@@ -95,49 +115,47 @@ function jsonResponse(body: unknown): Response {
   })
 }
 
-describe('parseTdRouteShapesJson', () => {
-  it('orders stops by stopSeq regardless of feature order', () => {
-    const index = parseTdRouteShapesJson(BUS_FIXTURE)
+describe('parseTdCompactShapesJson', () => {
+  it('preserves the stopSeq point order from the extract', () => {
+    const index = parseTdCompactShapesJson(BUS_FIXTURE)
     const seq1 = index['1']?.find((shape) => shape.routeId === 1001 && shape.routeSeq === 1)
     expect(seq1?.points).toEqual([A, B, C])
   })
 
   it('keeps routeSeq 1 and 2 as separate directional shapes', () => {
-    const index = parseTdRouteShapesJson(BUS_FIXTURE)
+    const index = parseTdCompactShapesJson(BUS_FIXTURE)
     const shapes = (index['1'] ?? []).filter((shape) => shape.routeId === 1001)
     expect(shapes.map((shape) => shape.routeSeq).sort()).toEqual([1, 2])
     expect(shapes.find((shape) => shape.routeSeq === 2)?.points).toEqual([C, B, A])
   })
 
   it('keeps special departures under separate routeIds', () => {
-    const index = parseTdRouteShapesJson(BUS_FIXTURE)
+    const index = parseTdCompactShapesJson(BUS_FIXTURE)
     const shortWorking = (index['1'] ?? []).find((shape) => shape.routeId === 1480)
     expect(shortWorking?.points).toEqual([A, B])
   })
 
-  it('skips invalid features without failing the file', () => {
-    const index = parseTdRouteShapesJson(BUS_FIXTURE)
-    // The LineString-geometry and non-numeric stops never join route 1 seq 1.
-    const seq1 = index['1']?.find((shape) => shape.routeId === 1001 && shape.routeSeq === 1)
-    expect(seq1?.points).toEqual([A, B, C])
-    // Empty route names produce no bucket.
-    expect(index['']).toBeUndefined()
+  it('skips invalid entries without failing the file', () => {
+    const index = parseTdCompactShapesJson(BUS_FIXTURE)
     // The swapped lng/lat middle stop drops out, neighbors stay in order.
     expect(index['2']?.[0]?.points).toEqual([
       { lat: 22.31, lng: 114.25 },
       { lat: 22.33, lng: 114.27 },
     ])
+    // Single-point, company-less, and short-pair entries yield no shape.
+    expect(index['3']).toBeUndefined()
   })
 
   it('splits joint company codes for both operators', () => {
-    const index = parseTdRouteShapesJson(BUS_FIXTURE)
+    const index = parseTdCompactShapesJson(BUS_FIXTURE)
     expect(index['101']?.[0]?.companies).toEqual(['KMB', 'CTB'])
   })
 
-  it('returns an empty index for non-collection input', () => {
-    expect(parseTdRouteShapesJson(null)).toEqual({})
-    expect(parseTdRouteShapesJson({ type: 'FeatureCollection' })).toEqual({})
-    expect(parseTdRouteShapesJson([])).toEqual({})
+  it('returns an empty index for non-extract input', () => {
+    expect(parseTdCompactShapesJson(null)).toEqual({})
+    expect(parseTdCompactShapesJson({ type: 'FeatureCollection' })).toEqual({})
+    expect(parseTdCompactShapesJson([])).toEqual({})
+    expect(parseTdCompactShapesJson({ shapes: [] })).toEqual({})
   })
 })
 
@@ -300,6 +318,30 @@ describe('TD shape fetching and caching', () => {
     await expect(
       resolveTdInstantPath({ dataset: 'bus', route: '1', co: 'kmb', variantPoints: [A] })
     ).resolves.toBeNull()
+  })
+
+  it('still resolves when the IndexedDB persist fails with a quota error', async () => {
+    vi.resetModules()
+    const fresh = await import('./td-shapes')
+    const idb = await import('@/lib/eta/cache/idb')
+    vi.mocked(idb.idbGet).mockResolvedValue(null)
+    vi.mocked(idb.idbSet).mockRejectedValue(
+      new DOMException('Quota exceeded.', 'QuotaExceededError')
+    )
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      if (String(input) === TD_BUS_SHAPES_URL) return Promise.resolve(jsonResponse(BUS_FIXTURE))
+      return Promise.reject(new Error(`unexpected url ${String(input)}`))
+    })
+
+    const shape = await fresh.resolveTdInstantPath({
+      dataset: 'bus',
+      route: '1',
+      co: 'kmb',
+      variantPoints: [A, B, C],
+    })
+    expect(shape).toEqual({ points: [A, B, C], routeId: 1001, routeSeq: 1 })
+    // One cached-path attempt plus one direct retry without the cache.
+    expect(spy).toHaveBeenCalledTimes(2)
   })
 
   it('rejects when the dataset download fails so callers can fall back', async () => {

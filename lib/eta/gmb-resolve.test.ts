@@ -146,6 +146,6 @@ describe('resolveGmbStopQueries', () => {
       tdStopCount: 0,
       indexes: { kmbRouteListEntries: [entry] },
     })
-    expect(resolved ? gmbVariantBaseKey(resolved, '69x') : null).toBe('gmb|69X|O|1')
+    expect(resolved ? gmbVariantBaseKey({ ...resolved, route: '69x' }) : null).toBe('gmb|69X|O|1')
   })
 })

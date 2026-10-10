@@ -106,18 +106,15 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://data.etabus.gov.hk" />
         <link rel="preconnect" href="https://rt.data.gov.hk" />
-        <link rel="preconnect" href="https://static.data.gov.hk" />
         <link rel="preconnect" href="https://data.hkbus.app" />
         <link rel="dns-prefetch" href="https://data.etabus.gov.hk" />
         <link rel="dns-prefetch" href="https://rt.data.gov.hk" />
-        <link rel="dns-prefetch" href="https://static.data.gov.hk" />
         <link rel="dns-prefetch" href="https://data.hkbus.app" />
         <link rel="dns-prefetch" href="https://hkbus.github.io" />
         <link rel="dns-prefetch" href="https://opendata.mtr.com.hk" />
         <link rel="dns-prefetch" href="https://www.lrtetas.hk" />
         <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
         <link rel="dns-prefetch" href="https://router.project-osrm.org" />
-        <link rel="dns-prefetch" href="https://static.data.gov.hk" />
       </head>
       <body
         className={`${inter.variable} ${notoSansHK.variable} ${geistMono.variable} min-h-dvh antialiased`}

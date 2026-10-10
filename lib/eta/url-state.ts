@@ -44,6 +44,8 @@ export type UrlEncodeInput = {
   // Bus routes-view tab. Encoded only as bt=gmb on the bus routes view;
   // the default bus list encodes nothing so old links keep working.
   busRoutesTab?: BusRoutesTab | null
+  // Open GMB route detail, encoded as gr=<routeId> alongside bt=gmb.
+  gmbRouteId?: number | null
 }
 
 export type UrlDecodeResult = {
@@ -57,6 +59,7 @@ export type UrlDecodeResult = {
     routeFilterMode?: RouteFilterMode
     autoRefreshSeconds?: number
     busRoutesTab?: BusRoutesTab
+    gmbRouteId?: number
   }
   selectedItem: FavoritesItem | null
 }
@@ -191,6 +194,9 @@ export function decodeUrlState(search: string): UrlDecodeResult {
   const mtrSta = params.get('ms')
   const lrtStationId = params.get('ls')
   const busRoutesTab: BusRoutesTab | null = params.get('bt') === 'gmb' ? 'gmb' : null
+  const gmbRouteIdRaw = params.get('gr')
+  const gmbRouteId =
+    gmbRouteIdRaw !== null && /^\d+$/.test(gmbRouteIdRaw.trim()) ? Number(gmbRouteIdRaw) : null
 
   const inferredMode: TransportMode | null =
     explicitMode ?? (mtrSta ? 'mtr' : lrtStationId ? 'lrt' : kmbQuery ? 'kmb' : null)
@@ -199,6 +205,14 @@ export function decodeUrlState(search: string): UrlDecodeResult {
   if (inferredMode) state.mode = inferredMode
   if (subView) state.subView = subView
   if (busRoutesTab) state.busRoutesTab = busRoutesTab
+  // A gr param implies the GMB directory even without bt=gmb, and a bare
+  // gr link opens the bus routes view so shared links land on the detail.
+  if (gmbRouteId !== null) {
+    state.busRoutesTab = 'gmb'
+    state.gmbRouteId = gmbRouteId
+    if (!state.mode && !inferredMode) state.mode = 'kmb'
+    if (!state.subView && !subView) state.subView = 'routes'
+  }
 
   const derivedRouteFilterMode = routeFilterModeParam ?? (kmbEntries.length ? 'advanced' : null)
 
@@ -290,6 +304,9 @@ export function encodeUrlState(input: UrlEncodeInput): string {
 
   if (input.mode === 'kmb' && input.subView === 'routes' && input.busRoutesTab === 'gmb') {
     params.set('bt', 'gmb')
+    if (typeof input.gmbRouteId === 'number' && Number.isFinite(input.gmbRouteId)) {
+      params.set('gr', String(Math.trunc(input.gmbRouteId)))
+    }
   }
 
   return params.toString()

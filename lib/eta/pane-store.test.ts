@@ -172,3 +172,21 @@ describe('setBusRoutesTab', () => {
     expect(usePaneStore.getState()).toBe(first)
   })
 })
+
+describe('setGmbRouteId', () => {
+  beforeEach(() => {
+    usePaneStore.setState({ gmbRouteId: null })
+  })
+
+  it('defaults to null and skips no-op writes', () => {
+    expect(usePaneStore.getState().gmbRouteId).toBeNull()
+    const { setGmbRouteId } = usePaneStore.getState()
+    setGmbRouteId(2000410)
+    expect(usePaneStore.getState().gmbRouteId).toBe(2000410)
+    const first = usePaneStore.getState()
+    setGmbRouteId(2000410)
+    expect(usePaneStore.getState()).toBe(first)
+    setGmbRouteId(null)
+    expect(usePaneStore.getState().gmbRouteId).toBeNull()
+  })
+})

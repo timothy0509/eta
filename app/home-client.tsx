@@ -81,6 +81,13 @@ const GmbRoutesView = dynamic(
     })),
   { loading: () => <ResultsSkeleton />, ssr: false }
 )
+const GmbRouteDetail = dynamic(
+  () =>
+    import('@/components/eta/views/gmb-route-detail').then((mod) => ({
+      default: mod.GmbRouteDetail,
+    })),
+  { loading: () => <ResultsSkeleton />, ssr: false }
+)
 const LrtRoutesView = dynamic(
   () =>
     import('@/components/eta/views/lrt-routes-view').then((mod) => ({
@@ -276,6 +283,8 @@ export default function HomeClient() {
   const lrtStationId = usePaneStore((s) => s.lrt?.stationId ?? null)
   const busRoutesTab = usePaneStore((s) => s.busRoutesTab)
   const setBusRoutesTab = usePaneStore((s) => s.setBusRoutesTab)
+  const gmbRouteId = usePaneStore((s) => s.gmbRouteId)
+  const setGmbRouteId = usePaneStore((s) => s.setGmbRouteId)
 
   // Pane-store snapshots are read-only here. Panes write their own
   // snapshots, and the URL hook below only reads them for encoding.
@@ -287,6 +296,7 @@ export default function HomeClient() {
     mtrSta,
     lrtStationId,
     busRoutesTab,
+    gmbRouteId,
   })
 
   const { onRegisterRefresh } = useRefreshRegistry({ mode, subView, autoRefreshSeconds })
@@ -539,12 +549,24 @@ export default function HomeClient() {
       // A saved bus route favorite opens straight into the bus list
       // drilldown, so the GMB tab never hides a deep-linked selection.
       const effectiveTab = kmbRouteInitialSelection ? 'bus' : busRoutesTab
+      const handleBusTabChange = (tab: typeof effectiveTab) => {
+        setBusRoutesTab(tab)
+        if (tab !== 'gmb') setGmbRouteId(null)
+      }
       return (
         <PaneEnter key="routes:kmb">
           <div className="space-y-4">
-            <BusRoutesTabs lang={lang} tab={effectiveTab} onTabChange={setBusRoutesTab} />
+            <BusRoutesTabs lang={lang} tab={effectiveTab} onTabChange={handleBusTabChange} />
             {effectiveTab === 'gmb' ? (
-              <GmbRoutesView lang={lang} />
+              gmbRouteId !== null ? (
+                <GmbRouteDetail
+                  routeId={gmbRouteId}
+                  lang={lang}
+                  onBack={() => setGmbRouteId(null)}
+                />
+              ) : (
+                <GmbRoutesView lang={lang} onSelectRoute={setGmbRouteId} />
+              )
             ) : (
               <KmbRoutesView
                 lang={lang}

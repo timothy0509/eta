@@ -340,4 +340,34 @@ describe('decodeUrlState', () => {
     expect(decodeUrlState('m=kmb&v=routes').state.busRoutesTab).toBeUndefined()
     expect(decodeUrlState('m=kmb&v=routes&bt=bus').state.busRoutesTab).toBeUndefined()
   })
+
+  it('round-trips an open GMB route through gr', () => {
+    const base: UrlEncodeInput = {
+      mode: 'kmb',
+      subView: 'routes',
+      lang: 'tc',
+      routeFilterMode: 'simple',
+      autoRefreshSeconds: 15,
+      busRoutesTab: 'gmb',
+      gmbRouteId: 2000410,
+    }
+    const encoded = encodeUrlState(base)
+    expect(encoded).toContain('gr=2000410')
+    const decoded = decodeUrlState(encoded)
+    expect(decoded.state.busRoutesTab).toBe('gmb')
+    expect(decoded.state.gmbRouteId).toBe(2000410)
+  })
+
+  it('implies the GMB directory from a bare gr link', () => {
+    const decoded = decodeUrlState('gr=2000410')
+    expect(decoded.state.busRoutesTab).toBe('gmb')
+    expect(decoded.state.gmbRouteId).toBe(2000410)
+    expect(decoded.state.mode).toBe('kmb')
+    expect(decoded.state.subView).toBe('routes')
+  })
+
+  it('ignores a malformed gr value', () => {
+    expect(decodeUrlState('m=kmb&v=routes&bt=gmb&gr=abc').state.gmbRouteId).toBeUndefined()
+    expect(decodeUrlState('m=kmb&v=routes&bt=gmb').state.gmbRouteId).toBeUndefined()
+  })
 })

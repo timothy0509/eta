@@ -319,6 +319,7 @@ const gmb: Record<string, TranslationEntry> = {
   searchRoutes: { en: 'Search minibus routes', tc: '搜尋小巴路線', sc: '搜索小巴路线' },
   clearFilters: { en: 'Clear search and filters', tc: '清除搜尋及篩選', sc: '清除搜索及筛选' },
   routesFound: { en: '{count} routes', tc: '{count} 條路線', sc: '{count} 条路线' },
+  viewStops: { en: 'Stops & ETAs', tc: '車站及到站預報', sc: '车站及到站预报' },
   noRoutesMatch: {
     en: 'No minibus routes match "{query}".',
     tc: '沒有符合「{query}」的小巴路線。',

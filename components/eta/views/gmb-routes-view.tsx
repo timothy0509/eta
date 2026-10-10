@@ -44,10 +44,12 @@ function GmbRouteCard({
   route,
   lang,
   index,
+  onSelect,
 }: {
   route: GmbRouteEntry
   lang: UiLanguage
   index: number
+  onSelect: (routeId: number) => void
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const name = pickLang(route.name, lang)
@@ -76,7 +78,14 @@ function GmbRouteCard({
         <span aria-hidden>·</span>
         <span className="font-tabular">{fare ?? '—'}</span>
       </div>
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onSelect(route.routeId)}
+          className="text-primary m3-label-lg ui-press inline-flex min-h-[44px] items-center gap-1.5 rounded-full bg-[var(--primary-container)] px-4 py-2 transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
+        >
+          {t('gmb.viewStops')}
+        </button>
         <a
           href={gmbDetailUrl(route.routeId, lang)}
           target="_blank"
@@ -91,7 +100,13 @@ function GmbRouteCard({
   )
 }
 
-export function GmbRoutesView({ lang }: { lang: UiLanguage }) {
+export function GmbRoutesView({
+  lang,
+  onSelectRoute,
+}: {
+  lang: UiLanguage
+  onSelectRoute: (routeId: number) => void
+}) {
   const { t, tWithParams } = useTranslations(lang)
   const [routes, setRoutes] = React.useState<GmbRouteEntry[]>([])
   const [cutoffDate, setCutoffDate] = React.useState<string | null>(null)
@@ -271,7 +286,13 @@ export function GmbRoutesView({ lang }: { lang: UiLanguage }) {
           </div>
           <div className="space-y-3">
             {visibleHits.map((route, idx) => (
-              <GmbRouteCard key={route.routeId} route={route} lang={lang} index={idx} />
+              <GmbRouteCard
+                key={route.routeId}
+                route={route}
+                lang={lang}
+                index={idx}
+                onSelect={onSelectRoute}
+              />
             ))}
           </div>
           {hasMore && (

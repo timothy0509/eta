@@ -1105,17 +1105,19 @@ export function KmbRoutesView({
     [stopsVariantKey, currentVariant, routePath]
   )
   // GMB routes have no OSRM upgrade today, so the TD shape is their whole
-  // map. Other operators paint the TD shape first, then swap in the cached
-  // road-following geometry when it resolves.
+  // map. Other operators keep the TD stop-sequence shape as the persistent
+  // line: OSRM routes buses like cars and regularly draws the wrong roads,
+  // while the TD shape follows the true stop order. OSRM geometry stays as
+  // the fallback for variants with no TD match.
   const isGmbRoute = currentVariant ? normalizeOperator(currentVariant.co) === 'gmb' : false
   const routedGeometry = useKmbRouteGeometry(
     isGmbRoute ? null : (currentVariant?.key ?? null),
     geometryPoints
   )
   const tdInstantPath = useTdInstantPath(currentVariant, geometryPoints)
-  // Straight segments between stops cut corners versus the road geometry,
-  // so this instant line is a placeholder until the OSRM upgrade lands.
-  const displayPath = routedGeometry ?? tdInstantPath ?? routePath
+  // Straight segments between stops cut corners versus road geometry, but
+  // the line always visits the stops in travel order.
+  const displayPath = tdInstantPath ?? routedGeometry ?? routePath
 
   const mapCenter = React.useMemo(() => {
     if (routePath.length) return routePath[Math.floor(routePath.length / 2)]

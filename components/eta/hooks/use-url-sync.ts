@@ -18,6 +18,7 @@ export type UrlSyncPaneBits = {
   mtrSta: string | null | undefined
   lrtStationId: string | null | undefined
   busRoutesTab: BusRoutesTab | null
+  gmbRouteId: number | null
 }
 
 /**
@@ -34,6 +35,7 @@ export function useUrlSync({
   mtrSta,
   lrtStationId,
   busRoutesTab,
+  gmbRouteId,
 }: UrlSyncPaneBits) {
   // lang, routeFilterMode, and autoRefreshSeconds are read only to satisfy
   // the encode input shape. They are never written from the URL and never
@@ -84,10 +86,20 @@ export function useUrlSync({
       const nextTab: BusRoutesTab =
         (decoded.state.mode ?? nextMode) === 'kmb' &&
         (decoded.state.subView ?? subView) === 'routes' &&
-        decoded.state.busRoutesTab === 'gmb'
+        (decoded.state.busRoutesTab === 'gmb' || decoded.state.gmbRouteId != null)
           ? 'gmb'
           : 'bus'
       usePaneStore.getState().setBusRoutesTab(nextTab)
+      // Same rule for the open GMB route: only the bus routes view keeps
+      // it, anywhere else it resets so stale detail never lingers.
+      const onRoutesView =
+        (decoded.state.mode ?? nextMode) === 'kmb' &&
+        (decoded.state.subView ?? subView) === 'routes'
+      usePaneStore
+        .getState()
+        .setGmbRouteId(
+          onRoutesView && nextTab === 'gmb' ? (decoded.state.gmbRouteId ?? null) : null
+        )
       // decode never populates lang, routeFilterMode, or autoRefreshSeconds:
       // hydrate applies nav only so a shared link never overwrites prefs.
       // Decoded ids are deterministic, so re-hydrating the same URL keeps
@@ -107,6 +119,7 @@ export function useUrlSync({
         mtr: { sta: null },
         lrt: { stationId: null },
         busRoutesTab: decoded.state.busRoutesTab ?? null,
+        gmbRouteId: decoded.state.gmbRouteId ?? null,
       })
       didHydrateFromUrlRef.current = true
     },
@@ -151,6 +164,7 @@ export function useUrlSync({
       mtr: { sta: mtrSta ?? null },
       lrt: { stationId: lrtStationId ?? null },
       busRoutesTab: busRoutesTab ?? null,
+      gmbRouteId: gmbRouteId ?? null,
     })
 
     if (query === lastEncodedRef.current) return
@@ -162,6 +176,7 @@ export function useUrlSync({
   }, [
     autoRefreshSeconds,
     busRoutesTab,
+    gmbRouteId,
     kmbQuery,
     kmbRouteFilter,
     lang,

@@ -103,7 +103,7 @@ Tests live next to source as `*.test.ts`, matched by `**/*.{test,spec}.{ts,tsx}`
 ### Data layer
 
 - No API routes. All transit fetches run client-side through `lib/eta/client.ts` and `lib/eta/direct/*`.
-- Source of truth is the `hk-bus-eta` npm package plus direct upstream JSON: `data.etabus.gov.hk`, `opendata.mtr.com.hk`, `www.lrtetas.hk`, plus `rt.data.gov.hk`, `data.etagmb.gov.hk`, `data.hkbus.app`, `hkbus.github.io`, `router.project-osrm.org` for routing. If you add a host, add it to `connect-src` in `next.config.ts` CSP or the browser blocks it.
+- Source of truth is the `hk-bus-eta` npm package plus direct upstream JSON: `data.etabus.gov.hk`, `opendata.mtr.com.hk`, `www.lrtetas.hk`, plus `rt.data.gov.hk`, `data.etagmb.gov.hk`, `data.hkbus.app`, `hkbus.github.io`, `static.data.gov.hk` for TD route shapes, `router.project-osrm.org` for routing. If you add a host, add it to `connect-src` in `next.config.ts` CSP or the browser blocks it.
 - `client.ts` dedupes in-flight requests by normalized key (sorted routes, sorted stop ids, normalized fare variant). Reuse `fetchJsonDedupe` for new fetchers, do not add parallel fetch helpers.
 - `lib/eta/http.ts` owns `fetchJson` with 12 s default timeout, `ApiError` with status, `UpstreamTimeoutError`, and HTML-body sanitizing. New HTTP code goes through it.
 - Caching is `MicroCache` with TTL in `lib/eta/cache/micro-cache.ts`, key builders in `keys.ts`, policy in `policy.ts`, IndexedDB persistence in `idb.ts` for the ETA db. Respect TTLs, do not bypass the cache for freshness.

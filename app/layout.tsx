@@ -117,6 +117,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://www.lrtetas.hk" />
         <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
         <link rel="dns-prefetch" href="https://router.project-osrm.org" />
+        <link rel="dns-prefetch" href="https://static.data.gov.hk" />
       </head>
       <body
         className={`${inter.variable} ${notoSansHK.variable} ${geistMono.variable} min-h-dvh antialiased`}

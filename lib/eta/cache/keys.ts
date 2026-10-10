@@ -27,6 +27,8 @@ export function kmbRouteGeometryKey(variantKey: string): string {
   return `kmb-route-geometry:${variantKey}`
 }
 
+export const GMB_TD_GROUPS_CACHE_KEY = 'gmb-td:groups:v1'
+
 export function lrtRouteEtaKey(params: {
   route: string
   bound: string

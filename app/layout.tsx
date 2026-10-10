@@ -106,9 +106,11 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://data.etabus.gov.hk" />
         <link rel="preconnect" href="https://rt.data.gov.hk" />
+        <link rel="preconnect" href="https://static.data.gov.hk" />
         <link rel="preconnect" href="https://data.hkbus.app" />
         <link rel="dns-prefetch" href="https://data.etabus.gov.hk" />
         <link rel="dns-prefetch" href="https://rt.data.gov.hk" />
+        <link rel="dns-prefetch" href="https://static.data.gov.hk" />
         <link rel="dns-prefetch" href="https://data.hkbus.app" />
         <link rel="dns-prefetch" href="https://hkbus.github.io" />
         <link rel="dns-prefetch" href="https://opendata.mtr.com.hk" />

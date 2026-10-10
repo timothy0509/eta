@@ -146,7 +146,9 @@ async function fetchJsonOnce<T>(url: string, options: FetchJsonOptions): Promise
       )
     }
 
-    return (await response.json()) as T
+    const bodyText = await response.text().catch(() => '')
+    const withoutBom = bodyText.charCodeAt(0) === 0xfeff ? bodyText.slice(1) : bodyText
+    return JSON.parse(withoutBom) as T
   } catch (error) {
     if (error instanceof UpstreamTimeoutError) throw error
     if (error instanceof DOMException && error.name === 'AbortError') {

@@ -26,7 +26,8 @@ const OUT_PATH = join(ROOT, 'public', 'data', 'gmb-routes.json')
 async function fetchText(url: string): Promise<string> {
   const response = await fetch(url)
   if (!response.ok) throw new Error(`HTTP ${response.status} from ${url}`)
-  return await response.text()
+  const text = await response.text()
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
 }
 
 async function main(): Promise<void> {

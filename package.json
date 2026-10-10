@@ -15,6 +15,7 @@
     "test:coverage": "vitest run --coverage",
     "analyze": "ANALYZE=true next build",
     "data:gmb": "bun scripts/build-gmb-routes.ts",
+    "extract:td-bus": "bun scripts/extract-td-bus.ts",
     "prepare": "husky"
   },
   "dependencies": {

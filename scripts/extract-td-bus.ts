@@ -96,6 +96,20 @@ function isRegular(td: TdVariant): boolean {
   return td.serviceMode === 'R' && td.specialType === 0
 }
 
+/**
+ * TD routeSeq 1 covers outbound and circular legs, routeSeq 2 is inbound.
+ * hk-bus-eta bounds follow the same O/I convention. Constraining candidates
+ * by direction keeps an inbound variant from silently joining the outbound
+ * TD leg when the two share a corridor.
+ */
+function tdRouteSeqMatchesBound(routeSeq: number, bound: string): boolean {
+  const b = String(bound ?? '').toUpperCase()
+  if (!b) return true
+  if (routeSeq === 2) return b === 'I'
+  if (routeSeq === 1) return b !== 'I'
+  return true
+}
+
 async function fetchJson(url: string): Promise<unknown> {
   const res = await fetch(url)
   if (!res.ok) throw new Error(`fetch ${url} failed: ${res.status}`)
@@ -216,14 +230,20 @@ async function main(): Promise<void> {
 
   const out: Record<
     string,
-    { m: string; s: number; t: number | null; f: number | null; p: string; id: number }
+    { m: string; s: number; t: number | null; f: number | null; p: string; id: number; q: number }
   > = {}
   let matched = 0
   let unmatched = 0
+  let directionSkipped = 0
   for (const hk of hkVariants) {
-    const candidates = (tdByRouteName.get(hk.route) ?? []).filter((td) =>
-      td.companies.includes(hk.co)
+    const candidates = (tdByRouteName.get(hk.route) ?? []).filter(
+      (td) => td.companies.includes(hk.co) && tdRouteSeqMatchesBound(td.routeSeq, hk.bound)
     )
+    if (candidates.length === 0) {
+      directionSkipped += 1
+      unmatched += 1
+      continue
+    }
     let best: TdVariant | null = null
     let bestScore = 0
     for (const td of candidates) {
@@ -251,6 +271,7 @@ async function main(): Promise<void> {
       f: best.fullFare,
       p: pick,
       id: best.routeId,
+      q: best.routeSeq,
     }
     matched += 1
   }
@@ -264,7 +285,9 @@ async function main(): Promise<void> {
     variants: out,
   }
   await writeFile(OUT_PATH, `${JSON.stringify(payload)}\n`)
-  console.log(`matched: ${matched}, unmatched: ${unmatched}`)
+  console.log(
+    `matched: ${matched}, unmatched: ${unmatched} (no same-direction TD leg: ${directionSkipped})`
+  )
   console.log(`wrote ${OUT_PATH}`)
 }
 

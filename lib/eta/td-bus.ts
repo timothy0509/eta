@@ -29,6 +29,8 @@ export type TdVariantInfo = {
   /** 1-indexed stop-sequence string of pick/drop digits; '0' means unknown. */
   pickDropBySeq: string
   tdRouteId: number
+  /** TD routeSeq of the joined leg: 1 outbound/circular, 2 inbound. */
+  tdRouteSeq: number | null
 }
 
 type TdVariantKey = {
@@ -45,6 +47,7 @@ type RawTdVariant = {
   f: number | null
   p: string
   id: number
+  q?: number
 }
 
 const variants = (tdData as { variants: Record<string, RawTdVariant> }).variants ?? {}
@@ -66,6 +69,7 @@ export function getTdVariantInfo(key: TdVariantKey): TdVariantInfo | null {
     fullFareHkd: typeof raw.f === 'number' && Number.isFinite(raw.f) && raw.f >= 0 ? raw.f : null,
     pickDropBySeq: typeof raw.p === 'string' ? raw.p : '',
     tdRouteId: raw.id,
+    tdRouteSeq: typeof raw.q === 'number' ? raw.q : null,
   }
 }
 

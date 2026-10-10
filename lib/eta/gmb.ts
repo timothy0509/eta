@@ -189,6 +189,7 @@ function isGmbRouteEntry(value: unknown): value is GmbRouteEntry {
     isGmbTrilingual(value['origin']) &&
     isGmbTrilingual(value['destination']) &&
     typeof value['fullFare'] === 'number' &&
+    Number.isFinite(value['fullFare']) &&
     typeof value['lastUpdateDate'] === 'string' &&
     typeof value['stopCount'] === 'number'
   )

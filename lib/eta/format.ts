@@ -40,35 +40,15 @@ export function formatRelativeMinutesWithDrift(
 }
 
 /**
- * Format a countdown to `targetIso` as hh:mm:ss, clamped at zero.
- * Optional `dataTimestampIso` applies the same drift correction as
- * `formatRelativeMinutesWithDrift`. Returns null when `targetIso` is
- * not a valid date so callers can fall back to a placeholder.
+ * Format an ETA target as the clock time of day it arrives, hh:mm:ss
+ * (24-hour). Returns null when `targetIso` is not a valid date so callers
+ * can fall back to a placeholder.
  */
-export function formatExactEtaCountdown(
-  targetIso: string,
-  dataTimestampIso: string | undefined,
-  now: number | Date = new Date()
-): string | null {
-  const target = new Date(targetIso).getTime()
-  if (Number.isNaN(target)) return null
-  const nowMs = now instanceof Date ? now.getTime() : now
-  let diffMs = target - nowMs
-
-  if (dataTimestampIso) {
-    const dataTimestamp = new Date(dataTimestampIso).getTime()
-    if (!Number.isNaN(dataTimestamp)) {
-      const dataAgeMs = nowMs - dataTimestamp
-      if (dataAgeMs > 0) diffMs -= dataAgeMs
-    }
-  }
-
-  const totalSeconds = Math.max(0, Math.round(diffMs / 1000))
-  const hours = Math.floor(totalSeconds / 3600)
-  const minutes = Math.floor((totalSeconds % 3600) / 60)
-  const seconds = totalSeconds % 60
+export function formatExactEtaTime(targetIso: string): string | null {
+  const target = new Date(targetIso)
+  if (Number.isNaN(target.getTime())) return null
   const pad = (n: number) => String(n).padStart(2, '0')
-  return `${pad(hours)}:${pad(minutes)}:${pad(seconds)}`
+  return `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`
 }
 
 const LOCALE_MAP: Record<UiLanguage, string> = {

@@ -3,7 +3,7 @@
 import * as React from 'react'
 
 import { EtaValue, LivePulse } from '@/components/m3/motion'
-import { formatExactEtaCountdown, formatRelativeMinutesWithDrift } from '@/lib/eta/format'
+import { formatExactEtaTime, formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickSoonestIsoEta } from '@/lib/eta/pick-soonest-eta'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -11,65 +11,49 @@ import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 /**
- * Shared tick pools for ETA labels. One interval per precision no matter
- * how many labels mount; each label re-renders alone without touching the
- * results tree. Minute labels use the 15s pool; exact hh:mm:ss countdowns
- * subscribe to the 1s pool.
+ * Shared 15s tick for ETA labels. One interval total no matter how many
+ * labels mount; each label re-renders alone without touching the results
+ * tree. Exact clock-time labels need no faster tick: the displayed
+ * arrival time only changes when data refreshes.
  */
-type TickPool = {
-  now: number
-  listeners: Set<() => void>
-  timer: ReturnType<typeof setInterval> | null
-  visibilityBound: boolean
-}
+let sharedNow = Date.now()
+const sharedListeners = new Set<() => void>()
+let sharedTimer: ReturnType<typeof setInterval> | null = null
 
-const tickPools = new Map<number, TickPool>()
+function subscribeSharedTick(listener: () => void) {
+  sharedListeners.add(listener)
 
-function getTickPool(intervalMs: number): TickPool {
-  let pool = tickPools.get(intervalMs)
-  if (!pool) {
-    pool = { now: Date.now(), listeners: new Set(), timer: null, visibilityBound: false }
-    tickPools.set(intervalMs, pool)
-  }
-  return pool
-}
-
-function subscribeTick(intervalMs: number, listener: () => void) {
-  const pool = getTickPool(intervalMs)
-  pool.listeners.add(listener)
-
-  if (!pool.timer) {
-    pool.timer = setInterval(() => {
+  if (!sharedTimer) {
+    sharedTimer = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        pool.now = Date.now()
-        pool.listeners.forEach((l) => l())
+        sharedNow = Date.now()
+        sharedListeners.forEach((l) => l())
       }
-    }, intervalMs)
+    }, 15_000)
   }
 
-  if (!pool.visibilityBound && typeof document !== 'undefined') {
-    pool.visibilityBound = true
+  if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'visible') {
-        pool.now = Date.now()
-        pool.listeners.forEach((l) => l())
+        sharedNow = Date.now()
+        sharedListeners.forEach((l) => l())
       }
     })
   }
 
   return () => {
-    pool.listeners.delete(listener)
-    if (pool.listeners.size === 0 && pool.timer) {
-      clearInterval(pool.timer)
-      pool.timer = null
+    sharedListeners.delete(listener)
+    if (sharedListeners.size === 0 && sharedTimer) {
+      clearInterval(sharedTimer)
+      sharedTimer = null
     }
   }
 }
 
-function useTick(intervalMs: number): number {
+function useTick(): number {
   return React.useSyncExternalStore(
-    (listener) => subscribeTick(intervalMs, listener),
-    () => getTickPool(intervalMs).now,
+    subscribeSharedTick,
+    () => sharedNow,
     () => Date.now()
   )
 }
@@ -103,18 +87,14 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   className?: string
 }) {
   const exactEtaTime = useAppStore((s) => s.exactEtaTime)
-  const now = useTick(exactEtaTime ? 1_000 : 15_000)
+  const now = useTick()
   const { t, tWithParams } = useTranslations(lang)
   const minutes =
     eta != null ? formatRelativeMinutesWithDrift(eta, dataTimestamp ?? undefined, now) : null
-  const arriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
 
-  const exact =
-    exactEtaTime && eta != null
-      ? formatExactEtaCountdown(eta, dataTimestamp ?? undefined, now)
-      : null
-  const arrivingExact = exact === '00:00:00'
-  const display = exact && !arrivingExact ? exact : formatMinutesDisplay(minutes, t, tWithParams)
+  const exact = exactEtaTime && eta != null ? formatExactEtaTime(eta) : null
+  const arriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
+  const display = exact ?? formatMinutesDisplay(minutes, t, tWithParams)
 
   if (variant === 'plain') {
     return (
@@ -127,18 +107,17 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   if (variant === 'panel') {
     return (
       <span className="font-tabular flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
-        {arriving || arrivingExact ? <LivePulse /> : null}
+        {arriving ? <LivePulse /> : null}
         <EtaValue key={display} value={display} />
       </span>
     )
   }
 
-  if (arriving || arrivingExact) {
-    const nowText = t('common.now')
+  if (arriving) {
     return (
       <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
         <LivePulse />
-        <EtaValue key={nowText} value={nowText} />
+        <EtaValue key={display} value={display} />
       </span>
     )
   }
@@ -165,24 +144,22 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
   className?: string
 }) {
   const exactEtaTime = useAppStore((s) => s.exactEtaTime)
-  const now = useTick(exactEtaTime ? 1_000 : 15_000)
+  const now = useTick()
   const { t, tWithParams } = useTranslations(lang)
   const soonest = pickSoonestIsoEta(etas, now)
   const minutes = soonest.minutes
 
-  const exact =
-    exactEtaTime && soonest.etaIso
-      ? formatExactEtaCountdown(soonest.etaIso, soonest.dataTimestamp, now)
-      : null
+  const exact = exactEtaTime && soonest.etaIso ? formatExactEtaTime(soonest.etaIso) : null
 
   if (minutes === null) {
     return <span className={cn('text-on-surface-variant m3-label-md', className)}>—</span>
   }
 
-  const isArriving = soonest.arriving || minutes <= 0 || exact === '00:00:00'
-  const display = isArriving
-    ? t('common.now')
-    : (exact ?? tWithParams('common.minutes', { count: minutes }))
+  // Arriving styling follows the minute math, but with the exact setting
+  // the pill shows the arrival clock time instead of "Now".
+  const isArriving = soonest.arriving || minutes <= 0
+  const display =
+    exact ?? (isArriving ? t('common.now') : tWithParams('common.minutes', { count: minutes }))
 
   if (isArriving) {
     return (

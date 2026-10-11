@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
-  formatExactEtaCountdown,
+  formatExactEtaTime,
   formatFareHkd,
   formatRelativeMinutes,
   formatRelativeMinutesWithDrift,
@@ -52,32 +52,23 @@ describe('formatRelativeMinutesWithDrift', () => {
   })
 })
 
-describe('formatExactEtaCountdown', () => {
-  it('formats hh:mm:ss with zero padding', () => {
-    const now = new Date('2024-01-01T00:00:00.000Z')
-    const target = '2024-01-01T01:02:03.000Z'
+describe('formatExactEtaTime', () => {
+  it('formats the arrival clock time as hh:mm:ss', () => {
+    // Fixed local time: construct from components so the test does not
+    // depend on the machine timezone.
+    const target = new Date(2024, 0, 1, 9, 5, 3)
 
-    expect(formatExactEtaCountdown(target, undefined, now)).toBe('01:02:03')
+    expect(formatExactEtaTime(target.toISOString())).toBe('09:05:03')
   })
 
-  it('applies drift correction from the data timestamp', () => {
-    const now = new Date('2024-01-01T00:00:30.000Z')
-    const target = '2024-01-01T00:03:00.000Z'
-    const dataTimestamp = '2024-01-01T00:00:00.000Z' // data is 30s old
+  it('zero-pads single digits', () => {
+    const target = new Date(2024, 0, 1, 0, 0, 7)
 
-    // Without drift: 02:30. With drift: 2 min - 30s = 02:00
-    expect(formatExactEtaCountdown(target, dataTimestamp, now)).toBe('00:02:00')
-  })
-
-  it('clamps past arrivals to zero', () => {
-    const now = new Date('2024-01-01T00:05:00.000Z')
-    const target = '2024-01-01T00:03:00.000Z'
-
-    expect(formatExactEtaCountdown(target, undefined, now)).toBe('00:00:00')
+    expect(formatExactEtaTime(target.toISOString())).toBe('00:00:07')
   })
 
   it('returns null for invalid dates', () => {
-    expect(formatExactEtaCountdown('not-a-date', undefined, new Date())).toBeNull()
+    expect(formatExactEtaTime('not-a-date')).toBeNull()
   })
 })
 

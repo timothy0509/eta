@@ -34,9 +34,9 @@ const common: Record<string, TranslationEntry> = {
   },
   exactEtaTime: { en: 'Exact arrival time', tc: '顯示確實時間', sc: '显示确实时间' },
   exactEtaTimeDesc: {
-    en: 'Count down to each arrival as hh:mm:ss instead of minutes.',
-    tc: '以 hh:mm:ss 倒數顯示到站時間，而非以分鐘顯示。',
-    sc: '以 hh:mm:ss 倒数显示到站时间，而非以分钟显示。',
+    en: 'Show the arrival time as hh:mm:ss instead of a minutes countdown.',
+    tc: '以 hh:mm:ss 顯示到站時間，而非以分鐘倒數。',
+    sc: '以 hh:mm:ss 显示到站时间，而非以分钟倒数。',
   },
   themeLight: { en: 'Light', tc: '淺色', sc: '浅色' },
   themeDark: { en: 'Dark', tc: '深色', sc: '深色' },

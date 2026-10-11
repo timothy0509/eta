@@ -116,8 +116,6 @@ type TrainRowModel = {
   dest: string
   platform: string
   eta: { text: string; arriving: boolean }
-  minutes: number
-  key: string
 }
 
 type MtrDirectionContext = {
@@ -134,31 +132,22 @@ function buildRowModel(
   dir: MtrDirection,
   ctx: MtrDirectionContext
 ): TrainRowModel {
-  const route = String((train as { route?: unknown }).route ?? '')
+  const route = String(train.route ?? '')
   const showViaRacecourse = shouldShowViaRacecourse({
     line: ctx.line,
     currentSta: ctx.sta,
     dir,
     route: route || undefined,
   })
-  const dest = formatDestWithRacecourse(
-    train.dest,
-    ctx.lang,
-    ctx.viaRacecourseSuffix,
-    showViaRacecourse
-  )
-  const rawMinutes = String(train.ttnt ?? '').trim()
-  const parsedMinutes = Number(rawMinutes)
-  const minutes =
-    rawMinutes === '' || Number.isNaN(parsedMinutes)
-      ? Number.POSITIVE_INFINITY
-      : Math.max(parsedMinutes, 0)
   return {
-    dest,
+    dest: formatDestWithRacecourse(
+      train.dest,
+      ctx.lang,
+      ctx.viaRacecourseSuffix,
+      showViaRacecourse
+    ),
     platform: formatPlatform(train.plat),
     eta: formatMinutes(train.ttnt, ctx.arrivingText, ctx.minutesUnit),
-    minutes,
-    key: `${dest}-${route}-${dir}`,
   }
 }
 
@@ -211,22 +200,23 @@ function MtrLineCard({
       minutesUnit,
     })
 
-  // Mobile collapsed summary: dedupe by destination across both directions.
-  const seenDests = new Set<string>()
-  const collapsedItems = [
-    ...upTrains.map((train) => rowFor(train, 'UP')),
-    ...downTrains.map((train) => rowFor(train, 'DOWN')),
-  ].filter((item) => {
-    if (!item.dest || seenDests.has(item.dest)) return false
-    seenDests.add(item.dest)
-    return true
+  // Collapsed summary: dedupe within each direction, so the same destination
+  // reached in both directions still shows once per direction.
+  const collapsedItems = (['UP', 'DOWN'] as const).flatMap((dir) => {
+    const trains = dir === 'UP' ? upTrains : downTrains
+    const seen = new Set<string>()
+    return trains
+      .map((train) => rowFor(train, dir))
+      .filter((row) => {
+        if (!row.dest || seen.has(row.dest)) return false
+        seen.add(row.dest)
+        return true
+      })
+      .map((row) => ({ dir, row }))
   })
 
-  const rowContent = (item: TrainRowModel, dense: boolean) => (
-    <div
-      key={item.key}
-      className={cn('flex items-center justify-between gap-3', dense ? 'py-0.5' : 'py-1.5')}
-    >
+  const Row = ({ item, dense }: { item: TrainRowModel; dense: boolean }) => (
+    <div className={cn('flex items-center justify-between gap-3', dense ? 'py-0.5' : 'py-1.5')}>
       <Marquee title={item.dest} className="text-on-surface m3-body-md min-w-0 flex-1 font-medium">
         {item.dest}
       </Marquee>
@@ -253,7 +243,7 @@ function MtrLineCard({
       {collapsedItems.length === 0 ? (
         <div className="text-on-surface-variant m3-body-md">—</div>
       ) : (
-        collapsedItems.map((item) => rowContent(item, true))
+        collapsedItems.map(({ dir, row }) => <Row key={`${dir}:${row.dest}`} item={row} dense />)
       )}
     </div>
   )
@@ -266,10 +256,11 @@ function MtrLineCard({
           {upTrains.length === 0 ? (
             <div className="text-on-surface-variant m3-body-md">—</div>
           ) : (
-            upTrains.slice(0, 4).map((train, idx) => {
-              const row = { ...rowFor(train, 'UP'), key: `UP-${idx}` }
-              return rowContent(row, false)
-            })
+            upTrains
+              .slice(0, 4)
+              .map((train, idx) => (
+                <Row key={`up-${idx}`} item={rowFor(train, 'UP')} dense={false} />
+              ))
           )}
         </div>
       </div>
@@ -279,10 +270,11 @@ function MtrLineCard({
           {downTrains.length === 0 ? (
             <div className="text-on-surface-variant m3-body-md">—</div>
           ) : (
-            downTrains.slice(0, 4).map((train, idx) => {
-              const row = { ...rowFor(train, 'DOWN'), key: `DOWN-${idx}` }
-              return rowContent(row, false)
-            })
+            downTrains
+              .slice(0, 4)
+              .map((train, idx) => (
+                <Row key={`down-${idx}`} item={rowFor(train, 'DOWN')} dense={false} />
+              ))
           )}
         </div>
       </div>
@@ -344,10 +336,11 @@ function MtrLineCard({
           {trains.length === 0 ? (
             <div className="text-on-surface-variant m3-body-md">—</div>
           ) : (
-            trains.slice(0, 4).map((train, idx) => {
-              const row = { ...rowFor(train, dir), key: `${dir}-${idx}` }
-              return rowContent(row, false)
-            })
+            trains
+              .slice(0, 4)
+              .map((train, idx) => (
+                <Row key={`${dir.toLowerCase()}-${idx}`} item={rowFor(train, dir)} dense={false} />
+              ))
           )}
         </div>
       </div>
@@ -451,7 +444,7 @@ export const MtrResults = React.memo(function MtrResults({
             ) : null}
           </div>
         ) : (
-          <>
+          <div>
             {/* Each card renders its own phone/desktop variant. */}
             <div className="space-y-4">
               {lineEntries.map(([key, payload], idx) => {
@@ -478,7 +471,7 @@ export const MtrResults = React.memo(function MtrResults({
                 )
               })}
             </div>
-          </>
+          </div>
         )}
       </div>
     </div>

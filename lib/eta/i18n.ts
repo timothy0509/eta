@@ -21,6 +21,23 @@ const common: Record<string, TranslationEntry> = {
   appearance: { en: 'Appearance', tc: '外觀', sc: '外观' },
   language: { en: 'Language', tc: '語言', sc: '语言' },
   autoRefresh: { en: 'Auto Refresh', tc: '自動刷新', sc: '自动刷新' },
+  display: { en: 'Display', tc: '顯示', sc: '显示' },
+  showStopCodeFare: {
+    en: 'Show fare & stop code',
+    tc: '顯示車費及站牌編號',
+    sc: '显示车费及站牌编号',
+  },
+  showStopCodeFareDesc: {
+    en: 'Show the fare and stop code below each route.',
+    tc: '在路線下方顯示車費及站牌編號。',
+    sc: '在路线下方显示车费及站牌编号。',
+  },
+  exactEtaTime: { en: 'Exact arrival time', tc: '顯示確實時間', sc: '显示确实时间' },
+  exactEtaTimeDesc: {
+    en: 'Count down to each arrival as hh:mm:ss instead of minutes.',
+    tc: '以 hh:mm:ss 倒數顯示到站時間，而非以分鐘顯示。',
+    sc: '以 hh:mm:ss 倒数显示到站时间，而非以分钟显示。',
+  },
   themeLight: { en: 'Light', tc: '淺色', sc: '浅色' },
   themeDark: { en: 'Dark', tc: '深色', sc: '深色' },
   themeSystem: { en: 'System', tc: '系統', sc: '系统' },

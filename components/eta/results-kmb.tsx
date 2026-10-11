@@ -26,6 +26,7 @@ import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
+import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
@@ -277,12 +278,15 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const operatorName = formatOperatorLabel(first?.co ?? co, lang)
 
   const { t } = useTranslations(lang)
+  const showStopCodeFare = useAppStore((s) => s.showStopCodeFare)
 
   const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && Boolean(expanded)
 
-  const fareLabel = fare ? formatFareHkd(fare.hkd) : null
-  const codeLabel = [stopChips.platform, stopChips.stopCode].filter(Boolean).join(' · ') || null
+  const fareLabel = showStopCodeFare && fare ? formatFareHkd(fare.hkd) : null
+  const codeLabel = showStopCodeFare
+    ? [stopChips.platform, stopChips.stopCode].filter(Boolean).join(' · ') || null
+    : null
 
   const detailsContent = (
     <>

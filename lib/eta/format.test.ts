@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatExactEtaCountdown,
   formatFareHkd,
   formatRelativeMinutes,
   formatRelativeMinutesWithDrift,
@@ -48,6 +49,35 @@ describe('formatRelativeMinutesWithDrift', () => {
 
     // Bus was 1 min away 45s ago, so it should be arriving now
     expect(formatRelativeMinutesWithDrift(target, dataTimestamp, now)).toBe(0)
+  })
+})
+
+describe('formatExactEtaCountdown', () => {
+  it('formats hh:mm:ss with zero padding', () => {
+    const now = new Date('2024-01-01T00:00:00.000Z')
+    const target = '2024-01-01T01:02:03.000Z'
+
+    expect(formatExactEtaCountdown(target, undefined, now)).toBe('01:02:03')
+  })
+
+  it('applies drift correction from the data timestamp', () => {
+    const now = new Date('2024-01-01T00:00:30.000Z')
+    const target = '2024-01-01T00:03:00.000Z'
+    const dataTimestamp = '2024-01-01T00:00:00.000Z' // data is 30s old
+
+    // Without drift: 02:30. With drift: 2 min - 30s = 02:00
+    expect(formatExactEtaCountdown(target, dataTimestamp, now)).toBe('00:02:00')
+  })
+
+  it('clamps past arrivals to zero', () => {
+    const now = new Date('2024-01-01T00:05:00.000Z')
+    const target = '2024-01-01T00:03:00.000Z'
+
+    expect(formatExactEtaCountdown(target, undefined, now)).toBe('00:00:00')
+  })
+
+  it('returns null for invalid dates', () => {
+    expect(formatExactEtaCountdown('not-a-date', undefined, new Date())).toBeNull()
   })
 })
 

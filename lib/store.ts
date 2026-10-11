@@ -108,6 +108,9 @@ type PrefsSlice = {
   lang: UiLanguage
   routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
+  // Display prefs for route rows and ETA labels.
+  showStopCodeFare: boolean
+  exactEtaTime: boolean
 
   favorites: FavoritesItem[]
   favoritesGroups: FavoritesGroup[]
@@ -116,6 +119,8 @@ type PrefsSlice = {
   setLang: (lang: UiLanguage) => void
   setRouteFilterMode: (mode: RouteFilterMode) => void
   setAutoRefreshSeconds: (seconds: number) => void
+  setShowStopCodeFare: (show: boolean) => void
+  setExactEtaTime: (exact: boolean) => void
   addFavorite: (item: FavoritesItem) => void
   removeFavorite: (id: string) => void
   toggleFavoritePin: (id: string) => void
@@ -163,6 +168,8 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   lang: 'tc',
   routeFilterMode: 'simple',
   autoRefreshSeconds: 15,
+  showStopCodeFare: true,
+  exactEtaTime: false,
 
   favorites: [],
   favoritesGroups: [],
@@ -171,6 +178,8 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   setLang: (lang) => set({ lang }),
   setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
   setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
+  setShowStopCodeFare: (showStopCodeFare) => set({ showStopCodeFare }),
+  setExactEtaTime: (exactEtaTime) => set({ exactEtaTime }),
 
   addFavorite: (item) =>
     set((state) => {
@@ -327,6 +336,8 @@ export const useAppStore = create<AppState>()(
           lang: state?.lang ?? 'tc',
           routeFilterMode: state?.routeFilterMode ?? 'simple',
           autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
+          showStopCodeFare: state?.showStopCodeFare ?? true,
+          exactEtaTime: state?.exactEtaTime ?? false,
           favorites,
           favoritesGroups: state?.favoritesGroups ?? [],
           recents: state?.recents ?? [],
@@ -336,6 +347,8 @@ export const useAppStore = create<AppState>()(
         lang: state.lang,
         routeFilterMode: state.routeFilterMode,
         autoRefreshSeconds: state.autoRefreshSeconds,
+        showStopCodeFare: state.showStopCodeFare,
+        exactEtaTime: state.exactEtaTime,
         favorites: state.favorites,
         favoritesGroups: state.favoritesGroups,
         recents: state.recents,

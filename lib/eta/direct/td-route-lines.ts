@@ -62,7 +62,8 @@ export function parseTdRouteLinesFile(json: unknown): Map<string, TdRouteLine[]>
 
 /**
  * TD company codes a hk-bus-eta variant company can draw from. Long Win has
- * no hk-bus-eta namespace of its own; its routes ride under kmb.
+ * no hk-bus-eta namespace of its own; its routes ride under kmb. GMB routes
+ * come from the TD green minibus directory and match the CSDI GMB layer.
  */
 function compatibleTdCompanies(hkCo: string): string[] {
   switch (String(hkCo ?? '').toLowerCase()) {
@@ -72,6 +73,8 @@ function compatibleTdCompanies(hkCo: string): string[] {
       return ['CTB', 'KMB+CTB', 'LWB+CTB']
     case 'nlb':
       return ['NLB']
+    case 'gmb':
+      return ['GMB']
     default:
       return []
   }
@@ -87,11 +90,13 @@ function endpointErrorM(line: TdRouteLine, first: GeoPoint, last: GeoPoint): num
 }
 
 /**
- * Pick the true road-following line for a variant. Direction comes from the
- * bound (inbound is TD routeSeq 2, anything else is 1); when several lines
- * share the route name, the one whose endpoints land closest to the
- * variant's first and last stops wins. Returns null when nothing fits, so
- * callers fall back to stop-sequence lines.
+ * Pick the true road-following line for a variant. TD's ROUTE_SEQ does not
+ * map onto hk-bus-eta bounds consistently across routes (2E inbound is CSDI
+ * seq 1), so direction is decided by endpoints, not by a fixed seq. When
+ * several lines share the route name, the one whose endpoints land closest
+ * to the variant's first and last stops wins; a matching seq breaks near
+ * ties. Returns null when nothing fits, so callers fall back to
+ * stop-sequence lines.
  */
 export function selectTdRouteLine(
   candidates: TdRouteLine[],
@@ -104,12 +109,14 @@ export function selectTdRouteLine(
   const wantSeq = String(params.bound ?? '').toUpperCase() === 'I' ? 2 : 1
   let best: TdRouteLine | null = null
   let bestErr = Number.POSITIVE_INFINITY
+  let bestSeqErr = Number.POSITIVE_INFINITY
   for (const candidate of candidates) {
     if (!companies.includes(candidate.company)) continue
-    if (candidate.routeSeq !== wantSeq) continue
     const err = endpointErrorM(candidate, first, last)
-    if (err < bestErr) {
+    const seqErr = candidate.routeSeq === wantSeq ? 0 : 1
+    if (err < bestErr || (err === bestErr && seqErr < bestSeqErr)) {
       bestErr = err
+      bestSeqErr = seqErr
       best = candidate
     }
   }

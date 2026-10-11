@@ -144,8 +144,30 @@ describe('selectTdRouteLine', () => {
 
   it('returns null for unknown companies and short inputs', () => {
     const lines = [makeLine()]
-    expect(selectTdRouteLine(lines, { co: 'gmb', bound: 'O', variantPoints })).toBeNull()
     expect(selectTdRouteLine(lines, { co: 'kmb', bound: 'O', variantPoints: [] })).toBeNull()
     expect(selectTdRouteLine([], { co: 'kmb', bound: 'O', variantPoints })).toBeNull()
+  })
+
+  it('decides direction by endpoints when the seq-to-bound mapping is inverted', () => {
+    // 2E inbound: CSDI seq 1 is the shape that fits the inbound stops even
+    // though bound 'I' nominally maps to seq 2.
+    const lines = [
+      makeLine({ routeSeq: 1 }),
+      makeLine({ routeSeq: 2, points: [...variantPoints].reverse() }),
+    ]
+    expect(selectTdRouteLine(lines, { co: 'kmb', bound: 'I', variantPoints })?.routeSeq).toBe(1)
+  })
+
+  it('breaks ties with the nominal bound seq', () => {
+    // A circular route's two legs share endpoints; the bound then decides.
+    const lines = [makeLine({ routeSeq: 2 }), makeLine({ routeSeq: 1 })]
+    expect(selectTdRouteLine(lines, { co: 'kmb', bound: 'I', variantPoints })?.routeSeq).toBe(2)
+    expect(selectTdRouteLine(lines, { co: 'kmb', bound: 'O', variantPoints })?.routeSeq).toBe(1)
+  })
+
+  it('matches GMB variants against the GMB layer', () => {
+    const lines = [makeLine({ company: 'GMB' })]
+    expect(selectTdRouteLine(lines, { co: 'gmb', bound: 'O', variantPoints })?.company).toBe('GMB')
+    expect(selectTdRouteLine(lines, { co: 'kmb', bound: 'O', variantPoints })).toBeNull()
   })
 })

@@ -62,8 +62,8 @@ import {
   searchRouteIndex,
   type RouteFuseInstance,
 } from '@/lib/eta/route-search'
-import { resolveTdRouteLine } from '@/lib/eta/direct/td-route-lines'
 import { resolveTdInstantPath } from '@/lib/eta/direct/td-shapes'
+import { useTdRouteLine } from '@/lib/eta/use-td-route-line'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
 import { isKmbStop } from '@/lib/eta/types'
@@ -728,39 +728,6 @@ function useKmbStops() {
 }
 
 /**
- * True road-following shape from the CSDI bus route lines, matched by route
- * name, company, and bound direction. Replaces the old car-profile OSRM
- * routing, which drew buses along the wrong roads.
- */
-function useTdRouteLine(variant: RouteVariant | null, points: GeoPoint[]): GeoPoint[] | null {
-  const [result, setResult] = React.useState<{
-    variantKey: string
-    path: GeoPoint[]
-  } | null>(null)
-
-  React.useEffect(() => {
-    if (!variant || points.length < 2) return
-    let cancelled = false
-    const variantKey = variant.key
-    resolveTdRouteLine({
-      route: variant.route,
-      co: variant.co,
-      bound: variant.bound,
-      variantPoints: points,
-    })
-      .then((line) => {
-        if (!cancelled && line) setResult({ variantKey, path: line.points })
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [variant, points])
-
-  return result && variant && result.variantKey === variant.key ? result.path : null
-}
-
-/**
  * Instant route shape from Transport Department stop coordinates. The TD
  * datasets already order stops by stopSeq per routeSeq direction, so the
  * selected shape draws with no per-route fetch once the dataset is cached.
@@ -1116,10 +1083,10 @@ export function KmbRoutesView({
     [stopsVariantKey, currentVariant, routePath]
   )
   // The CSDI route line is the persistent map shape: true road-following
-  // geometry in travel order. Variants with no line (GMB, DB/PI/XB, or a
-  // TD miss) fall back to straight stop-sequence segments, then bare stop
-  // points. GMB routes never had OSRM routing; nothing else still uses it
-  // for route maps.
+  // geometry in travel order, franchised bus or GMB. Variants with no line
+  // (GMB red-minibus aliases, or a TD miss) fall back to straight
+  // stop-sequence segments, then bare stop points. GMB routes never had
+  // OSRM routing; nothing else still uses it for route maps.
   const tdRouteLine = useTdRouteLine(currentVariant, geometryPoints)
   const tdInstantPath = useTdInstantPath(currentVariant, geometryPoints)
   const displayPath = tdRouteLine ?? tdInstantPath ?? routePath

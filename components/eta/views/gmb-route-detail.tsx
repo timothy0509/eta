@@ -19,6 +19,8 @@ import {
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { fetchKmbStopEtas, type KmbEtaEntryWithLeg } from '@/lib/eta/client'
 import { formatFareHkd, getUiLocale } from '@/lib/eta/format'
+import type { GeoPoint } from '@/lib/eta/geo'
+import { useTdRouteLine } from '@/lib/eta/use-td-route-line'
 import {
   gmbVariantBaseKey,
   resolveGmbEtaVariant,
@@ -352,16 +354,38 @@ export function GmbRouteDetail({
     }))
   }, [activeVariant, lang])
 
+  const stopPoints = React.useMemo<GeoPoint[]>(
+    () => (activeVariant?.stops ?? []).map((stop) => ({ lat: stop.lat, lng: stop.lng })),
+    [activeVariant]
+  )
+
+  // True road-following shape from the CSDI GMB route lines, matched by
+  // route name and stop endpoints. The CSDI layer stores the English route
+  // number, so match on that rather than the localized name. Falls back to
+  // straight stop-sequence segments when no line fits.
+  const routeNumber = group !== null ? group.routeName.en || group.routeName.tc || null : null
+  const tdLine = useTdRouteLine(
+    activeVariant && routeNumber
+      ? {
+          key: `${routeId}:${activeVariant.routeSeq}`,
+          route: routeNumber,
+          co: 'gmb',
+          bound: activeVariant.routeSeq === 2 ? 'I' : 'O',
+        }
+      : null,
+    stopPoints
+  )
+
   const mapPolylines = React.useMemo(() => {
     if (!activeVariant) return []
     return [
       {
         id: `${routeId}:${activeVariant.routeSeq}`,
-        path: activeVariant.stops.map((stop) => ({ lat: stop.lat, lng: stop.lng })),
+        path: tdLine ?? stopPoints,
         color: '#00478d',
       },
     ]
-  }, [activeVariant, routeId])
+  }, [activeVariant, routeId, tdLine, stopPoints])
 
   if (load.status === 'loading') {
     return (

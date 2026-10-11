@@ -1,12 +1,13 @@
 /**
- * Build-time extractor for true road-following bus route shapes.
+ * Build-time extractor for true road-following transit route shapes.
  *
  * The TD GeoJSON files only carry stop coordinates, so maps drawn from them
- * are straight segments. The CSDI Bus Route FeatureServer (FB_ROUTE_LINE)
- * publishes survey-grade polylines per (ROUTE_ID, ROUTE_SEQ) in the same TD
- * namespace. This script downloads all 2,246 lines (~160 MB raw, paged),
- * simplifies them with Douglas-Peucker, and writes a compact same-origin
- * extract the app loads instead of car-profile OSRM routing.
+ * are straight segments. CSDI publishes survey-grade polylines per
+ * (ROUTE_ID, ROUTE_SEQ) in the same TD namespace: FB_ROUTE_LINE for
+ * franchised buses and GMB_ROUTE_LINE for green minibuses. This script
+ * downloads both layers (~160 MB raw, paged), simplifies them with
+ * Douglas-Peucker, and writes a compact same-origin extract the app loads
+ * instead of car-profile OSRM routing.
  *
  * Run with: `bun scripts/build-td-route-lines.ts`
  *
@@ -20,8 +21,22 @@ import { fileURLToPath } from 'node:url'
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 const OUT_PATH = join(ROOT, 'public', 'data', 'td-route-lines.json')
 
-const LAYER_URL =
-  'https://portal.csdi.gov.hk/server/rest/services/common/td_rcd_1638844988873_41214/FeatureServer/0/query'
+const SOURCES = [
+  {
+    co: null, // franchised buses carry their own COMPANY_CODE
+    layerUrl:
+      'https://portal.csdi.gov.hk/server/rest/services/common/td_rcd_1638844988873_41214/FeatureServer/0/query',
+    nameField: 'ROUTE_NAMEE',
+    companyField: 'COMPANY_CODE',
+  },
+  {
+    co: 'GMB',
+    layerUrl:
+      'https://portal.csdi.gov.hk/server/rest/services/common/td_rcd_1697082463580_57453/FeatureServer/0/query',
+    nameField: 'ROUTE_NAME',
+    companyField: null,
+  },
+]
 const PAGE_SIZE = 200
 // Douglas-Peucker tolerance in metres. Route maps are viewed zoomed out to
 // fit whole routes, where sub-20 m wiggles are invisible.
@@ -35,14 +50,22 @@ type RawFeature = {
     ROUTE_SEQ?: unknown
     COMPANY_CODE?: unknown
     ROUTE_NAMEE?: unknown
+    ROUTE_NAME?: unknown
   }
   geometry?: { coordinates?: unknown }
 }
 
-async function fetchPage(offset: number): Promise<{ features: RawFeature[]; done: boolean }> {
+async function fetchPage(
+  layerUrl: string,
+  nameField: string,
+  companyField: string | null,
+  offset: number
+): Promise<{ features: RawFeature[]; done: boolean }> {
+  const fields = ['ROUTE_ID', 'ROUTE_SEQ', nameField]
+  if (companyField) fields.push(companyField)
   const params = new URLSearchParams({
     where: '1=1',
-    outFields: 'ROUTE_ID,ROUTE_SEQ,COMPANY_CODE,ROUTE_NAMEE',
+    outFields: fields.join(','),
     returnGeometry: 'true',
     outSR: '4326',
     f: 'geojson',
@@ -50,11 +73,17 @@ async function fetchPage(offset: number): Promise<{ features: RawFeature[]; done
     resultOffset: String(offset),
     resultRecordCount: String(PAGE_SIZE),
   })
-  const response = await fetch(`${LAYER_URL}?${params.toString()}`)
+  const response = await fetch(`${layerUrl}?${params.toString()}`)
   if (!response.ok) throw new Error(`CSDI query HTTP ${response.status} at offset ${offset}`)
   const text = await response.text()
   const json = JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text) as {
     features?: RawFeature[]
+    error?: { message?: string } | null
+  }
+  // ArcGIS answers HTTP 200 with an error body for bad queries in geojson
+  // mode; a silent zero here would quietly drop a whole layer.
+  if (json.error) {
+    throw new Error(`CSDI error at offset ${offset}: ${json.error.message ?? 'unknown'}`)
   }
   const features = Array.isArray(json.features) ? json.features : []
   return { features, done: features.length < PAGE_SIZE }
@@ -118,64 +147,79 @@ function round5(value: number): number {
 
 async function main(): Promise<void> {
   const lines: Record<string, Array<{ co: string; seq: number; id: number; pts: LngLat[] }>> = {}
-  let offset = 0
   let rawPoints = 0
   let keptPoints = 0
   let skipped = 0
-  for (;;) {
-    const { features, done } = await fetchPage(offset)
-    console.log(`offset ${offset}: ${features.length} features`)
-    for (const feature of features) {
-      const attrs = feature.properties ?? {}
-      const routeId = toFiniteNumber(attrs.ROUTE_ID)
-      const routeSeq = toFiniteNumber(attrs.ROUTE_SEQ)
-      const company =
-        typeof attrs.COMPANY_CODE === 'string' ? attrs.COMPANY_CODE.trim().toUpperCase() : ''
-      const routeName =
-        typeof attrs.ROUTE_NAMEE === 'string' ? attrs.ROUTE_NAMEE.trim().toUpperCase() : ''
-      const parts = feature.geometry?.coordinates
-      if (
-        routeId === null ||
-        (routeSeq !== 1 && routeSeq !== 2) ||
-        !company ||
-        !routeName ||
-        !Array.isArray(parts)
-      ) {
-        skipped += 1
-        continue
-      }
-      // MultiLineString parts already run in travel order; join them.
-      const joined: LngLat[] = []
-      for (const part of parts) {
-        if (!Array.isArray(part)) continue
-        for (const pair of part) {
+  for (const source of SOURCES) {
+    let offset = 0
+    for (;;) {
+      const { features, done } = await fetchPage(
+        source.layerUrl,
+        source.nameField,
+        source.companyField,
+        offset
+      )
+      console.log(`offset ${offset}: ${features.length} features`)
+      for (const feature of features) {
+        const attrs = feature.properties ?? {}
+        const routeId = toFiniteNumber(attrs.ROUTE_ID)
+        const routeSeq = toFiniteNumber(attrs.ROUTE_SEQ)
+        const company =
+          source.co ??
+          (typeof attrs.COMPANY_CODE === 'string' ? attrs.COMPANY_CODE.trim().toUpperCase() : '')
+        const rawName = source.nameField === 'ROUTE_NAME' ? attrs.ROUTE_NAME : attrs.ROUTE_NAMEE
+        const routeName = typeof rawName === 'string' ? rawName.trim().toUpperCase() : ''
+        const parts = feature.geometry?.coordinates
+        if (
+          routeId === null ||
+          (routeSeq !== 1 && routeSeq !== 2) ||
+          !company ||
+          !routeName ||
+          !Array.isArray(parts)
+        ) {
+          skipped += 1
+          continue
+        }
+        // MultiLineString parts already run in travel order; join them.
+        // The GMB layer publishes LineString instead, whose top-level
+        // entries are coordinates, not parts.
+        const joined: LngLat[] = []
+        const addPair = (pair: unknown): void => {
           const point = toLngLat(pair)
-          if (!point) continue
+          if (!point) return
           const prev = joined[joined.length - 1]
           if (!prev || prev[0] !== point[0] || prev[1] !== point[1]) joined.push(point)
         }
+        for (const part of parts) {
+          if (!Array.isArray(part)) continue
+          // A numeric first element means the pair itself (LineString).
+          if (toFiniteNumber(part[0]) !== null) {
+            addPair(part)
+            continue
+          }
+          for (const pair of part) addPair(pair)
+        }
+        if (joined.length < 2) {
+          skipped += 1
+          continue
+        }
+        rawPoints += joined.length
+        const simplified = douglasPeucker(joined, SIMPLIFY_TOLERANCE_M).map(
+          ([lng, lat]): LngLat => [round5(lng), round5(lat)]
+        )
+        keptPoints += simplified.length
+        const bucket = lines[routeName] ?? []
+        bucket.push({ co: company, seq: routeSeq, id: routeId, pts: simplified })
+        lines[routeName] = bucket
       }
-      if (joined.length < 2) {
-        skipped += 1
-        continue
-      }
-      rawPoints += joined.length
-      const simplified = douglasPeucker(joined, SIMPLIFY_TOLERANCE_M).map(([lng, lat]): LngLat => [
-        round5(lng),
-        round5(lat),
-      ])
-      keptPoints += simplified.length
-      const bucket = lines[routeName] ?? []
-      bucket.push({ co: company, seq: routeSeq, id: routeId, pts: simplified })
-      lines[routeName] = bucket
+      if (done) break
+      offset += PAGE_SIZE
     }
-    if (done) break
-    offset += PAGE_SIZE
   }
 
   const payload = {
     meta: {
-      source: LAYER_URL,
+      source: SOURCES.map((s) => s.layerUrl),
       dataset: 'https://data.gov.hk/en-data/dataset/hk-td-tis_23-routes-fares-geojson',
       generatedAt: new Date().toISOString(),
       simplifyToleranceM: SIMPLIFY_TOLERANCE_M,

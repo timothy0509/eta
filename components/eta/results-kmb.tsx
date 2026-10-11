@@ -495,8 +495,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
           )
         })}
       </div>
-      <div className="flex items-center justify-between gap-2 pt-1">
-        <div className="flex min-h-8 min-w-0 flex-1 items-center">{fareCodeNode}</div>
+      <div className="flex min-h-8 items-center justify-end pt-1">
         <div className="pointer-events-auto shrink-0">{DetailsTextButton}</div>
       </div>
     </div>
@@ -561,7 +560,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       panel={etaPanel}
       toggleLabel={`${route} ${label ?? ''} ${operatorName}`.trim()}
     >
-      {routeHeader({ showEta: !isExpanded, showSubtitle: !isExpanded })}
+      {routeHeader({ showEta: !isExpanded, showSubtitle: true })}
     </ExpandableEtaRow>
   )
 })

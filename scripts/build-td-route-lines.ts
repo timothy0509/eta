@@ -38,9 +38,11 @@ const SOURCES = [
   },
 ]
 const PAGE_SIZE = 200
-// Douglas-Peucker tolerance in metres. Route maps are viewed zoomed out to
-// fit whole routes, where sub-20 m wiggles are invisible.
-const SIMPLIFY_TOLERANCE_M = 20
+// Douglas-Peucker tolerance in metres. Route maps are zoomable to street
+// level, where the median raw vertex gap is ~10 m: a 20 m tolerance cut
+// corners visibly across city blocks, so the extract keeps shapes tight
+// enough to stay on the pavement line at high zoom.
+const SIMPLIFY_TOLERANCE_M = 3
 
 type LngLat = [number, number]
 
@@ -141,12 +143,40 @@ function douglasPeucker(points: LngLat[], toleranceM: number): LngLat[] {
   return [...left.slice(0, -1), ...right]
 }
 
-function round5(value: number): number {
-  return Math.round(value * 1e5) / 1e5
+/**
+ * Google encoded-polyline format on a 1e-5 grid (~1.1 m at Hong Kong's
+ * latitude): zigzag deltas, base32 chars. A dense post-simplify polyline
+ * costs about a third of the JSON-array equivalent and parses
+ * near-instantly in the browser.
+ */
+function encodeValue(value: number): string {
+  let v = value < 0 ? ~(value << 1) : value << 1
+  let out = ''
+  while (v >= 0x20) {
+    out += String.fromCharCode(((v & 0x1f) | 0x20) + 63)
+    v >>= 5
+  }
+  out += String.fromCharCode(v + 63)
+  return out
+}
+
+function encodePolyline(points: LngLat[]): string {
+  let out = ''
+  let prevLat = 0
+  let prevLng = 0
+  for (const [lng, lat] of points) {
+    const latQ = Math.round(lat * 1e5)
+    const lngQ = Math.round(lng * 1e5)
+    out += encodeValue(latQ - prevLat)
+    out += encodeValue(lngQ - prevLng)
+    prevLat = latQ
+    prevLng = lngQ
+  }
+  return out
 }
 
 async function main(): Promise<void> {
-  const lines: Record<string, Array<{ co: string; seq: number; id: number; pts: LngLat[] }>> = {}
+  const lines: Record<string, Array<{ co: string; seq: number; id: number; poly: string }>> = {}
   let rawPoints = 0
   let keptPoints = 0
   let skipped = 0
@@ -204,12 +234,10 @@ async function main(): Promise<void> {
           continue
         }
         rawPoints += joined.length
-        const simplified = douglasPeucker(joined, SIMPLIFY_TOLERANCE_M).map(
-          ([lng, lat]): LngLat => [round5(lng), round5(lat)]
-        )
+        const simplified = douglasPeucker(joined, SIMPLIFY_TOLERANCE_M)
         keptPoints += simplified.length
         const bucket = lines[routeName] ?? []
-        bucket.push({ co: company, seq: routeSeq, id: routeId, pts: simplified })
+        bucket.push({ co: company, seq: routeSeq, id: routeId, poly: encodePolyline(simplified) })
         lines[routeName] = bucket
       }
       if (done) break

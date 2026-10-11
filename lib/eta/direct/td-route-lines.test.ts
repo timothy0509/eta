@@ -1,10 +1,37 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  decodeEncodedPolyline,
   parseTdRouteLinesFile,
   selectTdRouteLine,
   type TdRouteLine,
 } from '@/lib/eta/direct/td-route-lines'
+
+/** Minimal Google-polyline encoder mirroring the build script output. */
+function encodePolyline(points: Array<[number, number]>): string {
+  const encodeValue = (value: number): string => {
+    let v = value < 0 ? ~(value << 1) : value << 1
+    let out = ''
+    while (v >= 0x20) {
+      out += String.fromCharCode(((v & 0x1f) | 0x20) + 63)
+      v >>= 5
+    }
+    out += String.fromCharCode(v + 63)
+    return out
+  }
+  let out = ''
+  let prevLat = 0
+  let prevLng = 0
+  for (const [lng, lat] of points) {
+    const latQ = Math.round(lat * 1e5)
+    const lngQ = Math.round(lng * 1e5)
+    out += encodeValue(latQ - prevLat)
+    out += encodeValue(lngQ - prevLng)
+    prevLat = latQ
+    prevLng = lngQ
+  }
+  return out
+}
 
 function makeLine(overrides: Partial<TdRouteLine> = {}): TdRouteLine {
   return {
@@ -20,11 +47,41 @@ function makeLine(overrides: Partial<TdRouteLine> = {}): TdRouteLine {
   }
 }
 
+function lineToPoly(line: TdRouteLine): string {
+  return encodePolyline(line.points.map((p) => [p.lng, p.lat]))
+}
+
 const variantPoints = [
   { lat: 22.34535, lng: 114.19245 },
   { lat: 22.34, lng: 114.19 },
   { lat: 22.29407, lng: 114.16913 },
 ]
+
+describe('decodeEncodedPolyline', () => {
+  it('round-trips the exact grid values the encoder wrote', () => {
+    const poly = encodePolyline([
+      [114.19245, 22.34535],
+      [114.19, 22.34],
+    ])
+    const decoded = decodeEncodedPolyline(poly)
+    expect(decoded).toEqual([
+      { lat: 22.34535, lng: 114.19245 },
+      { lat: 22.34, lng: 114.19 },
+    ])
+  })
+
+  it('drops off-world points but keeps the travel order', () => {
+    const poly = encodePolyline([
+      [114.19245, 22.34535],
+      [999, 3],
+      [114.19, 22.34],
+    ])
+    const decoded = decodeEncodedPolyline(poly)
+    expect(decoded).toHaveLength(2)
+    expect(decoded[0]).toEqual({ lat: 22.34535, lng: 114.19245 })
+    expect(decoded[1]).toEqual({ lat: 22.34, lng: 114.19 })
+  })
+})
 
 describe('parseTdRouteLinesFile', () => {
   it('parses compact entries keyed by route name', () => {
@@ -35,10 +92,10 @@ describe('parseTdRouteLinesFile', () => {
             co: 'KMB',
             seq: 1,
             id: 1001,
-            pts: [
+            poly: encodePolyline([
               [114.192, 22.345],
               [114.169, 22.294],
-            ],
+            ]),
           },
         ],
       },
@@ -51,37 +108,15 @@ describe('parseTdRouteLinesFile', () => {
   it('skips malformed entries and rejects bad files', () => {
     expect(parseTdRouteLinesFile(null).size).toBe(0)
     expect(parseTdRouteLinesFile({ lines: [] }).size).toBe(0)
+    const good = makeLine()
     const index = parseTdRouteLinesFile({
       lines: {
         1: [
-          {
-            co: 'KMB',
-            seq: 1,
-            id: 1001,
-            pts: [
-              [114.192, 22.345],
-              [114.169, 22.294],
-            ],
-          },
-          {
-            co: 'KMB',
-            seq: 9,
-            id: 1001,
-            pts: [
-              [114.1, 22.3],
-              [114.2, 22.4],
-            ],
-          },
-          {
-            co: '',
-            seq: 1,
-            id: 1001,
-            pts: [
-              [114.1, 22.3],
-              [114.2, 22.4],
-            ],
-          },
-          { co: 'KMB', seq: 1, id: 1001, pts: [[999, 999]] },
+          { co: 'KMB', seq: 1, id: 1001, poly: lineToPoly(good) },
+          { co: 'KMB', seq: 9, id: 1001, poly: lineToPoly(good) },
+          { co: '', seq: 1, id: 1001, poly: lineToPoly(good) },
+          { co: 'KMB', seq: 1, id: 1001, poly: '__' },
+          { co: 'KMB', seq: 1, id: 1001 },
         ],
       },
     })

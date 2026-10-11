@@ -14,7 +14,46 @@ type RawLineEntry = {
   co?: unknown
   seq?: unknown
   id?: unknown
-  pts?: unknown
+  /** Google encoded polyline on a 1e-5 grid, [lat, lng] pairs. */
+  poly?: unknown
+}
+
+/**
+ * Decode a Google encoded polyline into [lng, lat] travel-order points.
+ * Invalid tails are ignored; a decode needs at least one pair to matter.
+ */
+export function decodeEncodedPolyline(encoded: string): GeoPoint[] {
+  const points: GeoPoint[] = []
+  let index = 0
+  let latQ = 0
+  let lngQ = 0
+  const length = encoded.length
+  while (index < length) {
+    const coords: number[] = []
+    for (let axis = 0; axis < 2; axis += 1) {
+      let shift = 0
+      let value = 0
+      for (;;) {
+        if (index >= length) return points
+        const byte = encoded.charCodeAt(index) - 63
+        index += 1
+        value |= (byte & 0x1f) << shift
+        if (byte < 0x20) break
+        shift += 5
+      }
+      const negative = (value & 1) === 1
+      value >>= 1
+      coords.push(negative ? ~value : value)
+    }
+    latQ += coords[0]
+    lngQ += coords[1]
+    const lat = latQ / 1e5
+    const lng = lngQ / 1e5
+    if (lng < 100 || lng > 120 || lat < 10 || lat > 30) continue
+    const prev = points[points.length - 1]
+    if (!prev || prev.lat !== lat || prev.lng !== lng) points.push({ lat, lng })
+  }
+  return points
 }
 
 function toRouteLine(routeName: string, entry: RawLineEntry): TdRouteLine | null {
@@ -24,17 +63,8 @@ function toRouteLine(routeName: string, entry: RawLineEntry): TdRouteLine | null
   const seq = entry.seq === 1 ? 1 : entry.seq === 2 ? 2 : null
   const routeId = typeof entry.id === 'number' && Number.isFinite(entry.id) ? entry.id : null
   if (seq === null || routeId === null) return null
-  if (!Array.isArray(entry.pts)) return null
-  const points: GeoPoint[] = []
-  for (const pair of entry.pts) {
-    if (!Array.isArray(pair) || pair.length < 2) continue
-    const lng = Number(pair[0])
-    const lat = Number(pair[1])
-    if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue
-    if (lng < 100 || lng > 120 || lat < 10 || lat > 30) continue
-    const prev = points[points.length - 1]
-    if (!prev || prev.lat !== lat || prev.lng !== lng) points.push({ lat, lng })
-  }
+  if (typeof entry.poly !== 'string' || entry.poly.length < 8) return null
+  const points = decodeEncodedPolyline(entry.poly)
   if (points.length < 2) return null
   return { routeId, routeSeq: seq, company, points }
 }

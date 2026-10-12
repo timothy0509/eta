@@ -32,8 +32,8 @@ export function ExpandableEtaRow({
   return (
     <div
       className={cn(
-        'bg-surface-container relative overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm',
-        'hover:bg-surface-container-high focus-within:ring-primary/30 focus-within:ring-2 focus-within:outline-none hover:shadow',
+        'bg-surface-container border-edge relative overflow-hidden rounded-2xl border',
+        'hover:bg-surface-container-high focus-within:ring-signal/40 focus-within:ring-2 focus-within:outline-none',
         className
       )}
     >

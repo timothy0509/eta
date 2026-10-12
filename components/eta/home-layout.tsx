@@ -50,12 +50,11 @@ export function StopsLayout({
   return (
     <PaneEnter className="mx-auto max-w-[var(--app-max)] lg:grid lg:grid-cols-[360px_1fr] lg:items-start lg:gap-6">
       <div className="lg:sticky lg:top-[4.5rem] lg:max-h-[calc(100dvh-5.5rem)] lg:[scrollbar-width:thin] lg:overflow-y-auto lg:pr-1">
-        <div className="card-m3 p-4 sm:p-5 lg:p-5">{controls}</div>
+        <div className="card-m3 p-3 sm:p-5 lg:p-5">{controls}</div>
       </div>
 
-      <FadeIn className="relative mt-4 lg:mt-0" delay={0.05}>
-        <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 p-4 shadow-sm sm:p-6">
-          <span className="bg-primary absolute top-0 right-0 left-0 h-[3px]" aria-hidden />
+      <FadeIn className="relative mt-3 lg:mt-0" delay={0.05}>
+        <div className="bg-surface-container-lowest border-edge relative overflow-hidden rounded-2xl border p-3 sm:p-6">
           {results}
         </div>
       </FadeIn>

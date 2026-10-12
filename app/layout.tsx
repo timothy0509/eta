@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Geist_Mono, Inter, Noto_Sans_HK } from 'next/font/google'
+import { Archivo, Geist_Mono, Noto_Sans_HK } from 'next/font/google'
 
 import { DynamicToaster } from '@/components/dynamic-toaster'
 import { ThemeProvider } from '@/components/theme-provider'
@@ -7,10 +7,11 @@ import { LangSync } from '@/components/eta/lang-sync'
 import { env } from '@/lib/env'
 import './globals.css'
 
-const inter = Inter({
-  variable: '--font-inter',
+/* Archivo: grotesque signage face for UI text. Inter removed. CJK
+   glyphs fall through to Noto Sans HK / system PingFang stacks. */
+const archivo = Archivo({
+  variable: '--font-archivo',
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
   display: 'swap',
   preload: true,
 })
@@ -41,8 +42,8 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#00478d' },
-    { media: '(prefers-color-scheme: dark)', color: '#141218' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f2ee' },
+    { media: '(prefers-color-scheme: dark)', color: '#0e1013' },
   ],
 }
 
@@ -117,7 +118,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://router.project-osrm.org" />
       </head>
       <body
-        className={`${inter.variable} ${notoSansHK.variable} ${geistMono.variable} min-h-dvh antialiased`}
+        className={`${archivo.variable} ${notoSansHK.variable} ${geistMono.variable} min-h-dvh antialiased`}
       >
         <ThemeProvider
           attribute="class"

@@ -31,7 +31,7 @@ export function SoonestEtaPill({
 
   if (isArriving) {
     return (
-      <div className="bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1">
+      <div className="bg-signal text-signal-contrast flex items-center gap-1.5 rounded-lg px-3 py-1">
         <LivePulse />
         <span className="m3-title-md">
           <EtaValue key={display} value={display} />

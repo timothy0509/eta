@@ -225,7 +225,7 @@ function MtrLineCard({
           <span className="text-on-surface-variant m3-label-md font-mono">P{item.platform}</span>
         ) : null}
         {item.eta.arriving ? (
-          <span className="bg-primary-container text-on-primary-container m3-label-lg font-tabular flex items-center gap-1.5 rounded-full px-2.5 py-0.5 font-semibold">
+          <span className="bg-signal text-signal-contrast m3-label-lg font-tabular flex items-center gap-1.5 rounded-lg px-2.5 py-0.5 font-semibold">
             <LivePulse />
             {item.eta.text}
           </span>
@@ -312,7 +312,7 @@ function MtrLineCard({
   ) : (
     <div
       className={cn(
-        'overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm lg:hidden',
+        'border-edge overflow-hidden rounded-2xl border shadow-sm lg:hidden',
         staggerClass
       )}
     >
@@ -350,12 +350,12 @@ function MtrLineCard({
   const desktopCard = (
     <div
       className={cn(
-        'hidden overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 shadow-sm lg:block',
+        'border-edge hidden overflow-hidden rounded-2xl border shadow-sm lg:block',
         staggerClass
       )}
     >
       {header(false)}
-      <div className="bg-surface-container grid grid-cols-2 divide-x divide-[var(--outline-variant)]/10">
+      <div className="bg-surface-container divide-edge grid grid-cols-2 divide-x">
         {directionColumn('UP', upLabel)}
         {directionColumn('DOWN', downLabel)}
       </div>
@@ -416,7 +416,7 @@ export const MtrResults = React.memo(function MtrResults({
               <button
                 type="button"
                 onClick={onRefresh}
-                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                className="btn-primary m3-label-lg ui-press mt-2 focus-visible:ring-2 focus-visible:outline-none"
               >
                 {t('common.tryAgain')}
               </button>

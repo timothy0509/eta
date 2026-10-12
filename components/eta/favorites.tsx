@@ -410,7 +410,7 @@ function FavoriteRow({
   // Draggable rows skip the CSS entrance: its fill-mode transform would
   // override framer's drag transform. The stagger delay alone is a no-op there.
   const rowClass = cn(
-    'bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5',
+    'bg-surface-container-low border-edge rounded-2xl border px-3 py-2.5',
     !draggable && 'ui-animate-in ui-cv-row',
     staggerClass
   )
@@ -456,7 +456,7 @@ function RecentRow({ item, lang, maps, dateFormatter, onSelect, staggerClass }: 
     <button
       type="button"
       className={cn(
-        'bg-surface-container-low hover:bg-surface-container border-outline-variant/50 ui-animate-in ui-press ui-cv-row flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors',
+        'bg-surface-container-low hover:bg-surface-container border-edge ui-animate-in ui-press ui-cv-row flex w-full items-center gap-3 rounded-2xl border px-3 py-2.5 text-left transition-colors',
         staggerClass
       )}
       onClick={() => onSelect(item)}
@@ -525,7 +525,7 @@ function GroupsEditor({
   }
 
   return (
-    <div className="bg-surface-container border-outline-variant/50 rounded-2xl border p-3">
+    <div className="bg-surface-container border-edge rounded-2xl border p-3">
       <button
         type="button"
         onClick={() => setOpen((prev) => !prev)}
@@ -805,7 +805,7 @@ export function FavoritesAndRecents({ lang, onSelect, onOpenInStops }: Props) {
 
   return (
     <section className="card-m3 p-4 sm:p-5">
-      <div className="flex flex-row items-center justify-between gap-3 border-b border-[var(--outline-variant)]/10 pb-4">
+      <div className="border-edge flex flex-row items-center justify-between gap-3 border-b pb-4">
         <h2 className="m3-title-md text-on-surface">{t('favorites.saved')}</h2>
         <div className="bg-surface-container-high inline-flex items-center rounded-full p-1">
           <button

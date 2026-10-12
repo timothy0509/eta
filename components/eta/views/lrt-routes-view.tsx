@@ -257,7 +257,7 @@ export function LrtRoutesView({
                 <button
                   type="button"
                   onClick={handleRetryRoutes}
-                  className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                  className="btn-primary m3-label-lg ui-press mt-2 focus-visible:ring-2 focus-visible:outline-none"
                 >
                   {t('common.tryAgain')}
                 </button>

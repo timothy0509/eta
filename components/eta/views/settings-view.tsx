@@ -51,10 +51,10 @@ export function SettingsView({ lang }: Props) {
                 type="button"
                 onClick={() => setTheme(value)}
                 className={cn(
-                  'm3-label-lg flex min-h-[44px] items-center gap-2 rounded-full px-5 py-2 shadow-sm transition-colors',
+                  'm3-label-lg flex min-h-[44px] items-center gap-2 rounded-xl px-5 py-2 transition-colors',
                   activeTheme === value
                     ? 'bg-primary-container text-on-primary-container'
-                    : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                    : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface'
                 )}
               >
                 <Icon className="h-4 w-4" />
@@ -79,10 +79,10 @@ export function SettingsView({ lang }: Props) {
                   disabled={disabled}
                   onClick={() => setLang(l)}
                   className={cn(
-                    'm3-label-lg flex min-h-[44px] items-center justify-center rounded-full px-5 py-2 shadow-sm transition-colors',
+                    'm3-label-lg flex min-h-[44px] items-center justify-center rounded-xl px-5 py-2 transition-colors',
                     storeLang === l
                       ? 'bg-primary-container text-on-primary-container'
-                      : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface',
+                      : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface',
                     disabled && 'cursor-not-allowed opacity-40'
                   )}
                   title={disabled ? t('common.scNotSupported') : undefined}
@@ -107,10 +107,10 @@ export function SettingsView({ lang }: Props) {
               type="button"
               onClick={() => setAutoRefreshSeconds(s)}
               className={cn(
-                'm3-label-lg rounded-full px-5 py-2 shadow-sm transition-colors',
+                'm3-label-lg rounded-xl px-5 py-2 transition-colors',
                 autoRefreshSeconds === s
                   ? 'bg-primary-container text-on-primary-container'
-                  : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                  : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest hover:text-on-surface'
               )}
             >
               {s === 0 ? t('common.off') : `${s}s`}

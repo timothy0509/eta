@@ -227,7 +227,7 @@ function GroupMemberSection({
   return (
     <section
       aria-label={`${headerName}${suffix}`}
-      className={cn(!isFirst && 'border-outline-variant mt-5 border-t pt-5')}
+      className={cn(!isFirst && 'border-edge mt-5 border-t pt-5')}
     >
       <div className="mb-2 flex items-center gap-2">
         <h3 className="text-on-surface m3-title-md min-w-0 flex-1 truncate">

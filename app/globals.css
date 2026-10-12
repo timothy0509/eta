@@ -7,11 +7,10 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans:
-    var(--font-inter), var(--font-noto-sans-hk), 'PingFang HK', 'PingFang SC', 'Microsoft JhengHei',
-    'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
+    var(--font-archivo), var(--font-noto-sans-hk), 'PingFang HK', 'PingFang SC',
+    'Microsoft JhengHei', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
   --font-mono:
     var(--font-geist-mono), ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace;
-  --font-numbers: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -28,13 +27,13 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: 0.25rem;
+  --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  --radius-2xl: 1.5rem;
-  --radius-3xl: 1.75rem;
-  --radius-4xl: 2rem;
+  --radius-lg: 0.625rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.25rem;
+  --radius-4xl: 1.5rem;
 
   /* Material 3 surface roles */
   --color-surface: var(--surface);
@@ -52,7 +51,12 @@
   --color-inverse-on-surface: var(--inverse-on-surface);
   --color-outline: var(--outline);
   --color-outline-variant: var(--outline-variant);
-  --color-surface-tint: var(--surface-tint);
+
+  /* Terminal-board additions */
+  --color-edge: var(--edge);
+  --color-edge-strong: var(--edge-strong);
+  --color-signal: var(--signal);
+  --color-signal-contrast: var(--signal-contrast);
 
   /* M3 extended roles */
   --color-primary-container: var(--primary-container);
@@ -99,62 +103,70 @@
   /* Material 3 baseline radius */
   --radius: 0.75rem;
 
-  /* Surface roles */
-  --surface: #faf8fd;
-  --surface-dim: #dbd9de;
-  --surface-bright: #faf8fd;
+  /* Surface roles: warm paper */
+  --surface: #f3f2ee;
+  --surface-dim: #dcdbd5;
+  --surface-bright: #fdfdfb;
   --surface-container-lowest: #ffffff;
-  --surface-container-low: #f5f3f7;
-  --surface-container: #efedf2;
-  --surface-container-high: #e9e7ec;
-  --surface-container-highest: #e3e2e6;
-  --on-surface: #1b1b1f;
-  --on-surface-variant: #424752;
-  --inverse-surface: #303034;
-  --inverse-on-surface: #f2f0f4;
-  --outline: #727783;
-  --outline-variant: #c2c6d4;
-  --surface-tint: #005db6;
-  --surface-variant: #e3e2e6;
+  --surface-container-low: #f9f9f6;
+  --surface-container: #f1f0eb;
+  --surface-container-high: #e8e7e1;
+  --surface-container-highest: #dfdcd5;
+  --on-surface: #1a1b1e;
+  --on-surface-variant: #5b5e63;
+  --inverse-surface: #2a2b2f;
+  --inverse-on-surface: #f3f2ee;
+  --outline: #7b7e82;
+  --outline-variant: #c8c7c0;
+  --surface-tint: #1a1b1e;
+  --surface-variant: #e8e7e1;
 
-  /* Primary roles */
-  --primary: #00478d;
-  --on-primary: #ffffff;
-  --primary-container: #005eb8;
-  --on-primary-container: #c8daff;
-  --inverse-primary: #a9c7ff;
+  /* Hairlines: one idiom for the whole app */
+  --edge: rgb(17 18 21 / 0.1);
+  --edge-strong: rgb(17 18 21 / 0.2);
 
-  /* Secondary roles */
-  --secondary: #565e71;
+  /* Signal: reserved for live/arriving data only */
+  --signal: #0c7a4e;
+  --signal-contrast: #ffffff;
+
+  /* Primary roles: ink */
+  --primary: #1a1b1e;
+  --on-primary: #f9f9f7;
+  --primary-container: #1a1b1e;
+  --on-primary-container: #f9f9f7;
+  --inverse-primary: #e8e9e7;
+
+  /* Secondary roles: quiet grays */
+  --secondary: #5b5e63;
   --on-secondary: #ffffff;
-  --secondary-container: #dae2f9;
-  --on-secondary-container: #5c6478;
+  --secondary-container: #e6e5df;
+  --on-secondary-container: #3c3e42;
 
-  /* Tertiary roles */
-  --tertiary: #583f5b;
+  /* Tertiary roles: muted bronze, rarely surfaced */
+  --tertiary: #6d5a3e;
   --on-tertiary: #ffffff;
-  --tertiary-container: #715674;
-  --on-tertiary-container: #f1cff2;
+  --tertiary-container: #d8d2c6;
+  --on-tertiary-container: #464033;
 
   /* Error roles */
-  --error: #ba1a1a;
+  --error: #b3261e;
   --on-error: #ffffff;
   --error-container: #ffdad6;
   --on-error-container: #93000a;
 
   /* Fixed accent roles */
-  --primary-fixed: #d6e3ff;
-  --primary-fixed-dim: #a9c7ff;
-  --on-primary-fixed: #001b3d;
-  --on-primary-fixed-variant: #00468c;
-  --secondary-fixed: #dae2f9;
-  --secondary-fixed-dim: #bec6dc;
-  --on-secondary-fixed: #131b2c;
-  --on-secondary-fixed-variant: #3f4759;
-  --tertiary-fixed: #fbd8fc;
-  --tertiary-fixed-dim: #ddbcdf;
-  --on-tertiary-fixed: #29132d;
-  --on-tertiary-fixed-variant: #573e5b;
+  --primary-fixed: #e9e8e3;
+  --primary-fixed-dim: #d7d6d0;
+  --on-primary-fixed: #1a1b1e;
+  --on-primary-fixed-variant: #3c3e42;
+  --secondary-fixed: #e6e5df;
+  --secondary-fixed-dim: #d7d6d0;
+  --on-secondary-fixed: #1a1b1e;
+  --on-secondary-fixed-variant: #3c3e42;
+  --tertiary-fixed: #ece8df;
+  --tertiary-fixed-dim: #d8d2c6;
+  --on-tertiary-fixed: #1a1b1e;
+  --on-tertiary-fixed-variant: #464033;
 
   /* Mapped shadcn variables */
   --background: var(--surface);
@@ -167,52 +179,60 @@
   --secondary-foreground: var(--on-secondary);
   --muted: var(--surface-container-high);
   --muted-foreground: var(--on-surface-variant);
-  --accent: var(--primary-fixed);
-  --accent-foreground: var(--on-primary-fixed);
+  --accent: var(--surface-container-high);
+  --accent-foreground: var(--on-surface);
   --destructive: var(--error);
   --destructive-foreground: var(--on-error);
-  --border: var(--outline-variant);
-  --input: var(--surface-variant);
-  --ring: var(--surface-tint);
+  --border: var(--edge);
+  --input: var(--edge-strong);
+  --ring: var(--signal);
 }
 
 .dark {
-  /* Surface roles */
-  --surface: #141218;
-  --surface-dim: #141218;
-  --surface-bright: #3c3c40;
-  --surface-container-lowest: #0f0e12;
-  --surface-container-low: #1b1b1f;
-  --surface-container: #222226;
-  --surface-container-high: #2c2c30;
-  --surface-container-highest: #36363a;
-  --on-surface: #e3e2e6;
-  --on-surface-variant: #bec6dc;
-  --inverse-surface: #e3e2e6;
-  --inverse-on-surface: #1b1b1f;
-  --outline: #727783;
-  --outline-variant: #424752;
-  --surface-tint: #a9c7ff;
-  --surface-variant: #303034;
+  /* Surface roles: near-black with stepped elevation */
+  --surface: #0e1013;
+  --surface-dim: #0e1013;
+  --surface-bright: #33363c;
+  --surface-container-lowest: #131519;
+  --surface-container-low: #17191e;
+  --surface-container: #1c1f24;
+  --surface-container-high: #24272d;
+  --surface-container-highest: #2d3037;
+  --on-surface: #e8e9e7;
+  --on-surface-variant: #9ba0a6;
+  --inverse-surface: #e8e9e7;
+  --inverse-on-surface: #17191e;
+  --outline: #71757b;
+  --outline-variant: #34373d;
+  --surface-tint: #e8e9e7;
+  --surface-variant: #24272d;
 
-  /* Primary roles */
-  --primary: #a9c7ff;
-  --on-primary: #001b3d;
-  --primary-container: #00468c;
-  --on-primary-container: #c8daff;
-  --inverse-primary: #00478d;
+  /* Hairlines: light edges on dark */
+  --edge: rgb(255 255 255 / 0.09);
+  --edge-strong: rgb(255 255 255 / 0.18);
+
+  /* Signal: reserved for live/arriving data only */
+  --signal: #3adf9e;
+  --signal-contrast: #071610;
+
+  /* Primary roles: bone white */
+  --primary: #ececeb;
+  --on-primary: #15161a;
+  --primary-container: #ececeb;
+  --on-primary-container: #15161a;
+  --inverse-primary: #15161a;
 
   /* Secondary roles */
-  --secondary: #bec6dc;
-  --on-secondary: #131b2c;
-  --secondary-container: #3f4759;
-  --on-secondary-container: #dae2f9;
+  --secondary: #9ba0a6;
+  --on-secondary: #15161a;
+  --secondary-container: #2b2e34;
+  --on-secondary-container: #c9ccce;
 
   /* Tertiary roles */
-  --tertiary: #ddbcdf;
-  --on-tertiary: #29132d;
-  --tertiary-container: #573e5b;
-  --on-tertiary-container: #fbd8fc;
+  --tertiary: #cfc4ae;
+  --on-tertiary: #1c1913;
+  --tertiary-container: #3a362c;
+  --on-tertiary-container: #d8d2c6;
 
   /* Error roles */
   --error: #ffb4ab;
@@ -221,37 +241,37 @@
   --on-error-container: #ffdad6;
 
   /* Fixed accent roles */
-  --primary-fixed: #d6e3ff;
-  --primary-fixed-dim: #a9c7ff;
-  --on-primary-fixed: #001b3d;
-  --on-primary-fixed-variant: #c8daff;
-  --secondary-fixed: #dae2f9;
-  --secondary-fixed-dim: #bec6dc;
-  --on-secondary-fixed: #131b2c;
-  --on-secondary-fixed-variant: #e3e2e6;
-  --tertiary-fixed: #fbd8fc;
-  --tertiary-fixed-dim: #ddbcdf;
-  --on-tertiary-fixed: #29132d;
-  --on-tertiary-fixed-variant: #f1cff2;
+  --primary-fixed: #e8e7e1;
+  --primary-fixed-dim: #d7d6d0;
+  --on-primary-fixed: #15161a;
+  --on-primary-fixed-variant: #e8e9e7;
+  --secondary-fixed: #2b2e34;
+  --secondary-fixed-dim: #24272d;
+  --on-secondary-fixed: #e8e9e7;
+  --on-secondary-fixed-variant: #c9ccce;
+  --tertiary-fixed: #3a362c;
+  --tertiary-fixed-dim: #2e2b22;
+  --on-tertiary-fixed: #d8d2c6;
+  --on-tertiary-fixed-variant: #cfc4ae;
 
   /* Mapped shadcn variables */
   --background: var(--surface);
   --foreground: var(--on-surface);
   --card: var(--surface-container-low);
   --card-foreground: var(--on-surface);
-  --popover: var(--surface-container-lowest);
+  --popover: var(--surface-container-low);
   --popover-foreground: var(--on-surface);
   --primary-foreground: var(--on-primary);
   --secondary-foreground: var(--on-secondary);
   --muted: var(--surface-container-high);
   --muted-foreground: var(--on-surface-variant);
-  --accent: var(--primary-container);
-  --accent-foreground: var(--on-primary-container);
+  --accent: var(--surface-container-high);
+  --accent-foreground: var(--on-surface);
   --destructive: var(--error);
   --destructive-foreground: var(--on-error);
-  --border: var(--outline-variant);
-  --input: var(--surface-variant);
-  --ring: var(--surface-tint);
+  --border: var(--edge);
+  --input: var(--edge-strong);
+  --ring: var(--signal);
 }
 
 @layer base {
@@ -261,15 +281,21 @@
   body {
     @apply bg-background text-foreground;
     font-family:
-      var(--font-inter), var(--font-noto-sans-hk), 'PingFang HK', 'PingFang SC',
+      var(--font-archivo), var(--font-noto-sans-hk), 'PingFang HK', 'PingFang SC',
       'Microsoft JhengHei', 'Microsoft YaHei', ui-sans-serif, system-ui, sans-serif;
   }
 }
 
-/* Tabular numbers for ETA displays */
+/* Board numerals: every ETA minute, fare, and code uses the mono face */
 .font-tabular {
-  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
   font-variant-numeric: tabular-nums;
+}
+
+/* Wordmark: uppercase mono with wide tracking, like a signage plate */
+.wordmark {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  letter-spacing: 0.08em;
 }
 
 /* Material 3 typography scale utilities */
@@ -677,14 +703,74 @@
     contain-intrinsic-size: auto 5rem;
   }
 
-  /* Shared M3 card: surface, radius, outline, shadow. Padding stays in markup. */
+  /* Shared panel card: hairline, radius, dark-mode glint. Padding stays in markup. */
   .card-m3 {
     background-color: var(--color-surface-container-low);
-    border-radius: 1.5rem;
-    border: 1px solid color-mix(in srgb, var(--outline-variant) 15%, transparent);
-    box-shadow:
-      0 1px 2px 0 rgb(0 0 0 / 0.05),
-      0 1px 3px 1px rgb(0 0 0 / 0.04);
+    border-radius: 1rem;
+    border: 1px solid var(--edge);
+  }
+
+  .dark .card-m3 {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  }
+
+  /* Rectangular action buttons. No pills: the ink block is the CTA. */
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.75rem;
+    background-color: var(--primary);
+    color: var(--on-primary);
+    font-size: 0.875rem;
+    font-weight: 600;
+    white-space: nowrap;
+    transition:
+      background-color var(--ui-dur-fast) var(--ui-ease-out),
+      transform var(--ui-dur-fast) var(--ui-ease-out);
+  }
+  .btn-primary:hover {
+    background-color: color-mix(in srgb, var(--primary) 86%, var(--on-primary));
+  }
+  .btn-primary:active {
+    transform: scale(0.98);
+  }
+  .btn-primary:disabled {
+    opacity: 0.4;
+  }
+
+  .btn-tonal {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    min-height: 2.75rem;
+    padding: 0.5rem 1.25rem;
+    border-radius: 0.75rem;
+    background-color: var(--secondary-container);
+    color: var(--on-secondary-container);
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+    transition:
+      background-color var(--ui-dur-fast) var(--ui-ease-out),
+      transform var(--ui-dur-fast) var(--ui-ease-out);
+  }
+  .btn-tonal:hover {
+    background-color: color-mix(
+      in srgb,
+      var(--secondary-container) 70%,
+      var(--surface-container-highest)
+    );
+  }
+  .btn-tonal:active {
+    transform: scale(0.98);
+  }
+  .btn-tonal:disabled {
+    opacity: 0.4;
   }
 
   /* M3 elevation tints */
@@ -702,6 +788,11 @@
     box-shadow:
       0 1px 3px 0 rgb(0 0 0 / 0.05),
       0 4px 8px 3px rgb(0 0 0 / 0.08);
+  }
+  .dark .elevation-1,
+  .dark .elevation-2,
+  .dark .elevation-3 {
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05);
   }
 }
 

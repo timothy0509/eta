@@ -1066,7 +1066,7 @@ export function KmbRoutesView({
               <button
                 type="button"
                 onClick={handleRetryRoutes}
-                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                className="btn-primary m3-label-lg ui-press mt-2 focus-visible:ring-2 focus-visible:outline-none"
               >
                 {t('common.tryAgain')}
               </button>
@@ -1088,7 +1088,7 @@ export function KmbRoutesView({
                   <button
                     type="button"
                     onClick={handleClearFilters}
-                    className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                    className="btn-primary m3-label-lg ui-press mt-2 focus-visible:ring-2 focus-visible:outline-none"
                   >
                     {t('kmb.clearFilters')}
                   </button>
@@ -1126,7 +1126,7 @@ export function KmbRoutesView({
                   <button
                     type="button"
                     onClick={loadMore}
-                    className="bg-surface-container-high text-on-surface-variant hover:text-on-surface m3-label-lg ui-press inline-flex min-h-[44px] w-full items-center justify-center rounded-full px-5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                    className="btn-tonal m3-label-lg ui-press inline-flex w-full items-center justify-center focus-visible:ring-2 focus-visible:outline-none"
                   >
                     {t('kmb.loadMore')}
                   </button>

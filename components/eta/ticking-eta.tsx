@@ -108,7 +108,7 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   if (arriving) {
     const nowText = t('common.now')
     return (
-      <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
+      <span className="bg-signal text-signal-contrast m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-0.5 font-semibold sm:px-2.5">
         <LivePulse />
         <EtaValue key={nowText} value={nowText} />
       </span>
@@ -116,7 +116,7 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   }
 
   return (
-    <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
+    <span className="text-on-surface font-tabular shrink-0 text-lg font-semibold tracking-tight sm:text-2xl">
       <EtaValue key={display} value={display} />
     </span>
   )
@@ -152,7 +152,7 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
     return (
       <span
         className={cn(
-          'bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1',
+          'bg-signal text-signal-contrast flex items-center gap-1.5 rounded-lg px-3 py-1',
           className
         )}
       >
@@ -167,7 +167,7 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
   return (
     <span
       className={cn(
-        'text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl',
+        'text-on-surface font-tabular shrink-0 text-lg font-semibold tracking-tight sm:text-2xl',
         className
       )}
     >

@@ -1064,7 +1064,7 @@ export function KmbPane({
       {stopsError ? <p className="text-error m3-body-md">{stopsError}</p> : null}
       {routeStopsError ? <p className="text-error m3-body-md">{routeStopsError}</p> : null}
 
-      <div className="border-outline-variant/15 mt-2 flex items-center justify-between gap-3 border-t pt-3">
+      <div className="border-edge mt-2 flex items-center justify-between gap-3 border-t pt-3">
         <FavoriteSaveButton onSave={onSave} label={t('common.save')} disabled={!canFavorite} />
         <span className="text-on-surface-variant m3-label-sm text-right">
           {loadingStops || loadingRouteStops ? (

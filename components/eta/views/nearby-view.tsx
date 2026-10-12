@@ -316,7 +316,7 @@ function KmbNearbyView({
           </div>
         )}
         {(loading || stops.length > 0) && (
-          <div className="mb-4 overflow-hidden rounded-2xl border border-[var(--outline-variant)]/15">
+          <div className="border-edge mb-4 overflow-hidden rounded-2xl border">
             <TransitMap
               center={mapCenter}
               markers={mapMarkers}
@@ -335,7 +335,7 @@ function KmbNearbyView({
               <button
                 type="button"
                 onClick={onRefresh}
-                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                className="btn-primary m3-label-lg ui-press mt-2 focus-visible:ring-2 focus-visible:outline-none"
               >
                 {t('common.tryAgain')}
               </button>
@@ -498,7 +498,7 @@ function LrtNearbyView({
               <button
                 type="button"
                 onClick={handleRetry}
-                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                className="btn-primary m3-label-lg ui-press mt-2 focus-visible:ring-2 focus-visible:outline-none"
               >
                 {t('common.tryAgain')}
               </button>

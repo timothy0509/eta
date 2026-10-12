@@ -71,12 +71,12 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   const firstTimeText = first ? getLrtDisplayTime(first, lang) : '—'
 
   const firstEtaNode = firstArriving ? (
-    <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
+    <span className="bg-signal text-signal-contrast m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-lg px-2 py-0.5 font-semibold sm:px-2.5">
       <LivePulse />
       <EtaValue key={firstTimeText} value={firstTimeText} />
     </span>
   ) : (
-    <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
+    <span className="text-on-surface font-tabular shrink-0 text-lg font-semibold tracking-tight sm:text-2xl">
       <EtaValue key={firstTimeText} value={firstTimeText} />
     </span>
   )
@@ -265,7 +265,7 @@ const LrtPlatformSection = React.memo(function LrtPlatformSection({
   const { t, tWithParams } = useTranslations(lang)
 
   return (
-    <div className={cn('ui-cv-auto', !isFirst && 'border-outline-variant mt-5 border-t pt-5')}>
+    <div className={cn('ui-cv-auto', !isFirst && 'border-edge mt-5 border-t pt-5')}>
       <div className="mb-2 flex items-center gap-2">
         <h3 className="text-on-surface m3-title-md min-w-0 truncate">
           {tWithParams('lrt.platform', { id: platformId })}
@@ -366,7 +366,7 @@ export const LrtResults = React.memo(function LrtResults({
               <button
                 type="button"
                 onClick={onRefresh}
-                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                className="btn-primary m3-label-lg ui-press mt-2 focus-visible:ring-2 focus-visible:outline-none"
               >
                 {t('common.tryAgain')}
               </button>

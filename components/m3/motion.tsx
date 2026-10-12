@@ -110,8 +110,8 @@ MotionCard.displayName = 'MotionCard'
 export function LivePulse({ className }: { className?: string }) {
   return (
     <span className={cn('live-pulse relative inline-flex h-2.5 w-2.5', className)}>
-      <span className="bg-primary absolute inline-flex h-full w-full rounded-full opacity-75 motion-safe:animate-ping motion-reduce:hidden" />
-      <span className="bg-primary relative inline-flex h-2.5 w-2.5 rounded-full" />
+      <span className="absolute inline-flex h-full w-full rounded-full bg-current opacity-75 motion-safe:animate-ping motion-reduce:hidden" />
+      <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-current" />
     </span>
   )
 }

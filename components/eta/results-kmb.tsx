@@ -207,7 +207,7 @@ function RouteDetailsDialog({
   return (
     <Dialog>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="bg-surface-container-low rounded-3xl border-0">
+      <DialogContent className="bg-surface-container-lowest border-edge rounded-2xl border">
         {children}
       </DialogContent>
     </Dialog>
@@ -364,7 +364,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       variant="header"
     />
   ) : (
-    <span className="text-on-surface font-tabular shrink-0 text-base font-semibold tracking-tight sm:text-xl">
+    <span className="text-on-surface font-tabular shrink-0 text-lg font-semibold tracking-tight sm:text-2xl">
       —
     </span>
   )
@@ -531,7 +531,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
     return (
       <div
         className={cn(
-          'bg-surface-container relative overflow-hidden rounded-2xl border border-[var(--outline-variant)]/10 py-3.5 pr-3 pl-0 shadow-sm',
+          'bg-surface-container border-edge relative overflow-hidden rounded-2xl border py-3.5 pr-3 pl-0',
           staggerClass
         )}
       >
@@ -597,10 +597,7 @@ const StopSection = React.memo(function StopSection({
   const stopRef = registerStopRef ? registerStopRef(stopId) : undefined
 
   return (
-    <div
-      ref={stopRef}
-      className={cn('ui-cv-auto', !isFirst && 'border-outline-variant mt-5 border-t pt-5')}
-    >
+    <div ref={stopRef} className={cn('ui-cv-auto', !isFirst && 'border-edge mt-5 border-t pt-5')}>
       <div className="mb-2 flex items-center gap-2">
         <h3 className="text-on-surface m3-title-md min-w-0 truncate">{parsed.name}</h3>
         {stopCodeBadge ? (

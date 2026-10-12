@@ -341,7 +341,7 @@ export function MtrRoutesView({
               <button
                 type="button"
                 onClick={handleRetryRoutes}
-                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                className="btn-primary m3-label-lg ui-press mt-2 focus-visible:ring-2 focus-visible:outline-none"
               >
                 {t('common.tryAgain')}
               </button>
@@ -363,7 +363,7 @@ export function MtrRoutesView({
                   }}
                   style={{ backgroundColor: color }}
                   className={cn(
-                    'ui-press rounded-2xl p-4 text-left shadow-sm transition-shadow hover:shadow-md focus-visible:ring-2 focus-visible:outline-none',
+                    'ui-press rounded-xl p-4 text-left focus-visible:ring-2 focus-visible:outline-none',
                     staggerClassForIndex(idx),
                     fg
                   )}

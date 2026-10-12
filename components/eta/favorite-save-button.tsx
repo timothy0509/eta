@@ -22,7 +22,7 @@ export function FavoriteSaveButton({ onSave, label, disabled, className }: Props
   return (
     <Button
       size="sm"
-      className={cn('ui-press min-h-[44px] rounded-full shadow-sm', className)}
+      className={cn('btn-tonal ui-press', className)}
       disabled={disabled}
       onClick={() => {
         onSave()

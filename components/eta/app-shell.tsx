@@ -185,13 +185,19 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
   const { containerRef, buttonRefs, indicator } = useSlidingIndicator<HTMLDivElement>(mode, lang)
 
   return (
-    <header className="bg-surface-container-low/90 supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
+    <header className="bg-surface/85 supports-[backdrop-filter]:bg-surface/75 border-edge sticky top-0 z-40 border-b backdrop-blur">
       <div className="mx-auto flex h-[3.5rem] max-w-[var(--app-max)] items-center justify-between gap-2 px-3 sm:h-14 sm:gap-3 sm:px-6">
         <div className="flex shrink-0 items-center gap-2">
-          <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-xl text-[15px] font-bold shadow-sm sm:h-9 sm:w-9 sm:text-lg">
-            T
+          <div className="relative">
+            <div className="bg-primary text-on-primary wordmark flex h-8 w-8 items-center justify-center rounded-[10px] text-sm font-bold sm:h-9 sm:w-9 sm:text-base">
+              T
+            </div>
+            <span
+              className="bg-signal absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full ring-2 ring-[var(--surface)]"
+              aria-hidden
+            />
           </div>
-          <span className="hidden text-[15px] font-semibold tracking-tight min-[500px]:inline sm:text-[17px]">
+          <span className="wordmark hidden text-[13px] font-semibold uppercase min-[500px]:inline sm:text-sm">
             TimoETA
           </span>
         </div>
@@ -201,11 +207,11 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
             ref={containerRef}
             role="group"
             aria-label={t('common.transportMode')}
-            className="bg-surface-container-high/70 relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
+            className="bg-surface-container-high/60 border-edge relative flex w-full max-w-[420px] items-center rounded-xl border p-1"
           >
             <span
               aria-hidden
-              className="bg-secondary-container ui-indicator-slide pointer-events-none absolute top-1 bottom-1 left-0 rounded-full shadow-sm"
+              className="bg-primary ui-indicator-slide pointer-events-none absolute top-1 bottom-1 left-0 rounded-[calc(0.75rem-4px)]"
               style={
                 indicator.ready
                   ? { transform: `translateX(${indicator.x}px)`, width: indicator.w }
@@ -232,9 +238,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   title={m.labels[lang]}
                   className={cn(
                     'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1 rounded-full px-1 text-xs font-medium transition-colors min-[500px]:gap-1.5 min-[500px]:px-2 min-[500px]:text-[13px] sm:py-2 sm:text-sm',
-                    active
-                      ? 'text-on-secondary-container'
-                      : 'text-on-surface-variant hover:text-on-surface'
+                    active ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'
                   )}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
@@ -268,13 +272,13 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
   return (
     <nav
       aria-label={t('common.sections')}
-      className="bg-surface-container-low border-outline-variant/20 sticky top-20 hidden h-fit shrink-0 flex-col items-center gap-1 rounded-[28px] border px-2 py-3 shadow-sm lg:flex"
+      className="bg-surface-container-low border-edge sticky top-20 hidden h-fit shrink-0 flex-col items-center gap-1 rounded-2xl border px-2 py-3 lg:flex"
     >
       <div ref={containerRef} className="relative flex flex-col items-center gap-1">
         {indicator.ready && (
           <span
             aria-hidden
-            className="bg-primary-container ui-indicator-slide pointer-events-none absolute top-0 left-0 rounded-2xl"
+            className="bg-primary ui-indicator-slide pointer-events-none absolute top-0 left-0 rounded-xl"
             style={{
               transform: `translate(${indicator.x}px, ${indicator.y}px)`,
               width: indicator.w,
@@ -306,9 +310,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
               {...preloadProps}
               className={cn(
                 'ui-press relative z-10 flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-[color,background-color,transform]',
-                active
-                  ? 'text-on-primary-container'
-                  : 'text-on-surface-variant hover:text-on-surface'
+                active ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'
               )}
             >
               <Icon className={cn('h-5 w-5 transition-transform', active && 'scale-110')} />
@@ -334,13 +336,13 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
   return (
     <nav
       aria-label={t('common.sections')}
-      className="bg-surface-container-low fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),28rem)] -translate-x-1/2 rounded-full border border-[var(--outline-variant)]/20 px-2 py-1.5 shadow-lg lg:hidden"
+      className="bg-surface-container-low border-edge fixed bottom-[max(0.75rem,env(safe-area-inset-bottom,0px))] left-1/2 z-50 w-[min(calc(100vw-1.5rem),28rem)] -translate-x-1/2 rounded-2xl border px-2 py-1.5 shadow-lg lg:hidden"
     >
       <div ref={containerRef} className="relative flex w-full items-center">
         {indicator.ready && (
           <span
             aria-hidden
-            className="bg-primary-container ui-indicator-slide pointer-events-none absolute top-0 left-0 rounded-full"
+            className="bg-primary ui-indicator-slide pointer-events-none absolute top-0 left-0 rounded-xl"
             style={{
               transform: `translate(${indicator.x}px, ${indicator.y}px)`,
               width: indicator.w,
@@ -372,9 +374,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
               {...preloadProps}
               className={cn(
                 'ui-press relative z-10 flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 text-[11px] font-medium transition-[color,background-color,transform]',
-                active
-                  ? 'text-on-primary-container'
-                  : 'text-on-surface-variant hover:text-on-surface'
+                active ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'
               )}
             >
               <Icon

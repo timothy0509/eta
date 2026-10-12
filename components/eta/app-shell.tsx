@@ -237,7 +237,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   aria-label={m.labels[lang]}
                   title={m.labels[lang]}
                   className={cn(
-                    'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1 rounded-full px-1 text-xs font-medium transition-colors min-[500px]:gap-1.5 min-[500px]:px-2 min-[500px]:text-[13px] sm:py-2 sm:text-sm',
+                    'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1 rounded-xl px-1 text-xs font-medium transition-colors min-[500px]:gap-1.5 min-[500px]:px-2 min-[500px]:text-[13px] sm:py-2 sm:text-sm',
                     active ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'
                   )}
                 >
@@ -309,7 +309,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
               aria-current={active ? 'page' : undefined}
               {...preloadProps}
               className={cn(
-                'ui-press relative z-10 flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-2xl px-2 py-2.5 text-[11px] font-medium transition-[color,background-color,transform]',
+                'ui-press relative z-10 flex min-h-[44px] w-[64px] flex-col items-center gap-1 rounded-xl px-2 py-2.5 text-[11px] font-medium transition-[color,background-color,transform]',
                 active ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'
               )}
             >
@@ -373,7 +373,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
               aria-current={active ? 'page' : undefined}
               {...preloadProps}
               className={cn(
-                'ui-press relative z-10 flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-full px-1 py-2 text-[11px] font-medium transition-[color,background-color,transform]',
+                'ui-press relative z-10 flex min-h-[44px] min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-2 text-[11px] font-medium transition-[color,background-color,transform]',
                 active ? 'text-on-primary' : 'text-on-surface-variant hover:text-on-surface'
               )}
             >

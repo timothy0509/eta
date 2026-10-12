@@ -99,7 +99,7 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   if (variant === 'panel') {
     return (
       <span className="font-tabular flex items-center justify-center gap-1.5 text-xl font-semibold tracking-tight sm:text-2xl">
-        {arriving ? <LivePulse /> : null}
+        {arriving ? <LivePulse className="text-signal" /> : null}
         <EtaValue key={display} value={display} />
       </span>
     )

@@ -107,6 +107,13 @@ export const MotionCard = React.forwardRef<HTMLDivElement, MotionCardProps>(
 )
 MotionCard.displayName = 'MotionCard'
 
+/**
+ * Live dot. The dot intentionally inherits the surrounding text color
+ * (`bg-current`): inside signal-green pills it renders in the contrast
+ * color, on plain surfaces it renders signal green via the parent text
+ * color. Callers on a node without an explicit text color should pass
+ * `className="text-signal"` so the dot does not come out ink-colored.
+ */
 export function LivePulse({ className }: { className?: string }) {
   return (
     <span className={cn('live-pulse relative inline-flex h-2.5 w-2.5', className)}>

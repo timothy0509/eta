@@ -92,7 +92,7 @@ Tests live next to source as `*.test.ts`, matched by `**/*.{test,spec}.{ts,tsx}`
 
 - Tailwind v4 (`@import 'tailwindcss'` in `app/globals.css`), shadcn style `new-york`, base color neutral, CSS variables on. Use `cn()` from `@/lib/utils` for class merges.
 - Prettier: no semicolons, single quotes, `printWidth: 100`, `tailwindcss` plugin last. Run `bun run format` before pushing. `.prettierignore` skips build output and lockfiles.
-- Fonts: Inter plus Noto Sans HK/SC via `next/font`, Geist Mono via `@fontsource`. Theme via `next-themes` with `attribute="class"`.
+- Fonts: Archivo plus Noto Sans HK and Geist Mono, all via `next/font/google` (Inter removed). Theme via `next-themes` with `attribute="class"`.
 
 ### State
 

@@ -3,6 +3,11 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Legacy names kept for compatibility: tokens below were introduced as
+   Material 3 roles (surface containers, primary-container, .card-m3,
+   .m3-* type utilities). They are re-valued for the current
+   terminal-board design but not renamed yet, so call sites and tests
+   that reference the old names keep working. Renaming is a follow-up. */
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -286,9 +291,13 @@
   }
 }
 
-/* Board numerals: every ETA minute, fare, and code uses the mono face */
+/* Board numerals: every ETA minute, fare, and code uses the mono face.
+   Noto Sans HK stays in the stack so CJK text slipping into a
+   .font-tabular node does not drop to a system mono CJK face. */
 .font-tabular {
-  font-family: var(--font-geist-mono), ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+  font-family:
+    var(--font-geist-mono), var(--font-noto-sans-hk), ui-monospace, SFMono-Regular, 'SF Mono',
+    Menlo, monospace;
   font-variant-numeric: tabular-nums;
 }
 
@@ -714,7 +723,10 @@
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.04);
   }
 
-  /* Rectangular action buttons. No pills: the ink block is the CTA. */
+  /* Rectangular action buttons. No pills on buttons: the ink block is
+     the CTA. Exception: chips, badges, and small selectors stay pill
+     shaped on purpose (route-filter, operator-filter, distance badge,
+     selected chips). */
   .btn-primary {
     display: inline-flex;
     align-items: center;

@@ -118,16 +118,6 @@ const common: Record<string, TranslationEntry> = {
   },
   nearbyStops: { en: 'Nearby stops', tc: '附近車站', sc: '附近车站' },
   distance: { en: 'Distance', tc: '距離', sc: '距离' },
-  mtrNoCoords: {
-    en: 'MTR stations are not geolocated. Showing all stations grouped by line.',
-    tc: '港鐵車站沒有地理座標，現按路線顯示所有車站。',
-    sc: '港铁车站没有地理坐标，现按路线显示所有车站。',
-  },
-  lrtNoCoords: {
-    en: 'Light Rail stations are not geolocated. Showing all route stations.',
-    tc: '輕鐵車站沒有地理座標，現顯示各路線車站。',
-    sc: '轻铁车站没有地理坐标，现显示各路线车站。',
-  },
   allMtrLines: { en: 'All MTR lines', tc: '所有港鐵路線', sc: '所有港铁路线' },
   allLrtRoutes: { en: 'All Light Rail routes', tc: '所有輕鐵路線', sc: '所有轻铁路线' },
   loading: { en: 'Loading…', tc: '載入中…', sc: '载入中…' },

@@ -71,7 +71,7 @@ function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
         setResult({
           key,
           at: Date.now(),
-          stops: computeNearbyStops(userLocation, data, 15, NEARBY_BBOX_KM),
+          stops: computeNearbyStops(userLocation, data, NEARBY_LIMIT, NEARBY_BBOX_KM),
           error: null,
         })
       } catch (err) {
@@ -196,11 +196,13 @@ export function NearbyView({
   }
 
   if (mode === 'mtr') {
-    return <MtrNearbyView lang={lang} onSelectMtrStation={onSelectMtrStation} t={t} />
+    return <MtrNearbyWithLocation lang={lang} onSelectMtrStation={onSelectMtrStation} t={t} />
   }
 
-  return <LrtNearbyView lang={lang} onSelectLrtStation={onSelectLrtStation} t={t} />
+  return <LrtNearbyWithLocation lang={lang} onSelectLrtStation={onSelectLrtStation} t={t} />
 }
+
+const NEARBY_LIMIT = 15
 
 function KmbNearbyWithLocation({
   lang,
@@ -220,6 +222,52 @@ function KmbNearbyWithLocation({
       locationError={locationError}
       onRefresh={refresh}
       onSelectStopGroup={onSelectStopGroup}
+      t={t}
+    />
+  )
+}
+
+function MtrNearbyWithLocation({
+  lang,
+  onSelectMtrStation,
+  t,
+}: {
+  lang: NearbyViewProps['lang']
+  onSelectMtrStation?: NearbyViewProps['onSelectMtrStation']
+  t: (key: string) => string
+}) {
+  const { location, loading: locating, error: locationError, refresh } = useGeolocation()
+  return (
+    <MtrNearbyView
+      lang={lang}
+      location={location}
+      locating={locating}
+      locationError={locationError}
+      onRefresh={refresh}
+      onSelectMtrStation={onSelectMtrStation}
+      t={t}
+    />
+  )
+}
+
+function LrtNearbyWithLocation({
+  lang,
+  onSelectLrtStation,
+  t,
+}: {
+  lang: NearbyViewProps['lang']
+  onSelectLrtStation?: NearbyViewProps['onSelectLrtStation']
+  t: (key: string) => string
+}) {
+  const { location, loading: locating, error: locationError, refresh } = useGeolocation()
+  return (
+    <LrtNearbyView
+      lang={lang}
+      location={location}
+      locating={locating}
+      locationError={locationError}
+      onRefresh={refresh}
+      onSelectLrtStation={onSelectLrtStation}
       t={t}
     />
   )
@@ -401,29 +449,131 @@ function KmbNearbyView({
 
 function MtrNearbyView({
   lang,
+  location,
+  locating,
+  locationError,
+  onRefresh,
   onSelectMtrStation,
   t,
-}: Pick<SharedViewProps, 'lang' | 'onSelectMtrStation' | 't'>) {
+}: Pick<
+  SharedViewProps,
+  'lang' | 'location' | 'locating' | 'locationError' | 'onRefresh' | 'onSelectMtrStation' | 't'
+>) {
   const lines = useMtrStationsByLine()
+  const nearby = React.useMemo(
+    () => (location ? computeNearbyStops(location, MTR_STATIONS, NEARBY_LIMIT) : []),
+    [location]
+  )
+
+  const mapCenter = React.useMemo(() => {
+    if (location) return { lat: location.lat, lng: location.lng }
+    if (nearby[0]) return { lat: nearby[0].lat, lng: nearby[0].lng }
+    return { lat: 22.3193, lng: 114.1694 }
+  }, [location, nearby])
+
+  const mapMarkers = React.useMemo(
+    () =>
+      nearby.map((station) => ({
+        id: station.sta,
+        lat: station.lat,
+        lng: station.lng,
+        title: pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang),
+      })),
+    [nearby, lang]
+  )
 
   const stationName = React.useCallback(
     (station: MtrStation) => pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang),
+    [lang]
+  )
+  const stationLines = React.useCallback(
+    (station: MtrStation) => station.lines.map((line) => getMtrLineName(line, lang)).join(' · '),
     [lang]
   )
 
   return (
     <div className="space-y-4">
       <div className="card-m3 p-5">
-        <div className="m3-title-md mb-4 flex items-center gap-2">
-          <Navigation className="h-5 w-5" />
-          {t('common.nearby')}
+        <div className="m3-title-md mb-4 flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <Navigation className="h-5 w-5" />
+            {t('common.nearby')}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full shadow-sm"
+            onClick={onRefresh}
+            disabled={locating}
+          >
+            <RefreshCw className={cn('mr-1.5 h-4 w-4', locating && 'ui-spin')} />
+            {t('common.refreshLocation')}
+          </Button>
         </div>
 
-        <div className="bg-surface-container text-on-surface-variant m3-body-md mb-4 rounded-2xl p-3">
-          {t('common.mtrNoCoords')}
-        </div>
+        {locating && (
+          <div className="text-on-surface-variant m3-body-md py-2">{t('common.locating')}</div>
+        )}
+        {locationError && (
+          <div className="text-error m3-body-md flex items-center gap-2 py-2">
+            <MapPin className="h-4 w-4" />
+            {locationErrorMessage(locationError, t)}
+          </div>
+        )}
+        {!location && !locating && (
+          <div className="py-2">
+            <Button className="rounded-full shadow-sm" onClick={onRefresh}>
+              <MapPin className="mr-1.5 h-4 w-4" />
+              {t('common.enableLocation')}
+            </Button>
+          </div>
+        )}
+        {nearby.length > 0 && (
+          <>
+            <div className="mb-4 overflow-hidden rounded-2xl border border-[var(--outline-variant)]/15">
+              <TransitMap
+                center={mapCenter}
+                markers={mapMarkers}
+                userLocation={location}
+                zoom={14}
+                className="h-72 lg:h-80"
+              />
+            </div>
+            <div className="m3-title-md mb-2">{t('common.nearbyStops')}</div>
+            <StaggerList>
+              {nearby.map((station, idx) => (
+                <button
+                  key={station.sta}
+                  type="button"
+                  onClick={() =>
+                    onSelectMtrStation?.(station.sta, station.lines[0] ?? '', stationName(station))
+                  }
+                  className={cn(
+                    'bg-surface-container hover:bg-surface-container-high ui-press ui-cv-row w-full rounded-2xl p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                    staggerClassForIndex(idx)
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="m3-body-md truncate font-medium">{stationName(station)}</div>
+                      <div className="text-on-surface-variant m3-label-md truncate">
+                        {stationLines(station)}
+                      </div>
+                    </div>
+                    <div className="bg-primary-container text-on-primary-container m3-label-lg shrink-0 rounded-full px-2.5 py-1">
+                      {formatDistanceKm(station.distanceKm, lang)}
+                    </div>
+                    <ChevronRight className="text-on-surface-variant h-4 w-4 shrink-0" />
+                  </div>
+                </button>
+              ))}
+            </StaggerList>
+          </>
+        )}
 
-        <div className="m3-title-md mb-3">{t('common.allMtrLines')}</div>
+        <div className={cn('m3-title-md mb-3', nearby.length > 0 && 'mt-6')}>
+          {t('common.allMtrLines')}
+        </div>
         <StaggerList className="space-y-3">
           {lines.map(({ line, stations }, idx) => (
             <div
@@ -462,11 +612,53 @@ function MtrNearbyView({
 
 function LrtNearbyView({
   lang,
+  location,
+  locating,
+  locationError,
+  onRefresh,
   onSelectLrtStation,
   t,
-}: Pick<SharedViewProps, 'lang' | 'onSelectLrtStation' | 't'>) {
+}: Pick<
+  SharedViewProps,
+  'lang' | 'location' | 'locating' | 'locationError' | 'onRefresh' | 'onSelectLrtStation' | 't'
+>) {
   const { routes, loading, error, retry } = useLrtRouteStations()
   const routeGroups = useLrtStationsByRoute(routes)
+
+  const nearby = React.useMemo(
+    () => (location ? computeNearbyStops(location, LRT_STATIONS, NEARBY_LIMIT) : []),
+    [location]
+  )
+
+  // stationId -> route numbers, for the row subtitle.
+  const routesByStation = React.useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const group of routeGroups) {
+      for (const station of group.stations) {
+        const list = map.get(station.stationId) ?? []
+        list.push(group.route)
+        map.set(station.stationId, list)
+      }
+    }
+    return map
+  }, [routeGroups])
+
+  const mapCenter = React.useMemo(() => {
+    if (location) return { lat: location.lat, lng: location.lng }
+    if (nearby[0]) return { lat: nearby[0].lat, lng: nearby[0].lng }
+    return { lat: 22.4187, lng: 113.985 }
+  }, [location, nearby])
+
+  const mapMarkers = React.useMemo(
+    () =>
+      nearby.map((station) => ({
+        id: station.stationId,
+        lat: station.lat,
+        lng: station.lng,
+        title: pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang),
+      })),
+    [nearby, lang]
+  )
 
   const stationName = React.useCallback(
     (station: LrtStation) => pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang),
@@ -480,16 +672,82 @@ function LrtNearbyView({
   return (
     <div className="space-y-4">
       <div className="card-m3 p-5">
-        <div className="m3-title-md mb-4 flex items-center gap-2">
-          <Navigation className="h-5 w-5" />
-          {t('common.nearby')}
+        <div className="m3-title-md mb-4 flex items-center justify-between gap-3">
+          <span className="flex items-center gap-2">
+            <Navigation className="h-5 w-5" />
+            {t('common.nearby')}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full shadow-sm"
+            onClick={onRefresh}
+            disabled={locating}
+          >
+            <RefreshCw className={cn('mr-1.5 h-4 w-4', locating && 'ui-spin')} />
+            {t('common.refreshLocation')}
+          </Button>
         </div>
 
-        <div className="bg-surface-container text-on-surface-variant m3-body-md mb-4 rounded-2xl p-3">
-          {t('common.lrtNoCoords')}
-        </div>
+        {locating && (
+          <div className="text-on-surface-variant m3-body-md py-2">{t('common.locating')}</div>
+        )}
+        {locationError && (
+          <div className="text-error m3-body-md flex items-center gap-2 py-2">
+            <MapPin className="h-4 w-4" />
+            {locationErrorMessage(locationError, t)}
+          </div>
+        )}
+        {!location && !locating && (
+          <div className="py-2">
+            <Button className="rounded-full shadow-sm" onClick={onRefresh}>
+              <MapPin className="mr-1.5 h-4 w-4" />
+              {t('common.enableLocation')}
+            </Button>
+          </div>
+        )}
+        {nearby.length > 0 && (
+          <>
+            <div className="mb-4 overflow-hidden rounded-2xl border border-[var(--outline-variant)]/15">
+              <TransitMap
+                center={mapCenter}
+                markers={mapMarkers}
+                userLocation={location}
+                zoom={14}
+                className="h-72 lg:h-80"
+              />
+            </div>
+            <div className="m3-title-md mb-2">{t('common.nearbyStops')}</div>
+            <StaggerList>
+              {nearby.map((station, idx) => (
+                <button
+                  key={station.stationId}
+                  type="button"
+                  onClick={() => onSelectLrtStation?.(station.stationId, stationName(station))}
+                  className={cn(
+                    'bg-surface-container hover:bg-surface-container-high ui-press ui-cv-row w-full rounded-2xl p-3 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                    staggerClassForIndex(idx)
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="m3-body-md truncate font-medium">{stationName(station)}</div>
+                      <div className="text-on-surface-variant m3-label-md truncate">
+                        {(routesByStation.get(station.stationId) ?? []).join(' · ')}
+                      </div>
+                    </div>
+                    <div className="bg-primary-container text-on-primary-container m3-label-lg shrink-0 rounded-full px-2.5 py-1">
+                      {formatDistanceKm(station.distanceKm, lang)}
+                    </div>
+                    <ChevronRight className="text-on-surface-variant h-4 w-4 shrink-0" />
+                  </div>
+                </button>
+              ))}
+            </StaggerList>
+          </>
+        )}
 
-        {loading && <ResultsSkeleton />}
+        {loading && !location && <ResultsSkeleton />}
         {error && (
           <EmptyState
             title={t('errors.updateFailedGeneric')}

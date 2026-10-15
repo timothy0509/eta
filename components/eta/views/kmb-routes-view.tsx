@@ -54,7 +54,7 @@ import {
   searchRouteIndex,
   type RouteFuseInstance,
 } from '@/lib/eta/route-search'
-import { getRoutedGeometry } from '@/lib/eta/routing'
+import { getRouteDisplayGeometry } from '@/lib/eta/routing'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
 import { isKmbStop } from '@/lib/eta/types'
@@ -670,26 +670,63 @@ function useKmbStops() {
   return stops
 }
 
-function useKmbRouteGeometry(variantKey: string | null, points: GeoPoint[]): GeoPoint[] | null {
+function useKmbRouteGeometry(
+  params: {
+    variant: { key: string; co: string; route: string; bound: string; serviceType: string } | null
+    points: GeoPoint[]
+  },
+  { stopsVariantKey }: { stopsVariantKey: string | null }
+): GeoPoint[] | null {
   const [result, setResult] = React.useState<{
     variantKey: string
     geometry: GeoPoint[]
   } | null>(null)
+  const variant = params.variant && stopsVariantKey === params.variant.key ? params.variant : null
 
   React.useEffect(() => {
-    if (!variantKey || points.length < 2) return
+    if (!variant || params.points.length < 2) return
     let cancelled = false
-    getRoutedGeometry(variantKey, points)
+    const load = async () => {
+      // gtfsId and the per-operator bound live on the raw eta-db entry; the
+      // client's lite route objects strip both.
+      let gtfsId: string | null = null
+      let perCoBound: string | null = null
+      try {
+        const { routeVariantIndex } = await getEtaDbIndexes()
+        const entry = routeVariantIndex.get(
+          routeVariantKey({
+            co: normalizeOperator(variant.co) as Company,
+            route: variant.route,
+            bound: variant.bound,
+            serviceType: variant.serviceType,
+          })
+        )
+        if (entry) {
+          gtfsId = entry.gtfsId
+          perCoBound = entry.bound[entry.co[0]] ?? null
+        }
+      } catch {
+        gtfsId = null
+      }
+      if (cancelled) return
+      return getRouteDisplayGeometry({
+        variantKey: variant.key,
+        gtfsId,
+        bound: perCoBound,
+        points: params.points,
+      })
+    }
+    load()
       .then((geometry) => {
-        if (!cancelled && geometry) setResult({ variantKey, geometry })
+        if (!cancelled && geometry) setResult({ variantKey: variant.key, geometry })
       })
       .catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [variantKey, points])
+  }, [variant, params.points])
 
-  return result && result.variantKey === variantKey ? result.geometry : null
+  return result && result.variantKey === variant?.key ? result.geometry : null
 }
 
 export function KmbRoutesView({
@@ -980,7 +1017,13 @@ export function KmbRoutesView({
     () => (stopsVariantKey === currentVariant?.key ? routePath : []),
     [stopsVariantKey, currentVariant, routePath]
   )
-  const routedGeometry = useKmbRouteGeometry(currentVariant?.key ?? null, geometryPoints)
+  const routedGeometry = useKmbRouteGeometry(
+    {
+      variant: currentVariant,
+      points: geometryPoints,
+    },
+    { stopsVariantKey }
+  )
   const displayPath = routedGeometry ?? routePath
 
   const mapCenter = React.useMemo(() => {
@@ -993,15 +1036,34 @@ export function KmbRoutesView({
       .map((rs) => {
         const stop = stopsById.get(rs.stopId)
         if (!stop) return null
-        return { id: rs.stopId, lat: stop.lat, lng: stop.lng, title: stop.nameEn }
+        return {
+          id: rs.stopId,
+          lat: stop.lat,
+          lng: stop.lng,
+          title: pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang),
+        }
       })
       .filter(Boolean) as Array<{ id: string; lat: number; lng: number; title?: string }>
-  }, [variantStops, stopsById])
+  }, [variantStops, stopsById, lang])
 
   const mapPolylines = React.useMemo(() => {
     if (!currentVariant) return []
-    return [{ id: currentVariant.key, path: displayPath, color: '#00478d' }]
+    return [{ id: currentVariant.key, path: displayPath }]
   }, [currentVariant, displayPath])
+
+  const handleMapStopClick = React.useCallback(
+    (stopId: string) => {
+      if (!onSelectStopGroup) return
+      const group = getStopGroupForClick(stopId, variantStops, stopsById, lang)
+      if (!group) return
+      onSelectStopGroup({
+        stopIds: group.stopIds,
+        title: group.title,
+        route: currentVariant?.route ?? '',
+      })
+    },
+    [onSelectStopGroup, variantStops, stopsById, lang, currentVariant]
+  )
 
   const onSaveRoute = () => {
     if (!currentVariant) return
@@ -1253,10 +1315,14 @@ export function KmbRoutesView({
           <div className="card-m3 p-4">
             <div className="m3-title-md mb-3">{t('common.map')}</div>
             <TransitMap
+              lang={lang}
               center={mapCenter}
               markers={mapMarkers}
               polylines={mapPolylines}
               zoom={13}
+              fitKey={currentVariant?.key ?? null}
+              onMarkerClick={handleMapStopClick}
+              ariaLabel={t('common.mapInteractive')}
               className="h-96"
             />
           </div>

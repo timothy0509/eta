@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronRight, MapPin, Navigation, RefreshCw } from 'lucide-react'
+import { ChevronRight, Crosshair, MapPin, Navigation, RefreshCw } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
@@ -37,9 +37,80 @@ type KmbNearbyStop = KmbStopSearchItem & { distanceKm: number }
 
 const NEARBY_CACHE_MS = 60_000
 const NEARBY_HYSTERESIS_KM = 0.05
-const NEARBY_BBOX_KM = 3
 
-function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
+/** Map zoom that keeps a controlled search radius comfortably on screen. */
+function zoomForRadiusKm(radiusKm: number, base: number): number {
+  if (!Number.isFinite(radiusKm) || radiusKm <= 0) return base
+  if (radiusKm <= 1) return base
+  if (radiusKm <= 2) return base - 1
+  return base - 2
+}
+
+const NEARBY_SLIDER_MIN_KM = 0.5
+const NEARBY_SLIDER_MAX_KM = 5
+const NEARBY_SLIDER_STEP_KM = 0.25
+
+/**
+ * Radius slider plus the follow toggle, shared by the three mode views.
+ * Radius is a pane-store value (transient UI state); the follow toggle is
+ * local per visit.
+ */
+function NearbyMapControls({
+  t,
+  radiusKm,
+  onRadiusChange,
+  following,
+  onToggleFollow,
+  disableFollow,
+}: {
+  t: (key: string) => string
+  radiusKm: number
+  onRadiusChange: (km: number) => void
+  following: boolean
+  onToggleFollow: () => void
+  disableFollow?: boolean
+}) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-3">
+      <div className="flex min-w-48 flex-1 items-center gap-3">
+        <label
+          className="text-on-surface-variant m3-label-md whitespace-nowrap"
+          htmlFor="nearby-radius"
+        >
+          {t('common.searchRadius')}
+        </label>
+        <input
+          id="nearby-radius"
+          type="range"
+          min={NEARBY_SLIDER_MIN_KM}
+          max={NEARBY_SLIDER_MAX_KM}
+          step={NEARBY_SLIDER_STEP_KM}
+          value={radiusKm}
+          onChange={(event) => onRadiusChange(Number(event.target.value))}
+          className="text-primary ui-press w-full min-w-32"
+          aria-label={t('common.searchRadius')}
+        />
+        <span className="text-on-surface-variant m3-label-md w-14 text-right tabular-nums">
+          {`${Math.round(radiusKm * 10) / 10} km`}
+        </span>
+      </div>
+      <Button
+        type="button"
+        variant={following ? 'default' : 'outline'}
+        size="sm"
+        className="rounded-full shadow-sm"
+        onClick={onToggleFollow}
+        aria-pressed={following}
+        disabled={disableFollow}
+      >
+        <Crosshair className={cn('mr-1.5 h-4 w-4', following && 'ui-spin')} />
+        {following ? t('common.stopFollowing') : t('common.followLocation')}
+      </Button>
+    </div>
+  )
+}
+
+function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null, radiusKm: number) {
   // Reuse the stops the KMB pane already loaded so nearby never refetches
   // the full list when the user already visited the stops tab.
   const cachedStops = usePaneStore((s) => s.kmbStops)
@@ -51,14 +122,18 @@ function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
   } | null>(null)
   const lastLocationRef = React.useRef<{ lat: number; lng: number } | null>(null)
   // Quantize to 4 decimals (~11 m) so GPS jitter does not retrigger the
-  // full 6k-stop distance sort on every fix.
-  const key = userLocation ? `${userLocation.lat.toFixed(4)},${userLocation.lng.toFixed(4)}` : null
+  // full 6k-stop distance sort on every fix. The radius rides on the key so
+  // dragging the slider recomputes without refetching the stop list.
+  const key = userLocation
+    ? `${userLocation.lat.toFixed(4)},${userLocation.lng.toFixed(4)},${radiusKm}`
+    : null
 
   React.useEffect(() => {
     if (!userLocation || !key) return
     const last = lastLocationRef.current
-    if (last && haversineDistanceKm(last, userLocation) < NEARBY_HYSTERESIS_KM) return
-    if (result?.key === key && Date.now() - result.at < NEARBY_CACHE_MS) {
+    const locationMoved = !last || haversineDistanceKm(last, userLocation) >= NEARBY_HYSTERESIS_KM
+    const cacheFresh = result?.key === key && Date.now() - result.at < NEARBY_CACHE_MS
+    if (!locationMoved && cacheFresh) {
       lastLocationRef.current = userLocation
       return
     }
@@ -71,7 +146,7 @@ function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
         setResult({
           key,
           at: Date.now(),
-          stops: computeNearbyStops(userLocation, data, NEARBY_LIMIT, NEARBY_BBOX_KM),
+          stops: computeNearbyStops(userLocation, data, NEARBY_LIMIT, radiusKm),
           error: null,
         })
       } catch (err) {
@@ -89,7 +164,7 @@ function useKmbNearbyStops(userLocation: { lat: number; lng: number } | null) {
     return () => {
       cancelled = true
     }
-  }, [key, result?.key, result?.at, userLocation, cachedStops])
+  }, [key, radiusKm, result?.key, result?.at, userLocation, cachedStops])
 
   if (!key) return { stops: [], loading: false, error: null }
   if (!result || result.key !== key)
@@ -213,7 +288,15 @@ function KmbNearbyWithLocation({
   onSelectStopGroup?: NearbyViewProps['onSelectStopGroup']
   t: (key: string) => string
 }) {
-  const { location, loading: locating, error: locationError, refresh } = useGeolocation()
+  const [following, setFollowing] = React.useState(false)
+  const {
+    location,
+    loading: locating,
+    error: locationError,
+    refresh,
+  } = useGeolocation({
+    watch: following,
+  })
   return (
     <KmbNearbyView
       lang={lang}
@@ -221,6 +304,8 @@ function KmbNearbyWithLocation({
       locating={locating}
       locationError={locationError}
       onRefresh={refresh}
+      onFocusToggle={() => setFollowing((prev) => !prev)}
+      following={following}
       onSelectStopGroup={onSelectStopGroup}
       t={t}
     />
@@ -236,7 +321,15 @@ function MtrNearbyWithLocation({
   onSelectMtrStation?: NearbyViewProps['onSelectMtrStation']
   t: (key: string) => string
 }) {
-  const { location, loading: locating, error: locationError, refresh } = useGeolocation()
+  const [following, setFollowing] = React.useState(false)
+  const {
+    location,
+    loading: locating,
+    error: locationError,
+    refresh,
+  } = useGeolocation({
+    watch: following,
+  })
   return (
     <MtrNearbyView
       lang={lang}
@@ -244,6 +337,8 @@ function MtrNearbyWithLocation({
       locating={locating}
       locationError={locationError}
       onRefresh={refresh}
+      onFocusToggle={() => setFollowing((prev) => !prev)}
+      following={following}
       onSelectMtrStation={onSelectMtrStation}
       t={t}
     />
@@ -259,7 +354,15 @@ function LrtNearbyWithLocation({
   onSelectLrtStation?: NearbyViewProps['onSelectLrtStation']
   t: (key: string) => string
 }) {
-  const { location, loading: locating, error: locationError, refresh } = useGeolocation()
+  const [following, setFollowing] = React.useState(false)
+  const {
+    location,
+    loading: locating,
+    error: locationError,
+    refresh,
+  } = useGeolocation({
+    watch: following,
+  })
   return (
     <LrtNearbyView
       lang={lang}
@@ -267,6 +370,8 @@ function LrtNearbyWithLocation({
       locating={locating}
       locationError={locationError}
       onRefresh={refresh}
+      onFocusToggle={() => setFollowing((prev) => !prev)}
+      following={following}
       onSelectLrtStation={onSelectLrtStation}
       t={t}
     />
@@ -288,10 +393,12 @@ function locationErrorMessage(code: GeolocationErrorCode, t: (key: string) => st
 
 type SharedViewProps = {
   lang: UiLanguage
-  location: { lat: number; lng: number } | null
+  location: { lat: number; lng: number; accuracyM?: number } | null
   locating: boolean
   locationError: GeolocationErrorCode | null
   onRefresh: () => void
+  onFocusToggle: () => void
+  following: boolean
   onSelectStopGroup?: (selection: { stopIds: string[]; title: string; route: string }) => void
   onSelectMtrStation?: (sta: string, line: string, name: string) => void
   onSelectLrtStation?: (stationId: string, name: string) => void
@@ -304,10 +411,14 @@ function KmbNearbyView({
   locating,
   locationError,
   onRefresh,
+  onFocusToggle,
+  following,
   onSelectStopGroup,
   t,
 }: SharedViewProps) {
-  const { stops, loading, error } = useKmbNearbyStops(location)
+  const radiusKm = usePaneStore((s) => s.nearbyRadiusKm)
+  const setRadiusKm = usePaneStore((s) => s.setNearbyRadiusKm)
+  const { stops, loading, error } = useKmbNearbyStops(location, radiusKm)
 
   const mapCenter = React.useMemo(() => {
     if (location) return { lat: location.lat, lng: location.lng }
@@ -317,7 +428,7 @@ function KmbNearbyView({
 
   const mapMarkers = React.useMemo(
     () =>
-      stops.slice(0, 15).map((stop) => ({
+      stops.map((stop) => ({
         id: stop.stopId,
         lat: stop.lat,
         lng: stop.lng,
@@ -363,13 +474,37 @@ function KmbNearbyView({
             </Button>
           </div>
         )}
+
+        <NearbyMapControls
+          t={t}
+          radiusKm={radiusKm}
+          onRadiusChange={setRadiusKm}
+          following={following}
+          onToggleFollow={onFocusToggle}
+        />
+
         {(loading || stops.length > 0) && (
           <div className="mb-4 overflow-hidden rounded-2xl border border-[var(--outline-variant)]/15">
             <TransitMap
+              lang={lang}
               center={mapCenter}
               markers={mapMarkers}
               userLocation={location}
-              zoom={15}
+              zoom={location ? zoomForRadiusKm(radiusKm, 15) : 14}
+              onMarkerClick={(stopId) => {
+                const stop = stops.find((candidate) => candidate.stopId === stopId)
+                if (!stop) return
+                const fullName = pickLang(
+                  { en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc },
+                  lang
+                )
+                const parsed = parseKmbStopNameCached(fullName, {
+                  isKmb: isKmbStop(stop),
+                  lang,
+                })
+                onSelectStopGroup?.({ stopIds: [stop.stopId], title: parsed.name, route: '' })
+              }}
+              ariaLabel={t('common.mapInteractive')}
               className="h-72 lg:h-80"
             />
           </div>
@@ -453,16 +588,28 @@ function MtrNearbyView({
   locating,
   locationError,
   onRefresh,
+  onFocusToggle,
+  following,
   onSelectMtrStation,
   t,
 }: Pick<
   SharedViewProps,
-  'lang' | 'location' | 'locating' | 'locationError' | 'onRefresh' | 'onSelectMtrStation' | 't'
+  | 'lang'
+  | 'location'
+  | 'locating'
+  | 'locationError'
+  | 'onRefresh'
+  | 'onFocusToggle'
+  | 'following'
+  | 'onSelectMtrStation'
+  | 't'
 >) {
+  const radiusKm = usePaneStore((s) => s.nearbyRadiusKm)
+  const setRadiusKm = usePaneStore((s) => s.setNearbyRadiusKm)
   const lines = useMtrStationsByLine()
   const nearby = React.useMemo(
-    () => (location ? computeNearbyStops(location, MTR_STATIONS, NEARBY_LIMIT) : []),
-    [location]
+    () => (location ? computeNearbyStops(location, MTR_STATIONS, NEARBY_LIMIT, radiusKm) : []),
+    [location, radiusKm]
   )
 
   const mapCenter = React.useMemo(() => {
@@ -528,14 +675,34 @@ function MtrNearbyView({
             </Button>
           </div>
         )}
+
+        <NearbyMapControls
+          t={t}
+          radiusKm={radiusKm}
+          onRadiusChange={setRadiusKm}
+          following={following}
+          onToggleFollow={onFocusToggle}
+        />
+
         {nearby.length > 0 && (
           <>
             <div className="mb-4 overflow-hidden rounded-2xl border border-[var(--outline-variant)]/15">
               <TransitMap
+                lang={lang}
                 center={mapCenter}
                 markers={mapMarkers}
                 userLocation={location}
-                zoom={14}
+                zoom={location ? zoomForRadiusKm(radiusKm, 14) : 13}
+                onMarkerClick={(sta) => {
+                  const station = nearby.find((candidate) => candidate.sta === sta)
+                  if (!station) return
+                  onSelectMtrStation?.(
+                    station.sta,
+                    station.lines[0] ?? '',
+                    pickLangZh({ en: station.nameEn, zh: station.nameTc }, lang)
+                  )
+                }}
+                ariaLabel={t('common.mapInteractive')}
                 className="h-72 lg:h-80"
               />
             </div>
@@ -616,18 +783,30 @@ function LrtNearbyView({
   locating,
   locationError,
   onRefresh,
+  onFocusToggle,
+  following,
   onSelectLrtStation,
   t,
 }: Pick<
   SharedViewProps,
-  'lang' | 'location' | 'locating' | 'locationError' | 'onRefresh' | 'onSelectLrtStation' | 't'
+  | 'lang'
+  | 'location'
+  | 'locating'
+  | 'locationError'
+  | 'onRefresh'
+  | 'onFocusToggle'
+  | 'following'
+  | 'onSelectLrtStation'
+  | 't'
 >) {
+  const radiusKm = usePaneStore((s) => s.nearbyRadiusKm)
+  const setRadiusKm = usePaneStore((s) => s.setNearbyRadiusKm)
   const { routes, loading, error, retry } = useLrtRouteStations()
   const routeGroups = useLrtStationsByRoute(routes)
 
   const nearby = React.useMemo(
-    () => (location ? computeNearbyStops(location, LRT_STATIONS, NEARBY_LIMIT) : []),
-    [location]
+    () => (location ? computeNearbyStops(location, LRT_STATIONS, NEARBY_LIMIT, radiusKm) : []),
+    [location, radiusKm]
   )
 
   // stationId -> route numbers, for the row subtitle.
@@ -706,14 +885,33 @@ function LrtNearbyView({
             </Button>
           </div>
         )}
+
+        <NearbyMapControls
+          t={t}
+          radiusKm={radiusKm}
+          onRadiusChange={setRadiusKm}
+          following={following}
+          onToggleFollow={onFocusToggle}
+        />
+
         {nearby.length > 0 && (
           <>
             <div className="mb-4 overflow-hidden rounded-2xl border border-[var(--outline-variant)]/15">
               <TransitMap
+                lang={lang}
                 center={mapCenter}
                 markers={mapMarkers}
                 userLocation={location}
-                zoom={14}
+                zoom={location ? zoomForRadiusKm(radiusKm, 14) : 13}
+                onMarkerClick={(stationId) => {
+                  const station = nearby.find((candidate) => candidate.stationId === stationId)
+                  if (!station) return
+                  onSelectLrtStation?.(
+                    station.stationId,
+                    pickLangZh({ en: station.nameEn, zh: station.nameZh }, lang)
+                  )
+                }}
+                ariaLabel={t('common.mapInteractive')}
                 className="h-72 lg:h-80"
               />
             </div>

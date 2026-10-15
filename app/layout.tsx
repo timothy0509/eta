@@ -107,13 +107,15 @@ export default function RootLayout({
         <link rel="preconnect" href="https://data.etabus.gov.hk" />
         <link rel="preconnect" href="https://rt.data.gov.hk" />
         <link rel="preconnect" href="https://data.hkbus.app" />
+        <link rel="preconnect" href="https://timothy0509.github.io" />
+        <link rel="preconnect" href="https://fonts.protomaps.com" />
         <link rel="dns-prefetch" href="https://data.etabus.gov.hk" />
         <link rel="dns-prefetch" href="https://rt.data.gov.hk" />
         <link rel="dns-prefetch" href="https://data.hkbus.app" />
         <link rel="dns-prefetch" href="https://hkbus.github.io" />
         <link rel="dns-prefetch" href="https://opendata.mtr.com.hk" />
         <link rel="dns-prefetch" href="https://www.lrtetas.hk" />
-        <link rel="dns-prefetch" href="https://tile.openstreetmap.org" />
+        <link rel="dns-prefetch" href="https://sprites.protomaps.com" />
         <link rel="dns-prefetch" href="https://router.project-osrm.org" />
       </head>
       <body

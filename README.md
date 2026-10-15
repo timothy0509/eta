@@ -206,6 +206,14 @@ This application uses the [hk-bus-eta](https://github.com/hkbus/hk-bus-eta) npm 
 
 The hk-bus-eta package maintains a single, cached EtaDb that aggregates all transit data with proper caching, holiday schedules, and service day logic.
 
+## Attribution
+
+**Map data.** The basemap tiles and fallback route geometry are built on data from [OpenStreetMap](https://www.openstreetmap.org/copyright), © OpenStreetMap contributors, under the Open Database License. ODbL requires this attribution to be visible on maps that display its data; the app shows it in the map's attribution control, and it is repeated here.
+
+**Bundled software.** The app bundles the following, whose copyright and license notices are retained with the distribution as their BSD-3-Clause license requires: [MapLibre GL JS](https://github.com/maplibre/maplibre-gl), [`pmtiles`](https://github.com/protomaps/PMTiles), and [`@protomaps/basemaps`](https://github.com/protomaps/basemaps) (all BSD-3-Clause).
+
+**Transit data.** Where government open data is redistributed, its source is acknowledged as required by the DATA.GOV.HK terms of use: 資料來源：資料一線通 (Source: DATA.GOV.HK).
+
 ## License
 
 MIT

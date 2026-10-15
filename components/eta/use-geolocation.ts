@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 
-export type GeoLocation = { lat: number; lng: number }
+export type GeoLocation = { lat: number; lng: number; accuracyM?: number }
 
 export type GeolocationErrorCode = 'denied' | 'unavailable' | 'timeout' | 'unsupported'
 
@@ -11,6 +11,14 @@ export type UseGeolocationReturn = {
   loading: boolean
   error: GeolocationErrorCode | null
   refresh: () => void
+}
+
+export type UseGeolocationOptions = {
+  /**
+   * Continuously follow the device with watchPosition. Keeps the same
+   * quantize/hysteresis duties to the consumer, which sorts downstream.
+   */
+  watch?: boolean
 }
 
 const LAST_LOCATION_KEY = 'eta:last-location'
@@ -119,13 +127,15 @@ async function isPermissionGranted(): Promise<boolean> {
 
 /**
  * Browser geolocation with a cached last fix, permission-aware auto-request,
- * and one high-accuracy retry. Errors are stable codes so views can translate them.
+ * and one high-accuracy retry. Errors are stable codes so views can translate
+ * them. The optional watch flag keeps a watchPosition running while on.
  */
-export function useGeolocation(): UseGeolocationReturn {
+export function useGeolocation(options?: UseGeolocationOptions): UseGeolocationReturn {
   const [location, setLocation] = React.useState<GeoLocation | null>(() => readCachedLocation())
   const [loading, setLoading] = React.useState(false)
   const [error, setError] = React.useState<GeolocationErrorCode | null>(null)
   const seqRef = React.useRef(0)
+  const watch = options?.watch === true
 
   const refresh = React.useCallback(() => {
     const seq = (seqRef.current += 1)
@@ -157,6 +167,34 @@ export function useGeolocation(): UseGeolocationReturn {
       cancelled = true
     }
   }, [refresh])
+
+  React.useEffect(() => {
+    if (!watch || typeof window === 'undefined' || !navigator.geolocation) return
+    let stopped = false
+    const watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        if (stopped) return
+        const next = {
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracyM: position.coords.accuracy,
+        }
+        if (!isValidLocation(next)) return
+        setError(null)
+        setLocation(next)
+        writeCachedLocation(next)
+      },
+      (err) => {
+        if (stopped) return
+        setError(readGeolocationErrorCode(err))
+      },
+      { enableHighAccuracy: false, timeout: 12000, maximumAge: 15000 }
+    )
+    return () => {
+      stopped = true
+      navigator.geolocation.clearWatch(watchId)
+    }
+  }, [watch])
 
   const memoizedLocation = React.useMemo(
     () => (location ? { lat: location.lat, lng: location.lng } : null),

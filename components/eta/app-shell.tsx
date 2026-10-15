@@ -69,7 +69,7 @@ const SUB_VIEWS: Array<{
   { id: 'settings', icon: Settings },
 ]
 
-// Preload the Leaflet map chunk on hover/focus of the nearby tab so the
+// Preload the MapLibre map chunk on hover/focus of the nearby tab so the
 // chunk arrives before the tap, without paying for it on startup.
 let mapPreloadStarted = false
 function preloadTransitMap(): void {

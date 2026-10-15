@@ -1,3 +1,4 @@
+import { env } from '@/lib/env'
 import type { GeoPoint } from '@/lib/eta/geo'
 import { fetchJson } from '@/lib/eta/http'
 
@@ -5,9 +6,10 @@ import { fetchJson } from '@/lib/eta/http'
  * Prebuilt route path geometry, published by the hkbus project from the
  * hk-bus-crawling dataset. One static JSON per route variant is far cheaper
  * and more accurate than an OSRM round-trip; straight-line stop coordinates
- * are the fallback when a route is missing here.
+ * are the fallback when a route is missing here. Override with
+ * NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL.
  */
-export const ROUTE_WAYPOINTS_BASE_URL = 'https://hkbus.github.io/route-waypoints'
+export const ROUTE_WAYPOINTS_BASE_URL = env.NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL
 
 export type RouteWaypointDirection = 'I' | 'O'
 

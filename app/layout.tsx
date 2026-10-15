@@ -1,11 +1,55 @@
 import type { Metadata, Viewport } from 'next'
 import { Geist_Mono, Inter, Noto_Sans_HK } from 'next/font/google'
 
+import { env } from '@/lib/env'
 import { DynamicToaster } from '@/components/dynamic-toaster'
 import { ThemeProvider } from '@/components/theme-provider'
 import { LangSync } from '@/components/eta/lang-sync'
-import { env } from '@/lib/env'
 import './globals.css'
+
+// Preconnect/dns-prefetch targets follow the configured map endpoints so an
+// env override swaps the warm-up connections along with the URLs.
+function originOf(url: string | undefined): string | null {
+  if (!url) return null
+  try {
+    return new URL(url).origin
+  } catch {
+    return null
+  }
+}
+
+const tileOrigin = originOf(env.NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL)
+const glyphOrigin = originOf(env.NEXT_PUBLIC_MAP_GLYPHS_URL)
+const spriteOrigin = originOf(env.NEXT_PUBLIC_MAP_SPRITE_URL)
+const waypointOrigin = originOf(env.NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL)
+const osrmOrigin = originOf(env.NEXT_PUBLIC_OSRM_BASE_URL)
+
+const preconnectHosts = Array.from(
+  new Set(
+    [
+      'https://data.etabus.gov.hk',
+      'https://rt.data.gov.hk',
+      'https://data.hkbus.app',
+      tileOrigin,
+      glyphOrigin,
+    ].filter((host): host is string => Boolean(host))
+  )
+).sort()
+
+const dnsPrefetchHosts = Array.from(
+  new Set(
+    [
+      'https://data.etabus.gov.hk',
+      'https://rt.data.gov.hk',
+      'https://data.hkbus.app',
+      'https://opendata.mtr.com.hk',
+      'https://www.lrtetas.hk',
+      waypointOrigin,
+      spriteOrigin,
+      osrmOrigin,
+    ].filter((host): host is string => Boolean(host))
+  )
+).sort()
 
 const inter = Inter({
   variable: '--font-inter',
@@ -104,19 +148,12 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <link rel="preconnect" href="https://data.etabus.gov.hk" />
-        <link rel="preconnect" href="https://rt.data.gov.hk" />
-        <link rel="preconnect" href="https://data.hkbus.app" />
-        <link rel="preconnect" href="https://timothy0509.github.io" />
-        <link rel="preconnect" href="https://fonts.protomaps.com" />
-        <link rel="dns-prefetch" href="https://data.etabus.gov.hk" />
-        <link rel="dns-prefetch" href="https://rt.data.gov.hk" />
-        <link rel="dns-prefetch" href="https://data.hkbus.app" />
-        <link rel="dns-prefetch" href="https://hkbus.github.io" />
-        <link rel="dns-prefetch" href="https://opendata.mtr.com.hk" />
-        <link rel="dns-prefetch" href="https://www.lrtetas.hk" />
-        <link rel="dns-prefetch" href="https://sprites.protomaps.com" />
-        <link rel="dns-prefetch" href="https://router.project-osrm.org" />
+        {preconnectHosts.map((host) => (
+          <link key={host} rel="preconnect" href={host} />
+        ))}
+        {dnsPrefetchHosts.map((host) => (
+          <link key={host} rel="dns-prefetch" href={host} />
+        ))}
       </head>
       <body
         className={`${inter.variable} ${notoSansHK.variable} ${geistMono.variable} min-h-dvh antialiased`}

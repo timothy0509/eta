@@ -275,12 +275,7 @@ function ensureOverlayLayers(map: MapLibreMap, theme: MapTheme): void {
         palette.stopSelectedFill,
         palette.stopFill,
       ],
-      'circle-radius': [
-        'case',
-        ['==', ['get', 'selected'], true],
-        8,
-        ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 5.5, 16, 7],
-      ],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 5.5, 16, 7],
       'circle-stroke-color': [
         'case',
         ['==', ['get', 'selected'], true],
@@ -288,6 +283,21 @@ function ensureOverlayLayers(map: MapLibreMap, theme: MapTheme): void {
         palette.stopStroke,
       ],
       'circle-stroke-width': 2,
+    },
+  }
+  // Selected pins get their own layer: a zoom-aware radius cannot nest an
+  // interpolate inside a case in the style spec, so the enlarged radius and
+  // the thicker stroke live here instead.
+  const stopsSelected: CircleLayerSpec = {
+    id: 'stops-selected',
+    type: 'circle',
+    source: STOPS_SOURCE,
+    filter: ['==', ['get', 'selected'], true],
+    paint: {
+      'circle-color': palette.stopSelectedFill,
+      'circle-radius': 8,
+      'circle-stroke-color': palette.stopSelectedStroke,
+      'circle-stroke-width': 3,
     },
   }
   const stopLabel: SymbolLayerSpec = {
@@ -328,6 +338,7 @@ function ensureOverlayLayers(map: MapLibreMap, theme: MapTheme): void {
   map.addLayer(main)
   map.addLayer(arrows)
   map.addLayer(stops)
+  map.addLayer(stopsSelected)
   map.addLayer(stopLabel)
   map.addLayer(userDot)
 }
@@ -402,6 +413,20 @@ export function TransitMap({
         if (cancelled || !containerRef.current || mapRef.current) return
         maplibre = gl
         void protocolReady
+
+        // MapLibre's automatic worker URL detection depends on resolving its
+        // own bundle URL, which Next's chunked ESM output does not expose
+        // (the resolved URL came back empty, so the worker was constructed
+        // from ''). Point it at the bundler-emitted worker asset instead.
+        try {
+          const workerUrl = new URL('maplibre-gl/dist/maplibre-gl-worker.mjs', import.meta.url).href
+          if (workerUrl && !workerUrl.startsWith('file:')) {
+            maplibre.setWorkerUrl(workerUrl)
+          }
+        } catch {
+          // Leave the builtin fallback in place; worker failures surface
+          // through maplibre's own error event either way.
+        }
       } catch {
         return
       }

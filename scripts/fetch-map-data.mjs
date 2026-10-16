@@ -95,8 +95,11 @@ async function fetchTiles() {
 
 async function fetchSprite() {
   const spriteDir = join(REPO_ROOT, 'public', 'map', 'sprite')
+  // All four densities must exist: MapLibre appends @2x to the path stem on
+  // high-DPI screens (the file the phone requests), and a missing density
+  // surfaces as a 404 overlay that drops every icon.
   let missing = false
-  for (const name of ['sprite.json', 'sprite.png']) {
+  for (const name of ['sprite.json', 'sprite.png', 'sprite@2x.json', 'sprite@2x.png']) {
     if (isForce() || !existsSync(join(spriteDir, name))) missing = true
   }
   if (!missing) {

@@ -7,6 +7,8 @@ const NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL = process.env.NEXT_PUBLIC_MAP_TILE_ARCHIV
 const NEXT_PUBLIC_MAP_GLYPHS_URL = process.env.NEXT_PUBLIC_MAP_GLYPHS_URL
 const NEXT_PUBLIC_MAP_SPRITE_URL = process.env.NEXT_PUBLIC_MAP_SPRITE_URL
 const NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL = process.env.NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL
+const NEXT_PUBLIC_ROUTE_WAYPOINTS_UPSTREAM_URL =
+  process.env.NEXT_PUBLIC_ROUTE_WAYPOINTS_UPSTREAM_URL
 const NEXT_PUBLIC_OSRM_BASE_URL = process.env.NEXT_PUBLIC_OSRM_BASE_URL
 
 // Only validate at runtime, not during build.
@@ -30,11 +32,14 @@ export const env = {
   // Glyph + sprite endpoints backing label/icon rendering.
   NEXT_PUBLIC_MAP_GLYPHS_URL:
     NEXT_PUBLIC_MAP_GLYPHS_URL ?? 'https://fonts.protomaps.com/fonts/{fontstack}/{range}.pbf',
-  NEXT_PUBLIC_MAP_SPRITE_URL:
-    NEXT_PUBLIC_MAP_SPRITE_URL ?? 'https://sprites.protomaps.com/sprites/sprite',
-  // Prebuilt route path geometry dataset from the hkbus project.
-  NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL:
-    NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL ?? 'https://hkbus.github.io/route-waypoints',
+  NEXT_PUBLIC_MAP_SPRITE_URL: NEXT_PUBLIC_MAP_SPRITE_URL ?? '/map/sprite/sprite',
+  // Prebuilt route path geometry dataset from the hkbus project. Default is
+  // a same-origin passthrough (app/map-waypoints/[...file]) because some
+  // mobile networks block github.io outright; the upstream fetcher lives in
+  // one env var for self-hosted mirrors.
+  NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL: NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL ?? '/map-waypoints',
+  NEXT_PUBLIC_ROUTE_WAYPOINTS_UPSTREAM_URL:
+    NEXT_PUBLIC_ROUTE_WAYPOINTS_UPSTREAM_URL ?? 'https://hkbus.github.io/route-waypoints',
   // Fallback router for route geometry outside the waypoint dataset.
   NEXT_PUBLIC_OSRM_BASE_URL: NEXT_PUBLIC_OSRM_BASE_URL ?? 'https://router.project-osrm.org',
 }

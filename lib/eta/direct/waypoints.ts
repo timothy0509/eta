@@ -14,7 +14,8 @@ export const ROUTE_WAYPOINTS_BASE_URL = env.NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL
 export type RouteWaypointDirection = 'I' | 'O'
 
 export function buildRouteWaypointsUrl(gtfsId: string, direction: RouteWaypointDirection): string {
-  return `${ROUTE_WAYPOINTS_BASE_URL}/${encodeURIComponent(gtfsId)}-${direction}.json`
+  const base = ROUTE_WAYPOINTS_BASE_URL.replace(/\/+$/, '')
+  return `${base}/${encodeURIComponent(gtfsId)}-${direction}.json`
 }
 
 export function waypointDirectionForBound(

@@ -13,6 +13,9 @@ export const MAP_TILE_PROTOCOL = 'pmtiles://'
 
 export const MAP_GLYPHS_URL = env.NEXT_PUBLIC_MAP_GLYPHS_URL
 
+// Same-origin sprite mirror fetched at build time by
+// scripts/fetch-map-data.mjs, so icon rendering does not depend on a
+// third-party host surviving the user's network.
 export const MAP_SPRITE_URL = env.NEXT_PUBLIC_MAP_SPRITE_URL
 
 export const MAP_ATTRIBUTION_HTML =

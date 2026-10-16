@@ -23,7 +23,7 @@ describe('buildBaseMapStyle', () => {
 
   it('wires glyphs and sprite endpoints for labels and icons', () => {
     expect(style.glyphs).toBe('https://fonts.protomaps.com/fonts/{fontstack}/{range}.pbf')
-    expect(style.sprite).toBe('https://sprites.protomaps.com/sprites/sprite')
+    expect(String(style.sprite)).toMatch(/^https?:\/\/[^/]+\/map\/sprite\/sprite$/)
   })
 
   it('emits the protomaps basemap layers', () => {

@@ -10,13 +10,9 @@ function jsonResponse(body: unknown): Response {
 }
 
 describe('buildRouteWaypointsUrl', () => {
-  it('builds the hkbus dataset URL with the direction suffix', () => {
-    expect(buildRouteWaypointsUrl('kmb-14A-O', 'O')).toBe(
-      'https://hkbus.github.io/route-waypoints/kmb-14A-O-O.json'
-    )
-    expect(buildRouteWaypointsUrl('kmb-14A-O', 'I')).toBe(
-      'https://hkbus.github.io/route-waypoints/kmb-14A-O-I.json'
-    )
+  it('builds the same-origin waypoint URL with the direction suffix', () => {
+    expect(buildRouteWaypointsUrl('kmb-14A-O', 'O')).toBe('/map-waypoints/kmb-14A-O-O.json')
+    expect(buildRouteWaypointsUrl('kmb-14A-O', 'I')).toBe('/map-waypoints/kmb-14A-O-I.json')
   })
 })
 

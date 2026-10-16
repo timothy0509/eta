@@ -31,10 +31,18 @@ export function basemapLabelLangForUi(lang: UiLanguage): MapLabelLanguage {
  * theme swap is just a new style object.
  */
 export function buildBaseMapStyle(theme: MapTheme, lang: MapLabelLanguage): StyleSpecification {
+  // MapLibre v6 validates sprite URLs as absolute, so expand a build-time
+  // same-origin sprite path against the page origin (the map only renders
+  // client-side, so location.origin always exists here; tests get a plain
+  // relative URL, which the test asserts on loosely).
+  const spriteUrl =
+    MAP_SPRITE_URL.startsWith('/') && typeof window !== 'undefined'
+      ? `${window.location.origin}${MAP_SPRITE_URL}`
+      : MAP_SPRITE_URL
   return {
     version: 8,
     glyphs: MAP_GLYPHS_URL,
-    sprite: MAP_SPRITE_URL,
+    sprite: spriteUrl,
     sources: {
       tiles: {
         type: 'vector',

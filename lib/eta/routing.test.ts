@@ -39,7 +39,7 @@ describe('getRouteDisplayGeometry', () => {
   it('prefers the prebuilt waypoint file over OSRM', async () => {
     const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = String(input)
-      if (url.startsWith('https://hkbus.github.io/route-waypoints/')) {
+      if (url.startsWith('/map-waypoints/')) {
         return Promise.resolve(
           jsonResponse({
             type: 'LineString',
@@ -71,7 +71,7 @@ describe('getRouteDisplayGeometry', () => {
   it('falls back to OSRM when the waypoint file is invalid', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
       const url = String(input)
-      if (url.startsWith('https://hkbus.github.io/route-waypoints/')) {
+      if (url.startsWith('/map-waypoints/')) {
         return Promise.resolve(jsonResponse({ type: 'LineString', coordinates: [[114]] }))
       }
       return Promise.resolve(jsonResponse(okBody()))
@@ -99,7 +99,7 @@ describe('getRouteDisplayGeometry', () => {
     const urls = (vi.mocked(globalThis.fetch).mock.calls as unknown as Array<[string]>).map(
       (call) => String(call[0])
     )
-    expect(urls.some((url) => url.includes('route-waypoints'))).toBe(false)
+    expect(urls.some((url) => url.includes('/map-waypoints/'))).toBe(false)
   })
 })
 

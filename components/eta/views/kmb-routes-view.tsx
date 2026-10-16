@@ -1086,7 +1086,7 @@ export function KmbRoutesView({
     addFavorite(item)
   }
 
-  const hasActiveFilters = debouncedQuery.trim() !== '' || operators.length > 0
+  const hasActiveFilters = query.trim() !== '' || operators.length > 0
   const isRouteSelected = selectedRouteKey !== null
 
   return (
@@ -1121,37 +1121,39 @@ export function KmbRoutesView({
                     aria-expanded={!sheetCollapsed}
                     className="text-on-surface-variant hover:text-on-surface ui-press inline-flex min-h-[36px] items-center rounded-full px-3 text-sm lg:hidden"
                   >
-                    {sheetCollapsed ? t('common.map') : t('kmb.routeStops')}
+                    {sheetCollapsed ? t('kmb.showList') : t('kmb.hideList')}
                   </button>
                 </div>
-                <div className="relative">
-                  <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    placeholder={t('kmb.searchRouteNumberAndPlace')}
-                    aria-label={t('kmb.searchBusRoutes')}
-                    className="bg-surface-container h-12 rounded-full pr-10 pl-10"
-                  />
-                  {query.trim() !== '' && (
-                    <button
-                      type="button"
-                      onClick={handleClearSearch}
-                      aria-label={t('kmb.clearSearch')}
-                      className="text-on-surface-variant hover:text-on-surface ui-press absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                    >
-                      <X className="h-4 w-4" aria-hidden />
-                    </button>
-                  )}
-                </div>
-                <div className="mt-3">
-                  <OperatorFilter
-                    operators={operatorOptions}
-                    total={searchIndex.length}
-                    value={operators}
-                    onChange={handleOperatorChange}
-                    lang={lang}
-                  />
+                <div className={sheetCollapsed ? 'hidden lg:block' : ''}>
+                  <div className="relative">
+                    <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                    <Input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder={t('kmb.searchRouteNumberAndPlace')}
+                      aria-label={t('kmb.searchBusRoutes')}
+                      className="bg-surface-container h-12 rounded-full pr-10 pl-10"
+                    />
+                    {query.trim() !== '' && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        aria-label={t('kmb.clearSearch')}
+                        className="text-on-surface-variant hover:text-on-surface ui-press absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                      >
+                        <X className="h-4 w-4" aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <OperatorFilter
+                      operators={operatorOptions}
+                      total={searchIndex.length}
+                      value={operators}
+                      onChange={handleOperatorChange}
+                      lang={lang}
+                    />
+                  </div>
                 </div>
 
                 <div

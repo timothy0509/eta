@@ -23,7 +23,7 @@ type Props = {
 
 /** Multi-select operator chips with brand dots and counts. Empty value means All. */
 export function OperatorFilter({ operators, total, value, onChange, lang }: Props) {
-  const { t } = useTranslations(lang)
+  const { t, tWithParams } = useTranslations(lang)
   if (operators.length === 0) return null
 
   const selected = new Set(value.map((v) => v.toLowerCase()))
@@ -34,8 +34,9 @@ export function OperatorFilter({ operators, total, value, onChange, lang }: Prop
     if (selected.has(lower)) {
       onChange(value.filter((v) => v.toLowerCase() !== lower))
     } else {
-      const next = [...value, code]
-      next.sort((a, b) => a.localeCompare(b))
+      const next = Array.from(new Set([...value.map((v) => v.toLowerCase()), lower])).sort((a, b) =>
+        a.localeCompare(b)
+      )
       onChange(next)
     }
   }
@@ -73,7 +74,6 @@ export function OperatorFilter({ operators, total, value, onChange, lang }: Prop
               aria-pressed={active}
               onClick={() => toggle(op.code)}
               className={chip(active)}
-              title={op.code.toUpperCase()}
             >
               <span
                 aria-hidden
@@ -90,9 +90,7 @@ export function OperatorFilter({ operators, total, value, onChange, lang }: Prop
       {selected.size > 0 && (
         <div className="text-on-surface-variant m3-label-md flex items-center justify-between">
           <span role="status">
-            {selected.size === 1
-              ? `1 ${t('common.operator')}`
-              : `${selected.size} ${t('common.operator')}`}
+            {tWithParams('kmb.operatorsSelected', { count: selected.size })}
           </span>
           <button
             type="button"

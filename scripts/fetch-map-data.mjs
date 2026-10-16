@@ -92,11 +92,13 @@ async function fetchTiles() {
     bytes = null
   }
   if (!bytes || bytes.length < 1_000_000 || bytes.toString('ascii', 0, 7) !== 'PMTiles') {
-    // Never fail the build over this: a missing archive degrades to a
-    // tile-less map and the warning stays loud.
+    // A tile-less map is a grey rectangle, not a graceful degradation — fail
+    // loudly under CI (Vercel sets CI=true) instead of shipping it silently.
+    // Locally this stays a warning so a flaky network never blocks dev.
     console.error(
       '[fetch-map-data] giving up: the map will lack tiles. Check network reachability of the tile archive host.'
     )
+    if (process.env.CI === 'true') process.exitCode = 1
     return
   }
   await writeAtomic(TILES_PATH, bytes)

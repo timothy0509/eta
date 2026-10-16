@@ -77,7 +77,11 @@ function requestPosition(options: PositionOptions): Promise<GeoLocation> {
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
-        resolve({ lat: position.coords.latitude, lng: position.coords.longitude })
+        resolve({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracyM: position.coords.accuracy,
+        })
       },
       (err) => reject(err),
       options
@@ -197,7 +201,8 @@ export function useGeolocation(options?: UseGeolocationOptions): UseGeolocationR
   }, [watch])
 
   const memoizedLocation = React.useMemo(
-    () => (location ? { lat: location.lat, lng: location.lng } : null),
+    () =>
+      location ? { lat: location.lat, lng: location.lng, accuracyM: location.accuracyM } : null,
     [location]
   )
 

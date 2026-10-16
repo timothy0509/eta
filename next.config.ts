@@ -56,6 +56,9 @@ const nextConfig: NextConfig = {
     optimizePackageImports: [
       'lucide-react',
       'framer-motion',
+      'maplibre-gl',
+      'pmtiles',
+      '@protomaps/basemaps',
       '@radix-ui/react-dialog',
       '@radix-ui/react-dropdown-menu',
       '@radix-ui/react-popover',

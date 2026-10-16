@@ -5,10 +5,10 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import * as React from 'react'
 import { useTheme } from 'next-themes'
 import type {
+  GeoJSONSource,
   LayerSpecification,
   Map as MapLibreMap,
   MapGeoJSONFeature,
-  StyleImageSource,
 } from 'maplibre-gl'
 
 type LineLayerSpec = Extract<LayerSpecification, { type: 'line' }>
@@ -130,7 +130,7 @@ function userFeatures(user: MapUserLocation | null): GeoJSON.Feature[] {
 }
 
 /** Small filled triangle rendered as pixels; line symbols orient along the road. */
-function makeArrowImage(body: string, outline: string): StyleImageSource | null {
+function makeArrowImage(body: string, outline: string): ImageData | null {
   if (typeof document === 'undefined') return null
   const size = 16
   const ratio = 2
@@ -154,29 +154,22 @@ function makeArrowImage(body: string, outline: string): StyleImageSource | null 
   ctx.lineWidth = 1
   ctx.strokeStyle = outline
   ctx.stroke()
-  const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height)
-  // The {width, height, data} image source branch carries no pixelRatio, so
-  // the retina-scaled icon relies on this extra metadata field.
-  const image = {
-    width: canvas.width,
-    height: canvas.height,
-    data: pixels.data,
-    pixelRatio: ratio,
-  }
-  return image as unknown as StyleImageSource
+  return ctx.getImageData(0, 0, canvas.width, canvas.height)
 }
 
 function ensureArrowImage(map: MapLibreMap, theme: MapTheme): void {
   if (map.hasImage(ARROW_IMAGE_ID)) map.removeImage(ARROW_IMAGE_ID)
   const palette = overlayPalette(theme)
-  const icon = makeArrowImage(palette.routeMain, palette.routeCasing)
-  if (icon) map.addImage(ARROW_IMAGE_ID, icon)
+  const pixels = makeArrowImage(palette.routeMain, palette.routeCasing)
+  // ImageData is a StyleImageSource; pixelRatio rides the documented
+  // options arg so the 2x buffer renders at 1x logical size.
+  if (pixels) map.addImage(ARROW_IMAGE_ID, pixels, { pixelRatio: 2 })
 }
 
 function setGeojsonSource(map: MapLibreMap, id: string, features: GeoJSON.Feature[]): void {
   const source = map.getSource(id)
-  if (source?.type !== 'geojson') return
-  ;(source as unknown as { setData: (data: GeoJSON.FeatureCollection) => void }).setData({
+  if (!source || source.type !== 'geojson') return
+  ;(source as GeoJSONSource).setData({
     type: 'FeatureCollection',
     features,
   })
@@ -383,6 +376,13 @@ export function TransitMap({
   const { resolvedTheme } = useTheme()
   const theme: MapTheme = resolvedTheme === 'dark' ? 'dark' : 'light'
   const labelLang = basemapLabelLangForUi(lang)
+  // The mount effect runs once but style.load fires on every setStyle
+  // (theme/language switch); the ref keeps the handler on the live theme
+  // instead of the one captured at mount.
+  const themeRef = React.useRef(theme)
+  React.useEffect(() => {
+    themeRef.current = theme
+  }, [theme])
 
   const dataRef = React.useRef({ markers, polylines, userLocation: userLocation ?? null })
   React.useEffect(() => {
@@ -448,6 +448,10 @@ export function TransitMap({
         // Wheel hijacks page scroll while the cursor sits over the map card;
         // it is re-enabled by an explicit pointer interaction inside the map.
         scrollZoom: false,
+        // CJK codepoints rasterize locally from system fonts instead of
+        // fetching CJK glyph ranges; only the small mirrored Latin/symbol
+        // ranges in public/map/fonts are ever requested.
+        localIdeographFontFamily: 'sans-serif',
         style: styleSpec,
       })
       mapRef.current = map
@@ -464,8 +468,8 @@ export function TransitMap({
 
       map.on('style.load', () => {
         if (cancelled || !mapRef.current) return
-        ensureOverlayLayers(mapRef.current, theme)
-        ensureArrowImage(mapRef.current, theme)
+        ensureOverlayLayers(mapRef.current, themeRef.current)
+        ensureArrowImage(mapRef.current, themeRef.current)
         syncOverlayData(mapRef.current, dataRef.current)
       })
 

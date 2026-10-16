@@ -95,6 +95,54 @@ describe('parseWaypointsGeoJson via fetchRouteWaypoints', () => {
     expect(points).toHaveLength(2)
   })
 
+  it('flattens a MultiLineString FeatureCollection, dropping joint duplicates', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({
+        type: 'FeatureCollection',
+        features: [
+          {
+            type: 'Feature',
+            geometry: {
+              type: 'MultiLineString',
+              coordinates: [
+                [
+                  [114.1, 22.3],
+                  [114.2, 22.31],
+                ],
+                [
+                  [114.2, 22.31],
+                  [114.25, 22.32],
+                ],
+              ],
+            },
+          },
+        ],
+      })
+    )
+    const points = await fetchRouteWaypoints({ gtfsId: 'kmb-1-O', direction: 'O' })
+    expect(points).toEqual([
+      { lat: 22.3, lng: 114.1 },
+      { lat: 22.31, lng: 114.2 },
+      { lat: 22.32, lng: 114.25 },
+    ])
+  })
+
+  it('parses a bare MultiLineString geometry', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      jsonResponse({
+        type: 'MultiLineString',
+        coordinates: [
+          [
+            [114.1, 22.3],
+            [114.2, 22.31],
+          ],
+        ],
+      })
+    )
+    const points = await fetchRouteWaypoints({ gtfsId: 'kmb-1-O', direction: 'O' })
+    expect(points).toHaveLength(2)
+  })
+
   it('rejects a file without a usable LineString', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       jsonResponse({ type: 'Feature', geometry: { type: 'Point', coordinates: [114, 22] } })

@@ -29,9 +29,10 @@ export const env = {
   // third-party host surviving the user's network. The env override restores
   // the old behavior in one deploy-time variable.
   NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL: NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL ?? '/map/hong-kong.pmtiles',
-  // Glyph + sprite endpoints backing label/icon rendering.
-  NEXT_PUBLIC_MAP_GLYPHS_URL:
-    NEXT_PUBLIC_MAP_GLYPHS_URL ?? 'https://fonts.protomaps.com/fonts/{fontstack}/{range}.pbf',
+  // Glyph endpoint backing label rendering. Same-origin mirror fetched at
+  // build time (CJK renders locally and is never fetched, so only the
+  // small Latin/symbol ranges are mirrored).
+  NEXT_PUBLIC_MAP_GLYPHS_URL: NEXT_PUBLIC_MAP_GLYPHS_URL ?? '/map/fonts/{fontstack}/{range}.pbf',
   NEXT_PUBLIC_MAP_SPRITE_URL: NEXT_PUBLIC_MAP_SPRITE_URL ?? '/map/sprite/sprite',
   // Prebuilt route path geometry dataset from the hkbus project. Default is
   // a same-origin passthrough (app/map-waypoints/[...file]) because some

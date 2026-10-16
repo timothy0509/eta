@@ -141,8 +141,9 @@ function makeArrowImage(body: string, outline: string): StyleImageSource | null 
   if (!ctx) return null
   ctx.scale(ratio, ratio)
   ctx.beginPath()
-  // Tip points up; with symbol-placement: line, arrow icons point along the
-  // increasing direction of the line, i.e. the direction of travel.
+  // Tip points up, matching hkbus's arrow sprite. Their style pairs this
+  // with icon-rotate: 90 (see the arrow layer below), which is what aligns
+  // the rendered arrow along the direction of travel.
   ctx.moveTo(size / 2, 3.5)
   ctx.lineTo(size - 2.5, size - 2.5)
   ctx.lineTo(size / 2, size - 5.5)
@@ -261,6 +262,7 @@ function ensureOverlayLayers(map: MapLibreMap, theme: MapTheme): void {
       'symbol-placement': 'line',
       'symbol-spacing': 140,
       'icon-image': ARROW_IMAGE_ID,
+      'icon-rotate': 90,
       'icon-rotation-alignment': 'map',
       'icon-allow-overlap': true,
       'icon-ignore-placement': true,
@@ -376,6 +378,7 @@ export function TransitMap({
   const mapRef = React.useRef<MapLibreMap | null>(null)
   const maplibreRef = React.useRef<typeof import('maplibre-gl') | null>(null)
   const [mapReady, setMapReady] = React.useState(false)
+  const [mapErrors, setMapErrors] = React.useState<string[]>([])
 
   const { resolvedTheme } = useTheme()
   const theme: MapTheme = resolvedTheme === 'dark' ? 'dark' : 'light'
@@ -448,6 +451,16 @@ export function TransitMap({
         style: styleSpec,
       })
       mapRef.current = map
+
+      map.on('error', (event) => {
+        const detail = event && event.error ? String(event.error.message || event.error) : 'unknown'
+        if (!cancelled) {
+          setMapErrors((prev) => {
+            const next = prev.includes(detail) ? prev : [...prev, detail].slice(-3)
+            return next
+          })
+        }
+      })
 
       map.on('style.load', () => {
         if (cancelled || !mapRef.current) return
@@ -574,6 +587,15 @@ export function TransitMap({
 
   return (
     <div className={cn('relative z-0 overflow-hidden rounded-2xl', className)}>
+      {mapErrors.length > 0 && (
+        <div className="bg-surface-container/90 text-on-surface-variant pointer-events-none absolute right-2 bottom-8 z-10 max-w-[90%] rounded-lg px-2 py-1 font-mono text-[11px] leading-tight">
+          {mapErrors.map((msg) => (
+            <div key={msg} className="truncate" aria-hidden>
+              {msg}
+            </div>
+          ))}
+        </div>
+      )}
       <div
         ref={containerRef}
         className="h-full w-full"

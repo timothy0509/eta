@@ -101,7 +101,10 @@ function routeFeature(line: MapPolyline): GeoJSON.Feature | null {
       type: 'LineString',
       coordinates: line.path.map((point) => [point.lng, point.lat]),
     },
-    properties: { id: line.id, color: line.color ?? '' },
+    properties: line.color ? { id: line.id, color: line.color } : { id: line.id },
+    // The 'color' property must stay absent when the line has no explicit
+    // color: painting ['coalesce', ['get','color'], palette.routeMain] with
+    // an empty-string property resolves to '' and drops the line.
   }
 }
 

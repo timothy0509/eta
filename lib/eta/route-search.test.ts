@@ -130,6 +130,15 @@ describe('searchRouteIndex', () => {
     expect(hits.every((h) => h.entry.operators.includes('ctb'))).toBe(true)
   })
 
+  it('filters by multiple operators', () => {
+    const hits = searchRouteIndex(index, '', { operator: ['kmb', 'ctb'] })
+    expect(hits.length).toBeGreaterThan(0)
+    expect(hits.every((h) => h.entry.operators.some((o) => ['kmb', 'ctb'].includes(o)))).toBe(true)
+    const kmbOnly = searchRouteIndex(index, '', { operator: ['kmb'] })
+    expect(kmbOnly.every((h) => h.entry.operators.includes('kmb'))).toBe(true)
+    expect(kmbOnly.length).toBeLessThanOrEqual(hits.length)
+  })
+
   it('returns empty for nonsense', () => {
     expect(searchRouteIndex(index, 'zzz-no-such-place')).toHaveLength(0)
   })

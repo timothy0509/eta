@@ -7,10 +7,8 @@ function headResponse(status: number, headers: Record<string, string> = {}): Res
 }
 
 describe('map tile constants', () => {
-  it('reads its source from the forked Pages deployment', () => {
-    expect(MAP_TILE_ARCHIVE_URL).toBe(
-      'https://timothy0509.github.io/hk-pmtiles-generation/hong-kong.pmtiles'
-    )
+  it('serves its tiles same-origin from the build-time fetch location', () => {
+    expect(MAP_TILE_ARCHIVE_URL).toBe('/map/hong-kong.pmtiles')
     expect(MAP_TILE_PROTOCOL).toBe('pmtiles://')
   })
 })

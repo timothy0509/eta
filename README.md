@@ -208,16 +208,16 @@ The hk-bus-eta package maintains a single, cached EtaDb that aggregates all tran
 
 ## Configuration
 
-All map endpoints are build/deploy configuration with sane defaults checked in to `lib/env.ts`. Overrides go through `NEXT_PUBLIC_*` environment variables at build time (they are inlined into the client bundle) and at server runtime (the CSP's `connect-src` and the preconnect hints in `app/layout.tsx` are derived from the same values, so a different tile host works end to end without source changes). A typical single-environment deploy (same env file for build and serve) needs nothing special.
+All map endpoints are build/deploy configuration with sane defaults checked in to `lib/env.ts`. Overrides go through `NEXT_PUBLIC_*` environment variables at build time (they are inlined into the client bundle) and at server runtime (the CSP's `connect-src` and the preconnect hints in `app/layout.tsx` are derived from the same values, so a different tile host works end to end without source changes). The tile archive default is same-origin on purpose: some mobile networks block or degrade third-party tile hosts, and same-origin never is. `scripts/fetch-map-tiles.mjs` runs as the `predev`/`prebuild` step and keeps `public/map/hong-kong.pmtiles` (gitignored) fresh from the `hk-pmtiles-generation` build output; `FORCE_MAP_TILE_FETCH=1` forces a re-download, `MAP_TILE_FETCH_URL` points it at another mirror.
 
-| Variable                               | Default                                                                 | Purpose                        |
-| -------------------------------------- | ----------------------------------------------------------------------- | ------------------------------ |
-| `NEXT_PUBLIC_SITE_URL`                 | `https://eta.hkjc.uk`                                                   | Canonical/OG base URL          |
-| `NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL`     | `https://timothy0509.github.io/hk-pmtiles-generation/hong-kong.pmtiles` | Vector basemap (PMTiles)       |
-| `NEXT_PUBLIC_MAP_GLYPHS_URL`           | `https://fonts.protomaps.com/fonts/{fontstack}/{range}.pbf`             | Label glyph fonts              |
-| `NEXT_PUBLIC_MAP_SPRITE_URL`           | `https://sprites.protomaps.com/sprites/sprite`                          | Label/POI sprite sheet         |
-| `NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL` | `https://hkbus.github.io/route-waypoints`                               | Prebuilt route path geometry   |
-| `NEXT_PUBLIC_OSRM_BASE_URL`            | `https://router.project-osrm.org`                                       | Fallback route geometry router |
+| Variable                               | Default                                                     | Purpose                                                                                   |
+| -------------------------------------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`                 | `https://eta.hkjc.uk`                                       | Canonical/OG base URL                                                                     |
+| `NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL`     | `/map/hong-kong.pmtiles`                                    | Vector basemap (PMTiles); fetched at build time into `public/map/` and served same-origin |
+| `NEXT_PUBLIC_MAP_GLYPHS_URL`           | `https://fonts.protomaps.com/fonts/{fontstack}/{range}.pbf` | Label glyph fonts                                                                         |
+| `NEXT_PUBLIC_MAP_SPRITE_URL`           | `https://sprites.protomaps.com/sprites/sprite`              | Label/POI sprite sheet                                                                    |
+| `NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL` | `https://hkbus.github.io/route-waypoints`                   | Prebuilt route path geometry                                                              |
+| `NEXT_PUBLIC_OSRM_BASE_URL`            | `https://router.project-osrm.org`                           | Fallback route geometry router                                                            |
 
 ## Attribution
 

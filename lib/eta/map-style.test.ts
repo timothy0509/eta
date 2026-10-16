@@ -17,9 +17,7 @@ describe('buildBaseMapStyle', () => {
     expect(style.version).toBe(8)
     const tiles = style.sources?.tiles
     if (!tiles || tiles.type !== 'vector') throw new Error('missing vector tile source')
-    expect(tiles.url).toBe(
-      'pmtiles://https://timothy0509.github.io/hk-pmtiles-generation/hong-kong.pmtiles'
-    )
+    expect(tiles.url).toMatch(/^pmtiles:\/\/.*hong-kong\.pmtiles$/)
     expect('attribution' in tiles && String(tiles.attribution).includes('OpenStreetMap')).toBe(true)
   })
 

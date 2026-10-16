@@ -52,3 +52,6 @@ feedback.md
 package-lock.json
 
 graphify-out/
+
+# Map tile archive fetched at build time by scripts/fetch-map-tiles.mjs
+public/map/

@@ -21,10 +21,12 @@ if (!NEXT_PUBLIC_SITE_URL && isRuntime) {
 export const env = {
   NEXT_PUBLIC_SITE_URL: NEXT_PUBLIC_SITE_URL ?? 'https://eta.hkjc.uk',
 
-  // Vector basemap driven by the forked hk-pmtiles-generation Pages deploy.
-  NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL:
-    NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL ??
-    'https://timothy0509.github.io/hk-pmtiles-generation/hong-kong.pmtiles',
+  // Vector basemap served same-origin from public/map/hong-kong.pmtiles
+  // (fetched at build time by scripts/fetch-map-tiles.mjs from the hkbus
+  // dataset's Pages deploy), so tile loading never depends on a
+  // third-party host surviving the user's network. The env override restores
+  // the old behavior in one deploy-time variable.
+  NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL: NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL ?? '/map/hong-kong.pmtiles',
   // Glyph + sprite endpoints backing label/icon rendering.
   NEXT_PUBLIC_MAP_GLYPHS_URL:
     NEXT_PUBLIC_MAP_GLYPHS_URL ?? 'https://fonts.protomaps.com/fonts/{fontstack}/{range}.pbf',

@@ -4,7 +4,9 @@ import { ChevronDown, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
-import { formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib/eta/kmb-eta-groups'
+import type { ScheduledFallback } from '@/lib/eta/headway/types'
+import { useHeadwaySchedules } from '@/lib/eta/headway/use-headway-schedule'
 import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -88,6 +90,43 @@ function formatRouteVariantLabel(
 
 function formatNoScheduledText(t: (key: string) => string) {
   return t('common.noScheduledBuses')
+}
+
+/** One-line scheduled fallback copy: headway beats range beats first/last. Static text, no ticking. */
+export function formatScheduledLine(
+  scheduled: ScheduledFallback,
+  t: (key: string) => string,
+  tWithParams: (key: string, params: Record<string, string | number>) => string
+): string {
+  if (scheduled.headwayMin != null) {
+    return tWithParams('kmb.scheduleEveryMin', { n: scheduled.headwayMin })
+  }
+  if (scheduled.headwayRange) {
+    return tWithParams('kmb.scheduleEveryRange', {
+      min: scheduled.headwayRange[0],
+      max: scheduled.headwayRange[1],
+    })
+  }
+  if (scheduled.first && scheduled.last) {
+    return tWithParams('kmb.scheduleFirstLast', {
+      first: scheduled.first,
+      last: scheduled.last,
+    })
+  }
+  return t('common.noScheduledBuses')
+}
+
+function formatScheduledSpanLine(
+  scheduled: ScheduledFallback,
+  tWithParams: (key: string, params: Record<string, string | number>) => string,
+  t: (key: string) => string
+): string | null {
+  if (!scheduled.first || !scheduled.last) return null
+  const span = tWithParams('kmb.scheduleFirstLast', {
+    first: scheduled.first,
+    last: scheduled.last,
+  })
+  return scheduled.isHolidayTimetable ? `${span} · ${t('kmb.scheduleHolidayNote')}` : span
 }
 
 function formatEtaLabel(seq: number, lang: UiLanguage) {
@@ -229,6 +268,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stopChips,
   expanded,
   onToggleExpand,
+  scheduled,
 }: {
   variantKey: string
   /** Base variant key without leg suffix (co|route|dir|service_type) for route info & fare lookup */
@@ -246,6 +286,8 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stopChips: StopChips
   expanded?: boolean
   onToggleExpand?: () => void
+  /** Scheduled headway fallback from the TD GTFS index; rendered only when !hasEta */
+  scheduled?: ScheduledFallback | null
 }) {
   const [co = 'kmb', route = ''] = variantKey.split('|')
   const first = items[0]
@@ -276,7 +318,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const operatorColor = getOperatorColor(first?.co ?? co)
   const operatorName = formatOperatorLabel(first?.co ?? co, lang)
 
-  const { t } = useTranslations(lang)
+  const { t, tWithParams } = useTranslations(lang)
 
   const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && Boolean(expanded)
@@ -333,6 +375,22 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
           <div className="space-y-1">
             <div className="text-on-surface-variant m3-label-md">{t('common.fare')}</div>
             <div className="text-on-surface m3-body-md font-medium">{fareLabel}</div>
+          </div>
+        ) : null}
+
+        {scheduled ? (
+          <div className="space-y-1">
+            <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleTitle')}</div>
+            <div className="text-on-surface m3-body-md font-medium">
+              {formatScheduledLine(scheduled, t, tWithParams)}
+            </div>
+            {scheduled.headwayMin != null || scheduled.headwayRange ? (
+              formatScheduledSpanLine(scheduled, tWithParams, t) ? (
+                <div className="text-on-surface-variant m3-body-md">
+                  {formatScheduledSpanLine(scheduled, tWithParams, t)}
+                </div>
+              ) : null
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -503,6 +561,16 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   // Routes without valid ETAs get a simplified display
   if (!hasEta) {
     const remark = getGroupRemark(items, lang)
+    const hasScheduleData =
+      scheduled != null &&
+      (scheduled.headwayMin != null ||
+        scheduled.headwayRange != null ||
+        (scheduled.first != null && scheduled.last != null))
+    const scheduleLine =
+      scheduled && hasScheduleData ? formatScheduledLine(scheduled, t, tWithParams) : null
+    const spanLine = scheduled ? formatScheduledSpanLine(scheduled, tWithParams, t) : null
+    const showSpanLine =
+      spanLine != null && (scheduled?.headwayMin != null || scheduled?.headwayRange != null)
     return (
       <div
         className={cn(
@@ -518,9 +586,18 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
         <div className="space-y-2.5 pl-4">
           {routeHeader({ showEta: false, showSubtitle: true })}
           <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-            <Info className="h-4 w-4 shrink-0" />
-            {remark || formatNoScheduledText(t)}
+            {scheduleLine ? (
+              <Clock className="h-4 w-4 shrink-0" />
+            ) : (
+              <Info className="h-4 w-4 shrink-0" />
+            )}
+            {scheduleLine ?? remark ?? formatNoScheduledText(t)}
           </div>
+          {showSpanLine ? (
+            <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+              {spanLine}
+            </div>
+          ) : null}
           {staticFooter}
         </div>
       </div>
@@ -576,6 +653,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById,
   expandedKey,
   onToggleExpand,
+  scheduledByBaseKey,
 }: {
   stopId: string
   stopInfo?: StopInfo
@@ -589,6 +667,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById: Map<string, StopChips>
   expandedKey?: string | null
   onToggleExpand?: (key: string) => void
+  scheduledByBaseKey?: Record<string, ScheduledFallback | null>
 }) {
   const { t } = useTranslations(lang)
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
@@ -632,6 +711,7 @@ const StopSection = React.memo(function StopSection({
               staggerClass={isFirst ? staggerClassForIndex(idx) : ''}
               expanded={expandedKey === g.key}
               onToggleExpand={() => onToggleExpand?.(g.key)}
+              scheduled={scheduledByBaseKey?.[g.baseKey] ?? null}
             />
           ))}
         </div>
@@ -768,6 +848,43 @@ export const KmbResults = React.memo(function KmbResults({
     return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
+  // Scheduled headway fallbacks for every rendered variant. Keys come from
+  // group baseKeys (co|route|dir|service_type); the hook resolves the
+  // serviceType "1" fallback internally and returns only resolving keys.
+  // Applied after grouping so live order is computed first, then the
+  // no-ETA tail is re-sorted with scheduled variants first.
+  const scheduleBaseKeys = React.useMemo(() => {
+    const keys = new Set<string>()
+    if (useStopSections && precomputedGroups) {
+      for (const groups of Object.values(precomputedGroups.byStopId)) {
+        for (const g of groups) keys.add(g.baseKey)
+      }
+    } else if (precomputedFlat && !multipleStops) {
+      for (const g of precomputedFlat) keys.add(g.baseKey)
+    } else {
+      for (const g of grouped) keys.add(g.baseKey)
+    }
+    return Array.from(keys)
+  }, [useStopSections, precomputedGroups, precomputedFlat, multipleStops, grouped])
+  const scheduledByBaseKey = useHeadwaySchedules(scheduleBaseKeys)
+
+  const sortedFlat = React.useMemo(
+    () => (precomputedFlat ? sortScheduledFirst(precomputedFlat, scheduledByBaseKey) : undefined),
+    [precomputedFlat, scheduledByBaseKey]
+  )
+  const sortedGrouped = React.useMemo(
+    () => sortScheduledFirst(grouped, scheduledByBaseKey),
+    [grouped, scheduledByBaseKey]
+  )
+  const sortedByStopId = React.useMemo(() => {
+    if (!precomputedGroups) return undefined
+    const out: Record<string, EtaGroup[]> = {}
+    for (const [stopId, groups] of Object.entries(precomputedGroups.byStopId)) {
+      out[stopId] = sortScheduledFirst(groups, scheduledByBaseKey)
+    }
+    return out
+  }, [precomputedGroups, scheduledByBaseKey])
+
   // Stagger replay key: query identity only, never live ETA arrays (see the
   // replay rule on staggerClassForIndex). Refresh keeps this key so rows
   // stay still and expand state survives; a new search remounts and replays.
@@ -820,7 +937,7 @@ export const KmbResults = React.memo(function KmbResults({
                 key={stopId}
                 stopId={stopId}
                 stopInfo={stopLookup.get(stopId)}
-                groups={precomputedGroups?.byStopId[stopId] ?? []}
+                groups={sortedByStopId?.[stopId] ?? precomputedGroups?.byStopId[stopId] ?? []}
                 routeInfos={routeInfos}
                 faresByVariantKey={faresByVariantKey}
                 lang={lang}
@@ -830,6 +947,7 @@ export const KmbResults = React.memo(function KmbResults({
                 stopChipsById={stopChipsById}
                 expandedKey={expandedKey}
                 onToggleExpand={onToggleExpand}
+                scheduledByBaseKey={scheduledByBaseKey}
               />
             ))}
 
@@ -851,9 +969,9 @@ export const KmbResults = React.memo(function KmbResults({
               </div>
             ) : null}
           </>
-        ) : precomputedFlat && !multipleStops ? (
+        ) : sortedFlat && !multipleStops ? (
           <StaggerList>
-            {precomputedFlat.map((g, idx) => {
+            {sortedFlat.map((g, idx) => {
               const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
               const stopChips = stopId
                 ? (stopChipsById.get(stopId) ??
@@ -877,15 +995,16 @@ export const KmbResults = React.memo(function KmbResults({
                   stopChips={stopChips}
                   expanded={expandedKey === g.key}
                   onToggleExpand={() => onToggleExpand(g.key)}
+                  scheduled={scheduledByBaseKey[g.baseKey] ?? null}
                 />
               )
             })}
           </StaggerList>
-        ) : grouped.length === 0 ? (
+        ) : sortedGrouped.length === 0 ? (
           <EmptyState title={formatNoScheduledText(t)} />
         ) : (
           <StaggerList>
-            {grouped.map((g, idx) => {
+            {sortedGrouped.map((g, idx) => {
               const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
               const stopChips = stopId
                 ? (stopChipsById.get(stopId) ??
@@ -909,6 +1028,7 @@ export const KmbResults = React.memo(function KmbResults({
                   stopChips={stopChips}
                   expanded={expandedKey === g.key}
                   onToggleExpand={() => onToggleExpand(g.key)}
+                  scheduled={scheduledByBaseKey[g.baseKey] ?? null}
                 />
               )
             })}

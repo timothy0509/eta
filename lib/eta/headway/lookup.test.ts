@@ -1,0 +1,174 @@
+import { describe, expect, it } from 'vitest'
+
+import { getDayType, getScheduleForVariant, resolveVariantKey } from './lookup'
+import type { HeadwayIndex } from './types'
+
+const HOLIDAYS = ['2026-02-17']
+
+/** KMB route 1 weekday sample: 05:35-07:05 @9min, 07:05-09:00 @6min, rest @12min. */
+const INDEX: HeadwayIndex = {
+  updated: '2026-10-16',
+  holidays: HOLIDAYS,
+  variants: {
+    'kmb|1|O|1': {
+      src: ['1001'],
+      span: {
+        weekday: ['0535', '2305'],
+        saturday: ['0545', '2300'],
+        holiday: ['0600', '2230'],
+      },
+      headway: {
+        weekday: [
+          [335, 425, 9],
+          [425, 540, 6],
+          [540, 1385, 12],
+        ],
+        saturday: [[345, 1380, 15]],
+        holiday: [[360, 1350, 20]],
+      },
+    },
+    'kmb|N1|O|1': {
+      src: ['2001'],
+      span: { weekday: ['2320', '0150'] },
+      headway: { weekday: [[1400, 110, 25]] },
+    },
+    'kmb|SINGLE|O|1': {
+      src: ['3001'],
+      span: { weekday: ['0600', '2200'] },
+      headway: { weekday: [[360, 1320, 10]] },
+    },
+  },
+}
+
+function date(iso: string): Date {
+  return new Date(iso)
+}
+
+describe('getDayType', () => {
+  it('classifies Mon-Fri as weekday', () => {
+    expect(getDayType(date('2026-10-16T12:00:00'), [])).toBe('weekday') // Friday
+    expect(getDayType(date('2026-10-19T12:00:00'), [])).toBe('weekday') // Monday
+  })
+
+  it('classifies Saturday and Sunday', () => {
+    expect(getDayType(date('2026-10-17T12:00:00'), [])).toBe('saturday')
+    expect(getDayType(date('2026-10-18T12:00:00'), [])).toBe('sunday')
+  })
+
+  it('lets a holiday-list match win over the weekday', () => {
+    // 2026-02-17 is a Tuesday (Lunar New Year).
+    expect(getDayType(date('2026-02-17T12:00:00'), HOLIDAYS)).toBe('holiday')
+  })
+
+  it('lets a holiday-list match win over the weekend', () => {
+    expect(getDayType(date('2026-10-17T12:00:00'), ['2026-10-17'])).toBe('holiday')
+  })
+})
+
+describe('resolveVariantKey', () => {
+  it('hits exact keys', () => {
+    expect(resolveVariantKey(INDEX.variants, 'kmb|1|O|1')).toBe('kmb|1|O|1')
+  })
+
+  it('falls back to serviceType "1"', () => {
+    expect(resolveVariantKey(INDEX.variants, 'kmb|1|O|3')).toBe('kmb|1|O|1')
+  })
+
+  it('returns null when neither exact nor serviceType 1 exists', () => {
+    expect(resolveVariantKey(INDEX.variants, 'kmb|999|O|1')).toBeNull()
+    expect(resolveVariantKey(INDEX.variants, 'kmb|999|O|3')).toBeNull()
+  })
+
+  it('returns null for malformed keys', () => {
+    expect(resolveVariantKey(INDEX.variants, 'kmb|1|O')).toBeNull()
+    expect(resolveVariantKey(INDEX.variants, '')).toBeNull()
+  })
+})
+
+describe('getScheduleForVariant', () => {
+  it('returns the active window headway on a weekday morning', () => {
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-16T06:00:00'))
+    expect(result).toMatchObject({
+      headwayMin: 9,
+      headwayRange: [6, 12],
+      first: '05:35',
+      last: '23:05',
+      isHolidayTimetable: false,
+      serviceKey: 'kmb|1|O|1',
+    })
+  })
+
+  it('treats window end as exclusive (now == end -> next window)', () => {
+    // 07:05 is the end of the 9-min window and the start of the 6-min one.
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-16T07:05:00'))
+    expect(result?.headwayMin).toBe(6)
+  })
+
+  it('treats window start as inclusive', () => {
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-16T05:35:00'))
+    expect(result?.headwayMin).toBe(9)
+  })
+
+  it('returns null headwayMin outside all windows but keeps span info', () => {
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-16T04:00:00'))
+    expect(result).toMatchObject({
+      headwayMin: null,
+      first: '05:35',
+      last: '23:05',
+      serviceKey: 'kmb|1|O|1',
+    })
+  })
+
+  it('resolves serviceType fallback and reports the resolved key', () => {
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|7', date('2026-10-16T10:00:00'))
+    expect(result?.serviceKey).toBe('kmb|1|O|1')
+    expect(result?.headwayMin).toBe(12)
+  })
+
+  it('falls back to the weekday table when the day-type table is missing', () => {
+    // Sunday has no table in the fixture -> weekday table.
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-18T10:00:00'))
+    expect(result?.headwayMin).toBe(12)
+    expect(result?.isHolidayTimetable).toBe(false)
+  })
+
+  it('uses the saturday table when present', () => {
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-17T10:00:00'))
+    expect(result).toMatchObject({
+      headwayMin: 15,
+      headwayRange: null,
+      first: '05:45',
+      last: '23:00',
+    })
+  })
+
+  it('uses the holiday table on a listed holiday', () => {
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-02-17T10:00:00'))
+    expect(result).toMatchObject({
+      headwayMin: 20,
+      first: '06:00',
+      last: '22:30',
+      isHolidayTimetable: true,
+      serviceKey: 'kmb|1|O|1',
+    })
+  })
+
+  it('matches overnight spans on both sides of midnight', () => {
+    // Window [1400, 110): 23:20 -> 01:50 next day.
+    const late = getScheduleForVariant(INDEX, 'kmb|N1|O|1', date('2026-10-16T23:30:00'))
+    expect(late?.headwayMin).toBe(25)
+    const early = getScheduleForVariant(INDEX, 'kmb|N1|O|1', date('2026-10-16T01:00:00'))
+    expect(early?.headwayMin).toBe(25)
+    const outside = getScheduleForVariant(INDEX, 'kmb|N1|O|1', date('2026-10-16T02:00:00'))
+    expect(outside?.headwayMin).toBeNull()
+  })
+
+  it('returns null headwayRange for a single distinct headway', () => {
+    const result = getScheduleForVariant(INDEX, 'kmb|SINGLE|O|1', date('2026-10-16T10:00:00'))
+    expect(result).toMatchObject({ headwayMin: 10, headwayRange: null })
+  })
+
+  it('returns null for a missing variant', () => {
+    expect(getScheduleForVariant(INDEX, 'kmb|999|O|1', date('2026-10-16T10:00:00'))).toBeNull()
+  })
+})

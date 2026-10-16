@@ -5,3 +5,4 @@ build
 dist
 *.lock
 bun.lock
+public/headway/*.json

@@ -8,12 +8,15 @@ import { RouteBadge } from '@/components/eta/route-badge'
 import { EmptyState } from '@/components/eta/empty-state'
 import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import { OperatorFilter } from '@/components/eta/operator-filter'
+import { formatScheduledLine } from '@/components/eta/results-kmb'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
+import { RouteScheduleSection } from '@/components/eta/route-schedule-section'
 import { Input } from '@/components/ui/input'
 import { RouteStopCard } from '@/components/eta/route-stop-timeline'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes, TickingSoonestPill } from '@/components/eta/ticking-eta'
+import { useHeadwaySchedule } from '@/lib/eta/headway/use-headway-schedule'
 import { formatEtaOrdinals } from '@/lib/eta/kmb-eta-groups'
 import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
 import {
@@ -136,12 +139,26 @@ function KmbRouteStopCard({
     [stopEtas]
   )
   const visible = sorted.slice(0, 3)
-  const { t: cardT } = useTranslations(lang)
+  const { t: cardT, tWithParams: cardTWithParams } = useTranslations(lang)
+
+  // Scheduled fallback for the stop card's variant (all entries here share
+  // one variant; the hook is unconditional with a possibly-null key).
+  const cardBaseKey = React.useMemo(() => {
+    const first = stopEtas[0]
+    if (!first) return null
+    return variantBaseKey(first)
+  }, [stopEtas])
+  const cardScheduled = useHeadwaySchedule(cardBaseKey)
 
   const panel =
     visible.length === 0 ? (
       <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-        {cardT('common.noScheduledBuses')}
+        {cardScheduled &&
+        (cardScheduled.headwayMin != null ||
+          cardScheduled.headwayRange != null ||
+          (cardScheduled.first && cardScheduled.last))
+          ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
+          : cardT('common.noScheduledBuses')}
       </div>
     ) : (
       <div className="space-y-2">
@@ -1285,6 +1302,13 @@ export function KmbRoutesView({
                 </div>
                 <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
               </div>
+            )}
+
+            {currentVariant && (
+              <RouteScheduleSection
+                variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
+                lang={lang}
+              />
             )}
           </RouteDrilldown>
         )}

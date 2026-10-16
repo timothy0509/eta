@@ -98,6 +98,36 @@ export function groupEtasByVariant(
   return [...withEtaAndFare, ...withEtaOnly, ...withoutEtas]
 }
 
+/**
+ * Stable-partition only the trailing no-ETA segment so groups with a
+ * scheduled fallback (baseKey present in the map) come first. Live groups
+ * keep their positions and relative order within each part is preserved.
+ * Returns the input array unchanged when there is nothing to reorder.
+ */
+export function sortScheduledFirst(
+  groups: EtaGroup[],
+  scheduledByBaseKey: Record<string, unknown>
+): EtaGroup[] {
+  let lastLive = -1
+  for (let i = 0; i < groups.length; i++) {
+    if (groups[i]?.hasEta) lastLive = i
+  }
+  const head = groups.slice(0, lastLive + 1)
+  const tail = groups.slice(lastLive + 1)
+  if (tail.length < 2) return groups
+  const withSchedule: EtaGroup[] = []
+  const withoutSchedule: EtaGroup[] = []
+  for (const group of tail) {
+    if (Object.prototype.hasOwnProperty.call(scheduledByBaseKey, group.baseKey)) {
+      withSchedule.push(group)
+    } else {
+      withoutSchedule.push(group)
+    }
+  }
+  if (withSchedule.length === 0 || withoutSchedule.length === 0) return groups
+  return [...head, ...withSchedule, ...withoutSchedule]
+}
+
 export function precomputeRenderGroups(
   etaByStopId: Record<string, KmbEtaEntryWithLeg[]>,
   loadedStopIds: string[],

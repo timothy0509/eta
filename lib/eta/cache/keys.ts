@@ -27,6 +27,10 @@ export function kmbRouteGeometryKey(variantKey: string): string {
   return `kmb-route-geometry:${variantKey}`
 }
 
+export function routeWaypointsKey(gtfsId: string, direction: string): string {
+  return `route-waypoints:${gtfsId}:${direction}`
+}
+
 export function lrtRouteEtaKey(params: {
   route: string
   bound: string

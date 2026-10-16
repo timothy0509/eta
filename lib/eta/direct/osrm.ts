@@ -1,7 +1,8 @@
+import { env } from '@/lib/env'
 import { fetchJson, resolveTimeoutMs } from '@/lib/eta/http'
 import type { GeoPoint } from '@/lib/eta/geo'
 
-export const OSRM_BASE_URL = 'https://router.project-osrm.org'
+export const OSRM_BASE_URL = env.NEXT_PUBLIC_OSRM_BASE_URL
 export const OSRM_MAX_WAYPOINTS = 100
 const OSRM_SIMPLIFIED_THRESHOLD = 30
 

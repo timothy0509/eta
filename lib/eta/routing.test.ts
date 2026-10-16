@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, afterEach } from 'vitest'
 
-import { getRoutedGeometry, pointsSignature } from './routing'
+import { getRouteDisplayGeometry, getRoutedGeometry, pointsSignature } from './routing'
 
 const POINTS = [
   { lat: 22.3193, lng: 114.1694 },
@@ -30,6 +30,78 @@ function okBody() {
     ],
   }
 }
+
+describe('getRouteDisplayGeometry', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('prefers the prebuilt waypoint file over OSRM', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input)
+      if (url.startsWith('/map-waypoints/')) {
+        return Promise.resolve(
+          jsonResponse({
+            type: 'LineString',
+            coordinates: [
+              [114.1, 22.4],
+              [114.2, 22.41],
+            ],
+          })
+        )
+      }
+      return Promise.resolve(jsonResponse(okBody()))
+    })
+
+    const result = await getRouteDisplayGeometry({
+      variantKey: 'display-wp-test',
+      gtfsId: 'kmb-display-tests-O',
+      bound: 'O',
+      points: POINTS,
+    })
+    expect(result).toEqual([
+      { lat: 22.4, lng: 114.1 },
+      { lat: 22.41, lng: 114.2 },
+    ])
+    // OSRM host must not be hit when waypoint data wins.
+    const urls = (fetchSpy.mock.calls as unknown as Array<[string]>).map((call) => String(call[0]))
+    expect(urls.some((url) => url.includes('router.project-osrm.org'))).toBe(false)
+  })
+
+  it('falls back to OSRM when the waypoint file is invalid', async () => {
+    vi.spyOn(globalThis, 'fetch').mockImplementation((input) => {
+      const url = String(input)
+      if (url.startsWith('/map-waypoints/')) {
+        return Promise.resolve(jsonResponse({ type: 'LineString', coordinates: [[114]] }))
+      }
+      return Promise.resolve(jsonResponse(okBody()))
+    })
+
+    const result = await getRouteDisplayGeometry({
+      variantKey: 'display-fallback-test',
+      gtfsId: 'kmb-display-fallback-O',
+      bound: 'O',
+      points: POINTS,
+    })
+    expect(result).toHaveLength(2)
+    expect(result?.[0]).toEqual({ lat: 22.3193, lng: 114.1694 })
+  })
+
+  it('skips the waypoint host entirely without a gtfsId', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(jsonResponse(okBody()))
+    const result = await getRouteDisplayGeometry({
+      variantKey: 'display-nogtfs-test',
+      gtfsId: null,
+      bound: 'O',
+      points: POINTS,
+    })
+    expect(result).not.toBeNull()
+    const urls = (vi.mocked(globalThis.fetch).mock.calls as unknown as Array<[string]>).map(
+      (call) => String(call[0])
+    )
+    expect(urls.some((url) => url.includes('/map-waypoints/'))).toBe(false)
+  })
+})
 
 describe('getRoutedGeometry', () => {
   afterEach(() => {

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { computeNearbyStops, formatDistanceKm, haversineDistanceKm, isValidGeoPoint } from './geo'
+import {
+  computeNearbyStops,
+  formatDistanceKm,
+  geodesicCircleRing,
+  haversineDistanceKm,
+  isValidGeoPoint,
+} from './geo'
 
 describe('haversineDistanceKm', () => {
   it('returns a known distance between Hong Kong Central and Tsim Sha Tsui', () => {
@@ -102,5 +108,41 @@ describe('isValidGeoPoint', () => {
     expect(isValidGeoPoint({ lat: Number.NaN, lng: 114.1 })).toBe(false)
     expect(isValidGeoPoint(null)).toBe(false)
     expect(isValidGeoPoint({ lat: '22', lng: 114 })).toBe(false)
+  })
+})
+
+describe('geodesicCircleRing', () => {
+  it('closes the ring and returns [lng, lat] pairs', () => {
+    const ring = geodesicCircleRing({ lat: 22.3, lng: 114.17 }, 1)
+    expect(ring.length).toBe(49) // steps + closing vertex
+    const [firstLng, firstLat] = ring[0]
+    const [lastLng, lastLat] = ring[ring.length - 1]
+    expect(lastLng).toBeCloseTo(firstLng, 10)
+    expect(lastLat).toBeCloseTo(firstLat, 10)
+    for (const [lng, lat] of ring) {
+      expect(lng).toBeGreaterThan(113)
+      expect(lng).toBeLessThan(115)
+      expect(lat).toBeGreaterThan(21.5)
+      expect(lat).toBeLessThan(23)
+    }
+  })
+
+  it('spans roughly twice the requested radius at the circle extremes', () => {
+    const ring = geodesicCircleRing({ lat: 22.32, lng: 114.17 }, 2, 8)
+    const lats = ring.map(([, lat]) => lat)
+    const lngs = ring.map(([lng]) => lng)
+    const latSpanKm = (Math.max(...lats) - Math.min(...lats)) * 111
+    const lngSpanKm =
+      (Math.max(...lngs) - Math.min(...lngs)) * 111 * Math.cos((22.32 * Math.PI) / 180)
+    expect(latSpanKm).toBeGreaterThan(3.7)
+    expect(latSpanKm).toBeLessThan(4.3)
+    expect(lngSpanKm).toBeGreaterThan(3.7)
+    expect(lngSpanKm).toBeLessThan(4.3)
+  })
+
+  it('is empty for invalid centers or radii', () => {
+    expect(geodesicCircleRing({ lat: Number.NaN, lng: 0 }, 1)).toEqual([])
+    expect(geodesicCircleRing({ lat: 22.3, lng: 114.1 }, 0)).toEqual([])
+    expect(geodesicCircleRing({ lat: 22.3, lng: 114.1 }, -1)).toEqual([])
   })
 })

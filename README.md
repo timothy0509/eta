@@ -206,6 +206,27 @@ This application uses the [hk-bus-eta](https://github.com/hkbus/hk-bus-eta) npm 
 
 The hk-bus-eta package maintains a single, cached EtaDb that aggregates all transit data with proper caching, holiday schedules, and service day logic.
 
+## Configuration
+
+All map endpoints are build/deploy configuration with sane defaults checked in to `lib/env.ts`. Overrides go through `NEXT_PUBLIC_*` environment variables at build time (they are inlined into the client bundle) and at server runtime (the CSP's `connect-src` and the preconnect hints in `app/layout.tsx` are derived from the same values, so a different tile host works end to end without source changes). The tile archive default is same-origin on purpose: some mobile networks block or degrade third-party tile hosts, and same-origin never is. `scripts/fetch-map-data.mjs` runs as the `predev`/`prebuild` step and keeps `public/map/hong-kong.pmtiles` (gitignored) fresh from the `hk-pmtiles-generation` build output; `FORCE_MAP_TILE_FETCH=1` forces a re-download, `MAP_TILE_FETCH_URL` points it at another mirror.
+
+| Variable                               | Default                              | Purpose                                                                                                                                       |
+| -------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_SITE_URL`                 | `https://eta.hkjc.uk`                | Canonical/OG base URL                                                                                                                         |
+| `NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL`     | `/map/hong-kong.pmtiles`             | Vector basemap (PMTiles); fetched at build time into `public/map/` and served same-origin                                                     |
+| `NEXT_PUBLIC_MAP_GLYPHS_URL`           | `/map/fonts/{fontstack}/{range}.pbf` | Label glyph fonts, mirrored at build time into `public/map/fonts/` (CJK renders locally, never fetched)                                       |
+| `NEXT_PUBLIC_MAP_SPRITE_URL`           | `/map/sprite/sprite`                 | Label/POI sprite sheet, mirrored at build time into `public/map/sprite/`                                                                      |
+| `NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL` | `/map-waypoints`                     | Prebuilt route path geometry, same-origin passthrough (`app/map-waypoints/[...file]`; upstream is `NEXT_PUBLIC_ROUTE_WAYPOINTS_UPSTREAM_URL`) |
+| `NEXT_PUBLIC_OSRM_BASE_URL`            | `https://router.project-osrm.org`    | Fallback route geometry router                                                                                                                |
+
+## Attribution
+
+**Map data.** The basemap tiles and fallback route geometry are built on data from [OpenStreetMap](https://www.openstreetmap.org/copyright), © OpenStreetMap contributors, under the Open Database License. ODbL requires this attribution to be visible on maps that display its data; the app shows it in the map's attribution control, and it is repeated here.
+
+**Bundled software.** The app bundles the following, whose copyright and license notices are retained with the distribution as their BSD-3-Clause license requires: [MapLibre GL JS](https://github.com/maplibre/maplibre-gl), [`pmtiles`](https://github.com/protomaps/PMTiles), and [`@protomaps/basemaps`](https://github.com/protomaps/basemaps) (all BSD-3-Clause).
+
+**Transit data.** Where government open data is redistributed, its source is acknowledged as required by the DATA.GOV.HK terms of use: 資料來源：資料一線通 (Source: DATA.GOV.HK).
+
 ## License
 
 MIT

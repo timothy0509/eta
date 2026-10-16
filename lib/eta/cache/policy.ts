@@ -25,6 +25,13 @@ export const CACHE_POLICIES = {
     maxStaleMs: 90 * 24 * 60 * 60 * 1000,
     persist: true,
   },
+  // Prebuilt route waypoint geometry from hkbus.github.io; static dataset
+  // files keyed by gtfsId, so they change with dataset releases, not ETAs.
+  routeWaypoints: {
+    ttlMs: 30 * 24 * 60 * 60 * 1000,
+    maxStaleMs: 90 * 24 * 60 * 60 * 1000,
+    persist: true,
+  },
 } as const satisfies Record<string, CachePolicy>
 
 export function createCacheMeta(ttlMs: number, now = Date.now()): CacheEntryMeta {

@@ -1,34 +1,40 @@
 'use client'
 
-import type * as L from 'leaflet'
+import 'maplibre-gl/dist/maplibre-gl.css'
+
 import * as React from 'react'
+import { useTheme } from 'next-themes'
+import type {
+  GeoJSONSource,
+  LayerSpecification,
+  Map as MapLibreMap,
+  MapGeoJSONFeature,
+} from 'maplibre-gl'
 
-import 'leaflet/dist/leaflet.css'
+type LineLayerSpec = Extract<LayerSpecification, { type: 'line' }>
+type FillLayerSpec = Extract<LayerSpecification, { type: 'fill' }>
+type CircleLayerSpec = Extract<LayerSpecification, { type: 'circle' }>
+type SymbolLayerSpec = Extract<LayerSpecification, { type: 'symbol' }>
 
+import { registerMapPmtilesProtocol } from '@/lib/eta/direct/map-pmtiles'
+import { checkMapTileArchiveHealth, MAP_TILE_ARCHIVE_URL } from '@/lib/eta/direct/map-tiles'
+import { geodesicCircleRing } from '@/lib/eta/geo'
+import {
+  basemapLabelLangForUi,
+  buildBaseMapStyle,
+  overlayPalette,
+  type MapTheme,
+} from '@/lib/eta/map-style'
 import { markPerf, measurePerf } from '@/lib/eta/perf'
+import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
-
-type LeafletMod = typeof import('leaflet')
-
-const TILE_URL = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-const TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-const TILE_MAX_ZOOM = 19
-
-const DEFAULT_CENTER = { lat: 22.3193, lng: 114.1694 }
-
-const STOP_COLOR = '#00478d'
-const USER_LOCATION_COLOR = '#005db6'
-const POLYLINE_DEFAULT_COLOR = '#00478d'
-
-const EMPTY_MARKERS: MapMarker[] = []
-const EMPTY_POLYLINES: MapPolyline[] = []
 
 export type MapMarker = {
   id: string
   lat: number
   lng: number
   title?: string
+  selected?: boolean
 }
 
 export type MapPolyline = {
@@ -37,29 +43,302 @@ export type MapPolyline = {
   color?: string
 }
 
-type Props = {
+export type MapUserLocation = {
+  lat: number
+  lng: number
+  /** GPS accuracy in metres; renders the geodesic accuracy ring when present. */
+  accuracyM?: number
+}
+
+export type TransitMapProps = {
+  lang: UiLanguage
   center?: { lat: number; lng: number }
   markers?: MapMarker[]
   polylines?: MapPolyline[]
   zoom?: number
   className?: string
-  userLocation?: { lat: number; lng: number } | null
+  userLocation?: MapUserLocation | null
+  onMarkerClick?: (id: string) => void
+  /**
+   * Fit the content extent whenever this key changes (e.g. route variant),
+   * instead of following the center/zoom props.
+   */
+  fitKey?: string | null
+  /** Fly to this point when its identity changes (stop selection, follow mode). */
+  focusPoint?: { lat: number; lng: number; zoom?: number } | null
+  ariaLabel?: string
 }
 
-function createStopIcon(Lmod: LeafletMod): L.DivIcon {
-  return Lmod.divIcon({
-    className: 'transit-map-stop-icon',
-    html: [
-      '<span style="display:block;width:26px;height:26px">',
-      `<svg viewBox="0 0 24 24" width="26" height="26" style="display:block;filter:drop-shadow(0 1px 2px rgba(0,0,0,0.3))">`,
-      `<path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7z" fill="${STOP_COLOR}" stroke="#fff" stroke-width="1.5"/>`,
-      `<circle cx="12" cy="9" r="2.6" fill="#fff"/>`,
-      '</svg>',
-      '</span>',
-    ].join(''),
-    iconSize: [26, 26],
-    iconAnchor: [13, 26],
+const DEFAULT_CENTER = { lat: 22.3193, lng: 114.1694 }
+
+const EMPTY_MARKERS: MapMarker[] = []
+const EMPTY_POLYLINES: MapPolyline[] = []
+
+// Sources / layers for our own GeoJSON overlays.
+const ROUTE_SOURCE = 'timoeta-route'
+const STOPS_SOURCE = 'timoeta-stops'
+const USER_SOURCE = 'timoeta-user'
+const ARROW_IMAGE_ID = 'timoeta-route-arrow'
+
+function stopFeature(marker: MapMarker): GeoJSON.Feature {
+  return {
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [marker.lng, marker.lat] },
+    properties: {
+      id: marker.id,
+      title: marker.title ?? '',
+      selected: marker.selected === true,
+    },
+    id: marker.id,
+  }
+}
+
+function routeFeature(line: MapPolyline): GeoJSON.Feature | null {
+  if (line.path.length < 2) return null
+  return {
+    type: 'Feature',
+    geometry: {
+      type: 'LineString',
+      coordinates: line.path.map((point) => [point.lng, point.lat]),
+    },
+    properties: line.color ? { id: line.id, color: line.color } : { id: line.id },
+    // The 'color' property must stay absent when the line has no explicit
+    // color: painting ['coalesce', ['get','color'], palette.routeMain] with
+    // an empty-string property resolves to '' and drops the line.
+  }
+}
+
+function userFeatures(user: MapUserLocation | null): GeoJSON.Feature[] {
+  if (!user) return []
+  const features: GeoJSON.Feature[] = [
+    {
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [user.lng, user.lat] },
+      properties: { kind: 'dot' },
+    },
+  ]
+  const accuracyKm = user.accuracyM && user.accuracyM > 0 ? user.accuracyM / 1000 : null
+  const ring = accuracyKm ? geodesicCircleRing(user, accuracyKm) : []
+  if (ring.length > 3) {
+    features.push({
+      type: 'Feature',
+      geometry: { type: 'Polygon', coordinates: [ring] },
+      properties: { kind: 'accuracy' },
+    })
+  }
+  return features
+}
+
+/** Small filled triangle rendered as pixels; line symbols orient along the road. */
+function makeArrowImage(body: string, outline: string): ImageData | null {
+  if (typeof document === 'undefined') return null
+  const size = 16
+  const ratio = 2
+  const canvas = document.createElement('canvas')
+  canvas.width = size * ratio
+  canvas.height = size * ratio
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return null
+  ctx.scale(ratio, ratio)
+  ctx.beginPath()
+  // Tip points up, matching hkbus's arrow sprite. Their style pairs this
+  // with icon-rotate: 90 (see the arrow layer below), which is what aligns
+  // the rendered arrow along the direction of travel.
+  ctx.moveTo(size / 2, 3.5)
+  ctx.lineTo(size - 2.5, size - 2.5)
+  ctx.lineTo(size / 2, size - 5.5)
+  ctx.lineTo(2.5, size - 2.5)
+  ctx.closePath()
+  ctx.fillStyle = body
+  ctx.fill()
+  ctx.lineWidth = 1
+  ctx.strokeStyle = outline
+  ctx.stroke()
+  return ctx.getImageData(0, 0, canvas.width, canvas.height)
+}
+
+function ensureArrowImage(map: MapLibreMap, theme: MapTheme): void {
+  if (map.hasImage(ARROW_IMAGE_ID)) map.removeImage(ARROW_IMAGE_ID)
+  const palette = overlayPalette(theme)
+  const pixels = makeArrowImage(palette.routeMain, palette.routeCasing)
+  // ImageData is a StyleImageSource; pixelRatio rides the documented
+  // options arg so the 2x buffer renders at 1x logical size.
+  if (pixels) map.addImage(ARROW_IMAGE_ID, pixels, { pixelRatio: 2 })
+}
+
+function setGeojsonSource(map: MapLibreMap, id: string, features: GeoJSON.Feature[]): void {
+  const source = map.getSource(id)
+  if (!source || source.type !== 'geojson') return
+  ;(source as GeoJSONSource).setData({
+    type: 'FeatureCollection',
+    features,
   })
+}
+
+function syncOverlayData(
+  map: MapLibreMap,
+  data: {
+    markers: MapMarker[]
+    polylines: MapPolyline[]
+    userLocation: MapUserLocation | null
+  }
+): void {
+  setGeojsonSource(map, STOPS_SOURCE, data.markers.map(stopFeature))
+  setGeojsonSource(
+    map,
+    ROUTE_SOURCE,
+    data.polylines.flatMap((line) => {
+      const feature = routeFeature(line)
+      return feature ? [feature] : []
+    })
+  )
+  setGeojsonSource(map, USER_SOURCE, userFeatures(data.userLocation))
+}
+
+/**
+ * Adds our overlay sources/layers after every style load: the initial load
+ * and each setStyle() call (theme/language switch) both land here. A fresh
+ * style object drops sources, so this is fully idempotent and relies on the
+ * caller to re-sync data afterwards.
+ */
+function ensureOverlayLayers(map: MapLibreMap, theme: MapTheme): void {
+  const palette = overlayPalette(theme)
+
+  for (const id of [ROUTE_SOURCE, STOPS_SOURCE, USER_SOURCE]) {
+    if (map.getSource(id)) map.removeSource(id)
+  }
+  const emptyCollection: GeoJSON.FeatureCollection = { type: 'FeatureCollection', features: [] }
+  map.addSource(ROUTE_SOURCE, { type: 'geojson', data: emptyCollection })
+  map.addSource(STOPS_SOURCE, { type: 'geojson', data: emptyCollection })
+  map.addSource(USER_SOURCE, { type: 'geojson', data: emptyCollection })
+
+  const accuracyFill: FillLayerSpec = {
+    id: 'user-accuracy',
+    type: 'fill',
+    source: USER_SOURCE,
+    filter: ['==', ['get', 'kind'], 'accuracy'],
+    paint: { 'fill-color': palette.userAccuracy },
+  }
+  const accuracyStroke: LineLayerSpec = {
+    id: 'user-accuracy-stroke',
+    type: 'line',
+    source: USER_SOURCE,
+    filter: ['==', ['get', 'kind'], 'accuracy'],
+    paint: { 'line-color': palette.userFill, 'line-width': 1.5, 'line-opacity': 0.5 },
+  }
+  const casing: LineLayerSpec = {
+    id: 'route-casing',
+    type: 'line',
+    source: ROUTE_SOURCE,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': palette.routeCasing,
+      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 5, 16, 11],
+      'line-opacity': 0.95,
+    },
+  }
+  const main: LineLayerSpec = {
+    id: 'route-main',
+    type: 'line',
+    source: ROUTE_SOURCE,
+    layout: { 'line-cap': 'round', 'line-join': 'round' },
+    paint: {
+      'line-color': ['coalesce', ['get', 'color'], palette.routeMain],
+      'line-width': ['interpolate', ['linear'], ['zoom'], 10, 2.5, 16, 7],
+    },
+  }
+  const arrows: SymbolLayerSpec = {
+    id: 'route-arrows',
+    type: 'symbol',
+    source: ROUTE_SOURCE,
+    layout: {
+      'symbol-placement': 'line',
+      'symbol-spacing': 140,
+      'icon-image': ARROW_IMAGE_ID,
+      'icon-rotate': 90,
+      'icon-rotation-alignment': 'map',
+      'icon-allow-overlap': true,
+      'icon-ignore-placement': true,
+      'icon-padding': 4,
+    },
+  }
+  const stops: CircleLayerSpec = {
+    id: 'stops',
+    type: 'circle',
+    source: STOPS_SOURCE,
+    paint: {
+      'circle-color': [
+        'case',
+        ['==', ['get', 'selected'], true],
+        palette.stopSelectedFill,
+        palette.stopFill,
+      ],
+      'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 4, 14, 5.5, 16, 7],
+      'circle-stroke-color': [
+        'case',
+        ['==', ['get', 'selected'], true],
+        palette.stopSelectedStroke,
+        palette.stopStroke,
+      ],
+      'circle-stroke-width': 2,
+    },
+  }
+  // Selected pins get their own layer: a zoom-aware radius cannot nest an
+  // interpolate inside a case in the style spec, so the enlarged radius and
+  // the thicker stroke live here instead.
+  const stopsSelected: CircleLayerSpec = {
+    id: 'stops-selected',
+    type: 'circle',
+    source: STOPS_SOURCE,
+    filter: ['==', ['get', 'selected'], true],
+    paint: {
+      'circle-color': palette.stopSelectedFill,
+      'circle-radius': 8,
+      'circle-stroke-color': palette.stopSelectedStroke,
+      'circle-stroke-width': 3,
+    },
+  }
+  const stopLabel: SymbolLayerSpec = {
+    id: 'stop-label',
+    type: 'symbol',
+    source: STOPS_SOURCE,
+    minzoom: 13,
+    filter: ['==', ['get', 'selected'], true],
+    layout: {
+      'text-field': ['get', 'title'],
+      'text-font': ['Noto Sans Medium'],
+      'text-size': 12,
+      'text-offset': [0, 1.2],
+      'text-anchor': 'top',
+    },
+    paint: {
+      'text-color': palette.stopLabelText,
+      'text-halo-color': palette.stopLabelHalo,
+      'text-halo-width': 1.2,
+    },
+  }
+  const userDot: CircleLayerSpec = {
+    id: 'user-dot',
+    type: 'circle',
+    source: USER_SOURCE,
+    filter: ['==', ['get', 'kind'], 'dot'],
+    paint: {
+      'circle-color': palette.userFill,
+      'circle-radius': 7,
+      'circle-stroke-color': palette.stopStroke,
+      'circle-stroke-width': 2.5,
+    },
+  }
+
+  map.addLayer(accuracyFill)
+  map.addLayer(accuracyStroke)
+  map.addLayer(casing)
+  map.addLayer(main)
+  map.addLayer(arrows)
+  map.addLayer(stops)
+  map.addLayer(stopsSelected)
+  map.addLayer(stopLabel)
+  map.addLayer(userDot)
 }
 
 function samePosition(
@@ -69,81 +348,161 @@ function samePosition(
   return !!a && !!b && a.lat === b.lat && a.lng === b.lng
 }
 
+/**
+ * MapLibre GL map over our own Hong Kong PMTiles vector archive. One
+ * component serves the nearby and route views; markers and route lines are
+ * GeoJSON sources, so pin styling (selected stop, direction arrows, accuracy
+ * ring) is declarative property-driven styling instead of one DOM node per pin.
+ */
 export function TransitMap({
+  lang,
   center = DEFAULT_CENTER,
   markers = EMPTY_MARKERS,
   polylines = EMPTY_POLYLINES,
   zoom = 14,
   className,
   userLocation,
-}: Props) {
+  onMarkerClick,
+  fitKey,
+  focusPoint,
+  ariaLabel,
+}: TransitMapProps) {
   const containerRef = React.useRef<HTMLDivElement>(null)
-  const mapRef = React.useRef<L.Map | null>(null)
-  const leafletRef = React.useRef<LeafletMod | null>(null)
-  const markerLayerRef = React.useRef<L.LayerGroup | null>(null)
-  const polylineLayerRef = React.useRef<L.LayerGroup | null>(null)
-  const userLocationLayerRef = React.useRef<L.LayerGroup | null>(null)
+  const mapRef = React.useRef<MapLibreMap | null>(null)
+  const maplibreRef = React.useRef<typeof import('maplibre-gl') | null>(null)
   const [mapReady, setMapReady] = React.useState(false)
+  const [mapErrors, setMapErrors] = React.useState<string[]>([])
+
+  const { resolvedTheme } = useTheme()
+  const theme: MapTheme = resolvedTheme === 'dark' ? 'dark' : 'light'
+  const labelLang = basemapLabelLangForUi(lang)
+  // The mount effect runs once but style.load fires on every setStyle
+  // (theme/language switch); the ref keeps the handler on the live theme
+  // instead of the one captured at mount.
+  const themeRef = React.useRef(theme)
+  React.useEffect(() => {
+    themeRef.current = theme
+  }, [theme])
+
+  const dataRef = React.useRef({ markers, polylines, userLocation: userLocation ?? null })
+  React.useEffect(() => {
+    dataRef.current = { markers, polylines, userLocation: userLocation ?? null }
+  }, [markers, polylines, userLocation])
 
   const initialCenterRef = React.useRef(center)
   const initialZoomRef = React.useRef(zoom)
   const lastAppliedCenterRef = React.useRef<{ lat: number; lng: number } | null>(null)
   const lastAppliedZoomRef = React.useRef<number | null>(null)
+  const lastFitKeyRef = React.useRef<string | null>(null)
+  const lastFocusRef = React.useRef<{ lat: number; lng: number; zoom?: number } | null>(null)
+  const onMarkerClickRef = React.useRef(onMarkerClick)
+  React.useEffect(() => {
+    onMarkerClickRef.current = onMarkerClick
+  }, [onMarkerClick])
+
+  const styleSpec = React.useMemo(() => buildBaseMapStyle(theme, labelLang), [theme, labelLang])
 
   React.useEffect(() => {
     let cancelled = false
-    let map: L.Map | null = null
     let resizeObserver: ResizeObserver | null = null
     let raf = 0
     markPerf('map:mount-start')
 
     async function init() {
       if (!containerRef.current || mapRef.current) return
-      let mod: LeafletMod
+      let maplibre: typeof import('maplibre-gl')
       try {
-        mod = await import('leaflet')
+        const [gl, protocolReady] = await Promise.all([
+          import('maplibre-gl'),
+          registerMapPmtilesProtocol(),
+        ])
+        if (cancelled || !containerRef.current || mapRef.current) return
+        maplibre = gl
+        void protocolReady
+
+        // MapLibre's automatic worker URL detection depends on resolving its
+        // own bundle URL, which Next's chunked ESM output does not expose
+        // (the resolved URL came back empty, so the worker was constructed
+        // from ''). Point it at the bundler-emitted worker asset instead.
+        try {
+          const workerUrl = new URL('maplibre-gl/dist/maplibre-gl-worker.mjs', import.meta.url).href
+          if (workerUrl && !workerUrl.startsWith('file:')) {
+            maplibre.setWorkerUrl(workerUrl)
+          }
+        } catch {
+          // Leave the builtin fallback in place; worker failures surface
+          // through maplibre's own error event either way.
+        }
       } catch {
         return
       }
       const container = containerRef.current
       if (cancelled || !container || mapRef.current) return
-      leafletRef.current = mod
+      maplibreRef.current = maplibre
 
-      map = mod.map(container, {
-        center: [initialCenterRef.current.lat, initialCenterRef.current.lng],
+      const map = new maplibre.Map({
+        container,
+        center: [initialCenterRef.current.lng, initialCenterRef.current.lat],
         zoom: initialZoomRef.current,
-        zoomControl: false,
-        attributionControl: true,
-        preferCanvas: true,
+        attributionControl: { compact: true },
+        // Wheel hijacks page scroll while the cursor sits over the map card;
+        // it is re-enabled by an explicit pointer interaction inside the map.
+        scrollZoom: false,
+        // CJK codepoints rasterize locally from system fonts instead of
+        // fetching CJK glyph ranges; only the small mirrored Latin/symbol
+        // ranges in public/map/fonts are ever requested.
+        localIdeographFontFamily: 'sans-serif',
+        style: styleSpec,
       })
       mapRef.current = map
 
-      mod
-        .tileLayer(TILE_URL, {
-          maxZoom: TILE_MAX_ZOOM,
-          attribution: TILE_ATTRIBUTION,
-          keepBuffer: 2,
-          updateWhenIdle: true,
-        })
-        .addTo(map)
+      map.on('error', (event) => {
+        const detail = event && event.error ? String(event.error.message || event.error) : 'unknown'
+        if (!cancelled) {
+          setMapErrors((prev) => {
+            const next = prev.includes(detail) ? prev : [...prev, detail].slice(-3)
+            return next
+          })
+        }
+      })
 
-      markerLayerRef.current = mod.layerGroup().addTo(map)
-      polylineLayerRef.current = mod.layerGroup().addTo(map)
-      userLocationLayerRef.current = mod.layerGroup().addTo(map)
+      map.on('style.load', () => {
+        if (cancelled || !mapRef.current) return
+        ensureOverlayLayers(mapRef.current, themeRef.current)
+        ensureArrowImage(mapRef.current, themeRef.current)
+        syncOverlayData(mapRef.current, dataRef.current)
+      })
 
-      lastAppliedCenterRef.current = initialCenterRef.current
-      lastAppliedZoomRef.current = initialZoomRef.current
+      map.on('click', 'stops', (event) => {
+        const feature = event.features?.[0] as MapGeoJSONFeature | undefined
+        const id = feature?.properties?.id
+        if (typeof id === 'string' && id) onMarkerClickRef.current?.(id)
+      })
+      map.on('mouseenter', 'stops', () => {
+        map.getCanvas().style.cursor = 'pointer'
+      })
+      map.on('mouseleave', 'stops', () => {
+        map.getCanvas().style.cursor = ''
+      })
 
-      raf = requestAnimationFrame(() => map?.invalidateSize())
+      raf = requestAnimationFrame(() => map.resize())
       resizeObserver =
-        typeof ResizeObserver !== 'undefined'
-          ? new ResizeObserver(() => map?.invalidateSize())
-          : null
+        typeof ResizeObserver !== 'undefined' ? new ResizeObserver(() => map.resize()) : null
       resizeObserver?.observe(container)
 
       if (!cancelled) {
         setMapReady(true)
         measurePerf('map:mount', 'map:mount-start')
+      }
+      if (process.env.NODE_ENV === 'development') {
+        void checkMapTileArchiveHealth().then((health) => {
+          if (health.ok) return
+          const detail =
+            health.reason === 'stale'
+              ? `(age ${health.ageDays ?? '?'}d) — the scheduled hk-pmtiles-generation run may have stopped`
+              : `— the tile archive is missing at ${MAP_TILE_ARCHIVE_URL}`
+          console.warn(`[timoeta] map tile archive check failed: ${health.reason} ${detail}`)
+        })
       }
     }
 
@@ -153,73 +512,102 @@ export function TransitMap({
       cancelled = true
       cancelAnimationFrame(raf)
       resizeObserver?.disconnect()
-      markerLayerRef.current = null
-      polylineLayerRef.current = null
-      userLocationLayerRef.current = null
-      map?.remove()
+      mapRef.current?.remove()
       mapRef.current = null
-      leafletRef.current = null
       setMapReady(false)
     }
+    // The map mounts once; style/theme changes go through setStyle below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   React.useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    if (!map || !mapReady) return
+    syncOverlayData(map, dataRef.current)
+  }, [markers, polylines, userLocation, mapReady])
+
+  React.useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    map.setStyle(styleSpec, { diff: false })
+  }, [styleSpec, mapReady])
+
+  React.useEffect(() => {
+    const map = mapRef.current
+    if (!map || !mapReady) return
     if (samePosition(lastAppliedCenterRef.current, center) && lastAppliedZoomRef.current === zoom) {
       return
     }
     lastAppliedCenterRef.current = center
     lastAppliedZoomRef.current = zoom
-    map.setView([center.lat, center.lng], zoom)
-  }, [center, zoom])
+    map.jumpTo({ center: [center.lng, center.lat], zoom })
+  }, [center, zoom, mapReady])
 
   React.useEffect(() => {
-    const layer = markerLayerRef.current
-    const Lmod = leafletRef.current
-    if (!layer || !Lmod) return
-    layer.clearLayers()
-    const icon = createStopIcon(Lmod)
-    for (const marker of markers) {
-      Lmod.marker([marker.lat, marker.lng], { icon, title: marker.title ?? '' }).addTo(layer)
+    const map = mapRef.current
+    const maplibre = maplibreRef.current
+    if (!map || !mapReady || !maplibre) return
+    if (fitKey === null || fitKey === undefined || fitKey === lastFitKeyRef.current) return
+    lastFitKeyRef.current = fitKey
+    const bounds = new maplibre.LngLatBounds()
+    let hasPoints = false
+    for (const marker of dataRef.current.markers) {
+      bounds.extend([marker.lng, marker.lat])
+      hasPoints = true
     }
-  }, [markers, mapReady])
+    for (const line of dataRef.current.polylines) {
+      for (const point of line.path) {
+        bounds.extend([point.lng, point.lat])
+        hasPoints = true
+      }
+    }
+    if (hasPoints) map.fitBounds(bounds, { padding: 48, maxZoom: 14.5 })
+  }, [fitKey, mapReady, markers, polylines])
 
   React.useEffect(() => {
-    const layer = polylineLayerRef.current
-    const Lmod = leafletRef.current
-    if (!layer || !Lmod) return
-    layer.clearLayers()
-    for (const line of polylines) {
-      Lmod.polyline(
-        line.path.map((p) => [p.lat, p.lng] as [number, number]),
-        { color: line.color ?? POLYLINE_DEFAULT_COLOR, weight: 4, opacity: 0.9 }
-      ).addTo(layer)
+    const map = mapRef.current
+    if (!map || !mapReady) return
+    if (!focusPoint) {
+      lastFocusRef.current = null
+      return
     }
-  }, [polylines, mapReady])
+    const last = lastFocusRef.current
+    if (last && samePosition(last, focusPoint) && last.zoom === focusPoint.zoom) return
+    lastFocusRef.current = focusPoint
+    map.flyTo({
+      center: [focusPoint.lng, focusPoint.lat],
+      zoom: focusPoint.zoom ?? map.getZoom(),
+      duration: 600,
+    })
+  }, [focusPoint, mapReady])
 
-  React.useEffect(() => {
-    const layer = userLocationLayerRef.current
-    const Lmod = leafletRef.current
-    if (!layer || !Lmod) return
-    layer.clearLayers()
-    if (userLocation) {
-      Lmod.circleMarker([userLocation.lat, userLocation.lng], {
-        radius: 8,
-        color: '#ffffff',
-        weight: 2,
-        fillColor: USER_LOCATION_COLOR,
-        fillOpacity: 1,
-      }).addTo(layer)
-    }
-  }, [userLocation, mapReady])
+  const handlePointerDown = React.useCallback(() => {
+    mapRef.current?.scrollZoom.enable()
+  }, [])
+
+  const handleMouseLeave = React.useCallback(() => {
+    mapRef.current?.scrollZoom.disable()
+  }, [])
 
   return (
     <div className={cn('relative z-0 overflow-hidden rounded-2xl', className)}>
+      {mapErrors.length > 0 && (
+        <div className="bg-surface-container/90 text-on-surface-variant pointer-events-none absolute right-2 bottom-8 z-10 max-w-[90%] rounded-lg px-2 py-1 font-mono text-[11px] leading-tight">
+          {mapErrors.map((msg) => (
+            <div key={msg} className="truncate" aria-hidden>
+              {msg}
+            </div>
+          ))}
+        </div>
+      )}
       <div
         ref={containerRef}
         className="h-full w-full"
         style={{ minHeight: '16rem', borderRadius: '1rem' }}
+        onPointerDown={handlePointerDown}
+        onMouseLeave={handleMouseLeave}
+        role="application"
+        aria-label={ariaLabel}
       />
     </div>
   )

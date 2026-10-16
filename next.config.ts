@@ -1,6 +1,26 @@
 import type { NextConfig } from 'next'
 import withBundleAnalyzer from '@next/bundle-analyzer'
 
+import { env } from './lib/env'
+
+// Fetchable origins for configurable map endpoints: whatever the build
+// environment chooses must ALSO be allowed by the CSP, so the origins are
+// derived from the same env values instead of being maintained separately.
+const configuredMapOrigins = new Set<string>()
+for (const url of [
+  env.NEXT_PUBLIC_MAP_TILE_ARCHIVE_URL,
+  env.NEXT_PUBLIC_MAP_GLYPHS_URL,
+  env.NEXT_PUBLIC_MAP_SPRITE_URL,
+  env.NEXT_PUBLIC_ROUTE_WAYPOINTS_BASE_URL,
+  env.NEXT_PUBLIC_OSRM_BASE_URL,
+]) {
+  try {
+    configuredMapOrigins.add(new URL(url).origin)
+  } catch {
+    // A malformed override fails loudly in the map code; skip it here.
+  }
+}
+
 const securityHeaders = [
   {
     key: 'Strict-Transport-Security',
@@ -25,7 +45,9 @@ const securityHeaders = [
   {
     key: 'Content-Security-Policy',
     value:
-      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://rt.data.gov.hk https://data.etabus.gov.hk https://data.etagmb.gov.hk https://data.hkbus.app https://hkbus.github.io https://opendata.mtr.com.hk https://www.lrtetas.hk https://router.project-osrm.org; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
+      "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' https://rt.data.gov.hk https://data.etabus.gov.hk https://data.etagmb.gov.hk https://data.hkbus.app https://opendata.mtr.com.hk https://www.lrtetas.hk " +
+      Array.from(configuredMapOrigins).join(' ') +
+      "; frame-ancestors 'none'; base-uri 'self'; form-action 'self'",
   },
 ]
 
@@ -34,6 +56,9 @@ const nextConfig: NextConfig = {
     optimizePackageImports: [
       'lucide-react',
       'framer-motion',
+      'maplibre-gl',
+      'pmtiles',
+      '@protomaps/basemaps',
       '@radix-ui/react-dialog',
       '@radix-ui/react-dropdown-menu',
       '@radix-ui/react-popover',

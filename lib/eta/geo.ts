@@ -101,3 +101,32 @@ export function computeNearbyStops<T extends GeoPoint>(
 
   return withDistance
 }
+
+export type LatLngRing = Array<[lng: number, lat: number]>
+
+/**
+ * Builds a geodesic circle as a polygon ring of [lng, lat] vertices.
+ * Screen-space circle layers shrink visually as you zoom out, but HK nearby
+ * maps let users pan far off-center, so the ring is computed on the sphere
+ * instead. Used for the GPS accuracy circle around the user dot.
+ */
+export function geodesicCircleRing(center: GeoPoint, radiusKm: number, steps = 48): LatLngRing {
+  if (!isValidGeoPoint(center) || !Number.isFinite(radiusKm) || radiusKm <= 0) return []
+  const stepCount = Math.max(3, Math.floor(steps))
+  const latRad = toRad(center.lat)
+  // WGS84 meters-per-degree approximation; local to HK (~22N) to keep the
+  // ring shape correct without a full datum projection.
+  const metersPerLat = 111_320
+  const metersPerLng = metersPerLat * Math.cos(latRad)
+  const latRadius = (radiusKm * 1000) / metersPerLat
+  const lngRadius = (radiusKm * 1000) / metersPerLng
+
+  const ring: LatLngRing = []
+  for (let i = 0; i <= stepCount; i++) {
+    const angle = (i / stepCount) * 2 * Math.PI
+    const lat = center.lat + latRadius * Math.sin(angle)
+    const lng = center.lng + lngRadius * Math.cos(angle)
+    ring.push([lng, lat])
+  }
+  return ring
+}

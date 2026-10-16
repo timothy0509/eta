@@ -37,6 +37,10 @@ const INDEX: HeadwayIndex = {
       span: { weekday: ['0600', '2200'] },
       headway: { weekday: [[360, 1320, 10]] },
     },
+    'ctb|102P|O|1': {
+      src: ['1000007'],
+      span: { weekday: ['0739', '0835'] },
+    },
   },
 }
 
@@ -170,5 +174,17 @@ describe('getScheduleForVariant', () => {
 
   it('returns null for a missing variant', () => {
     expect(getScheduleForVariant(INDEX, 'kmb|999|O|1', date('2026-10-16T10:00:00'))).toBeNull()
+  })
+
+  it('returns span-only fallback when the entry has no headway tables', () => {
+    const result = getScheduleForVariant(INDEX, 'ctb|102P|O|1', date('2026-10-16T10:00:00'))
+    expect(result).toMatchObject({
+      headwayMin: null,
+      headwayRange: null,
+      first: '07:39',
+      last: '08:35',
+      isHolidayTimetable: false,
+      serviceKey: 'ctb|102P|O|1',
+    })
   })
 })

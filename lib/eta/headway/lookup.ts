@@ -123,10 +123,21 @@ export function getScheduleForVariant(
 
   const dayType = getDayType(now, index.holidays)
   const windows = pickDayTable(schedule.headway, dayType)
-  if (!windows) return null
 
   const spanEntry = schedule.span[dayType] ?? schedule.span.weekday
   const { first, last } = spanToDisplay(spanEntry)
+  if (!windows) {
+    // Span-only entry: no frequency windows, but first/last is still useful.
+    if (!first && !last) return null
+    return {
+      headwayMin: null,
+      headwayRange: null,
+      first,
+      last,
+      isHolidayTimetable: dayType === 'holiday',
+      serviceKey,
+    }
+  }
   const mins = now.getHours() * 60 + now.getMinutes()
 
   return {

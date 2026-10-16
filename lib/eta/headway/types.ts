@@ -11,7 +11,8 @@ export type SpanRange = [startHhmm: string, endHhmm: string]
 export interface VariantSchedule {
   src: string[]
   span: Partial<Record<DayType, SpanRange>>
-  headway: Partial<Record<DayType, HeadwayWindow[]>>
+  /** Optional: span-only entries (peak-only routes) have no frequency windows. */
+  headway?: Partial<Record<DayType, HeadwayWindow[]>>
 }
 
 export interface HeadwayIndex {

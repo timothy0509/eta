@@ -17,23 +17,21 @@ function isVariantSchedule(value: unknown): value is VariantSchedule {
   const record = value as Record<string, unknown>
   const { src, span, headway } = record
   if (!Array.isArray(src) || !src.every((s) => typeof s === 'string')) return false
-  if (
-    typeof span !== 'object' ||
-    span === null ||
-    typeof headway !== 'object' ||
-    headway === null
-  ) {
-    return false
-  }
+  if (typeof span !== 'object' || span === null) return false
+  // headway is optional: span-only entries (peak-only routes with fixed
+  // departures) carry first/last times but no frequency windows.
+  if (headway !== undefined && (typeof headway !== 'object' || headway === null)) return false
   for (const [key, entry] of Object.entries(span as Record<string, unknown>)) {
     if (!isDayTypeKey(key)) return false
     if (!Array.isArray(entry) || entry.length !== 2 || !entry.every((s) => typeof s === 'string')) {
       return false
     }
   }
-  for (const [key, entry] of Object.entries(headway as Record<string, unknown>)) {
-    if (!isDayTypeKey(key)) return false
-    if (!Array.isArray(entry) || !entry.every(isWindow)) return false
+  if (headway !== undefined) {
+    for (const [key, entry] of Object.entries(headway as Record<string, unknown>)) {
+      if (!isDayTypeKey(key)) return false
+      if (!Array.isArray(entry) || !entry.every(isWindow)) return false
+    }
   }
   return true
 }

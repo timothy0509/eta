@@ -53,13 +53,14 @@ export function RouteScheduleSection({
     if (!schedule) return null
     const now = new Date()
     const dayType = getDayType(now, index.holidays)
-    const windows = schedule.headway[dayType] ?? schedule.headway.weekday
-    if (!windows || windows.length === 0) return null
+    const windows = schedule.headway?.[dayType] ?? schedule.headway?.weekday
     const span = schedule.span[dayType] ?? schedule.span.weekday
-    return { dayType, windows, span }
+    if ((!windows || windows.length === 0) && !span) return null
+    return { dayType, windows: windows ?? [], span }
   }, [index, variantKey])
 
   if (!content) return null
+  if (content.windows.length === 0 && !content.span) return null
 
   return (
     <details className="card-m3 px-4 py-3">

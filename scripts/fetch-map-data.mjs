@@ -180,5 +180,5 @@ async function main() {
 
 main().catch((err) => {
   console.error('[fetch-map-data] failed:', err)
-  process.exit(0)
+  process.exitCode = 1
 })

@@ -24,7 +24,7 @@ export const env = {
   NEXT_PUBLIC_SITE_URL: NEXT_PUBLIC_SITE_URL ?? 'https://eta.hkjc.uk',
 
   // Vector basemap served same-origin from public/map/hong-kong.pmtiles
-  // (fetched at build time by scripts/fetch-map-tiles.mjs from the hkbus
+  // (fetched at build time by scripts/fetch-map-data.mjs from the hkbus
   // dataset's Pages deploy), so tile loading never depends on a
   // third-party host surviving the user's network. The env override restores
   // the old behavior in one deploy-time variable.

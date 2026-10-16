@@ -25,7 +25,7 @@ const TILES_URL =
 const TILES_PATH = join(REPO_ROOT, 'public', 'map', 'hong-kong.pmtiles')
 
 const SPRITE_BASE_URL =
-  process.env.MAP_SPRITE_FETCH_URL || 'https://sprites.protomaps.com/sprites/sprite'
+  process.env.MAP_SPRITE_FETCH_URL || 'https://protomaps.github.io/basemaps-assets/sprites/v4/light'
 
 function log(msg) {
   console.log(`[fetch-map-data] ${msg}`)
@@ -105,13 +105,21 @@ async function fetchSprite() {
   }
   log(`downloading sprite sheets from ${SPRITE_BASE_URL}`)
   try {
-    // MapLibre appends @2x to the path stem on high-DPI screens (the file
-    // the phone requests), so both densities must exist or the map surfaces
-    // a 404 overlay and drops every icon.
-    for (const suffix of ['.json', '@2x.json', '.png', '@2x.png']) {
-      const bytes = await fetchWithRetry(`${SPRITE_BASE_URL}${suffix}`)
-      await writeAtomic(join(spriteDir, `sprite${suffix}`), bytes)
-      log(`wrote /map/sprite/sprite${suffix} (${bytes.length} bytes)`)
+    // The build-time mirror fetches upstream names (light.json/png/@2x)
+    // but the style advertises /map/sprite/sprite{,@2x}.{json,png}, so copy
+    // across during download. Both densities must exist: MapLibre appends
+    // @2x to the path stem on high-DPI screens (the file the phone
+    // requests), and a missing density surfaces as a 404 overlay that drops
+    // every icon.
+    for (const [upstream, local] of [
+      ['light', 'sprite'],
+      ['light@2x', 'sprite@2x'],
+    ]) {
+      for (const ext of ['.json', '.png']) {
+        const bytes = await fetchWithRetry(`${SPRITE_BASE_URL}${upstream}${ext}`)
+        await writeAtomic(join(spriteDir, `${local}${ext}`), bytes)
+        log(`wrote /map/sprite/${local}${ext} (${bytes.length} bytes)`)
+      }
     }
   } catch (err) {
     // Icons degrade to invisible pins; labels and shapes keep working.

@@ -1,6 +1,6 @@
 'use client'
 
-import { ChevronDown, Clock, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronLeft, Clock, Info, Search, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
@@ -18,6 +18,13 @@ import {
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
 import { RouteScheduleSection } from '@/components/eta/route-schedule-section'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { RouteStopCard } from '@/components/eta/route-stop-timeline'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -68,6 +75,7 @@ import {
 import { getRouteDisplayGeometry } from '@/lib/eta/routing'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
+import { useMediaQuery } from '@/lib/hooks/use-media-query'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { useAppStore, type FavoritesItem } from '@/lib/store'
@@ -806,8 +814,8 @@ export function KmbRoutesView({
   const [query, setQuery] = React.useState('')
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const [operators, setOperators] = React.useState<string[]>([])
-  const [sheetCollapsed, setSheetCollapsed] = React.useState(false)
   const [controlsOpen, setControlsOpen] = React.useState(true)
+  const isDesktop = useMediaQuery('(min-width: 1024px)')
   const routeStopsAll = usePaneStore((s) => s.kmbRouteStops)
   const setRouteStopsAll = usePaneStore((s) => s.setKmbRouteStops)
   const [fuse, setFuse] = React.useState<RouteFuseInstance | null>(null)
@@ -1219,9 +1227,342 @@ export function KmbRoutesView({
   const hasActiveFilters = query.trim() !== '' || operators.length > 0
   const isRouteSelected = selectedRouteKey !== null
 
+  // Mobile is its own layout, not the desktop overlay restacked. Search
+  // is a single card with no map: an empty-region map earns none of the
+  // screen. Drilldown is a full-bleed column filling the viewport height:
+  // compact header, map, then the stop list in its own scroll region.
+  // Nothing else on the page scrolls.
+  if (!isDesktop) {
+    return (
+      <div className="space-y-3">
+        {!isRouteSelected ? (
+          <div className="card-m3 p-4">
+            <div className="m3-title-md mb-3">{t('common.routes')}</div>
+            <div className="relative">
+              <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={t('kmb.searchRouteNumberAndPlace')}
+                aria-label={t('kmb.searchBusRoutes')}
+                className="bg-surface-container h-12 rounded-full pr-10 pl-10"
+              />
+              {query.trim() !== '' && (
+                <button
+                  type="button"
+                  onClick={handleClearSearch}
+                  aria-label={t('kmb.clearSearch')}
+                  className="text-on-surface-variant hover:text-on-surface ui-press absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <X className="h-4 w-4" aria-hidden />
+                </button>
+              )}
+            </div>
+            <div className="mt-3">
+              <OperatorFilter
+                operators={operatorOptions}
+                total={searchIndex.length}
+                value={operators}
+                onChange={handleOperatorChange}
+                lang={lang}
+              />
+            </div>
+            <div className="mt-3">
+              {loading && <ResultsSkeleton />}
+              {error && (
+                <EmptyState
+                  title={t('common.wentWrong')}
+                  hint={error}
+                  action={
+                    <button
+                      type="button"
+                      onClick={handleRetryRoutes}
+                      className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                    >
+                      {t('common.tryAgain')}
+                    </button>
+                  }
+                />
+              )}
+
+              {!loading && !error && searchHits.length === 0 ? (
+                <EmptyState
+                  title={t('common.noResults')}
+                  hint={
+                    debouncedQuery.trim() !== ''
+                      ? tWithParams('kmb.noRoutesMatch', { query: debouncedQuery.trim() })
+                      : undefined
+                  }
+                  action={
+                    hasActiveFilters ? (
+                      <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                      >
+                        {t('kmb.clearFilters')}
+                      </button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                !loading &&
+                !error && (
+                  <div className="space-y-3 pb-1">
+                    <div className="text-on-surface-variant m3-label-md" role="status">
+                      {tWithParams('kmb.routesFound', { count: searchHits.length })}
+                    </div>
+                    <div className="space-y-3">
+                      {visibleHits.map((hit, idx) => (
+                        <RouteResultCard
+                          key={hit.entry.key}
+                          entry={hit.entry}
+                          stopsById={stopsById}
+                          lang={lang}
+                          index={idx}
+                          matchReason={hit.matchReason}
+                          usageByStopName={usageByStopName}
+                          onSelect={() =>
+                            setSelectedRouteKey({
+                              co: hit.entry.co,
+                              route: hit.entry.route,
+                            })
+                          }
+                        />
+                      ))}
+                    </div>
+                    {hasMore && (
+                      <div ref={sentinelRef}>
+                        <button
+                          type="button"
+                          onClick={loadMore}
+                          className="bg-surface-container-high text-on-surface-variant hover:text-on-surface m3-label-lg ui-press inline-flex min-h-[44px] w-full items-center justify-center rounded-full px-5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                          {t('kmb.loadMore')}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )
+              )}
+            </div>
+          </div>
+        ) : (
+          // Compact header, full-width map, stops in their own scroll: the
+          // column fills the viewport height and only the stop list scrolls.
+          <div className="bg-surface-container-lowest relative flex h-[calc(100dvh-10rem)] min-h-[480px] flex-col overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 shadow-sm">
+            <div className="bg-surface-container-lowest z-10 shrink-0 border-b border-[var(--outline-variant)]/15 px-3 pt-2 pb-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedRouteKey(null)
+                    setSelectedVariant(null)
+                  }}
+                  aria-label={t('common.back')}
+                  title={t('common.back')}
+                  className="bg-secondary-container text-on-secondary-container ui-press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <ChevronLeft className="h-5 w-5" aria-hidden />
+                </button>
+                <RouteBadge
+                  route={selectedRouteKey.route}
+                  company={selectedRouteKey.co}
+                  size="lg"
+                />
+                {currentVariant && (
+                  <Marquee
+                    title={`${pickLang(currentVariant.origin, lang)} ↔ ${pickLang(currentVariant.destination, lang)}`}
+                    className="text-on-surface m3-title-md min-w-0 flex-1 font-medium"
+                  >
+                    {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
+                      co: currentVariant.co,
+                      lang,
+                    })}{' '}
+                    ↔{' '}
+                    {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
+                      co: currentVariant.co,
+                      lang,
+                    })}
+                  </Marquee>
+                )}
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      aria-label={t('common.routeDetails')}
+                      title={t('common.routeDetails')}
+                      className="text-on-surface-variant hover:text-on-surface ui-press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                    >
+                      <Info className="h-5 w-5" aria-hidden />
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="bg-surface-container-low max-h-[85dvh] gap-0 overflow-y-auto rounded-3xl border-0 p-0">
+                    <div className="space-y-4 p-5">
+                      <DialogHeader className="text-left">
+                        <DialogTitle className="text-on-surface m3-title-lg">
+                          {t('common.routeDetails')}
+                        </DialogTitle>
+                      </DialogHeader>
+                      {variantsForRoute.length > 1 && (
+                        <div
+                          className="flex gap-2 overflow-x-auto pb-1"
+                          role="group"
+                          aria-label={t('common.route')}
+                        >
+                          {variantsForRoute.map((v) => (
+                            <button
+                              key={v.key}
+                              type="button"
+                              aria-pressed={currentVariant?.key === v.key}
+                              onClick={() => setSelectedVariant(v)}
+                              className={cn(
+                                'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                                currentVariant?.key === v.key
+                                  ? 'bg-primary-container text-on-primary-container'
+                                  : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                              )}
+                            >
+                              <span>
+                                {v.bound === 'I'
+                                  ? t('common.inbound')
+                                  : v.bound === 'O'
+                                    ? t('common.outbound')
+                                    : v.bound || null}
+                              </span>
+                              <span>
+                                {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
+                                  co: v.co,
+                                  lang,
+                                })}
+                              </span>
+                              {showOperatorInVariants && (
+                                <span className="m3-label-sm uppercase opacity-80">
+                                  {normalizeOperator(v.co)}
+                                </span>
+                              )}
+                              {v.serviceType !== '1' ? (
+                                <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {currentVariant && (
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <RouteScheduleSection
+                              variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
+                              lang={lang}
+                            />
+                          </div>
+                          <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
+                        </div>
+                      )}
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              {variantsForRoute.length > 1 && (
+                <div
+                  className="mt-1.5 flex gap-2 overflow-x-auto pb-1"
+                  role="group"
+                  aria-label={t('common.route')}
+                >
+                  {variantsForRoute.map((v) => (
+                    <button
+                      key={v.key}
+                      type="button"
+                      aria-pressed={currentVariant?.key === v.key}
+                      onClick={() => setSelectedVariant(v)}
+                      className={cn(
+                        'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                        currentVariant?.key === v.key
+                          ? 'bg-primary-container text-on-primary-container'
+                          : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                      )}
+                    >
+                      <span>
+                        {v.bound === 'I'
+                          ? t('common.inbound')
+                          : v.bound === 'O'
+                            ? t('common.outbound')
+                            : v.bound || null}
+                      </span>
+                      <span>
+                        {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
+                          co: v.co,
+                          lang,
+                        })}
+                      </span>
+                      {showOperatorInVariants && (
+                        <span className="m3-label-sm uppercase opacity-80">
+                          {normalizeOperator(v.co)}
+                        </span>
+                      )}
+                      {v.serviceType !== '1' ? (
+                        <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
+                      ) : null}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="relative h-56 shrink-0 sm:h-64">
+              <TransitMap
+                lang={lang}
+                center={mapCenter}
+                markers={mapMarkers}
+                polylines={mapPolylines}
+                zoom={13}
+                fitKey={currentVariant?.key ?? null}
+                focusPoint={focusPoint}
+                onMarkerClick={handleMapStopClick}
+                ariaLabel={t('common.mapInteractive')}
+                className="h-full w-full rounded-none"
+              />
+            </div>
+
+            <div className="flex min-h-0 flex-1 flex-col px-3 pt-2 pb-3">
+              <div className="m3-title-md mb-2 flex shrink-0 items-center gap-2 px-1">
+                <Clock className="h-5 w-5" />
+                {t('kmb.routeStops')}
+                {variantStops.length > 0 && (
+                  <span className="text-on-surface-variant m3-body-md ml-auto">
+                    {variantStops.length}
+                  </span>
+                )}
+              </div>
+              <div className="min-h-0 flex-1 overflow-y-auto pb-1">
+                {variantStops.length === 0 ? (
+                  <ResultsSkeleton />
+                ) : (
+                  currentVariant && (
+                    <KmbRouteStopList
+                      listKey={currentVariant.key}
+                      currentVariant={currentVariant}
+                      variantStops={variantStops}
+                      stopsById={stopsById}
+                      etas={etas}
+                      lang={lang}
+                      onSelectStopGroup={onSelectStopGroup}
+                      expandedKey={expandedStopKey}
+                      onToggleStop={handleToggleStop}
+                    />
+                  )
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 shadow-sm">
-      <div className="relative h-[38dvh] min-h-[280px] lg:h-[calc(100dvh-10rem)] lg:max-h-[880px] lg:min-h-[640px]">
+      <div className="relative h-[calc(100dvh-10rem)] max-h-[880px] min-h-[640px]">
         <TransitMap
           lang={lang}
           center={mapCenter}
@@ -1236,26 +1577,13 @@ export function KmbRoutesView({
         />
       </div>
 
-      <div className="relative z-10 mx-3 -mt-12 mb-3 lg:absolute lg:top-4 lg:bottom-4 lg:left-4 lg:mx-0 lg:mt-0 lg:mb-0 lg:w-[400px] lg:max-w-[calc(100%-2rem)]">
-        <div className="card-m3 flex max-h-[62dvh] flex-col overflow-hidden shadow-xl lg:h-full lg:max-h-none">
-          <div className="flex items-center justify-center pt-2 lg:hidden" aria-hidden>
-            <span className="bg-outline-variant/60 h-1 w-10 rounded-full" />
-          </div>
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 pt-2 lg:pt-4">
+      <div className="absolute top-4 bottom-4 left-4 z-10 w-[400px] max-w-[calc(100%-2rem)]">
+        <div className="card-m3 flex h-full flex-col overflow-hidden shadow-xl">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4">
             {!isRouteSelected ? (
               <>
-                <div className="m3-title-md mb-3 flex items-center justify-between gap-2">
-                  <span>{t('kmb.routes')}</span>
-                  <button
-                    type="button"
-                    onClick={() => setSheetCollapsed((v) => !v)}
-                    aria-expanded={!sheetCollapsed}
-                    className="text-on-surface-variant hover:text-on-surface ui-press inline-flex min-h-[36px] items-center rounded-full px-3 text-sm lg:hidden"
-                  >
-                    {sheetCollapsed ? t('kmb.showList') : t('kmb.hideList')}
-                  </button>
-                </div>
-                <div className={sheetCollapsed ? 'hidden lg:block' : ''}>
+                <div className="m3-title-md mb-3">{t('common.routes')}</div>
+                <div>
                   <div className="relative">
                     <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                     <Input
@@ -1287,13 +1615,7 @@ export function KmbRoutesView({
                   </div>
                 </div>
 
-                <div
-                  className={
-                    sheetCollapsed
-                      ? 'hidden lg:block lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
-                      : 'mt-3 min-h-0 flex-1 overflow-y-auto'
-                  }
-                >
+                <div className="mt-3 min-h-0 flex-1 overflow-y-auto">
                   {loading && <ResultsSkeleton />}
                   {error && (
                     <EmptyState

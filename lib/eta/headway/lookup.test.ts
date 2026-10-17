@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { getDayType, getScheduleForVariant, resolveVariantKey } from './lookup'
-import type { HeadwayIndex } from './types'
+import { activeHeadwayIndex, getDayType, getScheduleForVariant, resolveVariantKey } from './lookup'
+import type { HeadwayIndex, HeadwayWindow } from './types'
 
 const HOLIDAYS = ['2026-02-17']
 
@@ -47,6 +47,37 @@ const INDEX: HeadwayIndex = {
 function date(iso: string): Date {
   return new Date(iso)
 }
+
+describe('activeHeadwayIndex', () => {
+  const WEEKDAY_WINDOWS: HeadwayWindow[] = [
+    [335, 425, 9],
+    [425, 540, 6],
+    [540, 1385, 12],
+  ]
+
+  it('returns the index of the window containing mins', () => {
+    expect(activeHeadwayIndex(WEEKDAY_WINDOWS, 350)).toBe(0)
+    expect(activeHeadwayIndex(WEEKDAY_WINDOWS, 539)).toBe(1)
+    expect(activeHeadwayIndex(WEEKDAY_WINDOWS, 1384)).toBe(2)
+  })
+
+  it('treats window end as exclusive', () => {
+    // 425 ends window 0 and starts window 1.
+    expect(activeHeadwayIndex(WEEKDAY_WINDOWS, 425)).toBe(1)
+  })
+
+  it('returns null outside every window', () => {
+    expect(activeHeadwayIndex(WEEKDAY_WINDOWS, 334)).toBeNull()
+    expect(activeHeadwayIndex(WEEKDAY_WINDOWS, 1385)).toBeNull()
+  })
+
+  it('matches overnight windows on both sides of midnight', () => {
+    const overnight: HeadwayWindow[] = [[1400, 110, 25]]
+    expect(activeHeadwayIndex(overnight, 1450)).toBe(0)
+    expect(activeHeadwayIndex(overnight, 30)).toBe(0)
+    expect(activeHeadwayIndex(overnight, 110)).toBeNull()
+  })
+})
 
 describe('getDayType', () => {
   it('classifies Mon-Fri as weekday', () => {

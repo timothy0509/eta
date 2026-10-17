@@ -90,11 +90,22 @@ function windowMatches(mins: number, startMin: number, endMin: number): boolean 
   return mins >= startMin && mins < endMin
 }
 
-function findActiveHeadway(windows: HeadwayWindow[], mins: number): number | null {
-  for (const [startMin, endMin, headwayMin] of windows) {
-    if (windowMatches(mins, startMin, endMin)) return headwayMin
+/** Index of the window matching mins (half-open [start, end), overnight wrap), or null. */
+export function activeHeadwayIndex(windows: HeadwayWindow[], mins: number): number | null {
+  for (let i = 0; i < windows.length; i += 1) {
+    const window = windows[i]
+    if (!window) continue
+    const [startMin, endMin] = window
+    if (windowMatches(mins, startMin, endMin)) return i
   }
   return null
+}
+
+function findActiveHeadway(windows: HeadwayWindow[], mins: number): number | null {
+  const idx = activeHeadwayIndex(windows, mins)
+  if (idx === null) return null
+  const window = windows[idx]
+  return window ? window[2] : null
 }
 
 function distinctHeadwayRange(windows: HeadwayWindow[]): [number, number] | null {

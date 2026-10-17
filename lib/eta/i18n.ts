@@ -254,6 +254,7 @@ const kmb: Record<string, TranslationEntry> = {
   scheduleTitle: { en: 'Timetable', tc: '時間表', sc: '时间表' },
   scheduleFullTitle: { en: 'Full timetable', tc: '完整時間表', sc: '完整时间表' },
   scheduleNoData: { en: 'No timetable available', tc: '暫無時間表', sc: '暂无时间表' },
+  scheduleNow: { en: 'Now', tc: '現時', sc: '现时' },
   scheduleEveryRow: { en: 'Every ~{n} min', tc: '約每 {n} 分鐘一班', sc: '约每 {n} 分钟一班' },
   scheduleToday: { en: 'Today', tc: '今日', sc: '今日' },
   scheduleFirstBus: { en: 'First bus', tc: '頭班', sc: '头班' },

@@ -12,12 +12,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { getDayType, resolveVariantKey } from '@/lib/eta/headway/lookup'
+import { getDayType, activeHeadwayIndex, resolveVariantKey } from '@/lib/eta/headway/lookup'
 import type { DayType, VariantSchedule } from '@/lib/eta/headway/types'
 import { useHeadwayIndex } from '@/lib/eta/headway/use-headway-schedule'
 import { useTranslations } from '@/lib/eta/i18n'
 import { getOperatorColor } from '@/lib/eta/operator-colors'
 import type { UiLanguage } from '@/lib/eta/types'
+import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { cn } from '@/lib/utils'
 
 export type RouteDetailsDialogProps = {
@@ -71,20 +72,37 @@ function daysWithData(schedule: VariantSchedule): DayType[] {
 
 /**
  * Day timetable table: first/last summary plus one row per headway window.
- * Pure presentational piece so the dialog shell stays thin and testable.
+ * The row covering the current time gets a highlighted background and a
+ * "Now" chip when `isToday` is set and the windows come from today's own
+ * day-type table (not the weekday fallback). Pure presentational piece so
+ * the dialog shell stays thin and testable.
  */
 export function TimetableTable({
   schedule,
   dayType,
   lang,
+  isToday = false,
+  now,
 }: {
   schedule: VariantSchedule
   dayType: DayType
   lang: UiLanguage
+  isToday?: boolean
+  /** Test override for the live clock; omit in normal use. */
+  now?: Date
 }) {
   const { t, tWithParams } = useTranslations(lang)
+  const tick = useTickingNow(60_000)
   const windows = schedule.headway?.[dayType] ?? schedule.headway?.weekday ?? []
   const span = schedule.span[dayType] ?? schedule.span.weekday
+  // Weekday fallback windows do not describe today's service, so only
+  // highlight when the day-type table exists for today.
+  const hasExactTable = schedule.headway?.[dayType] !== undefined
+  const nowDate = now ?? new Date(tick)
+  const activeIdx =
+    isToday && hasExactTable
+      ? activeHeadwayIndex(windows, nowDate.getHours() * 60 + nowDate.getMinutes())
+      : null
 
   if (windows.length === 0 && !span) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
@@ -111,19 +129,35 @@ export function TimetableTable({
       ) : null}
       {windows.length > 0 ? (
         <ul className="divide-outline-variant/15 divide-y">
-          {windows.map(([startMin, endMin, headwayMin], idx) => (
-            <li
-              key={`${startMin}-${endMin}-${headwayMin}:${idx}`}
-              className="flex items-center justify-between gap-3 py-1.5"
-            >
-              <span className="text-on-surface font-tabular m3-body-md font-medium tabular-nums">
-                {minsToDisplay(startMin)}–{minsToDisplay(endMin)}
-              </span>
-              <span className="text-on-surface-variant m3-body-md">
-                {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
-              </span>
-            </li>
-          ))}
+          {windows.map(([startMin, endMin, headwayMin], idx) => {
+            const active = idx === activeIdx
+            return (
+              <li
+                key={`${startMin}-${endMin}-${headwayMin}:${idx}`}
+                aria-current={active ? 'time' : undefined}
+                className={cn(
+                  '-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors',
+                  active ? 'bg-primary-container text-on-primary-container' : 'text-on-surface'
+                )}
+              >
+                <span className="m3-body-md font-tabular font-medium tabular-nums">
+                  {minsToDisplay(startMin)}–{minsToDisplay(endMin)}
+                </span>
+                {active ? (
+                  <span className="m3-label-sm flex items-center gap-2 font-medium">
+                    {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                    <span className="bg-on-primary-container text-primary-container m3-label-sm rounded-full px-1.5 py-px font-semibold">
+                      {t('kmb.scheduleNow')}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="m3-body-md text-on-surface-variant">
+                    {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                  </span>
+                )}
+              </li>
+            )
+          })}
         </ul>
       ) : null}
       {dayType === 'holiday' ? (
@@ -196,7 +230,7 @@ function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLanguage })
           </button>
         ))}
       </div>
-      <TimetableTable schedule={schedule} dayType={active} lang={lang} />
+      <TimetableTable schedule={schedule} dayType={active} lang={lang} isToday={active === today} />
       <div className="text-on-surface-variant m3-label-sm">
         {tWithParams('kmb.scheduleDataDate', { date: index.updated })}
       </div>

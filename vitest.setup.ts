@@ -4,6 +4,15 @@
 // keep working under every supported Node. On Node 22 jsdom provides the real
 // thing and this file does nothing.
 
+import { cleanup } from '@testing-library/react'
+import { afterEach } from 'vitest'
+
+// @testing-library/react only auto-cleans up when test framework globals are
+// enabled; vitest runs here without globals, so register it explicitly.
+afterEach(() => {
+  cleanup()
+})
+
 class MemoryStorage implements Storage {
   private store = new Map<string, string>()
 

@@ -68,3 +68,60 @@ describe('TimetableTable', () => {
     expect(getByText('No timetable available')).not.toBeNull()
   })
 })
+
+describe('TimetableTable now highlight', () => {
+  it('marks the row covering the current time with a Now chip', () => {
+    const { getAllByText, getByText } = render(
+      <TimetableTable
+        schedule={SCHEDULE}
+        dayType="weekday"
+        lang="en"
+        isToday
+        now={new Date('2026-10-16T07:30:00')}
+      />
+    )
+    expect(getByText('Now')).not.toBeNull()
+    const activeRow = getAllByText('07:05–09:00')[0]?.closest('li')
+    expect(activeRow?.getAttribute('aria-current')).toBe('time')
+    const idleRow = getAllByText('05:35–07:05')[0]?.closest('li')
+    expect(idleRow?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('marks nothing when now falls outside every window', () => {
+    const { queryByText } = render(
+      <TimetableTable
+        schedule={SCHEDULE}
+        dayType="weekday"
+        lang="en"
+        isToday
+        now={new Date('2026-10-16T04:00:00')}
+      />
+    )
+    expect(queryByText('Now')).toBeNull()
+  })
+
+  it('marks nothing when isToday is not set', () => {
+    const { queryByText } = render(
+      <TimetableTable
+        schedule={SCHEDULE}
+        dayType="weekday"
+        lang="en"
+        now={new Date('2026-10-16T07:30:00')}
+      />
+    )
+    expect(queryByText('Now')).toBeNull()
+  })
+
+  it('marks nothing when today windows come from the weekday fallback', () => {
+    const { queryByText } = render(
+      <TimetableTable
+        schedule={SCHEDULE}
+        dayType="sunday"
+        lang="en"
+        isToday
+        now={new Date('2026-10-16T07:30:00')}
+      />
+    )
+    expect(queryByText('Now')).toBeNull()
+  })
+})

@@ -6,9 +6,18 @@ import * as React from 'react'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib/eta/kmb-eta-groups'
 import type { ScheduledFallback } from '@/lib/eta/headway/types'
-import { useHeadwaySchedules } from '@/lib/eta/headway/use-headway-schedule'
+import {
+  useHeadwayIndex,
+  useHeadwaySchedule,
+  useHeadwaySchedules,
+} from '@/lib/eta/headway/use-headway-schedule'
 import { RouteBadge } from '@/components/eta/route-badge'
-import { RouteDetailsDialog } from '@/components/eta/route-details-dialog'
+import {
+  RouteDetailsDialog,
+  SpecialDeparturesLine,
+  DepartureChips,
+  CARD_CHIP_LIMIT,
+} from '@/components/eta/route-details-dialog'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes } from '@/components/eta/ticking-eta'
@@ -295,6 +304,15 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const { t, tWithParams } = useTranslations(lang)
 
+  // Per-stop schedule refinement: at partial-coverage stops (special-only
+  // termini, span-only subset stops) the variant-level fallback shows buses
+  // that never serve this stop. Once the index loads, the stop-aware
+  // lookup replaces the prop (it already falls back to variant level for
+  // fully covered stops).
+  const headwayIndex = useHeadwayIndex()
+  const stopScheduled = useHeadwaySchedule(baseKey, undefined, stopChips.stopId)
+  const effectiveScheduled = headwayIndex ? stopScheduled : scheduled
+
   const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && Boolean(expanded)
 
@@ -320,6 +338,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       destination={destination ?? (label || null)}
       operatorName={operatorName}
       stopName={stopChips.name}
+      stopId={stopChips.stopId}
       platform={stopChips.platform}
       stopCode={stopChips.stopCode}
       fareLabel={fareLabel}
@@ -473,17 +492,35 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   // Routes without valid ETAs get a simplified display
   if (!hasEta) {
+    const scheduled = effectiveScheduled
     const remark = getGroupRemark(items, lang)
+    const departures = scheduled?.departures ?? null
+    const departureGroups = scheduled?.departureGroups ?? null
     const hasScheduleData =
       scheduled != null &&
       (scheduled.headwayMin != null ||
         scheduled.headwayRange != null ||
+        (departures != null && departures.length > 0) ||
+        (departureGroups != null && departureGroups.length > 0) ||
         (scheduled.first != null && scheduled.last != null))
     const scheduleLine =
       scheduled && hasScheduleData ? formatScheduledLine(scheduled, t, tWithParams) : null
     const spanLine = scheduled ? formatScheduledSpanLine(scheduled, tWithParams, t) : null
     const showSpanLine =
       spanLine != null && (scheduled?.headwayMin != null || scheduled?.headwayRange != null)
+    // Split timetables replace the merged chips wherever they exist.
+    const showDepartures = !departureGroups && departures != null && departures.length > 0
+    // Departures-only rows never show the span line, so surface the
+    // holiday note on its own when the holiday timetable applies.
+    const showHolidayNote =
+      !showSpanLine &&
+      (showDepartures || (departureGroups != null && departureGroups.length > 0)) &&
+      (scheduled?.isHolidayTimetable ?? false)
+    const special = scheduled?.special ?? null
+    // Official remarks win over the computed schedule line: the operator's
+    // own "no departures right now" notice stays visible instead of being
+    // replaced by a frequency estimate.
+    const headline = remark ?? scheduleLine ?? formatNoScheduledText(t)
     return (
       <div
         className={cn(
@@ -499,18 +536,28 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
         <div className="space-y-2.5 pl-4">
           {routeHeader({ showEta: false, showSubtitle: true })}
           <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-            {scheduleLine ? (
+            {scheduleLine && !remark ? (
               <Clock className="h-4 w-4 shrink-0" />
             ) : (
               <Info className="h-4 w-4 shrink-0" />
             )}
-            {scheduleLine ?? remark ?? formatNoScheduledText(t)}
+            {headline}
           </div>
+          {showDepartures ? (
+            <DepartureChips departures={departures ?? []} lang={lang} cap={CARD_CHIP_LIMIT} />
+          ) : null}
           {showSpanLine ? (
             <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
               {spanLine}
             </div>
           ) : null}
+          {showHolidayNote ? (
+            <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+              {t('kmb.scheduleHolidayNote')}
+            </div>
+          ) : null}
+          {departureGroups ? <SpecialDeparturesLine special={departureGroups} lang={lang} /> : null}
+          {special ? <SpecialDeparturesLine special={special} lang={lang} /> : null}
           {staticFooter}
         </div>
       </div>

@@ -12,11 +12,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { getDayType, activeHeadwayIndex, resolveVariantKey } from '@/lib/eta/headway/lookup'
-import type { DayType, VariantSchedule } from '@/lib/eta/headway/types'
+import {
+  getDayType,
+  activeHeadwayIndex,
+  resolveVariantKey,
+  scheduleForStop,
+} from '@/lib/eta/headway/lookup'
+import type { DayType, SpecialDayDepartures, VariantSchedule } from '@/lib/eta/headway/types'
 import { useHeadwayIndex } from '@/lib/eta/headway/use-headway-schedule'
 import { useTranslations } from '@/lib/eta/i18n'
 import { getOperatorColor } from '@/lib/eta/operator-colors'
+import { minsToDisplay } from '@/lib/eta/format'
 import type { UiLanguage } from '@/lib/eta/types'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { cn } from '@/lib/utils'
@@ -31,6 +37,8 @@ export type RouteDetailsDialogProps = {
   destination: string | null
   operatorName: string
   stopName: string | null
+  /** App stop id for per-stop timetable resolution; omit for route-level. */
+  stopId?: string | null
   platform: string | null
   stopCode: string | null
   fareLabel: string | null
@@ -46,14 +54,6 @@ const DAY_LABEL_KEYS: Record<DayType, string> = {
   holiday: 'kmb.scheduleHoliday',
 }
 
-/** Minutes since midnight (may exceed 1440 for after-midnight windows) to HH:MM. */
-export function minsToDisplay(mins: number): string {
-  const normalized = ((mins % 1440) + 1440) % 1440
-  const h = Math.floor(normalized / 60)
-  const m = normalized % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
-
 /** "HHMM" span endpoint to HH:MM display. Falls back to the raw string. */
 export function spanHhmmToDisplay(hhmm: string): string {
   const normalized = hhmm.trim()
@@ -64,10 +64,17 @@ export function spanHhmmToDisplay(hhmm: string): string {
   return normalized
 }
 
-function daysWithData(schedule: VariantSchedule): DayType[] {
-  return DAY_ORDER.filter(
-    (day) => (schedule.headway?.[day]?.length ?? 0) > 0 || schedule.span[day] !== undefined
-  )
+export function daysWithData(schedule: VariantSchedule, stopId?: string | null): DayType[] {
+  return DAY_ORDER.filter((day) => {
+    const resolved = scheduleForStop(schedule, stopId ?? null, day)
+    return (
+      (resolved.windows?.length ?? 0) > 0 ||
+      (resolved.departures?.length ?? 0) > 0 ||
+      (resolved.specials?.length ?? 0) > 0 ||
+      (resolved.departureGroups?.length ?? 0) > 0 ||
+      resolved.span !== undefined
+    )
+  })
 }
 
 /**
@@ -83,6 +90,7 @@ export function TimetableTable({
   lang,
   isToday = false,
   now,
+  stopId = null,
 }: {
   schedule: VariantSchedule
   dayType: DayType
@@ -90,21 +98,27 @@ export function TimetableTable({
   isToday?: boolean
   /** Test override for the live clock; omit in normal use. */
   now?: Date
+  /** App stop id for per-stop resolution; omit for the variant-level table. */
+  stopId?: string | null
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const tick = useTickingNow(60_000)
-  const windows = schedule.headway?.[dayType] ?? schedule.headway?.weekday ?? []
-  const span = schedule.span[dayType] ?? schedule.span.weekday
+  const resolved = scheduleForStop(schedule, stopId, dayType)
+  const windows = resolved.windows ?? []
+  const departures = resolved.departures ?? []
+  const specials = resolved.specials
+  const departureGroups = resolved.departureGroups
+  const span = resolved.span
   // Weekday fallback windows do not describe today's service, so only
   // highlight when the day-type table exists for today.
-  const hasExactTable = schedule.headway?.[dayType] !== undefined
+  const hasExactTable = resolved.windows !== null && schedule.headway?.[dayType] !== undefined
   const nowDate = now ?? new Date(tick)
   const activeIdx =
     isToday && hasExactTable
       ? activeHeadwayIndex(windows, nowDate.getHours() * 60 + nowDate.getMinutes())
       : null
 
-  if (windows.length === 0 && !span) {
+  if (windows.length === 0 && departures.length === 0 && !specials && !departureGroups && !span) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
   }
 
@@ -128,37 +142,90 @@ export function TimetableTable({
         </div>
       ) : null}
       {windows.length > 0 ? (
-        <ul className="divide-outline-variant/15 divide-y">
-          {windows.map(([startMin, endMin, headwayMin], idx) => {
-            const active = idx === activeIdx
-            return (
-              <li
-                key={`${startMin}-${endMin}-${headwayMin}:${idx}`}
-                aria-current={active ? 'time' : undefined}
-                className={cn(
-                  '-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors',
-                  active ? 'bg-primary-container text-on-primary-container' : 'text-on-surface'
-                )}
-              >
-                <span className="m3-body-md font-tabular font-medium tabular-nums">
-                  {minsToDisplay(startMin)}–{minsToDisplay(endMin)}
-                </span>
-                {active ? (
-                  <span className="m3-label-sm flex items-center gap-2 font-medium">
-                    {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
-                    <span className="bg-on-primary-container text-primary-container m3-label-sm rounded-full px-1.5 py-px font-semibold">
-                      {t('kmb.scheduleNow')}
+        <div className="space-y-1.5">
+          <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleFrequency')}</div>
+          <ul className="divide-outline-variant/15 divide-y">
+            {windows.map(([startMin, endMin, headwayMin], idx) => {
+              const active = idx === activeIdx
+              return (
+                <li
+                  key={`${startMin}-${endMin}-${headwayMin}:${idx}`}
+                  aria-current={active ? 'time' : undefined}
+                  className={cn(
+                    '-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors',
+                    active ? 'bg-primary-container text-on-primary-container' : 'text-on-surface'
+                  )}
+                >
+                  <span className="m3-body-md font-tabular font-medium tabular-nums">
+                    {minsToDisplay(startMin)}–{minsToDisplay(endMin)}
+                  </span>
+                  {active ? (
+                    <span className="m3-label-sm flex items-center gap-2 font-medium">
+                      {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                      <span className="bg-on-primary-container text-primary-container m3-label-sm rounded-full px-1.5 py-px font-semibold">
+                        {t('kmb.scheduleNow')}
+                      </span>
                     </span>
+                  ) : (
+                    <span className="m3-body-md text-on-surface-variant">
+                      {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ) : departureGroups ? (
+        <div className="flex flex-col gap-1.5" role="list" aria-label={t('kmb.scheduleSpecial')}>
+          {departureGroups.map((group, groupIdx) => (
+            <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
+              {group.origin ? (
+                <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5" role="list">
+                {group.departures.map((depMin, idx) => (
+                  <span
+                    key={`${depMin}:${idx}`}
+                    role="listitem"
+                    className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                  >
+                    {minsToDisplay(depMin)}
                   </span>
-                ) : (
-                  <span className="m3-body-md text-on-surface-variant">
-                    {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : departures.length > 0 ? (
+        <DepartureChips departures={departures} lang={lang} />
+      ) : null}
+      {specials ? (
+        <div className="space-y-1.5 pt-1">
+          <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleSpecial')}</div>
+          {specials.map((group, groupIdx) => (
+            <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
+              {group.origin ? (
+                <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
+              ) : null}
+              <div
+                className="flex flex-wrap gap-1.5"
+                role="list"
+                aria-label={group.origin || t('kmb.scheduleSpecial')}
+              >
+                {group.departures.map((depMin, idx) => (
+                  <span
+                    key={`${depMin}:${idx}`}
+                    role="listitem"
+                    className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                  >
+                    {minsToDisplay(depMin)}
                   </span>
-                )}
-              </li>
-            )
-          })}
-        </ul>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       ) : null}
       {dayType === 'holiday' ? (
         <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleHolidayNote')}</div>
@@ -167,7 +234,114 @@ export function TimetableTable({
   )
 }
 
-export function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLanguage }) {
+/** Max time chips per special group on compact cards; the rest fold into +N. */
+const CARD_SPECIAL_CHIP_LIMIT = 6
+
+/** Max chips on compact no-ETA cards before folding the rest into +N. */
+export const CARD_CHIP_LIMIT = 12
+
+/**
+ * Plain fixed-departure chips with an optional cap. List rows cap the
+ * array (nlb routes carry 200+ departures); the full timetable leaves it
+ * uncapped.
+ */
+export function DepartureChips({
+  departures,
+  lang,
+  cap,
+}: {
+  departures: number[]
+  lang: UiLanguage
+  cap?: number
+}) {
+  const { t } = useTranslations(lang)
+  const capped = typeof cap === 'number' ? cap : departures.length
+  const visible = departures.slice(0, capped)
+  const overflow = departures.length - visible.length
+  return (
+    <div className="flex flex-wrap gap-1.5" role="list" aria-label={t('kmb.scheduleTitle')}>
+      {visible.map((depMin, idx) => (
+        <span
+          key={`${depMin}:${idx}`}
+          role="listitem"
+          className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+        >
+          {minsToDisplay(depMin)}
+        </span>
+      ))}
+      {overflow > 0 ? (
+        <span
+          role="listitem"
+          className="bg-surface-container-high text-on-surface-variant font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+        >
+          +{overflow}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+/**
+ * Compact special-departures line for no-ETA cards: origin label plus time
+ * chips per group, capped with a +N overflow chip. Route-level info, so it
+ * renders wherever the card renders regardless of the current stop.
+ */
+export function SpecialDeparturesLine({
+  special,
+  lang,
+}: {
+  special: SpecialDayDepartures[]
+  lang: UiLanguage
+}) {
+  const { t } = useTranslations(lang)
+  if (special.length === 0) return null
+  return (
+    <div className="space-y-1.5">
+      <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleSpecial')}</div>
+      {special.map((group, groupIdx) => {
+        const visible = group.departures.slice(0, CARD_SPECIAL_CHIP_LIMIT)
+        const overflow = group.departures.length - visible.length
+        return (
+          <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
+            {group.origin ? (
+              <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5" role="list">
+              {visible.map((depMin, idx) => (
+                <span
+                  key={`${depMin}:${idx}`}
+                  role="listitem"
+                  className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                >
+                  {minsToDisplay(depMin)}
+                </span>
+              ))}
+              {overflow > 0 ? (
+                <span
+                  role="listitem"
+                  className="bg-surface-container-high text-on-surface-variant font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                >
+                  +{overflow}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+export function FullTimetable({
+  baseKey,
+  lang,
+  stopId = null,
+}: {
+  baseKey: string
+  lang: UiLanguage
+  /** App stop id for per-stop resolution; omit for the variant-level table. */
+  stopId?: string | null
+}) {
   const index = useHeadwayIndex()
   const { t, tWithParams } = useTranslations(lang)
   const [tab, setTab] = React.useState<DayType | null>(null)
@@ -186,7 +360,7 @@ export function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLang
     return <div className="bg-surface-container-high ui-shimmer h-24 rounded-xl" aria-hidden />
   }
 
-  const available = daysWithData(schedule)
+  const available = daysWithData(schedule, stopId)
   if (available.length === 0) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
   }
@@ -230,7 +404,13 @@ export function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLang
           </button>
         ))}
       </div>
-      <TimetableTable schedule={schedule} dayType={active} lang={lang} isToday={active === today} />
+      <TimetableTable
+        schedule={schedule}
+        dayType={active}
+        lang={lang}
+        isToday={active === today}
+        stopId={stopId}
+      />
       <div className="text-on-surface-variant m3-label-sm">
         {tWithParams('kmb.scheduleDataDate', { date: index.updated })}
       </div>
@@ -252,6 +432,7 @@ export function RouteDetailsDialog({
   destination,
   operatorName,
   stopName,
+  stopId = null,
   platform,
   stopCode,
   fareLabel,
@@ -320,7 +501,7 @@ export function RouteDetailsDialog({
               <CalendarDays className="h-3.5 w-3.5" aria-hidden />
               {t('kmb.scheduleFullTitle')}
             </div>
-            <FullTimetable baseKey={baseKey} lang={lang} />
+            <FullTimetable baseKey={baseKey} lang={lang} stopId={stopId} />
           </section>
         </div>
       </DialogContent>

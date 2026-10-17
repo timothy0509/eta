@@ -57,10 +57,15 @@ export function useHeadwaySchedules(baseKeys: string[]): Record<string, Schedule
 
 /**
  * Scheduled fallback for a variant key, recomputed when the index, baseKey,
- * or current minute changes. Ticks at minute granularity (60s interval).
- * Pass `when` to pin the lookup to an explicit time (e.g. in tests).
+ * stopId, or current minute changes. Ticks at minute granularity (60s
+ * interval). Pass `when` to pin the lookup to an explicit time (e.g. in
+ * tests), `stopId` for per-stop resolution at partial-coverage stops.
  */
-export function useHeadwaySchedule(baseKey: string | null, when?: Date): ScheduledFallback | null {
+export function useHeadwaySchedule(
+  baseKey: string | null,
+  when?: Date,
+  stopId?: string | null
+): ScheduledFallback | null {
   const index = useHeadwayIndex()
   const tick = useTickingNow(60_000)
   const minuteKey = when ? when.getTime() : minuteOf(tick)
@@ -68,6 +73,6 @@ export function useHeadwaySchedule(baseKey: string | null, when?: Date): Schedul
   return React.useMemo(() => {
     if (!index || !baseKey) return null
     const now = when ?? new Date(minuteKey * 60_000)
-    return getScheduleForVariant(index, baseKey, now)
-  }, [index, baseKey, when, minuteKey])
+    return getScheduleForVariant(index, baseKey, now, stopId ?? null)
+  }, [index, baseKey, when, stopId, minuteKey])
 }

@@ -10,6 +10,11 @@ import { EmptyState } from '@/components/eta/empty-state'
 import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import { OperatorFilter } from '@/components/eta/operator-filter'
 import { formatScheduledLine } from '@/components/eta/results-kmb'
+import {
+  SpecialDeparturesLine,
+  DepartureChips,
+  CARD_CHIP_LIMIT,
+} from '@/components/eta/route-details-dialog'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
 import { RouteScheduleSection } from '@/components/eta/route-schedule-section'
@@ -113,6 +118,7 @@ function hasDuplicateOperators(variants: RouteVariant[]): boolean {
  */
 function KmbRouteStopCard({
   stopEtas,
+  stopId,
   name,
   stopCode,
   seq,
@@ -123,6 +129,8 @@ function KmbRouteStopCard({
   onSelect,
 }: {
   stopEtas: KmbEtaEntryWithLeg[]
+  /** App stop id for per-stop schedule resolution. */
+  stopId: string
   name: string
   stopCode: string | null
   seq: number
@@ -149,17 +157,40 @@ function KmbRouteStopCard({
     if (!first) return null
     return variantBaseKey(first)
   }, [stopEtas])
-  const cardScheduled = useHeadwaySchedule(cardBaseKey)
+  const cardScheduled = useHeadwaySchedule(cardBaseKey, undefined, stopId)
 
   const panel =
     visible.length === 0 ? (
-      <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-        {cardScheduled &&
-        (cardScheduled.headwayMin != null ||
-          cardScheduled.headwayRange != null ||
-          (cardScheduled.first && cardScheduled.last))
-          ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
-          : cardT('common.noScheduledBuses')}
+      <div className="space-y-2">
+        <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+          {(() => {
+            for (const entry of stopEtas) {
+              const remark =
+                pickLang(
+                  { en: entry.rmk_en ?? '', tc: entry.rmk_tc ?? '', sc: entry.rmk_sc ?? '' },
+                  lang
+                ).trim() || null
+              if (remark) return remark
+            }
+            return cardScheduled &&
+              (cardScheduled.headwayMin != null ||
+                cardScheduled.headwayRange != null ||
+                (cardScheduled.departures != null && cardScheduled.departures.length > 0) ||
+                (cardScheduled.departureGroups != null &&
+                  cardScheduled.departureGroups.length > 0) ||
+                (cardScheduled.first && cardScheduled.last))
+              ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
+              : cardT('common.noScheduledBuses')
+          })()}
+        </div>
+        {cardScheduled?.departureGroups && cardScheduled.departureGroups.length > 0 ? (
+          <SpecialDeparturesLine special={cardScheduled.departureGroups} lang={lang} />
+        ) : cardScheduled?.departures && cardScheduled.departures.length > 0 ? (
+          <DepartureChips departures={cardScheduled.departures} lang={lang} cap={CARD_CHIP_LIMIT} />
+        ) : null}
+        {cardScheduled?.special ? (
+          <SpecialDeparturesLine special={cardScheduled.special} lang={lang} />
+        ) : null}
       </div>
     ) : (
       <div className="space-y-2">
@@ -501,6 +532,7 @@ function KmbRouteStopList({
     return (
       <KmbRouteStopCard
         stopEtas={stopEtas}
+        stopId={rs.stopId}
         name={pickCtbDisplayName(ctb?.name, parsed.name)}
         stopCode={parsed.platform ?? parsed.stopCode}
         seq={seq}

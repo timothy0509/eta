@@ -3,7 +3,7 @@
 import { CalendarDays, ChevronRight } from 'lucide-react'
 import * as React from 'react'
 
-import { FullTimetable } from '@/components/eta/route-details-dialog'
+import { FullTimetable, daysWithData } from '@/components/eta/route-details-dialog'
 import {
   Dialog,
   DialogContent,
@@ -51,11 +51,13 @@ export function RouteScheduleSection({
     if (!resolved) return null
     const schedule = index.variants[resolved]
     if (!schedule) return null
+    // The button stays visible whenever any day has timetable data, but
+    // the label names the day the dialog will actually open on (mirroring
+    // FullTimetable's default tab) instead of always claiming today.
+    const available = daysWithData(schedule, null)
+    if (available.length === 0) return null
     const today = getDayType(new Date(), index.holidays)
-    const windows = schedule.headway?.[today] ?? schedule.headway?.weekday
-    const span = schedule.span[today] ?? schedule.span.weekday
-    if ((!windows || windows.length === 0) && !span) return null
-    return today
+    return available.includes(today) ? today : (available[0] ?? 'weekday')
   }, [index, variantKey])
 
   if (!dayType) return null

@@ -1,6 +1,6 @@
 'use client'
 
-import { Clock, Search, X } from 'lucide-react'
+import { ChevronDown, Clock, Search, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
@@ -767,6 +767,7 @@ export function KmbRoutesView({
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const [operators, setOperators] = React.useState<string[]>([])
   const [sheetCollapsed, setSheetCollapsed] = React.useState(false)
+  const [controlsOpen, setControlsOpen] = React.useState(true)
   const routeStopsAll = usePaneStore((s) => s.kmbRouteStops)
   const setRouteStopsAll = usePaneStore((s) => s.setKmbRouteStops)
   const [fuse, setFuse] = React.useState<RouteFuseInstance | null>(null)
@@ -1268,19 +1269,14 @@ export function KmbRoutesView({
                     setSelectedVariant(null)
                   }}
                   title={
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <RouteBadge
-                          route={selectedRouteKey.route}
-                          company={selectedRouteKey.co}
-                          size="lg"
-                        />
-                        <span className="text-on-surface-variant m3-label-md uppercase">
-                          {selectedRouteKey.co}
-                        </span>
-                      </span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <RouteBadge
+                        route={selectedRouteKey.route}
+                        company={selectedRouteKey.co}
+                        size="lg"
+                      />
                       {currentVariant && (
-                        <span className="text-on-surface m3-title-md truncate">
+                        <span className="text-on-surface m3-title-md min-w-0 flex-1 truncate">
                           {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
                             co: currentVariant.co,
                             lang,
@@ -1292,72 +1288,93 @@ export function KmbRoutesView({
                           })}
                         </span>
                       )}
+                      <span className="text-on-surface-variant m3-label-md shrink-0 uppercase">
+                        {selectedRouteKey.co}
+                      </span>
                     </span>
                   }
                 >
-                  {variantsForRoute.length > 1 && (
-                    <div
-                      className="flex gap-2 overflow-x-auto pb-1"
-                      role="group"
-                      aria-label={t('common.route')}
+                  {currentVariant && (
+                    <button
+                      type="button"
+                      onClick={() => setControlsOpen((v) => !v)}
+                      aria-expanded={controlsOpen}
+                      className="text-on-surface-variant hover:text-on-surface ui-press inline-flex min-h-[36px] items-center gap-1.5 self-start rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
                     >
-                      {variantsForRoute.map((v) => (
-                        <button
-                          key={v.key}
-                          type="button"
-                          aria-pressed={currentVariant?.key === v.key}
-                          onClick={() => setSelectedVariant(v)}
-                          className={cn(
-                            'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                            currentVariant?.key === v.key
-                              ? 'bg-primary-container text-on-primary-container'
-                              : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
-                          )}
+                      <span className="m3-label-lg">{t('common.routeDetails')}</span>
+                      {!controlsOpen && (
+                        <span className="m3-label-md max-w-44 truncate font-normal">
+                          {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
+                            co: currentVariant.co,
+                            lang,
+                          })}
+                        </span>
+                      )}
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          !controlsOpen && '-rotate-90'
+                        )}
+                        aria-hidden
+                      />
+                    </button>
+                  )}
+
+                  {controlsOpen && (
+                    <>
+                      {variantsForRoute.length > 1 && (
+                        <div
+                          className="flex gap-2 overflow-x-auto pb-1"
+                          role="group"
+                          aria-label={t('common.route')}
                         >
-                          <span>
-                            {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}
-                          </span>
-                          <span>
-                            {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
-                              co: v.co,
-                              lang,
-                            })}
-                          </span>
-                          {showOperatorInVariants && (
-                            <span className="m3-label-sm uppercase opacity-80">
-                              {normalizeOperator(v.co)}
-                            </span>
-                          )}
-                          {v.serviceType !== '1' ? (
-                            <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
-                  )}
+                          {variantsForRoute.map((v) => (
+                            <button
+                              key={v.key}
+                              type="button"
+                              aria-pressed={currentVariant?.key === v.key}
+                              onClick={() => setSelectedVariant(v)}
+                              className={cn(
+                                'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                                currentVariant?.key === v.key
+                                  ? 'bg-primary-container text-on-primary-container'
+                                  : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                              )}
+                            >
+                              <span>
+                                {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}
+                              </span>
+                              <span>
+                                {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
+                                  co: v.co,
+                                  lang,
+                                })}
+                              </span>
+                              {showOperatorInVariants && (
+                                <span className="m3-label-sm uppercase opacity-80">
+                                  {normalizeOperator(v.co)}
+                                </span>
+                              )}
+                              {v.serviceType !== '1' ? (
+                                <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      )}
 
-                  {currentVariant && (
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-on-surface-variant m3-body-md">
-                        {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
-                          co: currentVariant.co,
-                          lang,
-                        })}{' '}
-                        →{' '}
-                        {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
-                          co: currentVariant.co,
-                          lang,
-                        })}
-                      </div>
-                      <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
-                    </div>
-                  )}
-
-                  {currentVariant && (
-                    <RouteScheduleSection
-                      variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
-                      lang={lang}
-                    />
+                      {currentVariant && (
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <RouteScheduleSection
+                              variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
+                              lang={lang}
+                            />
+                          </div>
+                          <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
+                        </div>
+                      )}
+                    </>
                   )}
                 </RouteDrilldown>
 

@@ -167,7 +167,7 @@ export function TimetableTable({
   )
 }
 
-function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLanguage }) {
+export function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLanguage }) {
   const index = useHeadwayIndex()
   const { t, tWithParams } = useTranslations(lang)
   const [tab, setTab] = React.useState<DayType | null>(null)

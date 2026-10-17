@@ -167,11 +167,10 @@ describe('getScheduleForVariant', () => {
     expect(result?.headwayMin).toBe(12)
   })
 
-  it('falls back to the weekday table when the day-type table is missing', () => {
-    // Sunday has no table in the fixture -> weekday table.
+  it('returns null when the day-type headway table is missing', () => {
+    // Sunday has no table in the fixture -> no service, not weekday times.
     const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-18T10:00:00'))
-    expect(result?.headwayMin).toBe(12)
-    expect(result?.isHolidayTimetable).toBe(false)
+    expect(result).toBeNull()
   })
 
   it('uses the saturday table when present', () => {
@@ -308,11 +307,10 @@ describe('getScheduleForVariant', () => {
         },
       },
     }
-    // Sunday has no special table: no weekday fallback, so specials stay null
-    // while the frequency table still resolves.
+    // Sunday has no tables at all now: no special table, and no borrowed
+    // weekday frequency table either.
     const result = getScheduleForVariant(mixed, 'kmb|214|O|1', date('2026-10-18T10:00:00'))
-    expect(result?.special).toBeNull()
-    expect(result?.headwayMin).toBe(12)
+    expect(result).toBeNull()
   })
 
   it('returns null specials when no table covers the day', () => {
@@ -331,7 +329,7 @@ describe('getScheduleForVariant', () => {
       },
     }
     const result = getScheduleForVariant(mixed, 'kmb|214|O|1', date('2026-10-18T10:00:00'))
-    expect(result?.special).toBeNull()
+    expect(result).toBeNull()
   })
 })
 

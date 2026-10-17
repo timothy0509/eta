@@ -54,21 +54,9 @@ export function resolveVariantKey(
   return variants[fallback] ? fallback : null
 }
 
-/** Fallback chain when a day-type table is missing: exact match, else weekday. */
-function pickDayTable<T>(
-  table: Partial<Record<DayType, T>> | undefined,
-  dayType: DayType
-): T | null {
-  if (!table) return null
-  const exact = table[dayType]
-  if (exact !== undefined) return exact
-  const weekday = table.weekday
-  return weekday !== undefined ? weekday : null
-}
-
 /**
- * Exact day-type lookup with no weekday fallback. Fixed departures only
- * exist on the days their trips run, so borrowing another day's times
+ * Exact day-type lookup with no weekday fallback. Frequency windows only
+ * exist on the days their trips run, so borrowing another day's table
  * would show buses that never come.
  */
 function pickExactDayTable<T>(
@@ -226,7 +214,7 @@ export function scheduleForStop(
   span: SpanRange | null | undefined
 } {
   const spanEntry = pickExactDayTable(schedule.span, dayType)
-  const variantWindows = pickDayTable(schedule.headway, dayType)
+  const variantWindows = pickExactDayTable(schedule.headway, dayType)
   const variantDepartures = pickExactDayTable(schedule.departures, dayType)
   const cov = stopId ? schedule.stopCov?.[stopId.trim()] : undefined
   if (!cov || cov.length === 0) {

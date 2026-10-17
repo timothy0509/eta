@@ -56,11 +56,9 @@ describe('TimetableTable', () => {
     expect(getByText('07:05–09:00')).not.toBeNull()
   })
 
-  it('falls back to the weekday table when the day-type table is missing', () => {
-    const { getAllByText } = render(
-      <TimetableTable schedule={SCHEDULE} dayType="sunday" lang="en" />
-    )
-    expect(getAllByText('05:35–07:05').length).toBeGreaterThanOrEqual(1)
+  it('shows no data when the day-type headway table is missing', () => {
+    const { getByText } = render(<TimetableTable schedule={SCHEDULE} dayType="sunday" lang="en" />)
+    expect(getByText('No timetable available')).not.toBeNull()
   })
 
   it('shows the empty state when neither windows, departures, nor span exist', () => {
@@ -263,8 +261,8 @@ describe('TimetableTable now highlight', () => {
     expect(queryByText('Now')).toBeNull()
   })
 
-  it('marks nothing when today windows come from the weekday fallback', () => {
-    const { queryByText } = render(
+  it('shows no data when today has no windows of its own', () => {
+    const { getByText, queryByText } = render(
       <TimetableTable
         schedule={SCHEDULE}
         dayType="sunday"
@@ -273,6 +271,7 @@ describe('TimetableTable now highlight', () => {
         now={new Date('2026-10-16T07:30:00')}
       />
     )
+    expect(getByText('No timetable available')).not.toBeNull()
     expect(queryByText('Now')).toBeNull()
   })
 })

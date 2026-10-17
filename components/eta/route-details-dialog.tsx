@@ -66,7 +66,10 @@ export function spanHhmmToDisplay(hhmm: string): string {
 
 function daysWithData(schedule: VariantSchedule): DayType[] {
   return DAY_ORDER.filter(
-    (day) => (schedule.headway?.[day]?.length ?? 0) > 0 || schedule.span[day] !== undefined
+    (day) =>
+      (schedule.headway?.[day]?.length ?? 0) > 0 ||
+      (schedule.departures?.[day]?.length ?? 0) > 0 ||
+      schedule.span[day] !== undefined
   )
 }
 
@@ -94,6 +97,7 @@ export function TimetableTable({
   const { t, tWithParams } = useTranslations(lang)
   const tick = useTickingNow(60_000)
   const windows = schedule.headway?.[dayType] ?? schedule.headway?.weekday ?? []
+  const departures = schedule.departures?.[dayType] ?? schedule.departures?.weekday ?? []
   const span = schedule.span[dayType] ?? schedule.span.weekday
   // Weekday fallback windows do not describe today's service, so only
   // highlight when the day-type table exists for today.
@@ -104,7 +108,7 @@ export function TimetableTable({
       ? activeHeadwayIndex(windows, nowDate.getHours() * 60 + nowDate.getMinutes())
       : null
 
-  if (windows.length === 0 && !span) {
+  if (windows.length === 0 && departures.length === 0 && !span) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
   }
 
@@ -159,6 +163,18 @@ export function TimetableTable({
             )
           })}
         </ul>
+      ) : departures.length > 0 ? (
+        <div className="flex flex-wrap gap-1.5" role="list" aria-label={t('kmb.scheduleTitle')}>
+          {departures.map((depMin, idx) => (
+            <span
+              key={`${depMin}:${idx}`}
+              role="listitem"
+              className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+            >
+              {minsToDisplay(depMin)}
+            </span>
+          ))}
+        </div>
       ) : null}
       {dayType === 'holiday' ? (
         <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleHolidayNote')}</div>

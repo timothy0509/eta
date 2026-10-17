@@ -62,10 +62,36 @@ describe('TimetableTable', () => {
     expect(getAllByText('05:35–07:05').length).toBeGreaterThanOrEqual(1)
   })
 
-  it('shows the empty state when neither windows nor span exist', () => {
+  it('shows the empty state when neither windows, departures, nor span exist', () => {
     const empty: VariantSchedule = { src: ['x'], span: {} }
     const { getByText } = render(<TimetableTable schedule={empty} dayType="weekday" lang="en" />)
     expect(getByText('No timetable available')).not.toBeNull()
+  })
+
+  it('renders fixed departure chips for span-only schedules', () => {
+    const fixed: VariantSchedule = {
+      src: ['8092'],
+      span: { weekday: ['0645', '0710'] },
+      departures: { weekday: [405, 410, 430] },
+    }
+    const { getAllByText, getByText } = render(
+      <TimetableTable schedule={fixed} dayType="weekday" lang="en" />
+    )
+    // 06:45 / 07:10 appear in both the first/last row and the chips.
+    expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
+    expect(getByText('06:50')).not.toBeNull()
+    expect(getAllByText('07:10').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('falls back to the weekday departures table when the day-type table is missing', () => {
+    const fixed: VariantSchedule = {
+      src: ['8092'],
+      span: { weekday: ['0645', '0710'] },
+      departures: { weekday: [405, 430] },
+    }
+    const { getAllByText } = render(<TimetableTable schedule={fixed} dayType="sunday" lang="en" />)
+    expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
+    expect(getAllByText('07:10').length).toBeGreaterThanOrEqual(2)
   })
 })
 

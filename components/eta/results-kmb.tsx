@@ -8,7 +8,7 @@ import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib
 import type { ScheduledFallback } from '@/lib/eta/headway/types'
 import { useHeadwaySchedules } from '@/lib/eta/headway/use-headway-schedule'
 import { RouteBadge } from '@/components/eta/route-badge'
-import { RouteDetailsDialog } from '@/components/eta/route-details-dialog'
+import { RouteDetailsDialog, minsToDisplay } from '@/components/eta/route-details-dialog'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes } from '@/components/eta/ticking-eta'
@@ -474,16 +474,19 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   // Routes without valid ETAs get a simplified display
   if (!hasEta) {
     const remark = getGroupRemark(items, lang)
+    const departures = scheduled?.departures ?? null
     const hasScheduleData =
       scheduled != null &&
       (scheduled.headwayMin != null ||
         scheduled.headwayRange != null ||
+        (departures != null && departures.length > 0) ||
         (scheduled.first != null && scheduled.last != null))
     const scheduleLine =
       scheduled && hasScheduleData ? formatScheduledLine(scheduled, t, tWithParams) : null
     const spanLine = scheduled ? formatScheduledSpanLine(scheduled, tWithParams, t) : null
     const showSpanLine =
       spanLine != null && (scheduled?.headwayMin != null || scheduled?.headwayRange != null)
+    const showDepartures = departures != null && departures.length > 0
     return (
       <div
         className={cn(
@@ -506,6 +509,19 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
             )}
             {scheduleLine ?? remark ?? formatNoScheduledText(t)}
           </div>
+          {showDepartures ? (
+            <div className="flex flex-wrap gap-1.5" role="list">
+              {departures!.map((depMin, idx) => (
+                <span
+                  key={`${depMin}:${idx}`}
+                  role="listitem"
+                  className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                >
+                  {minsToDisplay(depMin)}
+                </span>
+              ))}
+            </div>
+          ) : null}
           {showSpanLine ? (
             <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
               {spanLine}

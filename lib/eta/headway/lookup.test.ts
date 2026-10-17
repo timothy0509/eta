@@ -218,4 +218,48 @@ describe('getScheduleForVariant', () => {
       serviceKey: 'ctb|102P|O|1',
     })
   })
+
+  it('returns fixed departures for span-only entries that carry them', () => {
+    const withDeps: HeadwayIndex = {
+      updated: '2026-10-16',
+      holidays: HOLIDAYS,
+      variants: {
+        'kmb|14D|O|1': {
+          src: ['8092'],
+          span: { weekday: ['0645', '0710'] },
+          departures: { weekday: [405, 410, 412, 418, 424, 430] },
+        },
+      },
+    }
+    const result = getScheduleForVariant(withDeps, 'kmb|14D|O|1', date('2026-10-16T10:00:00'))
+    expect(result).toMatchObject({
+      headwayMin: null,
+      headwayRange: null,
+      first: '06:45',
+      last: '07:10',
+      departures: [405, 410, 412, 418, 424, 430],
+    })
+  })
+
+  it('returns departures from the weekday table when the day-type table is missing', () => {
+    const withDeps: HeadwayIndex = {
+      updated: '2026-10-16',
+      holidays: HOLIDAYS,
+      variants: {
+        'kmb|14D|O|1': {
+          src: ['8092'],
+          span: { weekday: ['0645', '0710'] },
+          departures: { weekday: [405, 430] },
+        },
+      },
+    }
+    // Sunday has no departures table -> weekday table.
+    const result = getScheduleForVariant(withDeps, 'kmb|14D|O|1', date('2026-10-18T10:00:00'))
+    expect(result?.departures).toEqual([405, 430])
+  })
+
+  it('keeps departures null for frequency-based variants', () => {
+    const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-16T06:00:00'))
+    expect(result?.departures).toBeNull()
+  })
 })

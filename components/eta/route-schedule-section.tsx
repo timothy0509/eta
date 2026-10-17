@@ -53,8 +53,11 @@ export function RouteScheduleSection({
     if (!schedule) return null
     const today = getDayType(new Date(), index.holidays)
     const windows = schedule.headway?.[today] ?? schedule.headway?.weekday
+    const departures = schedule.departures?.[today] ?? schedule.departures?.weekday
     const span = schedule.span[today] ?? schedule.span.weekday
-    if ((!windows || windows.length === 0) && !span) return null
+    if ((!windows || windows.length === 0) && (!departures || departures.length === 0) && !span) {
+      return null
+    }
     return today
   }, [index, variantKey])
 

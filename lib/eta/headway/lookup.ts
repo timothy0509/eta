@@ -134,17 +134,20 @@ export function getScheduleForVariant(
 
   const dayType = getDayType(now, index.holidays)
   const windows = pickDayTable(schedule.headway, dayType)
+  const departures = pickDayTable(schedule.departures, dayType)
 
   const spanEntry = schedule.span[dayType] ?? schedule.span.weekday
   const { first, last } = spanToDisplay(spanEntry)
   if (!windows) {
-    // Span-only entry: no frequency windows, but first/last is still useful.
-    if (!first && !last) return null
+    // Span-only entry: no frequency windows, but fixed departures and/or
+    // first/last are still useful.
+    if ((!departures || departures.length === 0) && !first && !last) return null
     return {
       headwayMin: null,
       headwayRange: null,
       first,
       last,
+      departures: departures && departures.length > 0 ? [...departures] : null,
       isHolidayTimetable: dayType === 'holiday',
       serviceKey,
     }
@@ -156,6 +159,7 @@ export function getScheduleForVariant(
     headwayRange: distinctHeadwayRange(windows),
     first,
     last,
+    departures: null,
     isHolidayTimetable: dayType === 'holiday',
     serviceKey,
   }

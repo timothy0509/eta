@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/eta/empty-state'
 import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import { OperatorFilter } from '@/components/eta/operator-filter'
 import { formatScheduledLine } from '@/components/eta/results-kmb'
+import { minsToDisplay } from '@/components/eta/route-details-dialog'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
 import { RouteScheduleSection } from '@/components/eta/route-schedule-section'
@@ -153,13 +154,29 @@ function KmbRouteStopCard({
 
   const panel =
     visible.length === 0 ? (
-      <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-        {cardScheduled &&
-        (cardScheduled.headwayMin != null ||
-          cardScheduled.headwayRange != null ||
-          (cardScheduled.first && cardScheduled.last))
-          ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
-          : cardT('common.noScheduledBuses')}
+      <div className="space-y-2">
+        <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+          {cardScheduled &&
+          (cardScheduled.headwayMin != null ||
+            cardScheduled.headwayRange != null ||
+            (cardScheduled.departures != null && cardScheduled.departures.length > 0) ||
+            (cardScheduled.first && cardScheduled.last))
+            ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
+            : cardT('common.noScheduledBuses')}
+        </div>
+        {cardScheduled?.departures && cardScheduled.departures.length > 0 ? (
+          <div className="flex flex-wrap gap-1.5" role="list">
+            {cardScheduled.departures.map((depMin, idx) => (
+              <span
+                key={`${depMin}:${idx}`}
+                role="listitem"
+                className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+              >
+                {minsToDisplay(depMin)}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </div>
     ) : (
       <div className="space-y-2">

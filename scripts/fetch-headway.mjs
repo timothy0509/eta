@@ -23,9 +23,16 @@
  *       "<co>|<ROUTE>|<bound>|<serviceType>": {
  *         "src": ["<td_route_id>"],
  *         "span": { "weekday": ["HHMM","HHMM"], ... },
- *         "headway": { "weekday": [[startMin,endMin,headwayMin],...], ... }
+ *         "headway": { "weekday": [[startMin,endMin,headwayMin],...], ... },
+ *         "departures": { "weekday": [depMin,...], ... }
  *       } },
  *     "holidays": ["YYYY-MM-DD", ...] }
+ *
+ * "departures" holds fixed first-stop departure times (minutes since midnight,
+ * values past 1440 mean after midnight) for days that have trips but no
+ * frequency windows. Span-only entries (peak-only routes with fixed
+ * departures) carry departures plus first/last span but no headway key; mixed
+ * variants may carry departures only for the days lacking windows.
  *
  * Key rules:
  * - co is the lowercased app company (kmb/ctb/gmb/nlb/lrtfeeder). TD agency
@@ -282,7 +289,7 @@ function mergeWindows(windows) {
 }
 
 function newVariant() {
-  return { src: new Set(), spanFirst: {}, spanLast: {}, windows: {} }
+  return { src: new Set(), spanFirst: {}, spanLast: {}, windows: {}, fixed: {} }
 }
 
 function buildSnapshot(files) {
@@ -381,6 +388,10 @@ function buildSnapshot(files) {
       if (first === undefined || dep < first) variant.spanFirst[day] = dep
       const last = variant.spanLast[day]
       if (last === undefined || dep > last) variant.spanLast[day] = dep
+      // Keep every fixed first-stop departure: days that end up with no
+      // frequency windows render these instead of a bare first/last span.
+      if (!variant.fixed[day]) variant.fixed[day] = new Set()
+      variant.fixed[day].add(dep)
     }
   }
 
@@ -507,6 +518,16 @@ function buildSnapshot(files) {
     } else {
       spanOnly += 1
     }
+    // Fixed departures for days with trips but no frequency windows. Sorted
+    // minutes since midnight (may exceed 1440 for after-midnight trips).
+    const departures = {}
+    for (const day of DAY_TYPES) {
+      if (headway[day]) continue
+      const set = v.fixed[day]
+      if (set && set.size > 0) departures[day] = [...set].sort((a, b) => a - b)
+    }
+    if (!departures.holiday && departures.sunday) departures.holiday = [...departures.sunday]
+    if (Object.keys(departures).length > 0) entry.departures = departures
     outVariants[key] = entry
   }
 

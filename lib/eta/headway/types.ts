@@ -13,6 +13,12 @@ export interface VariantSchedule {
   span: Partial<Record<DayType, SpanRange>>
   /** Optional: span-only entries (peak-only routes) have no frequency windows. */
   headway?: Partial<Record<DayType, HeadwayWindow[]>>
+  /**
+   * Optional: fixed first-stop departures in minutes since midnight (may
+   * exceed 1440 for after-midnight trips), for days with trips but no
+   * frequency windows.
+   */
+  departures?: Partial<Record<DayType, number[]>>
 }
 
 export interface HeadwayIndex {
@@ -24,12 +30,15 @@ export interface HeadwayIndex {
 /**
  * Scheduled fallback for a route variant at a point in time.
  * first/last are "HH:MM" display strings (or null when the span is unknown).
+ * departures holds fixed departure minutes (since midnight, may exceed 1440)
+ * for days with trips but no frequency windows.
  */
 export interface ScheduledFallback {
   headwayMin: number | null
   headwayRange: [number, number] | null
   first: string | null
   last: string | null
+  departures: number[] | null
   isHolidayTimetable: boolean
   serviceKey: string | null
 }

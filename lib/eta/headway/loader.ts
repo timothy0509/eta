@@ -20,7 +20,12 @@ function isVariantSchedule(value: unknown): value is VariantSchedule {
   if (typeof span !== 'object' || span === null) return false
   // headway is optional: span-only entries (peak-only routes with fixed
   // departures) carry first/last times but no frequency windows.
+  // departures is optional: fixed first-stop departure minutes per day type.
   if (headway !== undefined && (typeof headway !== 'object' || headway === null)) return false
+  const { departures } = record
+  if (departures !== undefined && (typeof departures !== 'object' || departures === null)) {
+    return false
+  }
   for (const [key, entry] of Object.entries(span as Record<string, unknown>)) {
     if (!isDayTypeKey(key)) return false
     if (!Array.isArray(entry) || entry.length !== 2 || !entry.every((s) => typeof s === 'string')) {
@@ -31,6 +36,17 @@ function isVariantSchedule(value: unknown): value is VariantSchedule {
     for (const [key, entry] of Object.entries(headway as Record<string, unknown>)) {
       if (!isDayTypeKey(key)) return false
       if (!Array.isArray(entry) || !entry.every(isWindow)) return false
+    }
+  }
+  if (departures !== undefined) {
+    for (const [key, entry] of Object.entries(departures as Record<string, unknown>)) {
+      if (!isDayTypeKey(key)) return false
+      if (
+        !Array.isArray(entry) ||
+        !entry.every((n) => typeof n === 'number' && Number.isFinite(n))
+      ) {
+        return false
+      }
     }
   }
   return true

@@ -101,6 +101,54 @@ export function compareRouteEntries(a: RouteSearchEntry, b: RouteSearchEntry): n
   return a.route.localeCompare(b.route, undefined, { numeric: true }) || a.co.localeCompare(b.co)
 }
 
+/**
+ * Rank a bound so outbound sorts before inbound. Outbound (O, 去程) is the
+ * canonical direction; inbound (I, 回程) comes second.
+ */
+export function boundRank(bound: unknown): number {
+  const b = String(bound ?? '')
+  if (b === 'O') return 0
+  if (b === 'I') return 1
+  return 2
+}
+
+/** Rank a service type so the normal timetable (1) sorts before specials. */
+export function serviceTypeRank(serviceType: unknown): number {
+  return String(serviceType ?? '') === '1' ? 0 : 1
+}
+
+export type RouteVariantLike = {
+  bound: string
+  serviceType: string
+}
+
+/**
+ * Sort route variants: normal departures (serviceType 1) first, then
+ * outbound before inbound, then remaining types in natural order.
+ */
+export function compareRouteVariants(a: RouteVariantLike, b: RouteVariantLike): number {
+  return (
+    serviceTypeRank(a.serviceType) - serviceTypeRank(b.serviceType) ||
+    boundRank(a.bound) - boundRank(b.bound) ||
+    String(a.serviceType ?? '').localeCompare(String(b.serviceType ?? ''), undefined, {
+      numeric: true,
+    }) ||
+    String(a.bound ?? '').localeCompare(String(b.bound ?? ''))
+  )
+}
+
+/** Pick the canonical variant for display: normal outbound first. */
+export function pickCanonicalVariant<T extends RouteVariantLike>(variants: T[]): T | null {
+  if (variants.length === 0) return null
+  let best = variants[0] ?? null
+  for (let i = 1; i < variants.length; i += 1) {
+    const candidate = variants[i]
+    if (!best || !candidate) continue
+    if (compareRouteVariants(candidate, best) < 0) best = candidate
+  }
+  return best
+}
+
 function entryDisplayText(
   entry: RouteSearchEntry,
   field: 'origin' | 'destination',
@@ -224,13 +272,20 @@ export function buildRouteSearchIndex(
 
     const haystack = [first.route, ...altNames, ...stopNames].join(' ').toLowerCase()
 
+    // Canonical termini come from the normal outbound variant (O + service
+    // type 1) when it exists. The raw route list order follows the upstream
+    // db dump, so taking variants[0] shows inbound first for some routes
+    // (e.g. 2B, 14) and outbound first for others (e.g. 2A, 2D), which reads
+    // as randomly flipped origins.
+    const canonical = pickCanonicalVariant(variants) ?? first
+
     entries.push({
       key,
       co,
       route: first.route,
       operators,
-      origin: first.origin,
-      destination: first.destination,
+      origin: canonical.origin,
+      destination: canonical.destination,
       stopIds,
       viaStopIds,
       stopNames,

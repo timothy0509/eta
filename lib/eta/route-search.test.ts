@@ -4,10 +4,12 @@ import type { KmbRouteInfoLite, KmbRouteStopLite } from '@/lib/eta/client'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 import {
   buildRouteSearchIndex,
+  compareRouteVariants,
   countRoutesByStopName,
   getKeyStops,
   normalizeRouteQuery,
   operatorCounts,
+  pickCanonicalVariant,
   resolveKeyStopCount,
   searchRouteIndex,
 } from '@/lib/eta/route-search'
@@ -175,6 +177,57 @@ describe('variant termini', () => {
     const hits = searchRouteIndex(index, 'Po Tat')
     expect(hits.map((h) => h.entry.key)).toContain('kmb|1A')
     expect(hits[0]?.matchReason?.kind).toBe('terminus')
+  })
+
+  it('prefers the outbound variant for canonical termini', () => {
+    const variants = [
+      makeRoute('kmb', '2B', 'Cheung Sha Wan', 'Chuk Yuen Estate', 'I'),
+      makeRoute('kmb', '2B', 'Chuk Yuen Estate', 'Cheung Sha Wan', 'O'),
+    ]
+    const index = buildRouteSearchIndex(variants, [], new Map())
+    const entry = index.find((e) => e.key === 'kmb|2B')
+    expect(entry?.origin.en).toBe('Chuk Yuen Estate')
+    expect(entry?.destination.en).toBe('Cheung Sha Wan')
+  })
+
+  it('prefers outbound regardless of input order', () => {
+    const flipped = [
+      makeRoute('kmb', '14', 'Lei Yue Mun Estate', 'China Ferry Terminal', 'O'),
+      makeRoute('kmb', '14', 'China Ferry Terminal', 'Lei Yue Mun Estate', 'I'),
+    ]
+    const index = buildRouteSearchIndex(flipped, [], new Map())
+    const entry = index.find((e) => e.key === 'kmb|14')
+    expect(entry?.origin.en).toBe('Lei Yue Mun Estate')
+    expect(entry?.destination.en).toBe('China Ferry Terminal')
+  })
+})
+
+describe('compareRouteVariants', () => {
+  it('sorts outbound before inbound', () => {
+    const variants = [
+      { bound: 'I', serviceType: '1' },
+      { bound: 'O', serviceType: '1' },
+    ]
+    expect([...variants].sort(compareRouteVariants)[0]?.bound).toBe('O')
+  })
+
+  it('sorts normal service type before specials', () => {
+    const variants = [
+      { bound: 'O', serviceType: '2' },
+      { bound: 'O', serviceType: '1' },
+      { bound: 'I', serviceType: '1' },
+    ]
+    const sorted = [...variants].sort(compareRouteVariants)
+    expect(sorted.map((v) => `${v.bound}:${v.serviceType}`)).toEqual(['O:1', 'I:1', 'O:2'])
+  })
+
+  it('picks the normal outbound variant as canonical', () => {
+    const variants = [
+      { bound: 'I', serviceType: '1' },
+      { bound: 'O', serviceType: '2' },
+      { bound: 'O', serviceType: '1' },
+    ]
+    expect(pickCanonicalVariant(variants)).toEqual({ bound: 'O', serviceType: '1' })
   })
 })
 

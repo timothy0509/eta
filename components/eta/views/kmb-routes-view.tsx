@@ -57,9 +57,11 @@ import { pickLang } from '@/lib/eta/pick-lang'
 import { getReadableForeground } from '@/lib/ui/color'
 import {
   buildRouteSearchIndex,
+  compareRouteVariants,
   countRoutesByStopName,
   loadRouteFuseIndex,
   operatorCounts,
+  pickCanonicalVariant,
   searchRouteIndex,
   type RouteFuseInstance,
 } from '@/lib/eta/route-search'
@@ -867,7 +869,16 @@ export function KmbRoutesView({
               (initialSelection.serviceType ? v.serviceType === initialSelection.serviceType : true)
           )
         : undefined
-    const target = matchedVariant ?? matchingVariants[0]
+    const target =
+      matchedVariant ??
+      pickCanonicalVariant(
+        matchingVariants.map((v) => ({
+          bound: v.bound,
+          serviceType: v.serviceType,
+          source: v,
+        }))
+      )?.source ??
+      matchingVariants[0]
     if (!target) return null
     return {
       key: `${target.co}|${target.route}|${target.bound}|${target.serviceType}`,
@@ -1008,9 +1019,9 @@ export function KmbRoutesView({
         destination: r.destination,
       })
     }
-    return Array.from(map.values()).sort(
-      (a, b) => a.bound.localeCompare(b.bound) || a.serviceType.localeCompare(b.serviceType)
-    )
+    // Outbound (O, 去程) before inbound (I, 回程); normal timetable
+    // (service type 1) before specials.
+    return Array.from(map.values()).sort(compareRouteVariants)
   }, [routes, selectedRouteKey])
 
   const showOperatorInVariants = React.useMemo(

@@ -331,6 +331,8 @@ function KmbRouteStopList({
   lang,
   onSelectStopGroup,
   listKey,
+  expandedKey,
+  onToggleStop,
 }: {
   listKey: string
   currentVariant: RouteVariant
@@ -339,8 +341,9 @@ function KmbRouteStopList({
   etas: Record<string, KmbEtaEntryWithLeg[]>
   lang: UiLanguage
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
+  expandedKey: string | null
+  onToggleStop: (cardKey: string) => void
 }) {
-  const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
   const variantKey = routeVariantKey({
     co: currentVariant.co as Company,
     route: currentVariant.route,
@@ -503,7 +506,7 @@ function KmbRouteStopList({
         seq={seq}
         lang={lang}
         expanded={expandedKey === cardKey}
-        onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
+        onToggle={() => onToggleStop(cardKey)}
         selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
         onSelect={
           group && onSelectStopGroup
@@ -545,7 +548,8 @@ function KmbRouteStopList({
           {variantStops.map((rs, index) => (
             <div
               key={`${rs.stopId}:${rs.seq}`}
-              className={cn('ui-cv-row min-w-0 py-1', staggerClassForIndex(index))}
+              id={`kmb-route-stop-${rs.stopId}:${rs.seq}`}
+              className={cn('ui-cv-row min-w-0 scroll-mt-4 py-1', staggerClassForIndex(index))}
               style={{ gridColumn: 3, gridRow: index + 1 }}
             >
               {renderStopCard(rs)}
@@ -567,8 +571,9 @@ function KmbRouteStopList({
                 {section.items.map((rs, itemIdx) => (
                   <div
                     key={`${rs.stopId}:${rs.seq}`}
+                    id={`kmb-route-stop-${rs.stopId}:${rs.seq}`}
                     className={cn(
-                      'ui-cv-row',
+                      'ui-cv-row scroll-mt-4',
                       staggerClassForIndex((sectionStartRows[sectionIdx] ?? 0) + itemIdx)
                     )}
                   >
@@ -780,6 +785,10 @@ export function KmbRoutesView({
   const [variantStops, setVariantStops] = React.useState<KmbRouteStopLite[]>([])
   const [stopsVariantKey, setStopsVariantKey] = React.useState<string | null>(null)
   const [etas, setEtas] = React.useState<Record<string, KmbEtaEntryWithLeg[]>>({})
+  const [expandedStop, setExpandedStop] = React.useState<{
+    variantKey: string
+    cardKey: string
+  } | null>(null)
 
   const addFavorite = useAppStore((s) => s.addFavorite)
 
@@ -1052,38 +1061,97 @@ export function KmbRoutesView({
   }, [routePath])
 
   const mapMarkers = React.useMemo(() => {
+    const isCtbRoute = currentVariant ? normalizeOperator(currentVariant.co) === 'ctb' : false
+    const activeCardKey =
+      expandedStop && expandedStop.variantKey === currentVariant?.key ? expandedStop.cardKey : null
     return variantStops
       .map((rs) => {
         const stop = stopsById.get(rs.stopId)
         if (!stop) return null
+        const cardKey = `${rs.stopId}:${rs.seq}`
+        const fullName = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+        const parsed = parseKmbStopNameCached(fullName, {
+          isKmb: isKmbStop(stop),
+          lang,
+        })
+        const ctb = isCtbRoute ? parseCtbStopNameCached(parsed.name) : null
         return {
-          id: rs.stopId,
+          id: cardKey,
           lat: stop.lat,
           lng: stop.lng,
-          title: pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang),
+          title: pickCtbDisplayName(ctb?.name, parsed.name),
+          selected: activeCardKey === cardKey,
         }
       })
-      .filter(Boolean) as Array<{ id: string; lat: number; lng: number; title?: string }>
-  }, [variantStops, stopsById, lang])
+      .filter(Boolean) as Array<{
+      id: string
+      lat: number
+      lng: number
+      title?: string
+      selected?: boolean
+    }>
+  }, [variantStops, stopsById, lang, currentVariant, expandedStop])
 
   const mapPolylines = React.useMemo(() => {
     if (!currentVariant) return []
     return [{ id: currentVariant.key, path: displayPath }]
   }, [currentVariant, displayPath])
 
-  const handleMapStopClick = React.useCallback(
-    (stopId: string) => {
-      if (!onSelectStopGroup) return
-      const group = getStopGroupForClick(stopId, variantStops, stopsById, lang)
-      if (!group) return
-      onSelectStopGroup({
-        stopIds: group.stopIds,
-        title: group.title,
-        route: currentVariant?.route ?? '',
-      })
+  const focusPoint = React.useMemo(() => {
+    if (!expandedStop || expandedStop.variantKey !== currentVariant?.key) return null
+    const match = variantStops.find((rs) => `${rs.stopId}:${rs.seq}` === expandedStop.cardKey)
+    if (!match) return null
+    const stop = stopsById.get(match.stopId)
+    if (!stop) return null
+    return { lat: stop.lat, lng: stop.lng, zoom: 15 }
+  }, [expandedStop, variantStops, stopsById, currentVariant])
+
+  const scrollStopCardIntoView = React.useCallback((cardKey: string) => {
+    if (typeof document === 'undefined') return
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`kmb-route-stop-${cardKey}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [])
+
+  const handleToggleStop = React.useCallback(
+    (cardKey: string) => {
+      const variantKey = currentVariant?.key
+      if (!variantKey) return
+      setExpandedStop((prev) =>
+        prev && prev.variantKey === variantKey && prev.cardKey === cardKey
+          ? null
+          : { variantKey, cardKey }
+      )
     },
-    [onSelectStopGroup, variantStops, stopsById, lang, currentVariant]
+    [currentVariant]
   )
+
+  const handleMapStopClick = React.useCallback(
+    (id: string) => {
+      const variantKey = currentVariant?.key
+      if (!variantKey) return
+      const directHit = variantStops.some((rs) => `${rs.stopId}:${rs.seq}` === id)
+      const fallbackStop = directHit ? null : variantStops.find((rs) => rs.stopId === id)
+      const match = directHit
+        ? id
+        : fallbackStop
+          ? `${fallbackStop.stopId}:${fallbackStop.seq}`
+          : null
+      if (!match) return
+      setExpandedStop((prev) =>
+        prev && prev.variantKey === variantKey && prev.cardKey === match
+          ? null
+          : { variantKey, cardKey: match }
+      )
+      scrollStopCardIntoView(match)
+    },
+    [variantStops, scrollStopCardIntoView, currentVariant]
+  )
+
+  const expandedStopKey =
+    expandedStop && expandedStop.variantKey === currentVariant?.key ? expandedStop.cardKey : null
 
   const onSaveRoute = () => {
     if (!currentVariant) return
@@ -1118,6 +1186,7 @@ export function KmbRoutesView({
           polylines={isRouteSelected ? mapPolylines : []}
           zoom={isRouteSelected ? 13 : 11}
           fitKey={currentVariant?.key ?? null}
+          focusPoint={focusPoint}
           onMarkerClick={handleMapStopClick}
           ariaLabel={t('common.mapInteractive')}
           className="h-full w-full rounded-none"
@@ -1405,6 +1474,8 @@ export function KmbRoutesView({
                           etas={etas}
                           lang={lang}
                           onSelectStopGroup={onSelectStopGroup}
+                          expandedKey={expandedStopKey}
+                          onToggleStop={handleToggleStop}
                         />
                       )
                     )}

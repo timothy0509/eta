@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
+import { Marquee } from '@/components/ui/marquee'
 import { EmptyState } from '@/components/eta/empty-state'
 import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import { OperatorFilter } from '@/components/eta/operator-filter'
@@ -1276,7 +1277,10 @@ export function KmbRoutesView({
                         size="lg"
                       />
                       {currentVariant && (
-                        <span className="text-on-surface m3-title-md min-w-0 flex-1 truncate">
+                        <Marquee
+                          title={`${pickLang(currentVariant.origin, lang)} → ${pickLang(currentVariant.destination, lang)}`}
+                          className="text-on-surface m3-title-md min-w-0 flex-1 font-medium"
+                        >
                           {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
                             co: currentVariant.co,
                             lang,
@@ -1286,7 +1290,7 @@ export function KmbRoutesView({
                             co: currentVariant.co,
                             lang,
                           })}
-                        </span>
+                        </Marquee>
                       )}
                       <span className="text-on-surface-variant m3-label-md shrink-0 uppercase">
                         {selectedRouteKey.co}

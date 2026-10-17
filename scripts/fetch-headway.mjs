@@ -67,8 +67,9 @@
  *   second segment (1 -> O, 2 -> I). serviceType is the app variant's own
  *   service type: trips whose first stop lands near exactly one app variant
  *   first stop (same co/route, within 50 m with 200 m daylight to the
- *   runner-up) accumulate into that variant's key as well as the merged
- *   serviceType "1" key, so each timetable pill shows exactly its own trips.
+ *   runner-up) accumulate into that variant's key only, so each timetable
+ *   pill shows exactly its own trips. Unassigned trips stay in the merged
+ *   serviceType "1" key, which doubles as the fallback.
  *   TD and app bound conventions can disagree on specials, so matching
  *   spans every bound and the app bound wins in emitted keys.
  *   The lookup MUST fall back to serviceType "1" when an exact key misses.
@@ -697,7 +698,9 @@ function buildSnapshot(files, appStops) {
       const mergedKey = `${co}|${info.short}|${bound}|1`
       const extraKey = assignVariantKey(co, info.short, originStop)
       tripAssign.set(`${t.trip_id}|${co}`, extraKey && extraKey !== mergedKey ? extraKey : null)
-      const targetKeys = extraKey && extraKey !== mergedKey ? [mergedKey, extraKey] : [mergedKey]
+      // Trips confidently assigned to another service type leave the merged
+      // entry: each timetable pill shows exactly its own trips.
+      const targetKeys = extraKey && extraKey !== mergedKey ? [extraKey] : [mergedKey]
       for (const key of targetKeys) {
         const variant = getVariant(key)
         variant.src.add(t.route_id)
@@ -760,8 +763,7 @@ function buildSnapshot(files, appStops) {
     for (const co of info.coList) {
       const mergedKey = `${co}|${info.short}|${bound}|1`
       const extraKey = tripAssign.get(`${f.trip_id}|${co}`)
-      const targetKeys =
-        extraKey && extraKey !== mergedKey ? [mergedKey, extraKey] : [mergedKey]
+      const targetKeys = extraKey && extraKey !== mergedKey ? [extraKey] : [mergedKey]
       for (const key of targetKeys) {
         const variant = getVariant(key)
         variant.src.add(resolved.routeId)
@@ -947,10 +949,139 @@ function buildSnapshot(files, appStops) {
     outVariants[key] = entry
   }
 
+  // Fallback safety: groups left without a serviceType "1" entry (every
+  // trip confidently assigned elsewhere) get a |1 union, so unknown
+  // service types resolve something instead of nothing, as before.
+  let fallbackSynth = 0
+  const groupKeys = new Map()
+  for (const key of Object.keys(outVariants)) {
+    const sep = key.lastIndexOf('|')
+    const group = key.slice(0, sep)
+    let list = groupKeys.get(group)
+    if (!list) {
+      list = []
+      groupKeys.set(group, list)
+    }
+    list.push(key)
+  }
+  for (const [group, keys] of groupKeys) {
+    if (keys.some((key) => key.endsWith('|1'))) continue
+    const sortedSrc = [...new Set(keys.flatMap((key) => outVariants[key].src))].sort()
+    const srcIndex = new Map(sortedSrc.map((rid, i) => [rid, i]))
+    const union = { src: sortedSrc, span: {} }
+    const spanFirst = {}
+    const spanLast = {}
+    const windowLists = {}
+    const depSets = {}
+    const specialBySrc = new Map()
+    const freqIdx = new Set()
+    const covSets = new Map()
+    const covDepBySrc = {}
+    for (const key of keys) {
+      const sib = outVariants[key]
+      const sibIdx = new Map(sib.src.map((rid, i) => [rid, i]))
+      for (const [day, range] of Object.entries(sib.span ?? {})) {
+        if (
+          spanFirst[day] === undefined ||
+          range[0] < spanFirst[day]
+        ) {
+          spanFirst[day] = range[0]
+        }
+        if (spanLast[day] === undefined || range[1] > spanLast[day]) {
+          spanLast[day] = range[1]
+        }
+      }
+      for (const [day, list] of Object.entries(sib.headway ?? {})) {
+        if (!windowLists[day]) windowLists[day] = []
+        windowLists[day].push(...list.map((w) => [...w]))
+      }
+      for (const [day, list] of Object.entries(sib.departures ?? {})) {
+        if (!depSets[day]) depSets[day] = new Set()
+        for (const dep of list) depSets[day].add(dep)
+      }
+      for (const entry of sib.special ?? []) {
+        let agg = specialBySrc.get(entry.src)
+        if (!agg) {
+          agg = { src: entry.src, origin: entry.origin, departures: {} }
+          specialBySrc.set(entry.src, agg)
+        }
+        for (const [day, list] of Object.entries(entry.departures ?? {})) {
+          const set = new Set(agg.departures[day] ?? [])
+          for (const dep of list) set.add(dep)
+          agg.departures[day] = [...set].sort((a, b) => a - b)
+        }
+      }
+      for (const i of sib.freqSrc ?? []) {
+        const rid = sib.src[i]
+        const mapped = rid !== undefined ? srcIndex.get(rid) : undefined
+        if (mapped !== undefined) freqIdx.add(mapped)
+      }
+      for (const [appId, idxList] of Object.entries(sib.stopCov ?? {})) {
+        let set = covSets.get(appId)
+        if (!set) {
+          set = new Set()
+          covSets.set(appId, set)
+        }
+        for (const i of idxList) {
+          const rid = sib.src[i]
+          const mapped = rid !== undefined ? srcIndex.get(rid) : undefined
+          if (mapped !== undefined) set.add(mapped)
+        }
+      }
+      for (const [idxStr, table] of Object.entries(sib.depBySrc ?? {})) {
+        const rid = sib.src[Number(idxStr)]
+        const mapped = rid !== undefined ? srcIndex.get(rid) : undefined
+        if (mapped === undefined || !table || typeof table !== 'object') continue
+        covDepBySrc[String(mapped)] = {
+          origin: table.origin ?? '',
+          departures: { ...(table.departures ?? {}) },
+        }
+      }
+    }
+    for (const day of DAY_TYPES) {
+      if (spanFirst[day] !== undefined && spanLast[day] !== undefined) {
+        union.span[day] = [spanFirst[day], spanLast[day]]
+      }
+    }
+    if (Object.keys(union.span).length === 0) continue
+    const unionHeadway = {}
+    for (const [day, list] of Object.entries(windowLists)) {
+      if (list.length > 0) unionHeadway[day] = mergeWindows(list)
+    }
+    if (Object.keys(unionHeadway).length > 0) {
+      union.headway = unionHeadway
+    } else {
+      spanOnly += 1
+    }
+    for (const list of Object.values(unionHeadway)) totalWindows += list.length
+    const unionDepartures = {}
+    for (const [day, set] of Object.entries(depSets)) {
+      if (set.size > 0) unionDepartures[day] = [...set].sort((a, b) => a - b)
+    }
+    if (Object.keys(unionDepartures).length > 0) union.departures = unionDepartures
+    if (specialBySrc.size > 0) union.special = [...specialBySrc.values()]
+    if (freqIdx.size > 0) union.freqSrc = [...freqIdx].sort((a, b) => a - b)
+    if (covSets.size > 0) {
+      const stopCov = {}
+      for (const [appId, set] of covSets) {
+        if (set.size === 0 || set.size === sortedSrc.length) continue
+        stopCov[appId] = [...set].sort((a, b) => a - b)
+      }
+      if (Object.keys(stopCov).length > 0) {
+        union.stopCov = stopCov
+        stopCovVariants += 1
+        stopCovEntries += Object.keys(stopCov).length
+      }
+    }
+    if (Object.keys(covDepBySrc).length > 0) union.depBySrc = covDepBySrc
+    outVariants[`${group}|1`] = union
+    fallbackSynth += 1
+  }
+
   log(
-    `variants=${sortedKeys.length} span-only=${spanOnly} windows=${totalWindows} ` +
+    `variants=${Object.keys(outVariants).length} span-only=${spanOnly} windows=${totalWindows} ` +
       `stopCovVariants=${stopCovVariants} stopCovEntries=${stopCovEntries} ` +
-      `assignedTrips=${assignedTrips} ambiguousTrips=${ambiguousTrips} ` +
+      `assignedTrips=${assignedTrips} ambiguousTrips=${ambiguousTrips} fallbackSynth=${fallbackSynth} ` +
       `holidays=${holidays.length} skippedAgency=${skippedAgency} skippedShort=${skippedShort} ` +
       `tripsUnknownRoute=${tripsUnknownRoute} tripsUnknownService=${tripsUnknownService} ` +
       `tripsUnknownBound=${tripsUnknownBound} freqOrphans=${freqOrphans} freqBadTime=${freqBadTime}`

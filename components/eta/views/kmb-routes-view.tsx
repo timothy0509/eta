@@ -114,6 +114,7 @@ function hasDuplicateOperators(variants: RouteVariant[]): boolean {
  */
 function KmbRouteStopCard({
   stopEtas,
+  stopId,
   name,
   stopCode,
   seq,
@@ -124,6 +125,8 @@ function KmbRouteStopCard({
   onSelect,
 }: {
   stopEtas: KmbEtaEntryWithLeg[]
+  /** App stop id for per-stop schedule resolution. */
+  stopId: string
   name: string
   stopCode: string | null
   seq: number
@@ -150,7 +153,7 @@ function KmbRouteStopCard({
     if (!first) return null
     return variantBaseKey(first)
   }, [stopEtas])
-  const cardScheduled = useHeadwaySchedule(cardBaseKey)
+  const cardScheduled = useHeadwaySchedule(cardBaseKey, undefined, stopId)
 
   const panel =
     visible.length === 0 ? (
@@ -521,6 +524,7 @@ function KmbRouteStopList({
     return (
       <KmbRouteStopCard
         stopEtas={stopEtas}
+        stopId={rs.stopId}
         name={pickCtbDisplayName(ctb?.name, parsed.name)}
         stopCode={parsed.platform ?? parsed.stopCode}
         seq={seq}

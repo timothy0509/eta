@@ -16,7 +16,7 @@ import {
   getDayType,
   activeHeadwayIndex,
   resolveVariantKey,
-  specialsForDay,
+  scheduleForStop,
 } from '@/lib/eta/headway/lookup'
 import type { DayType, SpecialDayDepartures, VariantSchedule } from '@/lib/eta/headway/types'
 import { useHeadwayIndex } from '@/lib/eta/headway/use-headway-schedule'
@@ -36,6 +36,8 @@ export type RouteDetailsDialogProps = {
   destination: string | null
   operatorName: string
   stopName: string | null
+  /** App stop id for per-stop timetable resolution; omit for route-level. */
+  stopId?: string | null
   platform: string | null
   stopCode: string | null
   fareLabel: string | null
@@ -69,14 +71,16 @@ export function spanHhmmToDisplay(hhmm: string): string {
   return normalized
 }
 
-function daysWithData(schedule: VariantSchedule): DayType[] {
-  return DAY_ORDER.filter(
-    (day) =>
-      (schedule.headway?.[day]?.length ?? 0) > 0 ||
-      (schedule.departures?.[day]?.length ?? 0) > 0 ||
-      (schedule.special?.some((entry) => (entry.departures[day]?.length ?? 0) > 0) ?? false) ||
-      schedule.span[day] !== undefined
-  )
+function daysWithData(schedule: VariantSchedule, stopId?: string | null): DayType[] {
+  return DAY_ORDER.filter((day) => {
+    const resolved = scheduleForStop(schedule, stopId ?? null, day)
+    return (
+      (resolved.windows?.length ?? 0) > 0 ||
+      (resolved.departures?.length ?? 0) > 0 ||
+      (resolved.specials?.length ?? 0) > 0 ||
+      resolved.span !== undefined
+    )
+  })
 }
 
 /**
@@ -92,6 +96,7 @@ export function TimetableTable({
   lang,
   isToday = false,
   now,
+  stopId = null,
 }: {
   schedule: VariantSchedule
   dayType: DayType
@@ -99,16 +104,19 @@ export function TimetableTable({
   isToday?: boolean
   /** Test override for the live clock; omit in normal use. */
   now?: Date
+  /** App stop id for per-stop resolution; omit for the variant-level table. */
+  stopId?: string | null
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const tick = useTickingNow(60_000)
-  const windows = schedule.headway?.[dayType] ?? schedule.headway?.weekday ?? []
-  const departures = schedule.departures?.[dayType] ?? schedule.departures?.weekday ?? []
-  const specials = specialsForDay(schedule, dayType)
-  const span = schedule.span[dayType] ?? schedule.span.weekday
+  const resolved = scheduleForStop(schedule, stopId, dayType)
+  const windows = resolved.windows ?? []
+  const departures = resolved.departures ?? []
+  const specials = resolved.specials
+  const span = resolved.span
   // Weekday fallback windows do not describe today's service, so only
   // highlight when the day-type table exists for today.
-  const hasExactTable = schedule.headway?.[dayType] !== undefined
+  const hasExactTable = resolved.windows !== null && schedule.headway?.[dayType] !== undefined
   const nowDate = now ?? new Date(tick)
   const activeIdx =
     isToday && hasExactTable
@@ -271,7 +279,16 @@ export function SpecialDeparturesLine({
   )
 }
 
-export function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLanguage }) {
+export function FullTimetable({
+  baseKey,
+  lang,
+  stopId = null,
+}: {
+  baseKey: string
+  lang: UiLanguage
+  /** App stop id for per-stop resolution; omit for the variant-level table. */
+  stopId?: string | null
+}) {
   const index = useHeadwayIndex()
   const { t, tWithParams } = useTranslations(lang)
   const [tab, setTab] = React.useState<DayType | null>(null)
@@ -290,7 +307,7 @@ export function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLang
     return <div className="bg-surface-container-high ui-shimmer h-24 rounded-xl" aria-hidden />
   }
 
-  const available = daysWithData(schedule)
+  const available = daysWithData(schedule, stopId)
   if (available.length === 0) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
   }
@@ -334,7 +351,13 @@ export function FullTimetable({ baseKey, lang }: { baseKey: string; lang: UiLang
           </button>
         ))}
       </div>
-      <TimetableTable schedule={schedule} dayType={active} lang={lang} isToday={active === today} />
+      <TimetableTable
+        schedule={schedule}
+        dayType={active}
+        lang={lang}
+        isToday={active === today}
+        stopId={stopId}
+      />
       <div className="text-on-surface-variant m3-label-sm">
         {tWithParams('kmb.scheduleDataDate', { date: index.updated })}
       </div>
@@ -356,6 +379,7 @@ export function RouteDetailsDialog({
   destination,
   operatorName,
   stopName,
+  stopId = null,
   platform,
   stopCode,
   fareLabel,
@@ -424,7 +448,7 @@ export function RouteDetailsDialog({
               <CalendarDays className="h-3.5 w-3.5" aria-hidden />
               {t('kmb.scheduleFullTitle')}
             </div>
-            <FullTimetable baseKey={baseKey} lang={lang} />
+            <FullTimetable baseKey={baseKey} lang={lang} stopId={stopId} />
           </section>
         </div>
       </DialogContent>

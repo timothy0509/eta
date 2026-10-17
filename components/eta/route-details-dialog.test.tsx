@@ -127,6 +127,52 @@ describe('TimetableTable', () => {
     const { queryByText } = render(<TimetableTable schedule={mixed} dayType="sunday" lang="en" />)
     expect(queryByText('Special departures')).toBeNull()
   })
+
+  it('shows only specials without frequencies at a special-only stop', () => {
+    const mixed: VariantSchedule = {
+      src: ['8354', '8496'],
+      span: { weekday: ['0520', '2330'] },
+      headway: { weekday: [[320, 1410, 12]] },
+      special: [
+        {
+          src: '8496',
+          origin: 'PO TAT BUS TERMINUS',
+          departures: { weekday: [405, 415] },
+        },
+      ],
+      freqSrc: [0],
+      stopCov: { POTAT: [1] },
+    }
+    const { getAllByText, queryByText } = render(
+      <TimetableTable schedule={mixed} dayType="weekday" lang="en" stopId="POTAT" />
+    )
+    expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
+    expect(getAllByText('06:55').length).toBeGreaterThanOrEqual(2)
+    expect(queryByText('Every ~12 min')).toBeNull()
+    expect(queryByText('Special departures')).toBeNull()
+  })
+
+  it('keeps frequencies at a fully covered stop', () => {
+    const mixed: VariantSchedule = {
+      src: ['8354', '8496'],
+      span: { weekday: ['0520', '2330'] },
+      headway: { weekday: [[320, 1410, 12]] },
+      special: [
+        {
+          src: '8496',
+          origin: 'PO TAT BUS TERMINUS',
+          departures: { weekday: [405, 415] },
+        },
+      ],
+      freqSrc: [0],
+      stopCov: { POTAT: [1] },
+    }
+    const { getByText } = render(
+      <TimetableTable schedule={mixed} dayType="weekday" lang="en" stopId="OTHER" />
+    )
+    expect(getByText('Every ~12 min')).not.toBeNull()
+    expect(getByText('Special departures')).not.toBeNull()
+  })
 })
 
 describe('SpecialDeparturesLine', () => {

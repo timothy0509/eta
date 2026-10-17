@@ -1,13 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 
 import {
   activeHeadwayIndex,
   getDayType,
   getScheduleForVariant,
   resolveVariantKey,
+  scheduleForStop,
   specialsForDay,
 } from './lookup'
-import type { HeadwayIndex, HeadwayWindow } from './types'
+import type { HeadwayIndex, HeadwayWindow, VariantSchedule } from './types'
 
 const HOLIDAYS = ['2026-02-17']
 
@@ -354,5 +355,118 @@ describe('specialsForDay', () => {
 
   it('returns null without a special table', () => {
     expect(specialsForDay({ src: ['x'], span: {} }, 'weekday')).toBeNull()
+  })
+
+  it('keeps only entries from the serving routes when asked', () => {
+    const schedule: VariantSchedule = {
+      src: ['8354', '8496'],
+      span: {},
+      special: [
+        { src: '8354', origin: 'YAU TONG', departures: { weekday: [400] } },
+        { src: '8496', origin: 'PO TAT BUS TERMINUS', departures: { weekday: [405] } },
+      ],
+    }
+    expect(specialsForDay(schedule, 'weekday', new Set(['8496']))).toEqual([
+      { origin: 'PO TAT BUS TERMINUS', departures: [405] },
+    ])
+    expect(specialsForDay(schedule, 'weekday', new Set(['other']))).toBeNull()
+  })
+})
+
+/** 214-style merged variant: 8354 runs frequencies, 8496 runs Po Tat specials. */
+const COV_214: VariantSchedule = {
+  src: ['8354', '8496'],
+  span: { weekday: ['0520', '2330'] },
+  headway: { weekday: [[320, 1410, 12]] },
+  special: [{ src: '8496', origin: 'PO TAT BUS TERMINUS', departures: { weekday: [405, 415] } }],
+  freqSrc: [0],
+  stopCov: { POTAT: [1], YAUTONG: [0], SHARED: [0, 1] },
+}
+
+describe('scheduleForStop', () => {
+  it('hides frequencies at a special-only stop and derives span from specials', () => {
+    const resolved = scheduleForStop(COV_214, 'POTAT', 'weekday')
+    expect(resolved.windows).toBeNull()
+    expect(resolved.departures).toEqual([405, 415])
+    expect(resolved.specials).toBeNull()
+    expect(resolved.span).toEqual(['0645', '0655'])
+  })
+
+  it('keeps the variant-level tables at fully covered and unknown stops', () => {
+    for (const stopId of ['SHARED', 'SOMEWHERE-ELSE', null, undefined]) {
+      const resolved = scheduleForStop(COV_214, stopId, 'weekday')
+      expect(resolved.windows).toEqual([[320, 1410, 12]])
+      expect(resolved.departures).toBeNull()
+      expect(resolved.specials).toEqual([{ origin: 'PO TAT BUS TERMINUS', departures: [405, 415] }])
+      expect(resolved.span).toEqual(['0520', '2330'])
+    }
+  })
+
+  it('keeps frequencies but filters specials at a freq-served stop', () => {
+    const resolved = scheduleForStop(COV_214, 'YAUTONG', 'weekday')
+    expect(resolved.windows).toEqual([[320, 1410, 12]])
+    expect(resolved.specials).toBeNull()
+  })
+
+  it('filters span-only departures to the serving routes', () => {
+    const schedule: VariantSchedule = {
+      src: ['8092', '8096'],
+      span: { weekday: ['0645', '0710'] },
+      departures: { weekday: [405, 410, 412, 418, 424, 430] },
+      depBySrc: {
+        '0': { weekday: [405, 412, 418, 424, 430] },
+        '1': { weekday: [410, 430] },
+      },
+      stopCov: { STOP8096: [1] },
+    }
+    const resolved = scheduleForStop(schedule, 'STOP8096', 'weekday')
+    expect(resolved.windows).toBeNull()
+    expect(resolved.departures).toEqual([410, 430])
+    expect(resolved.span).toEqual(['0650', '0710'])
+  })
+
+  it('reports no service when no serving route runs that day', () => {
+    const satOnly: VariantSchedule = {
+      src: ['8354', '8496'],
+      span: { weekday: ['0520', '2330'] },
+      headway: { weekday: [[320, 1410, 12]] },
+      special: [{ src: '8496', origin: 'PO TAT BUS TERMINUS', departures: { saturday: [405] } }],
+      freqSrc: [0],
+      stopCov: { POTAT: [1] },
+    }
+    const resolved = scheduleForStop(satOnly, 'POTAT', 'weekday')
+    expect(resolved.windows).toBeNull()
+    expect(resolved.departures).toBeNull()
+    expect(resolved.span).toBeUndefined()
+  })
+})
+
+describe('getScheduleForVariant with stopId', () => {
+  const index: HeadwayIndex = { updated: '2026-10-16', holidays: HOLIDAYS, variants: {} }
+  beforeEach(() => {
+    index.variants['kmb|214|O|1'] = COV_214
+  })
+
+  it('returns fixed-only fallback at a special-only stop', () => {
+    const result = getScheduleForVariant(index, 'kmb|214|O|1', date('2026-10-16T10:00:00'), 'POTAT')
+    expect(result?.headwayMin).toBeNull()
+    expect(result?.headwayRange).toBeNull()
+    expect(result?.departures).toEqual([405, 415])
+    expect(result?.special).toBeNull()
+    expect(result?.first).toBe('06:45')
+    expect(result?.last).toBe('06:55')
+  })
+
+  it('returns null when the stop has no service that day', () => {
+    index.variants['kmb|214|O|1'] = {
+      src: ['8354', '8496'],
+      span: { weekday: ['0520', '2330'] },
+      headway: { weekday: [[320, 1410, 12]] },
+      special: [{ src: '8496', origin: 'PO TAT BUS TERMINUS', departures: { saturday: [405] } }],
+      freqSrc: [0],
+      stopCov: { POTAT: [1] },
+    }
+    const result = getScheduleForVariant(index, 'kmb|214|O|1', date('2026-10-16T10:00:00'), 'POTAT')
+    expect(result).toBeNull()
   })
 })

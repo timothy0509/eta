@@ -40,11 +40,32 @@ function isVariantSchedule(value: unknown): value is VariantSchedule {
   // departures) carry first/last times but no frequency windows.
   // departures is optional: fixed first-stop departure minutes per day type.
   // special is optional: per-route fixed extras for days with windows.
+  // freqSrc/depBySrc/stopCov are optional per-stop coverage tables.
   if (headway !== undefined && (typeof headway !== 'object' || headway === null)) return false
-  const { departures, special } = record
+  const { departures, special, freqSrc, depBySrc, stopCov } = record
   if (departures !== undefined && !isDeparturesTable(departures)) return false
   if (special !== undefined && (!Array.isArray(special) || !special.every(isSpecialEntry))) {
     return false
+  }
+  if (
+    freqSrc !== undefined &&
+    (!Array.isArray(freqSrc) || !freqSrc.every((n) => typeof n === 'number' && Number.isFinite(n)))
+  ) {
+    return false
+  }
+  if (depBySrc !== undefined) {
+    if (typeof depBySrc !== 'object' || depBySrc === null) return false
+    for (const table of Object.values(depBySrc as Record<string, unknown>)) {
+      if (!isDeparturesTable(table)) return false
+    }
+  }
+  if (stopCov !== undefined) {
+    if (typeof stopCov !== 'object' || stopCov === null) return false
+    for (const list of Object.values(stopCov as Record<string, unknown>)) {
+      if (!Array.isArray(list) || !list.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+        return false
+      }
+    }
   }
   for (const [key, entry] of Object.entries(span as Record<string, unknown>)) {
     if (!isDayTypeKey(key)) return false

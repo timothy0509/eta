@@ -121,14 +121,18 @@ function distinctHeadwayRange(windows: HeadwayWindow[]): [number, number] | null
 /**
  * Resolve special departures for a day type, with the same weekday fallback
  * as the other tables. Returns null when nothing applies that day.
+ * Pass servingSrc to keep only entries from those TD route ids (per-stop
+ * filtering); omit for the variant-level list.
  */
 export function specialsForDay(
   schedule: VariantSchedule,
-  dayType: DayType
+  dayType: DayType,
+  servingSrc?: Set<string> | null
 ): SpecialDayDepartures[] | null {
   if (!schedule.special || schedule.special.length === 0) return null
   const out: SpecialDayDepartures[] = []
   for (const entry of schedule.special) {
+    if (servingSrc && !servingSrc.has(entry.src)) continue
     const list = entry.departures[dayType] ?? entry.departures.weekday
     if (!list || list.length === 0) continue
     out.push({ origin: entry.origin, departures: [...list] })
@@ -136,15 +140,100 @@ export function specialsForDay(
   return out.length > 0 ? out : null
 }
 
+/** Minutes since midnight -> zero-padded "HHMM" (hours may exceed 24). */
+function minToHhmm(mins: number): string {
+  const h = String(Math.floor(mins / 60)).padStart(2, '0')
+  const m = String(mins % 60).padStart(2, '0')
+  return `${h}${m}`
+}
+
+/**
+ * Per-stop schedule resolution. Without a stop id, or when the stop has
+ * full variant coverage, this is the variant-level tables. At a partial
+ * coverage stop (see stopCov) the frequency table applies only when a
+ * frequency route serves the stop, and fixed departures filter to the
+ * serving routes. Returns windows/departures/specials plus the span to
+ * display; first/last come from the serving fixed trips when the
+ * frequency table does not apply.
+ */
+export function scheduleForStop(
+  schedule: VariantSchedule,
+  stopId: string | null | undefined,
+  dayType: DayType
+): {
+  windows: HeadwayWindow[] | null
+  departures: number[] | null
+  specials: SpecialDayDepartures[] | null
+  span: SpanRange | undefined
+} {
+  const spanEntry = schedule.span[dayType] ?? schedule.span.weekday
+  const variantWindows = pickDayTable(schedule.headway, dayType)
+  const variantDepartures = pickDayTable(schedule.departures, dayType)
+  const cov = stopId ? schedule.stopCov?.[stopId.trim()] : undefined
+  if (!cov || cov.length === 0) {
+    return {
+      windows: variantWindows,
+      departures: variantDepartures ? [...variantDepartures] : null,
+      specials: variantWindows ? specialsForDay(schedule, dayType) : null,
+      span: spanEntry,
+    }
+  }
+  const srcIdx = new Map(schedule.src.map((rid, i) => [rid, i]))
+  const serving = new Set<string>()
+  for (const i of cov) {
+    const rid = schedule.src[i]
+    if (rid !== undefined) serving.add(rid)
+  }
+  const freqSet = new Set<number>(schedule.freqSrc ?? [])
+  const freqServing = [...serving].some((rid) => freqSet.has(srcIdx.get(rid) ?? -1))
+  const windows = freqServing ? variantWindows : null
+  // Fixed departures from serving non-frequency routes: window-day
+  // specials plus windowless-day per-src tables, with weekday fallback.
+  const fixed: number[] = []
+  const pushFixed = (list: number[] | undefined) => {
+    if (list) for (const dep of list) fixed.push(dep)
+  }
+  for (const rid of serving) {
+    if (freqSet.has(srcIdx.get(rid) ?? -1)) continue
+    const special = schedule.special?.find((entry) => entry.src === rid)
+    pushFixed(special?.departures[dayType] ?? special?.departures.weekday)
+    const table = schedule.depBySrc?.[String(srcIdx.get(rid))]
+    pushFixed(table?.[dayType] ?? table?.weekday)
+  }
+  fixed.sort((a, b) => a - b)
+  if (windows) {
+    return {
+      windows,
+      departures: null,
+      specials: specialsForDay(schedule, dayType, serving),
+      span: spanEntry,
+    }
+  }
+  if (fixed.length === 0) {
+    // No frequency route serves this stop and no fixed trip does either
+    // today: genuinely no service, not the merged span.
+    return { windows: null, departures: null, specials: null, span: undefined }
+  }
+  return {
+    windows: null,
+    departures: fixed,
+    specials: null,
+    span: [minToHhmm(fixed[0]!), minToHhmm(fixed[fixed.length - 1]!)],
+  }
+}
+
 /**
  * Look up the scheduled fallback for a variant at a point in time.
- * Returns null when the variant key cannot be resolved or the index has
- * no usable tables for the day.
+ * Pass stopId for per-stop resolution: at partial-coverage stops the
+ * frequency table and fixed departures filter to the routes serving
+ * that stop. Returns null when the variant key cannot be resolved or
+ * the index has no usable tables for the day (or stop).
  */
 export function getScheduleForVariant(
   index: HeadwayIndex,
   baseKey: string,
-  now: Date = new Date()
+  now: Date = new Date(),
+  stopId?: string | null
 ): ScheduledFallback | null {
   const serviceKey = resolveVariantKey(index.variants, baseKey)
   if (!serviceKey) return null
@@ -152,14 +241,12 @@ export function getScheduleForVariant(
   if (!schedule) return null
 
   const dayType = getDayType(now, index.holidays)
-  const windows = pickDayTable(schedule.headway, dayType)
-  const departures = pickDayTable(schedule.departures, dayType)
-
-  const spanEntry = schedule.span[dayType] ?? schedule.span.weekday
-  const { first, last } = spanToDisplay(spanEntry)
-  if (!windows) {
+  const resolved = scheduleForStop(schedule, stopId, dayType)
+  const { first, last } = spanToDisplay(resolved.span)
+  if (!resolved.windows) {
     // Span-only entry: no frequency windows, but fixed departures and/or
     // first/last are still useful.
+    const departures = resolved.departures
     if ((!departures || departures.length === 0) && !first && !last) return null
     return {
       headwayMin: null,
@@ -175,12 +262,12 @@ export function getScheduleForVariant(
   const mins = now.getHours() * 60 + now.getMinutes()
 
   return {
-    headwayMin: findActiveHeadway(windows, mins),
-    headwayRange: distinctHeadwayRange(windows),
+    headwayMin: findActiveHeadway(resolved.windows, mins),
+    headwayRange: distinctHeadwayRange(resolved.windows),
     first,
     last,
     departures: null,
-    special: specialsForDay(schedule, dayType),
+    special: resolved.specials,
     isHolidayTimetable: dayType === 'holiday',
     serviceKey,
   }

@@ -26,7 +26,10 @@
  *         "headway": { "weekday": [[startMin,endMin,headwayMin],...], ... },
  *         "departures": { "weekday": [depMin,...], ... },
  *         "special": [{ "src": "<td_route_id>", "origin": "<first stop>",
- *                        "departures": { "weekday": [depMin,...], ... } }, ...]
+ *                        "departures": { "weekday": [depMin,...], ... } }, ...],
+ *         "freqSrc": [<src index into "src">, ...],
+ *         "depBySrc": { "<src index>": { "weekday": [depMin,...], ... }, ... },
+ *         "stopCov": { "<app stop id>": [<src index>, ...], ... }
  *       } },
  *     "holidays": ["YYYY-MM-DD", ...] }
  *
@@ -39,7 +42,19 @@
  * that DO have frequency windows: extras the frequency table misses, e.g.
  * peak short workings from another terminus. Each entry names its TD route
  * and first-stop origin. Trips from a route that also feeds the frequency
- * table only count when they fall outside every window that day.
+ * table only count when they fall outside every window that day or their
+ * stop pattern differs from every frequency trip pattern (inside-window
+ * trips on an identical pattern are presumably the frequency buses
+ * themselves).
+ * "freqSrc" lists src indexes with frequency trips, "depBySrc" holds
+ * per-src fixed departures for windowless days, and "stopCov" maps app
+ * stop ids (hk-bus-eta unified ids) to the serving src indexes, but only
+ * for stops with partial coverage where the display changes: stops no
+ * frequency route serves (hide the frequency table there) and stops in
+ * span-only variants served by a strict subset of routes (filter the
+ * departure list there). Serving sets come from coordinate matching TD
+ * stops.txt against the hk-bus-eta stop list (50 m radius); unmapped
+ * stops fall back to the variant-level display.
  *
  * Key rules:
  * - co is the lowercased app company (kmb/ctb/gmb/nlb/lrtfeeder). TD agency
@@ -77,6 +92,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const GTFS_BASE = process.env.TD_HEADWAY_BASE_URL || 'https://static.data.gov.hk/td/pt-headway-en'
 const GTFS_URL = process.env.TD_HEADWAY_GTFS_URL || `${GTFS_BASE}/gtfs.zip`
 const DATE_URL = process.env.TD_HEADWAY_DATE_URL || `${GTFS_BASE}/DATA_LAST_UPDATED_DATE.csv`
+const HKBUS_DB_URL = process.env.HKBUS_DB_URL || 'https://data.hkbus.app/routeFareList.min.json'
 const OUT_DIR = join(REPO_ROOT, 'public', 'headway')
 const HEADWAY_PATH = join(OUT_DIR, 'headway.json')
 const MANIFEST_PATH = join(OUT_DIR, 'manifest.json')
@@ -332,7 +348,77 @@ function windowCovers(windows, dep) {
   return false
 }
 
-function buildSnapshot(files) {
+/**
+ * Fetch hk-bus-eta stop coordinates for TD->app stop matching. Returns a
+ * Map of unified stop id -> { lat, lng }, or null when unreachable (the
+ * snapshot still builds, just without per-stop coverage tables).
+ */
+async function fetchAppStops() {
+  try {
+    const bytes = await fetchWithRetry(HKBUS_DB_URL)
+    const db = JSON.parse(bytes.toString('utf8'))
+    const stopList = db?.stopList
+    if (!stopList || typeof stopList !== 'object') {
+      log('hk-bus-eta db has no stopList, skipping stop coverage')
+      return null
+    }
+    const out = new Map()
+    for (const [id, stop] of Object.entries(stopList)) {
+      const lat = Number(stop?.location?.lat)
+      const lng = Number(stop?.location?.lng)
+      if (String(id) && Number.isFinite(lat) && Number.isFinite(lng)) {
+        out.set(String(id).trim(), { lat, lng })
+      }
+    }
+    log(`loaded ${out.size} hk-bus-eta stops for coverage matching`)
+    return out
+  } catch (err) {
+    log(`hk-bus-eta stop fetch failed, skipping stop coverage: ${err}`)
+    return null
+  }
+}
+
+/** Grid index over app stops for radius lookup (0.001 deg cells). */
+function buildStopGrid(appStops) {
+  const grid = new Map()
+  for (const [id, { lat, lng }] of appStops) {
+    const key = `${Math.round(lat * 1000)},${Math.round(lng * 1000)}`
+    let cell = grid.get(key)
+    if (!cell) {
+      cell = []
+      grid.set(key, cell)
+    }
+    cell.push([id, lat, lng])
+  }
+  return grid
+}
+
+const STOP_MATCH_RADIUS_M = 50
+
+function approxMeters(lat1, lng1, lat2, lng2) {
+  const dLat = (lat1 - lat2) * 111320
+  const dLng = (lng1 - lng2) * 101000
+  return Math.sqrt(dLat * dLat + dLng * dLng)
+}
+
+/** Every app stop id within the match radius of a TD stop coordinate. */
+function appStopsNear(grid, lat, lng) {
+  const out = []
+  const latC = Math.round(lat * 1000)
+  const lngC = Math.round(lng * 1000)
+  for (let dLat = -2; dLat <= 2; dLat += 1) {
+    for (let dLng = -2; dLng <= 2; dLng += 1) {
+      const cell = grid.get(`${latC + dLat},${lngC + dLng}`)
+      if (!cell) continue
+      for (const [id, aLat, aLng] of cell) {
+        if (approxMeters(lat, lng, aLat, aLng) <= STOP_MATCH_RADIUS_M) out.push(id)
+      }
+    }
+  }
+  return out
+}
+
+function buildSnapshot(files, appStops) {
   const routes = rowsToObjects(parseCsv(files['routes.txt']))
   const trips = rowsToObjects(parseCsv(files['trips.txt']))
   const frequencies = rowsToObjects(parseCsv(files['frequencies.txt']))
@@ -407,7 +493,17 @@ function buildSnapshot(files) {
   const firstDeparture = new Map()
   // trip_id -> first stop_id (for special-departure origin labels)
   const firstStopId = new Map()
+  // trip_id -> every TD stop_id it serves (for pattern + coverage analysis)
+  const tripStops = new Map()
   for (const st of stopTimes) {
+    if (st.stop_id) {
+      let set = tripStops.get(st.trip_id)
+      if (!set) {
+        set = new Set()
+        tripStops.set(st.trip_id, set)
+      }
+      set.add(st.stop_id)
+    }
     if (st.stop_sequence !== '1') continue
     const dep = toMinutes(st.departure_time)
     if (Number.isNaN(dep)) continue
@@ -416,6 +512,15 @@ function buildSnapshot(files) {
       firstDeparture.set(st.trip_id, dep)
       firstStopId.set(st.trip_id, st.stop_id)
     }
+  }
+
+  // TD stop_id -> coordinates for app-stop matching.
+  const stopCoords = new Map()
+  for (const s of stops) {
+    if (!s.stop_id) continue
+    const lat = Number(s.stop_lat)
+    const lng = Number(s.stop_lon)
+    if (Number.isFinite(lat) && Number.isFinite(lng)) stopCoords.set(s.stop_id, [lat, lng])
   }
 
   // TD stop_id -> cleaned origin label for special departures.
@@ -476,6 +581,12 @@ function buildSnapshot(files) {
   let tripsUnknownService = 0
   let tripsUnknownRoute = 0
   let tripsUnknownBound = 0
+  // Raw trip_ids referenced by frequencies.txt: membership decides whether a
+  // trip is a frequency bus without needing trip_id resolution.
+  const freqTripIdSet = new Set()
+  for (const f of frequencies) {
+    if (f.trip_id) freqTripIdSet.add(f.trip_id)
+  }
   for (const t of trips) {
     const info = routeInfo.get(t.route_id)
     if (!info) {
@@ -497,19 +608,37 @@ function buildSnapshot(files) {
     const dep = depOf(t.trip_id)
     if (Number.isNaN(dep)) continue
     const originStop = firstStopId.get(t.trip_id)
+    const isFreq = freqTripIdSet.has(t.trip_id)
+    const stopSet = tripStops.get(t.trip_id)
+    const pattern = stopSet ? [...stopSet].sort().join(',') : ''
     for (const co of info.coList) {
       const variant = getVariant(`${co}|${info.short}|${bound}|1`)
       variant.src.add(t.route_id)
       addTripSpan(variant, days, dep)
-      // Per-route fixed trips for the special-departures section: trips that
-      // never appear in frequencies.txt (checked later against freqRids).
+      // Per-route TD stop union for app-stop coverage mapping.
+      if (!variant.srcStops) variant.srcStops = new Map()
+      let stopUnion = variant.srcStops.get(t.route_id)
+      if (!stopUnion) {
+        stopUnion = new Set()
+        variant.srcStops.set(t.route_id, stopUnion)
+      }
+      if (stopSet) for (const s of stopSet) stopUnion.add(s)
+      if (isFreq) {
+        // Frequency trip patterns: shared-route fixed trips on an
+        // identical pattern are the frequency buses themselves.
+        if (!variant.freqPatterns) variant.freqPatterns = new Set()
+        if (pattern) variant.freqPatterns.add(pattern)
+        continue
+      }
+      // Per-route fixed trips for the special-departures section.
       if (!variant.fixedBySrc) variant.fixedBySrc = new Map()
       let perSrc = variant.fixedBySrc.get(t.route_id)
       if (!perSrc) {
-        perSrc = { firstStop: originStop, days: {} }
+        perSrc = { firstStop: originStop, days: {}, patterns: new Set() }
         variant.fixedBySrc.set(t.route_id, perSrc)
       }
       if (perSrc.firstStop === undefined) perSrc.firstStop = originStop
+      if (pattern) perSrc.patterns.add(pattern)
       for (const day of days) {
         if (!perSrc.days[day]) perSrc.days[day] = new Set()
         perSrc.days[day].add(dep)
@@ -562,6 +691,10 @@ function buildSnapshot(files) {
   const outVariants = {}
   let spanOnly = 0
   let totalWindows = 0
+  let stopCovVariants = 0
+  let stopCovEntries = 0
+  const appStopGrid = appStops && appStops.size > 0 ? buildStopGrid(appStops) : null
+  if (!appStopGrid) log('no app stop grid, skipping per-stop coverage tables')
   const sortedKeys = [...variants.keys()].sort()
   for (const key of sortedKeys) {
     const v = variants.get(key)
@@ -601,14 +734,19 @@ function buildSnapshot(files) {
     // route, for days that DO have frequency windows. These are extras the
     // frequency table does not describe, e.g. peak short workings from a
     // different terminus. Trips from a route that also has frequency trips
-    // only count when they fall outside every window that day (inside ones
-    // are presumably the frequency buses themselves).
+    // only count when they fall outside every window that day or run a
+    // stop pattern no frequency trip runs (inside-window trips on an
+    // identical pattern are presumably the frequency buses themselves).
     const special = []
     if (v.fixedBySrc) {
       const rids = [...v.fixedBySrc.keys()].sort()
       for (const rid of rids) {
         const perSrc = v.fixedBySrc.get(rid)
         const shared = Boolean(v.freqRids && v.freqRids.has(rid))
+        const hasDistinctPattern =
+          !perSrc.patterns ||
+          perSrc.patterns.size === 0 ||
+          [...perSrc.patterns].some((p) => !v.freqPatterns || !v.freqPatterns.has(p))
         const origin = originByStopId.get(perSrc.firstStop) || ''
         const depDays = {}
         for (const day of DAY_TYPES) {
@@ -616,7 +754,9 @@ function buildSnapshot(files) {
           const set = perSrc.days[day]
           if (!set || set.size === 0) continue
           let list = [...set]
-          if (shared) list = list.filter((dep) => !windowCovers(headway[day], dep))
+          if (shared && !hasDistinctPattern) {
+            list = list.filter((dep) => !windowCovers(headway[day], dep))
+          }
           if (list.length === 0) continue
           depDays[day] = list.sort((a, b) => a - b)
         }
@@ -627,11 +767,88 @@ function buildSnapshot(files) {
       }
     }
     if (special.length > 0) entry.special = special
+    // Per-stop coverage: app stops with partial TD-route coverage where the
+    // display changes. Serving sets use indexes into the sorted src array.
+    // A: windowed variants, stops no frequency route serves (hide the
+    // frequency table there). S: variants with windowless-day departures,
+    // stops served by a strict subset of routes (filter departures there).
+    if (appStopGrid && v.srcStops && v.src.size > 1) {
+      const sortedSrc = entry.src
+      const srcIndex = new Map(sortedSrc.map((rid, i) => [rid, i]))
+      const freqIdx = new Set(
+        [...(v.freqRids ?? [])].map((rid) => srcIndex.get(rid)).filter((i) => i !== undefined)
+      )
+      const hasWindows = Object.keys(headway).length > 0
+      const hasWindowlessDepartures = Object.keys(departures).length > 0
+      if ((hasWindows && freqIdx.size > 0) || hasWindowlessDepartures) {
+        const tdServing = new Map()
+        for (const [rid, stopUnion] of v.srcStops) {
+          for (const s of stopUnion) {
+            let set = tdServing.get(s)
+            if (!set) {
+              set = new Set()
+              tdServing.set(s, set)
+            }
+            set.add(rid)
+          }
+        }
+        const appServing = new Map()
+        for (const [tdStop, ridSet] of tdServing) {
+          if (ridSet.size === sortedSrc.length) continue
+          const coords = stopCoords.get(tdStop)
+          if (!coords) continue
+          for (const appId of appStopsNear(appStopGrid, coords[0], coords[1])) {
+            let set = appServing.get(appId)
+            if (!set) {
+              set = new Set()
+              appServing.set(appId, set)
+            }
+            for (const rid of ridSet) set.add(rid)
+          }
+        }
+        const stopCov = {}
+        for (const [appId, ridSet] of appServing) {
+          if (ridSet.size === sortedSrc.length) continue
+          const isSpecialOnly =
+            hasWindows &&
+            freqIdx.size > 0 &&
+            [...ridSet].every((rid) => !freqIdx.has(srcIndex.get(rid)))
+          if (!isSpecialOnly && !hasWindowlessDepartures) continue
+          stopCov[appId] = [...ridSet]
+            .map((rid) => srcIndex.get(rid))
+            .filter((i) => i !== undefined)
+            .sort((a, b) => a - b)
+        }
+        if (Object.keys(stopCov).length > 0) {
+          entry.stopCov = stopCov
+          stopCovVariants += 1
+          stopCovEntries += Object.keys(stopCov).length
+          if (freqIdx.size > 0) entry.freqSrc = [...freqIdx].sort((a, b) => a - b)
+          // Per-src fixed departures for windowless days, so stops can
+          // filter the merged departures table to their serving routes.
+          const depBySrc = {}
+          for (const [rid, perSrc] of v.fixedBySrc ?? []) {
+            const idx = srcIndex.get(rid)
+            if (idx === undefined) continue
+            const table = {}
+            for (const day of DAY_TYPES) {
+              if (headway[day]) continue
+              const set = perSrc.days[day]
+              if (set && set.size > 0) table[day] = [...set].sort((a, b) => a - b)
+            }
+            if (!table.holiday && table.sunday) table.holiday = [...table.sunday]
+            if (Object.keys(table).length > 0) depBySrc[String(idx)] = table
+          }
+          if (Object.keys(depBySrc).length > 0) entry.depBySrc = depBySrc
+        }
+      }
+    }
     outVariants[key] = entry
   }
 
   log(
     `variants=${sortedKeys.length} span-only=${spanOnly} windows=${totalWindows} ` +
+      `stopCovVariants=${stopCovVariants} stopCovEntries=${stopCovEntries} ` +
       `holidays=${holidays.length} skippedAgency=${skippedAgency} skippedShort=${skippedShort} ` +
       `tripsUnknownRoute=${tripsUnknownRoute} tripsUnknownService=${tripsUnknownService} ` +
       `tripsUnknownBound=${tripsUnknownBound} freqOrphans=${freqOrphans} freqBadTime=${freqBadTime}`
@@ -765,8 +982,8 @@ async function main() {
   let source = 'live'
   let effectiveDate = datasetDate
   try {
-    const files = await loadGtfs()
-    snapshot = buildSnapshot(files)
+    const [files, appStops] = await Promise.all([loadGtfs(), fetchAppStops()])
+    snapshot = buildSnapshot(files, appStops)
   } catch (err) {
     log(`GTFS load failed: ${err}`)
     snapshot = null

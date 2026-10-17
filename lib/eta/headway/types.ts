@@ -25,6 +25,24 @@ export interface VariantSchedule {
    * another terminus).
    */
   special?: SpecialDepartures[]
+  /**
+   * Optional: src indexes (into `src`) with frequency trips. Present only
+   * alongside stopCov.
+   */
+  freqSrc?: number[]
+  /**
+   * Optional: per-src fixed departures for windowless days, keyed by src
+   * index string. Lets stops filter the merged departures table to the
+   * routes that actually serve them. Present only alongside stopCov.
+   */
+  depBySrc?: Record<string, Partial<Record<DayType, number[]>>>
+  /**
+   * Optional: app stop id -> serving src indexes, only for stops with
+   * partial TD-route coverage where the display changes (stops no
+   * frequency route serves, stops in span-only variants served by a
+   * strict route subset). Stops absent here use the variant-level tables.
+   */
+  stopCov?: Record<string, number[]>
 }
 
 /** Fixed departures from one TD route, with its first-stop origin label. */

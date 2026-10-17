@@ -6,7 +6,11 @@ import * as React from 'react'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib/eta/kmb-eta-groups'
 import type { ScheduledFallback } from '@/lib/eta/headway/types'
-import { useHeadwaySchedules } from '@/lib/eta/headway/use-headway-schedule'
+import {
+  useHeadwayIndex,
+  useHeadwaySchedule,
+  useHeadwaySchedules,
+} from '@/lib/eta/headway/use-headway-schedule'
 import { RouteBadge } from '@/components/eta/route-badge'
 import {
   RouteDetailsDialog,
@@ -299,6 +303,15 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const { t, tWithParams } = useTranslations(lang)
 
+  // Per-stop schedule refinement: at partial-coverage stops (special-only
+  // termini, span-only subset stops) the variant-level fallback shows buses
+  // that never serve this stop. Once the index loads, the stop-aware
+  // lookup replaces the prop (it already falls back to variant level for
+  // fully covered stops).
+  const headwayIndex = useHeadwayIndex()
+  const stopScheduled = useHeadwaySchedule(baseKey, undefined, stopChips.stopId)
+  const effectiveScheduled = headwayIndex ? stopScheduled : scheduled
+
   const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && Boolean(expanded)
 
@@ -324,6 +337,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       destination={destination ?? (label || null)}
       operatorName={operatorName}
       stopName={stopChips.name}
+      stopId={stopChips.stopId}
       platform={stopChips.platform}
       stopCode={stopChips.stopCode}
       fareLabel={fareLabel}
@@ -477,6 +491,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   // Routes without valid ETAs get a simplified display
   if (!hasEta) {
+    const scheduled = effectiveScheduled
     const remark = getGroupRemark(items, lang)
     const departures = scheduled?.departures ?? null
     const hasScheduleData =

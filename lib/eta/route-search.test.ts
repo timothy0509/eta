@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { KmbRouteInfoLite, KmbRouteStopLite } from '@/lib/eta/client'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 import {
+  boundRank,
   buildRouteSearchIndex,
   compareRouteVariants,
   countRoutesByStopName,
@@ -228,6 +229,82 @@ describe('compareRouteVariants', () => {
       { bound: 'O', serviceType: '1' },
     ]
     expect(pickCanonicalVariant(variants)).toEqual({ bound: 'O', serviceType: '1' })
+  })
+
+  it('sorts long-form bounds with their short forms', () => {
+    const variants = [
+      { bound: 'I', serviceType: '1' },
+      { bound: 'outbound', serviceType: '1' },
+      { bound: 'inbound', serviceType: '1' },
+      { bound: 'O', serviceType: '1' },
+    ]
+    const sorted = [...variants].sort(compareRouteVariants)
+    expect(
+      sorted
+        .slice(0, 2)
+        .map((v) => v.bound)
+        .sort()
+    ).toEqual(['O', 'outbound'])
+    expect(
+      sorted
+        .slice(2)
+        .map((v) => v.bound)
+        .sort()
+    ).toEqual(['I', 'inbound'])
+  })
+})
+
+describe('boundRank', () => {
+  it('ranks outbound first, pseudo-circular next, inbound after', () => {
+    expect(boundRank('O')).toBe(0)
+    expect(boundRank('outbound')).toBe(0)
+    expect(boundRank(' o ')).toBe(0)
+    expect(boundRank('OI')).toBe(1)
+    expect(boundRank('IO')).toBe(1)
+    expect(boundRank('I')).toBe(2)
+    expect(boundRank('inbound')).toBe(2)
+    expect(boundRank('')).toBe(3)
+    expect(boundRank('X')).toBe(3)
+    expect(boundRank(null)).toBe(3)
+    expect(boundRank('O')).toBeLessThan(boundRank('OI'))
+    expect(boundRank('OI')).toBeLessThan(boundRank('I'))
+  })
+})
+
+describe('via line direction', () => {
+  it('follows the canonical outbound variant even when inbound is longer', () => {
+    const variants = [
+      makeRoute('kmb', 'X9', 'Outbound Origin', 'Outbound Dest', 'O'),
+      makeRoute('kmb', 'X9', 'Outbound Dest', 'Outbound Origin', 'I'),
+    ]
+    const rows: KmbRouteStopLite[] = [
+      { co: 'kmb', route: 'X9', bound: 'O', serviceType: '1', seq: 1, stopId: 'o1' },
+      { co: 'kmb', route: 'X9', bound: 'O', serviceType: '1', seq: 2, stopId: 'o2' },
+      { co: 'kmb', route: 'X9', bound: 'I', serviceType: '1', seq: 1, stopId: 'i1' },
+      { co: 'kmb', route: 'X9', bound: 'I', serviceType: '1', seq: 2, stopId: 'i2' },
+      { co: 'kmb', route: 'X9', bound: 'I', serviceType: '1', seq: 3, stopId: 'i3' },
+      { co: 'kmb', route: 'X9', bound: 'I', serviceType: '1', seq: 4, stopId: 'i4' },
+    ]
+    const index = buildRouteSearchIndex(variants, rows, new Map())
+    const entry = index.find((e) => e.key === 'kmb|X9')
+    expect(entry?.viaStopIds).toEqual(['o1', 'o2'])
+    expect(entry?.viaStopCount).toBe(2)
+  })
+
+  it('falls back to the longest group when the canonical group has no rows', () => {
+    const variants = [
+      makeRoute('kmb', 'X8', 'Outbound Origin', 'Outbound Dest', 'O'),
+      makeRoute('kmb', 'X8', 'Outbound Dest', 'Outbound Origin', 'I'),
+    ]
+    const rows: KmbRouteStopLite[] = [
+      { co: 'kmb', route: 'X8', bound: 'I', serviceType: '1', seq: 1, stopId: 'i1' },
+      { co: 'kmb', route: 'X8', bound: 'I', serviceType: '1', seq: 2, stopId: 'i2' },
+      { co: 'kmb', route: 'X8', bound: 'I', serviceType: '1', seq: 3, stopId: 'i3' },
+    ]
+    const index = buildRouteSearchIndex(variants, rows, new Map())
+    const entry = index.find((e) => e.key === 'kmb|X8')
+    expect(entry?.viaStopIds).toEqual(['i1', 'i2', 'i3'])
+    expect(entry?.origin.en).toBe('Outbound Origin')
   })
 })
 

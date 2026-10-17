@@ -1458,7 +1458,11 @@ export function KmbRoutesView({
                               )}
                             >
                               <span>
-                                {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}
+                                {v.bound === 'I'
+                                  ? t('common.inbound')
+                                  : v.bound === 'O'
+                                    ? t('common.outbound')
+                                    : v.bound || null}
                               </span>
                               <span>
                                 {formatKmbRouteEndpointName(pickLang(v.destination, lang), {

@@ -64,9 +64,14 @@
  *   (KMB+CTB, LWB+CTB) emit one variant per company. Agencies FERRY, XB, DB,
  *   PI, TRAM and PTRAM, and rows with empty route_short_name, are skipped.
  * - ROUTE is the uppercased route_short_name. bound comes from the TD trip_id
- *   second segment (1 -> O, 2 -> I). serviceType is always "1": TD carries no
- *   serviceType concept, so every key is emitted with serviceType "1" only,
- *   and the lookup MUST fall back to serviceType "1" when an exact key misses.
+ *   second segment (1 -> O, 2 -> I). serviceType is the app variant's own
+ *   service type: trips whose first stop lands near exactly one app variant
+ *   first stop (same co/route, within 50 m with 200 m daylight to the
+ *   runner-up) accumulate into that variant's key as well as the merged
+ *   serviceType "1" key, so each timetable pill shows exactly its own trips.
+ *   TD and app bound conventions can disagree on specials, so matching
+ *   spans every bound and the app bound wins in emitted keys.
+ *   The lookup MUST fall back to serviceType "1" when an exact key misses.
  * - Day types fold the calendar.txt weekday bitmasks: any Mon-Fri bit feeds
  *   "weekday", Saturday feeds "saturday", Sunday feeds "sunday". Services that
  *   span several day types (e.g. Mon-Sat, daily) contribute their windows to
@@ -372,8 +377,12 @@ async function fetchAppStops() {
         out.set(String(id).trim(), { lat, lng })
       }
     }
+    const routeList = db?.routeList
+    const routes =
+      routeList && typeof routeList === 'object' ? Object.values(routeList) : null
     log(`loaded ${out.size} hk-bus-eta stops for coverage matching`)
-    return out
+    if (routes) log(`loaded ${routes.length} hk-bus-eta routes for variant matching`)
+    return { stops: out, routes }
   } catch (err) {
     log(`hk-bus-eta stop fetch failed, skipping stop coverage: ${err}`)
     return null
@@ -580,6 +589,77 @@ function buildSnapshot(files, appStops) {
     return match ? Number(match[1]) * 60 + Number(match[2]) : NaN
   }
 
+  const appStopMap = appStops?.stops ?? null
+  // App route variants from hk-bus-eta, keyed by co|ROUTE: every
+  // (bound, serviceType, first-stop coordinate) triple. Special workings
+  // (peak-only branches, short workings) are first-class variants here with
+  // their own serviceType, while TD GTFS merges them under one route_id
+  // family. TD and app bound conventions can disagree on specials, so
+  // matching spans every bound and the app bound wins in emitted keys.
+  const appVariantIndex = new Map()
+  for (const entry of appStops?.routes ?? []) {
+    if (!entry || typeof entry.route !== 'string') continue
+    const short = entry.route.toUpperCase()
+    if (!short || !entry.co || !entry.bound || !entry.stops) continue
+    for (const rawCo of entry.co) {
+      const up = String(rawCo ?? '').toUpperCase()
+      const co = AGENCY_TO_CO[up] ?? String(rawCo ?? '').toLowerCase()
+      if (!co) continue
+      const boundKey = entry.bound[rawCo] ?? entry.bound[co]
+      if (boundKey !== 'I' && boundKey !== 'O') continue
+      const firstId = entry.stops[rawCo]?.[0] ?? entry.stops[co]?.[0]
+      const coords = firstId !== undefined ? appStopMap?.get(String(firstId).trim()) : undefined
+      if (!coords) continue
+      const key = `${co}|${short}`
+      let list = appVariantIndex.get(key)
+      if (!list) {
+        list = []
+        appVariantIndex.set(key, list)
+      }
+      const serviceType = String(entry.serviceType ?? '')
+      if (!list.some((c) => c.serviceType === serviceType && c.bound === boundKey)) {
+        list.push({ serviceType, bound: boundKey, flat: coords.lat, flng: coords.lng })
+      }
+    }
+  }
+
+  // Assign a TD trip to an app variant key via first-stop proximity: the
+  // trip's first TD stop must land near exactly one candidate variant's
+  // first stop. Returns a full variant key or null (merged entry only).
+  // Trips assigned to serviceType "1" (or single-candidate groups) need no
+  // extra entry, so only cross-serviceType splits are returned.
+  const ASSIGN_RADIUS_M = 50
+  const ASSIGN_MARGIN_M = 200
+  let assignedTrips = 0
+  let ambiguousTrips = 0
+  const assignVariantKey = (co, short, tdFirstStopId) => {
+    const cands = appVariantIndex.get(`${co}|${short}`)
+    if (!cands || cands.length < 2) return null
+    const coords = tdFirstStopId !== undefined ? stopCoords.get(tdFirstStopId) : undefined
+    if (!coords) return null
+    let best = null
+    let second = null
+    for (const c of cands) {
+      const d = approxMeters(coords[0], coords[1], c.flat, c.flng)
+      if (best === null || d < best.d) {
+        second = best
+        best = { d, c }
+      } else if (second === null || d < second.d) {
+        second = { d, c }
+      }
+    }
+    if (!best || best.d > ASSIGN_RADIUS_M) return null
+    if (second && second.d - best.d < ASSIGN_MARGIN_M) {
+      ambiguousTrips += 1
+      return null
+    }
+    if (best.c.serviceType === '1') return null
+    assignedTrips += 1
+    return `${co}|${short}|${best.c.bound}|${best.c.serviceType}`
+  }
+  // trip_id|co -> assigned variant key (or null) for the frequencies pass.
+  const tripAssign = new Map()
+
   let tripsUnknownService = 0
   let tripsUnknownRoute = 0
   let tripsUnknownBound = 0
@@ -614,36 +694,42 @@ function buildSnapshot(files, appStops) {
     const stopSet = tripStops.get(t.trip_id)
     const pattern = stopSet ? [...stopSet].sort().join(',') : ''
     for (const co of info.coList) {
-      const variant = getVariant(`${co}|${info.short}|${bound}|1`)
-      variant.src.add(t.route_id)
-      addTripSpan(variant, days, dep)
-      // Per-route TD stop union for app-stop coverage mapping.
-      if (!variant.srcStops) variant.srcStops = new Map()
-      let stopUnion = variant.srcStops.get(t.route_id)
-      if (!stopUnion) {
-        stopUnion = new Set()
-        variant.srcStops.set(t.route_id, stopUnion)
-      }
-      if (stopSet) for (const s of stopSet) stopUnion.add(s)
-      if (isFreq) {
-        // Frequency trip patterns: shared-route fixed trips on an
-        // identical pattern are the frequency buses themselves.
-        if (!variant.freqPatterns) variant.freqPatterns = new Set()
-        if (pattern) variant.freqPatterns.add(pattern)
-        continue
-      }
-      // Per-route fixed trips for the special-departures section.
-      if (!variant.fixedBySrc) variant.fixedBySrc = new Map()
-      let perSrc = variant.fixedBySrc.get(t.route_id)
-      if (!perSrc) {
-        perSrc = { firstStop: originStop, days: {}, patterns: new Set() }
-        variant.fixedBySrc.set(t.route_id, perSrc)
-      }
-      if (perSrc.firstStop === undefined) perSrc.firstStop = originStop
-      if (pattern) perSrc.patterns.add(pattern)
-      for (const day of days) {
-        if (!perSrc.days[day]) perSrc.days[day] = new Set()
-        perSrc.days[day].add(dep)
+      const mergedKey = `${co}|${info.short}|${bound}|1`
+      const extraKey = assignVariantKey(co, info.short, originStop)
+      tripAssign.set(`${t.trip_id}|${co}`, extraKey && extraKey !== mergedKey ? extraKey : null)
+      const targetKeys = extraKey && extraKey !== mergedKey ? [mergedKey, extraKey] : [mergedKey]
+      for (const key of targetKeys) {
+        const variant = getVariant(key)
+        variant.src.add(t.route_id)
+        addTripSpan(variant, days, dep)
+        // Per-route TD stop union for app-stop coverage mapping.
+        if (!variant.srcStops) variant.srcStops = new Map()
+        let stopUnion = variant.srcStops.get(t.route_id)
+        if (!stopUnion) {
+          stopUnion = new Set()
+          variant.srcStops.set(t.route_id, stopUnion)
+        }
+        if (stopSet) for (const s of stopSet) stopUnion.add(s)
+        if (isFreq) {
+          // Frequency trip patterns: shared-route fixed trips on an
+          // identical pattern are the frequency buses themselves.
+          if (!variant.freqPatterns) variant.freqPatterns = new Set()
+          if (pattern) variant.freqPatterns.add(pattern)
+        } else {
+          // Per-route fixed trips for the special-departures section.
+          if (!variant.fixedBySrc) variant.fixedBySrc = new Map()
+          let perSrc = variant.fixedBySrc.get(t.route_id)
+          if (!perSrc) {
+            perSrc = { firstStop: originStop, days: {}, patterns: new Set() }
+            variant.fixedBySrc.set(t.route_id, perSrc)
+          }
+          if (perSrc.firstStop === undefined) perSrc.firstStop = originStop
+          if (pattern) perSrc.patterns.add(pattern)
+          for (const day of days) {
+            if (!perSrc.days[day]) perSrc.days[day] = new Set()
+            perSrc.days[day].add(dep)
+          }
+        }
       }
     }
   }
@@ -672,20 +758,26 @@ function buildSnapshot(files, appStops) {
       continue
     }
     for (const co of info.coList) {
-      const variant = getVariant(`${co}|${info.short}|${bound}|1`)
-      variant.src.add(resolved.routeId)
-      if (!variant.freqRids) variant.freqRids = new Set()
-      variant.freqRids.add(resolved.routeId)
-      for (const day of days) {
-        if (!variant.windows[day]) variant.windows[day] = []
-        variant.windows[day].push([start, end, headway])
-        // Frequency window ends extend past the last trip's first departure,
-        // so fold them into the span: first bus ~= first window start,
-        // last bus ~= last window end.
-        const first = variant.spanFirst[day]
-        if (first === undefined || start < first) variant.spanFirst[day] = start
-        const last = variant.spanLast[day]
-        if (last === undefined || end > last) variant.spanLast[day] = end
+      const mergedKey = `${co}|${info.short}|${bound}|1`
+      const extraKey = tripAssign.get(`${f.trip_id}|${co}`)
+      const targetKeys =
+        extraKey && extraKey !== mergedKey ? [mergedKey, extraKey] : [mergedKey]
+      for (const key of targetKeys) {
+        const variant = getVariant(key)
+        variant.src.add(resolved.routeId)
+        if (!variant.freqRids) variant.freqRids = new Set()
+        variant.freqRids.add(resolved.routeId)
+        for (const day of days) {
+          if (!variant.windows[day]) variant.windows[day] = []
+          variant.windows[day].push([start, end, headway])
+          // Frequency window ends extend past the last trip's first departure,
+          // so fold them into the span: first bus ~= first window start,
+          // last bus ~= last window end.
+          const first = variant.spanFirst[day]
+          if (first === undefined || start < first) variant.spanFirst[day] = start
+          const last = variant.spanLast[day]
+          if (last === undefined || end > last) variant.spanLast[day] = end
+        }
       }
     }
   }
@@ -695,7 +787,8 @@ function buildSnapshot(files, appStops) {
   let totalWindows = 0
   let stopCovVariants = 0
   let stopCovEntries = 0
-  const appStopGrid = appStops && appStops.size > 0 ? buildStopGrid(appStops) : null
+  const appStopGrid =
+    appStopMap && appStopMap.size > 0 ? buildStopGrid(appStopMap) : null
   if (!appStopGrid) log('no app stop grid, skipping per-stop coverage tables')
   const sortedKeys = [...variants.keys()].sort()
   for (const key of sortedKeys) {
@@ -857,6 +950,7 @@ function buildSnapshot(files, appStops) {
   log(
     `variants=${sortedKeys.length} span-only=${spanOnly} windows=${totalWindows} ` +
       `stopCovVariants=${stopCovVariants} stopCovEntries=${stopCovEntries} ` +
+      `assignedTrips=${assignedTrips} ambiguousTrips=${ambiguousTrips} ` +
       `holidays=${holidays.length} skippedAgency=${skippedAgency} skippedShort=${skippedShort} ` +
       `tripsUnknownRoute=${tripsUnknownRoute} tripsUnknownService=${tripsUnknownService} ` +
       `tripsUnknownBound=${tripsUnknownBound} freqOrphans=${freqOrphans} freqBadTime=${freqBadTime}`

@@ -5,10 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { render } from '@/lib/test-utils'
 import {
   minsToDisplay,
-  patternOptions,
   spanHhmmToDisplay,
   SpecialDeparturesLine,
-  timetableDays,
   TimetableTable,
 } from '@/components/eta/route-details-dialog'
 import type { VariantSchedule } from '@/lib/eta/headway/types'
@@ -96,7 +94,7 @@ describe('TimetableTable', () => {
     expect(getByText('No timetable available')).not.toBeNull()
   })
 
-  it('shows only frequencies in the normal timetable', () => {
+  it('renders special departures with origin alongside frequency windows', () => {
     const mixed: VariantSchedule = {
       src: ['8354', '8496'],
       span: { weekday: ['0520', '2330'] },
@@ -109,49 +107,13 @@ describe('TimetableTable', () => {
         },
       ],
     }
-    const { queryByText, getByText } = render(
-      <TimetableTable schedule={mixed} dayType="weekday" lang="en" patternSrc={null} />
-    )
-    expect(getByText('Every ~12 min')).not.toBeNull()
-    expect(queryByText('PO TAT BUS TERMINUS')).toBeNull()
-    expect(queryByText('Special departures')).toBeNull()
-  })
-
-  it('shows only the selected pattern timetable', () => {
-    const mixed: VariantSchedule = {
-      src: ['8354', '8496'],
-      span: { weekday: ['0520', '2330'] },
-      headway: { weekday: [[320, 1410, 12]] },
-      special: [
-        {
-          src: '8496',
-          origin: 'PO TAT BUS TERMINUS',
-          departures: { weekday: [405, 415] },
-        },
-      ],
-    }
-    const { getAllByText, getByText, queryByText } = render(
-      <TimetableTable schedule={mixed} dayType="weekday" lang="en" patternSrc="8496" />
-    )
+    const { getByText } = render(<TimetableTable schedule={mixed} dayType="weekday" lang="en" />)
     expect(getByText('Special departures')).not.toBeNull()
     expect(getByText('PO TAT BUS TERMINUS')).not.toBeNull()
-    expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
-    expect(getAllByText('06:55').length).toBeGreaterThanOrEqual(2)
-    // No frequency rows leak into the pattern timetable.
-    expect(queryByText('Every ~12 min')).toBeNull()
-  })
-
-  it('shows no data for a pattern with no trips that day', () => {
-    const mixed: VariantSchedule = {
-      src: ['8354', '8496'],
-      span: { weekday: ['0520', '2330'] },
-      headway: { weekday: [[320, 1410, 12]] },
-      special: [{ src: '8496', origin: 'PO TAT BUS TERMINUS', departures: { saturday: [405] } }],
-    }
-    const { getByText } = render(
-      <TimetableTable schedule={mixed} dayType="sunday" lang="en" patternSrc="8496" />
-    )
-    expect(getByText('No timetable available')).not.toBeNull()
+    expect(getByText('06:45')).not.toBeNull()
+    expect(getByText('06:55')).not.toBeNull()
+    // Frequency rows still render.
+    expect(getByText('Every ~12 min')).not.toBeNull()
   })
 
   it('hides the special section when no table covers the day even via fallback', () => {
@@ -165,31 +127,7 @@ describe('TimetableTable', () => {
     expect(queryByText('Special departures')).toBeNull()
   })
 
-  it('shows serving trips without frequencies at a special-only stop', () => {
-    const mixed: VariantSchedule = {
-      src: ['8354', '8496'],
-      span: { weekday: ['0520', '2330'] },
-      headway: { weekday: [[320, 1410, 12]] },
-      special: [
-        {
-          src: '8496',
-          origin: 'PO TAT BUS TERMINUS',
-          departures: { weekday: [405, 415] },
-        },
-      ],
-      freqSrc: [0],
-      stopCov: { POTAT: [1] },
-    }
-    const { getAllByText, queryByText } = render(
-      <TimetableTable schedule={mixed} dayType="weekday" lang="en" stopId="POTAT" />
-    )
-    expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
-    expect(getAllByText('06:55').length).toBeGreaterThanOrEqual(2)
-    expect(queryByText('Every ~12 min')).toBeNull()
-    expect(queryByText('Special departures')).toBeNull()
-  })
-
-  it('shows the selected pattern alone at a special-only stop', () => {
+  it('shows only specials without frequencies at a special-only stop', () => {
     const mixed: VariantSchedule = {
       src: ['8354', '8496'],
       span: { weekday: ['0520', '2330'] },
@@ -205,21 +143,16 @@ describe('TimetableTable', () => {
       stopCov: { POTAT: [1] },
     }
     const { getAllByText, getByText, queryByText } = render(
-      <TimetableTable
-        schedule={mixed}
-        dayType="weekday"
-        lang="en"
-        stopId="POTAT"
-        patternSrc="8496"
-      />
+      <TimetableTable schedule={mixed} dayType="weekday" lang="en" stopId="POTAT" />
     )
-    expect(getByText('PO TAT BUS TERMINUS')).not.toBeNull()
     expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
     expect(getAllByText('06:55').length).toBeGreaterThanOrEqual(2)
+    expect(getByText('PO TAT BUS TERMINUS')).not.toBeNull()
     expect(queryByText('Every ~12 min')).toBeNull()
+    expect(queryByText('Special departures')).toBeNull()
   })
 
-  it('merges span-only departures in the normal timetable', () => {
+  it('splits span-only departures into per-pattern groups', () => {
     const split: VariantSchedule = {
       src: ['1000492', '8311'],
       span: { weekday: ['0700', '1740'] },
@@ -236,34 +169,11 @@ describe('TimetableTable', () => {
     const { getAllByText, getByText, queryByText } = render(
       <TimetableTable schedule={split} dayType="weekday" lang="en" />
     )
+    expect(getByText('LAM WAH STREET PLAYGROUND')).not.toBeNull()
+    expect(getByText('LUNG MUN OASIS BUS TERMINUS')).not.toBeNull()
     expect(getAllByText('07:00').length).toBeGreaterThanOrEqual(2)
     expect(getByText('17:25')).not.toBeNull()
-    expect(queryByText('LAM WAH STREET PLAYGROUND')).toBeNull()
-    expect(queryByText('LUNG MUN OASIS BUS TERMINUS')).toBeNull()
-  })
-
-  it('shows one pattern alone when selected', () => {
-    const split: VariantSchedule = {
-      src: ['1000492', '8311'],
-      span: { weekday: ['0700', '1740'] },
-      departures: { weekday: [420, 432, 444, 456, 1045, 1060] },
-      depBySrc: {
-        '0': { origin: 'LAM WAH STREET PLAYGROUND', departures: { weekday: [1045, 1060] } },
-        '1': {
-          origin: 'LUNG MUN OASIS BUS TERMINUS',
-          departures: { weekday: [420, 432, 444, 456] },
-        },
-      },
-      stopCov: { SOME_STOP: [1] },
-    }
-    const { getAllByText, getByText, queryByText } = render(
-      <TimetableTable schedule={split} dayType="weekday" lang="en" patternSrc="1000492" />
-    )
-    expect(getByText('LAM WAH STREET PLAYGROUND')).not.toBeNull()
-    expect(getAllByText('17:25').length).toBeGreaterThanOrEqual(2)
-    expect(getAllByText('17:40').length).toBeGreaterThanOrEqual(2)
-    expect(queryByText('LUNG MUN OASIS BUS TERMINUS')).toBeNull()
-    expect(queryByText('07:00')).toBeNull()
+    expect(queryByText('Special departures')).toBeNull()
   })
 
   it('keeps frequencies at a fully covered stop', () => {
@@ -281,54 +191,11 @@ describe('TimetableTable', () => {
       freqSrc: [0],
       stopCov: { POTAT: [1] },
     }
-    const { getByText, queryByText } = render(
+    const { getByText } = render(
       <TimetableTable schedule={mixed} dayType="weekday" lang="en" stopId="OTHER" />
     )
     expect(getByText('Every ~12 min')).not.toBeNull()
-    expect(queryByText('Special departures')).toBeNull()
-    expect(queryByText('PO TAT BUS TERMINUS')).toBeNull()
-  })
-
-  it('lists special pattern options with origins', () => {
-    const split: VariantSchedule = {
-      src: ['1000492', '8311'],
-      span: { weekday: ['0700', '1740'] },
-      departures: { weekday: [420, 432, 444, 456, 1045, 1060] },
-      depBySrc: {
-        '0': { origin: 'LAM WAH STREET PLAYGROUND', departures: { weekday: [1045, 1060] } },
-        '1': {
-          origin: 'LUNG MUN OASIS BUS TERMINUS',
-          departures: { weekday: [420, 432, 444, 456] },
-        },
-      },
-      stopCov: { SOME_STOP: [1] },
-    }
-    expect(patternOptions(split, null)).toEqual([
-      { src: '1000492', origin: 'LAM WAH STREET PLAYGROUND' },
-      { src: '8311', origin: 'LUNG MUN OASIS BUS TERMINUS' },
-    ])
-    expect(patternOptions(split, 'SOME_STOP')).toEqual([
-      { src: '8311', origin: 'LUNG MUN OASIS BUS TERMINUS' },
-    ])
-  })
-
-  it('limits pattern day tabs to days with trips', () => {
-    const split: VariantSchedule = {
-      src: ['1000492', '8311'],
-      span: { weekday: ['0700', '1740'] },
-      departures: { weekday: [420, 432, 444, 456, 1045, 1060] },
-      depBySrc: {
-        '0': { origin: 'LAM WAH STREET PLAYGROUND', departures: { weekday: [1045, 1060] } },
-        '1': {
-          origin: 'LUNG MUN OASIS BUS TERMINUS',
-          departures: { weekday: [420, 432, 444, 456] },
-        },
-      },
-      stopCov: { SOME_STOP: [1] },
-    }
-    expect(timetableDays(split, null, '1000492')).toEqual(['weekday'])
-    expect(timetableDays(split, null, '8311')).toEqual(['weekday'])
-    expect(timetableDays(split, null, null)).toEqual(['weekday'])
+    expect(getByText('Special departures')).not.toBeNull()
   })
 })
 

@@ -92,10 +92,3 @@ export interface SpecialDayDepartures {
   origin: string
   departures: number[]
 }
-
-/** One special pattern timetable: TD route id, origin label, per-day trips. */
-export interface PatternTimetable {
-  src: string
-  origin: string
-  departures: Partial<Record<DayType, number[]>>
-}

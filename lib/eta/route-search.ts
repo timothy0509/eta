@@ -375,7 +375,7 @@ function compareHits(a: ScoredHit, b: ScoredHit): number {
 }
 
 export type SearchRouteOptions = {
-  operator?: string | null
+  operator?: string | string[] | null
   lang?: UiLanguage
   limit?: number
   fuse?: RouteFuseInstance | null
@@ -388,13 +388,18 @@ export function searchRouteIndex(
   query: string,
   opts: SearchRouteOptions = {}
 ): RouteSearchHit[] {
-  const operator = opts.operator?.trim().toLowerCase() || null
+  const rawOperators = opts.operator
+    ? (Array.isArray(opts.operator) ? opts.operator : [opts.operator])
+        .map((o) => o.trim().toLowerCase())
+        .filter(Boolean)
+    : []
+  const operatorSet = rawOperators.length > 0 ? new Set(rawOperators) : null
   const lang = opts.lang ?? 'tc'
   const limit = opts.limit ?? 500
   const norm = normalizeRouteQuery(query)
 
-  const pool = operator
-    ? index.filter((e) => e.operators.some((o) => o.toLowerCase() === operator))
+  const pool = operatorSet
+    ? index.filter((e) => e.operators.some((o) => operatorSet.has(o.toLowerCase())))
     : index
 
   if (!norm.lower) {
@@ -412,7 +417,7 @@ export function searchRouteIndex(
     const seen = new Set(hits.map((h) => h.entry.key))
     for (const r of opts.fuse.search(norm.lower).slice(0, 60)) {
       if (seen.has(r.item.key)) continue
-      if (operator && !r.item.operators.some((o) => o.toLowerCase() === operator)) continue
+      if (operatorSet && !r.item.operators.some((o) => operatorSet.has(o.toLowerCase()))) continue
       hits.push({ entry: r.item, score: 8 + (r.score ?? 0.5) })
     }
     hits.sort(compareHits)

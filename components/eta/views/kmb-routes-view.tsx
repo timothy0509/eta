@@ -765,7 +765,8 @@ export function KmbRoutesView({
 
   const [query, setQuery] = React.useState('')
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
-  const [operator, setOperator] = React.useState<string | null>(null)
+  const [operators, setOperators] = React.useState<string[]>([])
+  const [sheetCollapsed, setSheetCollapsed] = React.useState(false)
   const routeStopsAll = usePaneStore((s) => s.kmbRouteStops)
   const setRouteStopsAll = usePaneStore((s) => s.setKmbRouteStops)
   const [fuse, setFuse] = React.useState<RouteFuseInstance | null>(null)
@@ -912,12 +913,12 @@ export function KmbRoutesView({
   const searchHits = React.useMemo(
     () =>
       searchRouteIndex(searchIndex, debouncedQuery, {
-        operator,
+        operator: operators.length > 0 ? operators : null,
         lang,
         fuse,
         stopsById,
       }),
-    [searchIndex, debouncedQuery, operator, lang, fuse, stopsById]
+    [searchIndex, debouncedQuery, operators, lang, fuse, stopsById]
   )
 
   const { visibleCount, hasMore, sentinelRef, loadMore } = useInfiniteScroll({
@@ -927,8 +928,8 @@ export function KmbRoutesView({
   })
   const visibleHits = searchHits.slice(0, visibleCount)
 
-  const handleOperatorChange = React.useCallback((code: string | null) => {
-    setOperator(code)
+  const handleOperatorChange = React.useCallback((codes: string[]) => {
+    setOperators(codes)
   }, [])
 
   const handleClearSearch = React.useCallback(() => {
@@ -939,7 +940,7 @@ export function KmbRoutesView({
   const handleClearFilters = React.useCallback(() => {
     setQuery('')
     setDebouncedQuery('')
-    setOperator(null)
+    setOperators([])
   }, [])
 
   const variantsForRoute = React.useMemo(() => {
@@ -1102,256 +1103,297 @@ export function KmbRoutesView({
     addFavorite(item)
   }
 
+  const hasActiveFilters = query.trim() !== '' || operators.length > 0
+  const isRouteSelected = selectedRouteKey !== null
+
   return (
-    <div className="space-y-4">
-      <div className="card-m3 p-4">
-        <div className="m3-title-md mb-3">{t('kmb.routes')}</div>
-        <div className="relative">
-          <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('kmb.searchRouteNumberAndPlace')}
-            aria-label={t('kmb.searchBusRoutes')}
-            className="bg-surface-container h-12 rounded-full pr-10 pl-10"
-          />
-          {query.trim() !== '' && (
-            <button
-              type="button"
-              onClick={handleClearSearch}
-              aria-label={t('kmb.clearSearch')}
-              className="text-on-surface-variant hover:text-on-surface ui-press absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
-            >
-              <X className="h-4 w-4" aria-hidden />
-            </button>
-          )}
-        </div>
-        <div className="mt-3">
-          <OperatorFilter
-            operators={operatorOptions}
-            total={searchIndex.length}
-            value={operator}
-            onChange={handleOperatorChange}
-            lang={lang}
-          />
-        </div>
-
-        {loading && <ResultsSkeleton />}
-        {error && (
-          <EmptyState
-            title={t('common.wentWrong')}
-            hint={error}
-            action={
-              <button
-                type="button"
-                onClick={handleRetryRoutes}
-                className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
-              >
-                {t('common.tryAgain')}
-              </button>
-            }
-          />
-        )}
-
-        {!selectedRouteKey ? (
-          !loading && !error && searchHits.length === 0 ? (
-            <EmptyState
-              title={t('common.noResults')}
-              hint={
-                debouncedQuery.trim() !== ''
-                  ? tWithParams('kmb.noRoutesMatch', { query: debouncedQuery.trim() })
-                  : undefined
-              }
-              action={
-                debouncedQuery.trim() !== '' || operator !== null ? (
-                  <button
-                    type="button"
-                    onClick={handleClearFilters}
-                    className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
-                  >
-                    {t('kmb.clearFilters')}
-                  </button>
-                ) : undefined
-              }
-            />
-          ) : (
-            <div className="mt-3 space-y-3">
-              {!loading && !error && (
-                <div className="text-on-surface-variant m3-label-md" role="status">
-                  {tWithParams('kmb.routesFound', { count: searchHits.length })}
-                </div>
-              )}
-              <div className="space-y-3">
-                {visibleHits.map((hit, idx) => (
-                  <RouteResultCard
-                    key={hit.entry.key}
-                    entry={hit.entry}
-                    stopsById={stopsById}
-                    lang={lang}
-                    index={idx}
-                    matchReason={hit.matchReason}
-                    usageByStopName={usageByStopName}
-                    onSelect={() =>
-                      setSelectedRouteKey({
-                        co: hit.entry.co,
-                        route: hit.entry.route,
-                      })
-                    }
-                  />
-                ))}
-              </div>
-              {hasMore && (
-                <div ref={sentinelRef}>
-                  <button
-                    type="button"
-                    onClick={loadMore}
-                    className="bg-surface-container-high text-on-surface-variant hover:text-on-surface m3-label-lg ui-press inline-flex min-h-[44px] w-full items-center justify-center rounded-full px-5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                  >
-                    {t('kmb.loadMore')}
-                  </button>
-                </div>
-              )}
-            </div>
-          )
-        ) : (
-          <RouteDrilldown
-            lang={lang}
-            onBack={() => {
-              setSelectedRouteKey(null)
-              setSelectedVariant(null)
-            }}
-            title={
-              <span className="flex min-w-0 flex-col gap-0.5">
-                <span className="flex flex-wrap items-center gap-2">
-                  <RouteBadge
-                    route={selectedRouteKey.route}
-                    company={selectedRouteKey.co}
-                    size="lg"
-                  />
-                  <span className="text-on-surface-variant m3-label-md uppercase">
-                    {selectedRouteKey.co}
-                  </span>
-                </span>
-                {currentVariant && (
-                  <span className="text-on-surface m3-title-md truncate">
-                    {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
-                      co: currentVariant.co,
-                      lang,
-                    })}{' '}
-                    →{' '}
-                    {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
-                      co: currentVariant.co,
-                      lang,
-                    })}
-                  </span>
-                )}
-              </span>
-            }
-          >
-            {variantsForRoute.length > 1 && (
-              <div
-                className="flex gap-2 overflow-x-auto pb-1"
-                role="group"
-                aria-label={t('common.route')}
-              >
-                {variantsForRoute.map((v) => (
-                  <button
-                    key={v.key}
-                    type="button"
-                    aria-pressed={currentVariant?.key === v.key}
-                    onClick={() => setSelectedVariant(v)}
-                    className={cn(
-                      'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                      currentVariant?.key === v.key
-                        ? 'bg-primary-container text-on-primary-container'
-                        : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
-                    )}
-                  >
-                    <span>{v.bound === 'I' ? t('common.inbound') : t('common.outbound')}</span>
-                    <span>
-                      {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
-                        co: v.co,
-                        lang,
-                      })}
-                    </span>
-                    {showOperatorInVariants && (
-                      <span className="m3-label-sm uppercase opacity-80">
-                        {normalizeOperator(v.co)}
-                      </span>
-                    )}
-                    {v.serviceType !== '1' ? (
-                      <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
-                    ) : null}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {currentVariant && (
-              <div className="flex items-center justify-between gap-3">
-                <div className="text-on-surface-variant m3-body-md">
-                  {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
-                    co: currentVariant.co,
-                    lang,
-                  })}{' '}
-                  →{' '}
-                  {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
-                    co: currentVariant.co,
-                    lang,
-                  })}
-                </div>
-                <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
-              </div>
-            )}
-
-            {currentVariant && (
-              <RouteScheduleSection
-                variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
-                lang={lang}
-              />
-            )}
-          </RouteDrilldown>
-        )}
+    <div className="bg-surface-container-lowest relative overflow-hidden rounded-3xl border border-[var(--outline-variant)]/15 shadow-sm">
+      <div className="relative h-[38dvh] min-h-[280px] lg:h-[calc(100dvh-10rem)] lg:max-h-[880px] lg:min-h-[640px]">
+        <TransitMap
+          lang={lang}
+          center={mapCenter}
+          markers={isRouteSelected ? mapMarkers : []}
+          polylines={isRouteSelected ? mapPolylines : []}
+          zoom={isRouteSelected ? 13 : 11}
+          fitKey={currentVariant?.key ?? null}
+          onMarkerClick={handleMapStopClick}
+          ariaLabel={t('common.mapInteractive')}
+          className="h-full w-full rounded-none"
+        />
       </div>
 
-      {currentVariant && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="card-m3 p-4">
-            <div className="m3-title-md mb-3 flex items-center gap-2">
-              <Clock className="h-5 w-5" />
-              {t('kmb.routeStops')}
-            </div>
-            {variantStops.length === 0 ? (
-              <ResultsSkeleton />
+      <div className="relative z-10 mx-3 -mt-12 mb-3 lg:absolute lg:top-4 lg:bottom-4 lg:left-4 lg:mx-0 lg:mt-0 lg:mb-0 lg:w-[400px] lg:max-w-[calc(100%-2rem)]">
+        <div className="card-m3 flex max-h-[62dvh] flex-col overflow-hidden shadow-xl lg:h-full lg:max-h-none">
+          <div className="flex items-center justify-center pt-2 lg:hidden" aria-hidden>
+            <span className="bg-outline-variant/60 h-1 w-10 rounded-full" />
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-4 pt-2 lg:pt-4">
+            {!isRouteSelected ? (
+              <>
+                <div className="m3-title-md mb-3 flex items-center justify-between gap-2">
+                  <span>{t('kmb.routes')}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSheetCollapsed((v) => !v)}
+                    aria-expanded={!sheetCollapsed}
+                    className="text-on-surface-variant hover:text-on-surface ui-press inline-flex min-h-[36px] items-center rounded-full px-3 text-sm lg:hidden"
+                  >
+                    {sheetCollapsed ? t('kmb.showList') : t('kmb.hideList')}
+                  </button>
+                </div>
+                <div className={sheetCollapsed ? 'hidden lg:block' : ''}>
+                  <div className="relative">
+                    <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                    <Input
+                      value={query}
+                      onChange={(e) => setQuery(e.target.value)}
+                      placeholder={t('kmb.searchRouteNumberAndPlace')}
+                      aria-label={t('kmb.searchBusRoutes')}
+                      className="bg-surface-container h-12 rounded-full pr-10 pl-10"
+                    />
+                    {query.trim() !== '' && (
+                      <button
+                        type="button"
+                        onClick={handleClearSearch}
+                        aria-label={t('kmb.clearSearch')}
+                        className="text-on-surface-variant hover:text-on-surface ui-press absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                      >
+                        <X className="h-4 w-4" aria-hidden />
+                      </button>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    <OperatorFilter
+                      operators={operatorOptions}
+                      total={searchIndex.length}
+                      value={operators}
+                      onChange={handleOperatorChange}
+                      lang={lang}
+                    />
+                  </div>
+                </div>
+
+                <div
+                  className={
+                    sheetCollapsed
+                      ? 'hidden lg:block lg:min-h-0 lg:flex-1 lg:overflow-y-auto'
+                      : 'mt-3 min-h-0 flex-1 overflow-y-auto'
+                  }
+                >
+                  {loading && <ResultsSkeleton />}
+                  {error && (
+                    <EmptyState
+                      title={t('common.wentWrong')}
+                      hint={error}
+                      action={
+                        <button
+                          type="button"
+                          onClick={handleRetryRoutes}
+                          className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                        >
+                          {t('common.tryAgain')}
+                        </button>
+                      }
+                    />
+                  )}
+
+                  {!loading && !error && searchHits.length === 0 ? (
+                    <EmptyState
+                      title={t('common.noResults')}
+                      hint={
+                        debouncedQuery.trim() !== ''
+                          ? tWithParams('kmb.noRoutesMatch', { query: debouncedQuery.trim() })
+                          : undefined
+                      }
+                      action={
+                        hasActiveFilters ? (
+                          <button
+                            type="button"
+                            onClick={handleClearFilters}
+                            className="bg-primary text-on-primary m3-label-lg ui-press mt-2 inline-flex min-h-[44px] items-center rounded-full px-5 py-2 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                          >
+                            {t('kmb.clearFilters')}
+                          </button>
+                        ) : undefined
+                      }
+                    />
+                  ) : (
+                    !loading &&
+                    !error && (
+                      <div className="space-y-3 pb-1">
+                        <div className="text-on-surface-variant m3-label-md" role="status">
+                          {tWithParams('kmb.routesFound', { count: searchHits.length })}
+                        </div>
+                        <div className="space-y-3">
+                          {visibleHits.map((hit, idx) => (
+                            <RouteResultCard
+                              key={hit.entry.key}
+                              entry={hit.entry}
+                              stopsById={stopsById}
+                              lang={lang}
+                              index={idx}
+                              matchReason={hit.matchReason}
+                              usageByStopName={usageByStopName}
+                              onSelect={() =>
+                                setSelectedRouteKey({
+                                  co: hit.entry.co,
+                                  route: hit.entry.route,
+                                })
+                              }
+                            />
+                          ))}
+                        </div>
+                        {hasMore && (
+                          <div ref={sentinelRef}>
+                            <button
+                              type="button"
+                              onClick={loadMore}
+                              className="bg-surface-container-high text-on-surface-variant hover:text-on-surface m3-label-lg ui-press inline-flex min-h-[44px] w-full items-center justify-center rounded-full px-5 py-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                            >
+                              {t('kmb.loadMore')}
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  )}
+                </div>
+              </>
             ) : (
-              <KmbRouteStopList
-                listKey={currentVariant.key}
-                currentVariant={currentVariant}
-                variantStops={variantStops}
-                stopsById={stopsById}
-                etas={etas}
-                lang={lang}
-                onSelectStopGroup={onSelectStopGroup}
-              />
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                <RouteDrilldown
+                  lang={lang}
+                  onBack={() => {
+                    setSelectedRouteKey(null)
+                    setSelectedVariant(null)
+                  }}
+                  title={
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <RouteBadge
+                          route={selectedRouteKey.route}
+                          company={selectedRouteKey.co}
+                          size="lg"
+                        />
+                        <span className="text-on-surface-variant m3-label-md uppercase">
+                          {selectedRouteKey.co}
+                        </span>
+                      </span>
+                      {currentVariant && (
+                        <span className="text-on-surface m3-title-md truncate">
+                          {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
+                            co: currentVariant.co,
+                            lang,
+                          })}{' '}
+                          →{' '}
+                          {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
+                            co: currentVariant.co,
+                            lang,
+                          })}
+                        </span>
+                      )}
+                    </span>
+                  }
+                >
+                  {variantsForRoute.length > 1 && (
+                    <div
+                      className="flex gap-2 overflow-x-auto pb-1"
+                      role="group"
+                      aria-label={t('common.route')}
+                    >
+                      {variantsForRoute.map((v) => (
+                        <button
+                          key={v.key}
+                          type="button"
+                          aria-pressed={currentVariant?.key === v.key}
+                          onClick={() => setSelectedVariant(v)}
+                          className={cn(
+                            'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                            currentVariant?.key === v.key
+                              ? 'bg-primary-container text-on-primary-container'
+                              : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                          )}
+                        >
+                          <span>
+                            {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}
+                          </span>
+                          <span>
+                            {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
+                              co: v.co,
+                              lang,
+                            })}
+                          </span>
+                          {showOperatorInVariants && (
+                            <span className="m3-label-sm uppercase opacity-80">
+                              {normalizeOperator(v.co)}
+                            </span>
+                          )}
+                          {v.serviceType !== '1' ? (
+                            <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
+                          ) : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {currentVariant && (
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="text-on-surface-variant m3-body-md">
+                        {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
+                          co: currentVariant.co,
+                          lang,
+                        })}{' '}
+                        →{' '}
+                        {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
+                          co: currentVariant.co,
+                          lang,
+                        })}
+                      </div>
+                      <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
+                    </div>
+                  )}
+
+                  {currentVariant && (
+                    <RouteScheduleSection
+                      variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
+                      lang={lang}
+                    />
+                  )}
+                </RouteDrilldown>
+
+                <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <div className="m3-title-md mb-3 flex items-center gap-2">
+                    <Clock className="h-5 w-5" />
+                    {t('kmb.routeStops')}
+                    {variantStops.length > 0 && (
+                      <span className="text-on-surface-variant m3-body-md ml-auto">
+                        {variantStops.length}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-h-0 flex-1 overflow-y-auto pb-1">
+                    {variantStops.length === 0 ? (
+                      <ResultsSkeleton />
+                    ) : (
+                      currentVariant && (
+                        <KmbRouteStopList
+                          listKey={currentVariant.key}
+                          currentVariant={currentVariant}
+                          variantStops={variantStops}
+                          stopsById={stopsById}
+                          etas={etas}
+                          lang={lang}
+                          onSelectStopGroup={onSelectStopGroup}
+                        />
+                      )
+                    )}
+                  </div>
+                </div>
+              </div>
             )}
           </div>
-
-          <div className="card-m3 p-4">
-            <div className="m3-title-md mb-3">{t('common.map')}</div>
-            <TransitMap
-              lang={lang}
-              center={mapCenter}
-              markers={mapMarkers}
-              polylines={mapPolylines}
-              zoom={13}
-              fitKey={currentVariant?.key ?? null}
-              onMarkerClick={handleMapStopClick}
-              ariaLabel={t('common.mapInteractive')}
-              className="h-96"
-            />
-          </div>
         </div>
-      )}
+      </div>
     </div>
   )
 }

@@ -6,6 +6,7 @@ import { render } from '@/lib/test-utils'
 import {
   minsToDisplay,
   spanHhmmToDisplay,
+  SpecialDeparturesLine,
   TimetableTable,
 } from '@/components/eta/route-details-dialog'
 import type { VariantSchedule } from '@/lib/eta/headway/types'
@@ -92,6 +93,60 @@ describe('TimetableTable', () => {
     const { getAllByText } = render(<TimetableTable schedule={fixed} dayType="sunday" lang="en" />)
     expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
     expect(getAllByText('07:10').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('renders special departures with origin alongside frequency windows', () => {
+    const mixed: VariantSchedule = {
+      src: ['8354', '8496'],
+      span: { weekday: ['0520', '2330'] },
+      headway: { weekday: [[320, 1410, 12]] },
+      special: [
+        {
+          src: '8496',
+          origin: 'PO TAT BUS TERMINUS',
+          departures: { weekday: [405, 415] },
+        },
+      ],
+    }
+    const { getByText } = render(<TimetableTable schedule={mixed} dayType="weekday" lang="en" />)
+    expect(getByText('Special departures')).not.toBeNull()
+    expect(getByText('PO TAT BUS TERMINUS')).not.toBeNull()
+    expect(getByText('06:45')).not.toBeNull()
+    expect(getByText('06:55')).not.toBeNull()
+    // Frequency rows still render.
+    expect(getByText('Every ~12 min')).not.toBeNull()
+  })
+
+  it('hides the special section when no table covers the day even via fallback', () => {
+    const mixed: VariantSchedule = {
+      src: ['8354', '8496'],
+      span: { weekday: ['0520', '2330'] },
+      headway: { weekday: [[320, 1410, 12]] },
+      special: [{ src: '8496', origin: 'PO TAT BUS TERMINUS', departures: { saturday: [405] } }],
+    }
+    const { queryByText } = render(<TimetableTable schedule={mixed} dayType="sunday" lang="en" />)
+    expect(queryByText('Special departures')).toBeNull()
+  })
+})
+
+describe('SpecialDeparturesLine', () => {
+  it('renders origin plus chips and caps overflow with +N', () => {
+    const { getByText } = render(
+      <SpecialDeparturesLine
+        special={[
+          { origin: 'PO TAT BUS TERMINUS', departures: [405, 415, 420, 425, 430, 435, 440] },
+        ]}
+        lang="en"
+      />
+    )
+    expect(getByText('PO TAT BUS TERMINUS')).not.toBeNull()
+    expect(getByText('06:45')).not.toBeNull()
+    expect(getByText('+1')).not.toBeNull()
+  })
+
+  it('renders nothing for an empty list', () => {
+    const { container } = render(<SpecialDeparturesLine special={[]} lang="en" />)
+    expect(container.textContent).toBe('')
   })
 })
 

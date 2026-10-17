@@ -12,8 +12,13 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { getDayType, activeHeadwayIndex, resolveVariantKey } from '@/lib/eta/headway/lookup'
-import type { DayType, VariantSchedule } from '@/lib/eta/headway/types'
+import {
+  getDayType,
+  activeHeadwayIndex,
+  resolveVariantKey,
+  specialsForDay,
+} from '@/lib/eta/headway/lookup'
+import type { DayType, SpecialDayDepartures, VariantSchedule } from '@/lib/eta/headway/types'
 import { useHeadwayIndex } from '@/lib/eta/headway/use-headway-schedule'
 import { useTranslations } from '@/lib/eta/i18n'
 import { getOperatorColor } from '@/lib/eta/operator-colors'
@@ -69,6 +74,7 @@ function daysWithData(schedule: VariantSchedule): DayType[] {
     (day) =>
       (schedule.headway?.[day]?.length ?? 0) > 0 ||
       (schedule.departures?.[day]?.length ?? 0) > 0 ||
+      (schedule.special?.some((entry) => (entry.departures[day]?.length ?? 0) > 0) ?? false) ||
       schedule.span[day] !== undefined
   )
 }
@@ -98,6 +104,7 @@ export function TimetableTable({
   const tick = useTickingNow(60_000)
   const windows = schedule.headway?.[dayType] ?? schedule.headway?.weekday ?? []
   const departures = schedule.departures?.[dayType] ?? schedule.departures?.weekday ?? []
+  const specials = specialsForDay(schedule, dayType)
   const span = schedule.span[dayType] ?? schedule.span.weekday
   // Weekday fallback windows do not describe today's service, so only
   // highlight when the day-type table exists for today.
@@ -108,7 +115,7 @@ export function TimetableTable({
       ? activeHeadwayIndex(windows, nowDate.getHours() * 60 + nowDate.getMinutes())
       : null
 
-  if (windows.length === 0 && departures.length === 0 && !span) {
+  if (windows.length === 0 && departures.length === 0 && !specials && !span) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
   }
 
@@ -176,9 +183,90 @@ export function TimetableTable({
           ))}
         </div>
       ) : null}
+      {specials ? (
+        <div className="space-y-1.5 pt-1">
+          <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleSpecial')}</div>
+          {specials.map((group, groupIdx) => (
+            <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
+              {group.origin ? (
+                <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
+              ) : null}
+              <div
+                className="flex flex-wrap gap-1.5"
+                role="list"
+                aria-label={group.origin || t('kmb.scheduleSpecial')}
+              >
+                {group.departures.map((depMin, idx) => (
+                  <span
+                    key={`${depMin}:${idx}`}
+                    role="listitem"
+                    className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                  >
+                    {minsToDisplay(depMin)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
       {dayType === 'holiday' ? (
         <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleHolidayNote')}</div>
       ) : null}
+    </div>
+  )
+}
+
+/** Max time chips per special group on compact cards; the rest fold into +N. */
+const CARD_SPECIAL_CHIP_LIMIT = 6
+
+/**
+ * Compact special-departures line for no-ETA cards: origin label plus time
+ * chips per group, capped with a +N overflow chip. Route-level info, so it
+ * renders wherever the card renders regardless of the current stop.
+ */
+export function SpecialDeparturesLine({
+  special,
+  lang,
+}: {
+  special: SpecialDayDepartures[]
+  lang: UiLanguage
+}) {
+  const { t } = useTranslations(lang)
+  if (special.length === 0) return null
+  return (
+    <div className="space-y-1.5">
+      <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleSpecial')}</div>
+      {special.map((group, groupIdx) => {
+        const visible = group.departures.slice(0, CARD_SPECIAL_CHIP_LIMIT)
+        const overflow = group.departures.length - visible.length
+        return (
+          <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
+            {group.origin ? (
+              <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5" role="list">
+              {visible.map((depMin, idx) => (
+                <span
+                  key={`${depMin}:${idx}`}
+                  role="listitem"
+                  className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                >
+                  {minsToDisplay(depMin)}
+                </span>
+              ))}
+              {overflow > 0 ? (
+                <span
+                  role="listitem"
+                  className="bg-surface-container-high text-on-surface-variant font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                >
+                  +{overflow}
+                </span>
+              ) : null}
+            </div>
+          </div>
+        )
+      })}
     </div>
   )
 }

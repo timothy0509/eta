@@ -8,7 +8,11 @@ import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib
 import type { ScheduledFallback } from '@/lib/eta/headway/types'
 import { useHeadwaySchedules } from '@/lib/eta/headway/use-headway-schedule'
 import { RouteBadge } from '@/components/eta/route-badge'
-import { RouteDetailsDialog, minsToDisplay } from '@/components/eta/route-details-dialog'
+import {
+  RouteDetailsDialog,
+  SpecialDeparturesLine,
+  minsToDisplay,
+} from '@/components/eta/route-details-dialog'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes } from '@/components/eta/ticking-eta'
@@ -487,6 +491,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
     const showSpanLine =
       spanLine != null && (scheduled?.headwayMin != null || scheduled?.headwayRange != null)
     const showDepartures = departures != null && departures.length > 0
+    const special = scheduled?.special ?? null
     return (
       <div
         className={cn(
@@ -527,6 +532,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
               {spanLine}
             </div>
           ) : null}
+          {special ? <SpecialDeparturesLine special={special} lang={lang} /> : null}
           {staticFooter}
         </div>
       </div>

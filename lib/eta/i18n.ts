@@ -257,6 +257,7 @@ const kmb: Record<string, TranslationEntry> = {
   scheduleNow: { en: 'Now', tc: '現時', sc: '现时' },
   scheduleEveryRow: { en: 'Every ~{n} min', tc: '約每 {n} 分鐘一班', sc: '约每 {n} 分钟一班' },
   scheduleToday: { en: 'Today', tc: '今日', sc: '今日' },
+  scheduleSpecial: { en: 'Special departures', tc: '特別班次', sc: '特别班次' },
   scheduleFirstBus: { en: 'First bus', tc: '頭班', sc: '头班' },
   scheduleLastBus: { en: 'Last bus', tc: '尾班', sc: '尾班' },
   scheduleDataDate: {

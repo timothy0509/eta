@@ -4,6 +4,7 @@ import type {
   HeadwayWindow,
   ScheduledFallback,
   SpanRange,
+  SpecialDayDepartures,
   VariantSchedule,
 } from '@/lib/eta/headway/types'
 
@@ -118,6 +119,24 @@ function distinctHeadwayRange(windows: HeadwayWindow[]): [number, number] | null
 }
 
 /**
+ * Resolve special departures for a day type, with the same weekday fallback
+ * as the other tables. Returns null when nothing applies that day.
+ */
+export function specialsForDay(
+  schedule: VariantSchedule,
+  dayType: DayType
+): SpecialDayDepartures[] | null {
+  if (!schedule.special || schedule.special.length === 0) return null
+  const out: SpecialDayDepartures[] = []
+  for (const entry of schedule.special) {
+    const list = entry.departures[dayType] ?? entry.departures.weekday
+    if (!list || list.length === 0) continue
+    out.push({ origin: entry.origin, departures: [...list] })
+  }
+  return out.length > 0 ? out : null
+}
+
+/**
  * Look up the scheduled fallback for a variant at a point in time.
  * Returns null when the variant key cannot be resolved or the index has
  * no usable tables for the day.
@@ -148,6 +167,7 @@ export function getScheduleForVariant(
       first,
       last,
       departures: departures && departures.length > 0 ? [...departures] : null,
+      special: null,
       isHolidayTimetable: dayType === 'holiday',
       serviceKey,
     }
@@ -160,6 +180,7 @@ export function getScheduleForVariant(
     first,
     last,
     departures: null,
+    special: specialsForDay(schedule, dayType),
     isHolidayTimetable: dayType === 'holiday',
     serviceKey,
   }

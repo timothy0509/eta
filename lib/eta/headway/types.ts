@@ -19,6 +19,19 @@ export interface VariantSchedule {
    * frequency windows.
    */
   departures?: Partial<Record<DayType, number[]>>
+  /**
+   * Optional: fixed trips from one TD route for days WITH frequency
+   * windows (extras the frequency table misses, e.g. short workings from
+   * another terminus).
+   */
+  special?: SpecialDepartures[]
+}
+
+/** Fixed departures from one TD route, with its first-stop origin label. */
+export interface SpecialDepartures {
+  src: string
+  origin: string
+  departures: Partial<Record<DayType, number[]>>
 }
 
 export interface HeadwayIndex {
@@ -31,7 +44,8 @@ export interface HeadwayIndex {
  * Scheduled fallback for a route variant at a point in time.
  * first/last are "HH:MM" display strings (or null when the span is unknown).
  * departures holds fixed departure minutes (since midnight, may exceed 1440)
- * for days with trips but no frequency windows.
+ * for days with trips but no frequency windows. special holds fixed extras
+ * for days WITH frequency windows, resolved to the looked-up day.
  */
 export interface ScheduledFallback {
   headwayMin: number | null
@@ -39,6 +53,13 @@ export interface ScheduledFallback {
   first: string | null
   last: string | null
   departures: number[] | null
+  special: SpecialDayDepartures[] | null
   isHolidayTimetable: boolean
   serviceKey: string | null
+}
+
+/** Fixed extras for the looked-up day: origin label plus departure minutes. */
+export interface SpecialDayDepartures {
+  origin: string
+  departures: number[]
 }

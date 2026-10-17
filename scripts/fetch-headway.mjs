@@ -24,7 +24,9 @@
  *         "src": ["<td_route_id>"],
  *         "span": { "weekday": ["HHMM","HHMM"], ... },
  *         "headway": { "weekday": [[startMin,endMin,headwayMin],...], ... },
- *         "departures": { "weekday": [depMin,...], ... }
+ *         "departures": { "weekday": [depMin,...], ... },
+ *         "special": [{ "src": "<td_route_id>", "origin": "<first stop>",
+ *                        "departures": { "weekday": [depMin,...], ... } }, ...]
  *       } },
  *     "holidays": ["YYYY-MM-DD", ...] }
  *
@@ -33,6 +35,11 @@
  * frequency windows. Span-only entries (peak-only routes with fixed
  * departures) carry departures plus first/last span but no headway key; mixed
  * variants may carry departures only for the days lacking windows.
+ * "special" holds fixed trips (never covered by frequencies.txt) for days
+ * that DO have frequency windows: extras the frequency table misses, e.g.
+ * peak short workings from another terminus. Each entry names its TD route
+ * and first-stop origin. Trips from a route that also feeds the frequency
+ * table only count when they fall outside every window that day.
  *
  * Key rules:
  * - co is the lowercased app company (kmb/ctb/gmb/nlb/lrtfeeder). TD agency
@@ -81,6 +88,7 @@ const GTFS_FILES = [
   'calendar.txt',
   'calendar_dates.txt',
   'stop_times.txt',
+  'stops.txt',
 ]
 
 // TD agencies the app has no company for (plus empty short names, handled at parse).
@@ -292,6 +300,38 @@ function newVariant() {
   return { src: new Set(), spanFirst: {}, spanLast: {}, windows: {}, fixed: {} }
 }
 
+/**
+ * Clean a TD stop_name into a short origin label. Names join agency segments
+ * with "|", e.g. "[CTB] PO TAT ESTATE|[KMB+CTB] PO TAT BUS TERMINUS/<BR>PO TAT".
+ * Prefer a KMB segment, strip the "[AGENCY]" prefix, cut at "<BR".
+ */
+function cleanOriginName(raw) {
+  const text = String(raw ?? '')
+  if (!text) return ''
+  const segments = text
+    .split('|')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const picked = segments.find((s) => s.includes('KMB')) ?? segments[0] ?? ''
+  const cut = picked
+    .replace(/^\[[^\]]*\]\s*/, '')
+    .split('<BR')[0]
+    .trim()
+  return cut.replace(/\/+$/, '').trim()
+}
+
+/** Half-open [start, end) match with overnight wrap (mirrors the app lookup). */
+function windowCovers(windows, dep) {
+  for (const [start, end] of windows) {
+    if (end < start) {
+      if (dep >= start || dep < end) return true
+    } else if (dep >= start && dep < end) {
+      return true
+    }
+  }
+  return false
+}
+
 function buildSnapshot(files) {
   const routes = rowsToObjects(parseCsv(files['routes.txt']))
   const trips = rowsToObjects(parseCsv(files['trips.txt']))
@@ -299,10 +339,11 @@ function buildSnapshot(files) {
   const calendars = rowsToObjects(parseCsv(files['calendar.txt']))
   const calendarDates = rowsToObjects(parseCsv(files['calendar_dates.txt']))
   const stopTimes = rowsToObjects(parseCsv(files['stop_times.txt']))
+  const stops = rowsToObjects(parseCsv(files['stops.txt']))
   log(
     `parsed routes=${routes.length} trips=${trips.length} frequencies=${frequencies.length} ` +
       `calendar=${calendars.length} calendar_dates=${calendarDates.length} ` +
-      `stop_times=${stopTimes.length}`
+      `stop_times=${stopTimes.length} stops=${stops.length}`
   )
 
   // route_id -> { coList, short }
@@ -364,12 +405,24 @@ function buildSnapshot(files) {
 
   // trip_id -> first-stop departure in minutes
   const firstDeparture = new Map()
+  // trip_id -> first stop_id (for special-departure origin labels)
+  const firstStopId = new Map()
   for (const st of stopTimes) {
     if (st.stop_sequence !== '1') continue
     const dep = toMinutes(st.departure_time)
     if (Number.isNaN(dep)) continue
     const prev = firstDeparture.get(st.trip_id)
-    if (prev === undefined || dep < prev) firstDeparture.set(st.trip_id, dep)
+    if (prev === undefined || dep < prev) {
+      firstDeparture.set(st.trip_id, dep)
+      firstStopId.set(st.trip_id, st.stop_id)
+    }
+  }
+
+  // TD stop_id -> cleaned origin label for special departures.
+  const originByStopId = new Map()
+  for (const s of stops) {
+    if (!s.stop_id) continue
+    originByStopId.set(s.stop_id, cleanOriginName(s.stop_name))
   }
 
   const variants = new Map()
@@ -443,10 +496,24 @@ function buildSnapshot(files) {
     }
     const dep = depOf(t.trip_id)
     if (Number.isNaN(dep)) continue
+    const originStop = firstStopId.get(t.trip_id)
     for (const co of info.coList) {
       const variant = getVariant(`${co}|${info.short}|${bound}|1`)
       variant.src.add(t.route_id)
       addTripSpan(variant, days, dep)
+      // Per-route fixed trips for the special-departures section: trips that
+      // never appear in frequencies.txt (checked later against freqRids).
+      if (!variant.fixedBySrc) variant.fixedBySrc = new Map()
+      let perSrc = variant.fixedBySrc.get(t.route_id)
+      if (!perSrc) {
+        perSrc = { firstStop: originStop, days: {} }
+        variant.fixedBySrc.set(t.route_id, perSrc)
+      }
+      if (perSrc.firstStop === undefined) perSrc.firstStop = originStop
+      for (const day of days) {
+        if (!perSrc.days[day]) perSrc.days[day] = new Set()
+        perSrc.days[day].add(dep)
+      }
     }
   }
 
@@ -476,6 +543,8 @@ function buildSnapshot(files) {
     for (const co of info.coList) {
       const variant = getVariant(`${co}|${info.short}|${bound}|1`)
       variant.src.add(resolved.routeId)
+      if (!variant.freqRids) variant.freqRids = new Set()
+      variant.freqRids.add(resolved.routeId)
       for (const day of days) {
         if (!variant.windows[day]) variant.windows[day] = []
         variant.windows[day].push([start, end, headway])
@@ -528,6 +597,36 @@ function buildSnapshot(files) {
     }
     if (!departures.holiday && departures.sunday) departures.holiday = [...departures.sunday]
     if (Object.keys(departures).length > 0) entry.departures = departures
+    // Special departures: fixed trips (never in frequencies.txt) from a TD
+    // route, for days that DO have frequency windows. These are extras the
+    // frequency table does not describe, e.g. peak short workings from a
+    // different terminus. Trips from a route that also has frequency trips
+    // only count when they fall outside every window that day (inside ones
+    // are presumably the frequency buses themselves).
+    const special = []
+    if (v.fixedBySrc) {
+      const rids = [...v.fixedBySrc.keys()].sort()
+      for (const rid of rids) {
+        const perSrc = v.fixedBySrc.get(rid)
+        const shared = Boolean(v.freqRids && v.freqRids.has(rid))
+        const origin = originByStopId.get(perSrc.firstStop) || ''
+        const depDays = {}
+        for (const day of DAY_TYPES) {
+          if (!headway[day]) continue
+          const set = perSrc.days[day]
+          if (!set || set.size === 0) continue
+          let list = [...set]
+          if (shared) list = list.filter((dep) => !windowCovers(headway[day], dep))
+          if (list.length === 0) continue
+          depDays[day] = list.sort((a, b) => a - b)
+        }
+        if (!depDays.holiday && depDays.sunday) depDays.holiday = [...depDays.sunday]
+        if (Object.keys(depDays).length > 0) {
+          special.push({ src: rid, origin, departures: depDays })
+        }
+      }
+    }
+    if (special.length > 0) entry.special = special
     outVariants[key] = entry
   }
 

@@ -10,7 +10,7 @@ import { EmptyState } from '@/components/eta/empty-state'
 import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import { OperatorFilter } from '@/components/eta/operator-filter'
 import { formatScheduledLine } from '@/components/eta/results-kmb'
-import { minsToDisplay } from '@/components/eta/route-details-dialog'
+import { SpecialDeparturesLine, minsToDisplay } from '@/components/eta/route-details-dialog'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
 import { RouteScheduleSection } from '@/components/eta/route-schedule-section'
@@ -176,6 +176,9 @@ function KmbRouteStopCard({
               </span>
             ))}
           </div>
+        ) : null}
+        {cardScheduled?.special ? (
+          <SpecialDeparturesLine special={cardScheduled.special} lang={lang} />
         ) : null}
       </div>
     ) : (

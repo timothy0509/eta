@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
-import { activeHeadwayIndex, getDayType, getScheduleForVariant, resolveVariantKey } from './lookup'
+import {
+  activeHeadwayIndex,
+  getDayType,
+  getScheduleForVariant,
+  resolveVariantKey,
+  specialsForDay,
+} from './lookup'
 import type { HeadwayIndex, HeadwayWindow } from './types'
 
 const HOLIDAYS = ['2026-02-17']
@@ -261,5 +267,92 @@ describe('getScheduleForVariant', () => {
   it('keeps departures null for frequency-based variants', () => {
     const result = getScheduleForVariant(INDEX, 'kmb|1|O|1', date('2026-10-16T06:00:00'))
     expect(result?.departures).toBeNull()
+  })
+
+  it('resolves specials for days with frequency windows', () => {
+    const mixed: HeadwayIndex = {
+      updated: '2026-10-16',
+      holidays: HOLIDAYS,
+      variants: {
+        'kmb|214|O|1': {
+          src: ['8354', '8496'],
+          span: { weekday: ['0520', '2330'] },
+          headway: { weekday: [[320, 1410, 12]] },
+          special: [
+            {
+              src: '8496',
+              origin: 'PO TAT BUS TERMINUS',
+              departures: { weekday: [405, 415] },
+            },
+          ],
+        },
+      },
+    }
+    const result = getScheduleForVariant(mixed, 'kmb|214|O|1', date('2026-10-16T10:00:00'))
+    expect(result?.special).toEqual([{ origin: 'PO TAT BUS TERMINUS', departures: [405, 415] }])
+    // Frequency data still resolves alongside specials.
+    expect(result?.headwayMin).toBe(12)
+  })
+
+  it('falls back to weekday specials when the day has no special table', () => {
+    const mixed: HeadwayIndex = {
+      updated: '2026-10-16',
+      holidays: HOLIDAYS,
+      variants: {
+        'kmb|214|O|1': {
+          src: ['8354', '8496'],
+          span: { weekday: ['0520', '2330'] },
+          headway: { weekday: [[320, 1410, 12]] },
+          special: [{ src: '8496', origin: 'PO TAT BUS TERMINUS', departures: { weekday: [405] } }],
+        },
+      },
+    }
+    // Sunday has no tables, so the whole lookup mirrors weekday.
+    const result = getScheduleForVariant(mixed, 'kmb|214|O|1', date('2026-10-18T10:00:00'))
+    expect(result?.special).toEqual([{ origin: 'PO TAT BUS TERMINUS', departures: [405] }])
+  })
+
+  it('returns null specials when no table covers the day even via fallback', () => {
+    const mixed: HeadwayIndex = {
+      updated: '2026-10-16',
+      holidays: HOLIDAYS,
+      variants: {
+        'kmb|214|O|1': {
+          src: ['8354', '8496'],
+          span: { weekday: ['0520', '2330'] },
+          headway: { weekday: [[320, 1410, 12]] },
+          special: [
+            { src: '8496', origin: 'PO TAT BUS TERMINUS', departures: { saturday: [405] } },
+          ],
+        },
+      },
+    }
+    const result = getScheduleForVariant(mixed, 'kmb|214|O|1', date('2026-10-18T10:00:00'))
+    expect(result?.special).toBeNull()
+  })
+})
+
+describe('specialsForDay', () => {
+  it('falls back to the weekday table when the day-type table is missing', () => {
+    const schedule = {
+      src: ['8496'],
+      span: {},
+      special: [{ src: '8496', origin: 'PO TAT', departures: { weekday: [405] } }],
+    }
+    expect(specialsForDay(schedule, 'saturday')).toEqual([{ origin: 'PO TAT', departures: [405] }])
+  })
+
+  it('returns null when no entry covers the day', () => {
+    const schedule = {
+      src: ['8496'],
+      span: {},
+      special: [{ src: '8496', origin: 'PO TAT', departures: { saturday: [405] } }],
+    }
+    expect(specialsForDay(schedule, 'weekday')).toBeNull()
+    expect(specialsForDay(schedule, 'sunday')).toBeNull()
+  })
+
+  it('returns null without a special table', () => {
+    expect(specialsForDay({ src: ['x'], span: {} }, 'weekday')).toBeNull()
   })
 })

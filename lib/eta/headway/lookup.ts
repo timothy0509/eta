@@ -66,6 +66,20 @@ function pickDayTable<T>(
   return weekday !== undefined ? weekday : null
 }
 
+/**
+ * Exact day-type lookup with no weekday fallback. Fixed departures only
+ * exist on the days their trips run, so borrowing another day's times
+ * would show buses that never come.
+ */
+function pickExactDayTable<T>(
+  table: Partial<Record<DayType, T>> | undefined,
+  dayType: DayType
+): T | null {
+  if (!table) return null
+  const exact = table[dayType]
+  return exact !== undefined ? exact : null
+}
+
 function hhmmToDisplay(hhmm: string): string | null {
   const normalized = hhmm.trim()
   if (!/^\d{3,4}$/.test(normalized)) return null
@@ -76,7 +90,10 @@ function hhmmToDisplay(hhmm: string): string | null {
   return `${padded.slice(0, 2)}:${padded.slice(2, 4)}`
 }
 
-function spanToDisplay(span: SpanRange | undefined): { first: string | null; last: string | null } {
+function spanToDisplay(span: SpanRange | null | undefined): {
+  first: string | null
+  last: string | null
+} {
   if (!span) return { first: null, last: null }
   return { first: hhmmToDisplay(span[0]), last: hhmmToDisplay(span[1]) }
 }
@@ -119,8 +136,9 @@ function distinctHeadwayRange(windows: HeadwayWindow[]): [number, number] | null
 }
 
 /**
- * Resolve special departures for a day type, with the same weekday fallback
- * as the other tables. Returns null when nothing applies that day.
+ * Resolve special departures for an exact day type. No weekday fallback:
+ * fixed trips only run on their own days, so Saturday must not borrow
+ * weekday-only times.
  * Pass servingSrc to keep only entries from those TD route ids (per-stop
  * filtering); omit for the variant-level list.
  */
@@ -133,7 +151,7 @@ export function specialsForDay(
   const out: SpecialDayDepartures[] = []
   for (const entry of schedule.special) {
     if (servingSrc && !servingSrc.has(entry.src)) continue
-    const list = entry.departures[dayType] ?? entry.departures.weekday
+    const list = entry.departures[dayType]
     if (!list || list.length === 0) continue
     out.push({ origin: entry.origin, departures: [...list] })
   }
@@ -164,11 +182,11 @@ export function scheduleForStop(
   windows: HeadwayWindow[] | null
   departures: number[] | null
   specials: SpecialDayDepartures[] | null
-  span: SpanRange | undefined
+  span: SpanRange | null | undefined
 } {
-  const spanEntry = schedule.span[dayType] ?? schedule.span.weekday
+  const spanEntry = pickExactDayTable(schedule.span, dayType)
   const variantWindows = pickDayTable(schedule.headway, dayType)
-  const variantDepartures = pickDayTable(schedule.departures, dayType)
+  const variantDepartures = pickExactDayTable(schedule.departures, dayType)
   const cov = stopId ? schedule.stopCov?.[stopId.trim()] : undefined
   if (!cov || cov.length === 0) {
     return {
@@ -188,7 +206,7 @@ export function scheduleForStop(
   const freqServing = [...serving].some((rid) => freqSet.has(srcIdx.get(rid) ?? -1))
   const windows = freqServing ? variantWindows : null
   // Fixed departures from serving non-frequency routes: window-day
-  // specials plus windowless-day per-src tables, with weekday fallback.
+  // specials plus windowless-day per-src tables, exact day only.
   const fixed: number[] = []
   const pushFixed = (list: number[] | undefined) => {
     if (list) for (const dep of list) fixed.push(dep)
@@ -196,9 +214,9 @@ export function scheduleForStop(
   for (const rid of serving) {
     if (freqSet.has(srcIdx.get(rid) ?? -1)) continue
     const special = schedule.special?.find((entry) => entry.src === rid)
-    pushFixed(special?.departures[dayType] ?? special?.departures.weekday)
+    pushFixed(special?.departures[dayType])
     const table = schedule.depBySrc?.[String(srcIdx.get(rid))]
-    pushFixed(table?.[dayType] ?? table?.weekday)
+    pushFixed(table?.[dayType])
   }
   fixed.sort((a, b) => a - b)
   if (windows) {

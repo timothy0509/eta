@@ -84,15 +84,14 @@ describe('TimetableTable', () => {
     expect(getAllByText('07:10').length).toBeGreaterThanOrEqual(2)
   })
 
-  it('falls back to the weekday departures table when the day-type table is missing', () => {
+  it('shows no data when the day-type departures table is missing', () => {
     const fixed: VariantSchedule = {
       src: ['8092'],
       span: { weekday: ['0645', '0710'] },
       departures: { weekday: [405, 430] },
     }
-    const { getAllByText } = render(<TimetableTable schedule={fixed} dayType="sunday" lang="en" />)
-    expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
-    expect(getAllByText('07:10').length).toBeGreaterThanOrEqual(2)
+    const { getByText } = render(<TimetableTable schedule={fixed} dayType="sunday" lang="en" />)
+    expect(getByText('No timetable available')).not.toBeNull()
   })
 
   it('renders special departures with origin alongside frequency windows', () => {

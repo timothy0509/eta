@@ -147,37 +147,40 @@ export function TimetableTable({
         </div>
       ) : null}
       {windows.length > 0 ? (
-        <ul className="divide-outline-variant/15 divide-y">
-          {windows.map(([startMin, endMin, headwayMin], idx) => {
-            const active = idx === activeIdx
-            return (
-              <li
-                key={`${startMin}-${endMin}-${headwayMin}:${idx}`}
-                aria-current={active ? 'time' : undefined}
-                className={cn(
-                  '-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors',
-                  active ? 'bg-primary-container text-on-primary-container' : 'text-on-surface'
-                )}
-              >
-                <span className="m3-body-md font-tabular font-medium tabular-nums">
-                  {minsToDisplay(startMin)}–{minsToDisplay(endMin)}
-                </span>
-                {active ? (
-                  <span className="m3-label-sm flex items-center gap-2 font-medium">
-                    {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
-                    <span className="bg-on-primary-container text-primary-container m3-label-sm rounded-full px-1.5 py-px font-semibold">
-                      {t('kmb.scheduleNow')}
+        <div className="space-y-1.5">
+          <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleFrequency')}</div>
+          <ul className="divide-outline-variant/15 divide-y">
+            {windows.map(([startMin, endMin, headwayMin], idx) => {
+              const active = idx === activeIdx
+              return (
+                <li
+                  key={`${startMin}-${endMin}-${headwayMin}:${idx}`}
+                  aria-current={active ? 'time' : undefined}
+                  className={cn(
+                    '-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors',
+                    active ? 'bg-primary-container text-on-primary-container' : 'text-on-surface'
+                  )}
+                >
+                  <span className="m3-body-md font-tabular font-medium tabular-nums">
+                    {minsToDisplay(startMin)}–{minsToDisplay(endMin)}
+                  </span>
+                  {active ? (
+                    <span className="m3-label-sm flex items-center gap-2 font-medium">
+                      {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                      <span className="bg-on-primary-container text-primary-container m3-label-sm rounded-full px-1.5 py-px font-semibold">
+                        {t('kmb.scheduleNow')}
+                      </span>
                     </span>
-                  </span>
-                ) : (
-                  <span className="m3-body-md text-on-surface-variant">
-                    {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
-                  </span>
-                )}
-              </li>
-            )
-          })}
-        </ul>
+                  ) : (
+                    <span className="m3-body-md text-on-surface-variant">
+                      {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                    </span>
+                  )}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
       ) : departures.length > 0 ? (
         <div className="flex flex-wrap gap-1.5" role="list" aria-label={t('kmb.scheduleTitle')}>
           {departures.map((depMin, idx) => (

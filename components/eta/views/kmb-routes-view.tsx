@@ -159,13 +159,23 @@ function KmbRouteStopCard({
     visible.length === 0 ? (
       <div className="space-y-2">
         <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-          {cardScheduled &&
-          (cardScheduled.headwayMin != null ||
-            cardScheduled.headwayRange != null ||
-            (cardScheduled.departures != null && cardScheduled.departures.length > 0) ||
-            (cardScheduled.first && cardScheduled.last))
-            ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
-            : cardT('common.noScheduledBuses')}
+          {(() => {
+            for (const entry of stopEtas) {
+              const remark =
+                pickLang(
+                  { en: entry.rmk_en ?? '', tc: entry.rmk_tc ?? '', sc: entry.rmk_sc ?? '' },
+                  lang
+                ).trim() || null
+              if (remark) return remark
+            }
+            return cardScheduled &&
+              (cardScheduled.headwayMin != null ||
+                cardScheduled.headwayRange != null ||
+                (cardScheduled.departures != null && cardScheduled.departures.length > 0) ||
+                (cardScheduled.first && cardScheduled.last))
+              ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
+              : cardT('common.noScheduledBuses')
+          })()}
         </div>
         {cardScheduled?.departures && cardScheduled.departures.length > 0 ? (
           <div className="flex flex-wrap gap-1.5" role="list">

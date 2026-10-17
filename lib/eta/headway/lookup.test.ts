@@ -248,7 +248,7 @@ describe('getScheduleForVariant', () => {
     })
   })
 
-  it('returns departures from the weekday table when the day-type table is missing', () => {
+  it('returns null departures when the day-type table is missing', () => {
     const withDeps: HeadwayIndex = {
       updated: '2026-10-16',
       holidays: HOLIDAYS,
@@ -260,9 +260,9 @@ describe('getScheduleForVariant', () => {
         },
       },
     }
-    // Sunday has no departures table -> weekday table.
+    // Sunday has no departures table: no service to show, not weekday times.
     const result = getScheduleForVariant(withDeps, 'kmb|14D|O|1', date('2026-10-18T10:00:00'))
-    expect(result?.departures).toEqual([405, 430])
+    expect(result).toBeNull()
   })
 
   it('keeps departures null for frequency-based variants', () => {
@@ -295,7 +295,7 @@ describe('getScheduleForVariant', () => {
     expect(result?.headwayMin).toBe(12)
   })
 
-  it('falls back to weekday specials when the day has no special table', () => {
+  it('returns null specials when the day has no special table', () => {
     const mixed: HeadwayIndex = {
       updated: '2026-10-16',
       holidays: HOLIDAYS,
@@ -308,12 +308,14 @@ describe('getScheduleForVariant', () => {
         },
       },
     }
-    // Sunday has no tables, so the whole lookup mirrors weekday.
+    // Sunday has no special table: no weekday fallback, so specials stay null
+    // while the frequency table still resolves.
     const result = getScheduleForVariant(mixed, 'kmb|214|O|1', date('2026-10-18T10:00:00'))
-    expect(result?.special).toEqual([{ origin: 'PO TAT BUS TERMINUS', departures: [405] }])
+    expect(result?.special).toBeNull()
+    expect(result?.headwayMin).toBe(12)
   })
 
-  it('returns null specials when no table covers the day even via fallback', () => {
+  it('returns null specials when no table covers the day', () => {
     const mixed: HeadwayIndex = {
       updated: '2026-10-16',
       holidays: HOLIDAYS,
@@ -334,13 +336,13 @@ describe('getScheduleForVariant', () => {
 })
 
 describe('specialsForDay', () => {
-  it('falls back to the weekday table when the day-type table is missing', () => {
+  it('returns null when the day-type table is missing (no weekday fallback)', () => {
     const schedule = {
       src: ['8496'],
       span: {},
       special: [{ src: '8496', origin: 'PO TAT', departures: { weekday: [405] } }],
     }
-    expect(specialsForDay(schedule, 'saturday')).toEqual([{ origin: 'PO TAT', departures: [405] }])
+    expect(specialsForDay(schedule, 'saturday')).toBeNull()
   })
 
   it('returns null when no entry covers the day', () => {

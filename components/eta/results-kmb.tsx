@@ -507,6 +507,10 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       spanLine != null && (scheduled?.headwayMin != null || scheduled?.headwayRange != null)
     const showDepartures = departures != null && departures.length > 0
     const special = scheduled?.special ?? null
+    // Official remarks win over the computed schedule line: the operator's
+    // own "no departures right now" notice stays visible instead of being
+    // replaced by a frequency estimate.
+    const headline = remark ?? scheduleLine ?? formatNoScheduledText(t)
     return (
       <div
         className={cn(
@@ -522,12 +526,12 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
         <div className="space-y-2.5 pl-4">
           {routeHeader({ showEta: false, showSubtitle: true })}
           <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-            {scheduleLine ? (
+            {scheduleLine && !remark ? (
               <Clock className="h-4 w-4 shrink-0" />
             ) : (
               <Info className="h-4 w-4 shrink-0" />
             )}
-            {scheduleLine ?? remark ?? formatNoScheduledText(t)}
+            {headline}
           </div>
           {showDepartures ? (
             <div className="flex flex-wrap gap-1.5" role="list">

@@ -146,7 +146,7 @@ export function RouteStopCard({
                   e.stopPropagation()
                   onSelect?.()
                 }}
-                className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface pointer-events-auto inline-flex h-8 shrink-0 items-center rounded-full px-3 transition-colors"
+                className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface pointer-events-auto inline-flex min-h-[44px] shrink-0 items-center rounded-full px-3 transition-colors"
               >
                 <span className="m3-label-md">{selectLabel}</span>
               </button>

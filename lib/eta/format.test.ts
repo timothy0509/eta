@@ -5,6 +5,7 @@ import {
   formatRelativeMinutes,
   formatRelativeMinutesWithDrift,
   formatUiLanguageLabel,
+  minsToDisplay,
 } from './format'
 
 describe('formatRelativeMinutes', () => {
@@ -68,5 +69,16 @@ describe('formatFareHkd', () => {
     expect(formatFareHkd(undefined)).toBeNull()
     expect(formatFareHkd('5.2')).toBeNull()
     expect(formatFareHkd(NaN)).toBeNull()
+  })
+})
+
+describe('minsToDisplay', () => {
+  it('formats minutes since midnight as HH:MM', () => {
+    expect(minsToDisplay(335)).toBe('05:35')
+    expect(minsToDisplay(0)).toBe('00:00')
+  })
+
+  it('wraps after-midnight windows past 1440', () => {
+    expect(minsToDisplay(1470)).toBe('00:30')
   })
 })

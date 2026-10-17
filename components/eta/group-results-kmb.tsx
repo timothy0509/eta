@@ -8,6 +8,8 @@ import type { Company } from 'hk-bus-eta'
 import { EmptyState } from '@/components/eta/empty-state'
 import { buildRouteFilterString } from '@/components/eta/panes/use-kmb-route-filter'
 import { ResultsHeader } from '@/components/eta/results-header'
+import type { ScheduledFallback } from '@/lib/eta/headway/types'
+import { useHeadwaySchedules } from '@/lib/eta/headway/use-headway-schedule'
 import { RouteDepartureRow, type StopChips } from '@/components/eta/results-kmb'
 import { Button } from '@/components/ui/button'
 import {
@@ -19,7 +21,7 @@ import {
 import { type KmbGroupMember } from '@/lib/eta/group-view'
 import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
-import { groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import { groupEtasByVariant, sortScheduledFirst } from '@/lib/eta/kmb-eta-groups'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { isKmbStop } from '@/lib/eta/types'
@@ -196,6 +198,17 @@ function GroupMemberSection({
 
   const groups = React.useMemo(() => groupEtasByVariant(eta, fares), [eta, fares])
 
+  const scheduleBaseKeys = React.useMemo(
+    () => Array.from(new Set(groups.map((g) => g.baseKey))),
+    [groups]
+  )
+  const scheduledByBaseKey: Record<string, ScheduledFallback> =
+    useHeadwaySchedules(scheduleBaseKeys)
+  const sortedGroups = React.useMemo(
+    () => sortScheduledFirst(groups, scheduledByBaseKey),
+    [groups, scheduledByBaseKey]
+  )
+
   const chipsByStopId = React.useMemo(() => {
     const next = new Map<string, StopChips>()
     for (const stopId of stopIds)
@@ -255,7 +268,7 @@ function GroupMemberSection({
             </Button>
           }
         />
-      ) : groups.length === 0 ? (
+      ) : sortedGroups.length === 0 ? (
         <EmptyState title={t('common.noScheduledBuses')} className="py-2" />
       ) : (
         <div className="space-y-2">
@@ -264,7 +277,7 @@ function GroupMemberSection({
               {error}
             </p>
           ) : null}
-          {groups.map((group) => {
+          {sortedGroups.map((group) => {
             const stopId = group.items[0]?.stop ? String(group.items[0].stop).trim() : null
             const chips =
               (stopId ? chipsByStopId.get(stopId) : undefined) ??
@@ -286,6 +299,7 @@ function GroupMemberSection({
                 onToggleExpand={() =>
                   setExpandedKey((prev) => (prev === group.key ? null : group.key))
                 }
+                scheduled={scheduledByBaseKey[group.baseKey] ?? null}
               />
             )
           })}

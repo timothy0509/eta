@@ -231,6 +231,45 @@ const kmb: Record<string, TranslationEntry> = {
     tc: '包含「{query}」的車站',
     sc: '包含“{query}”的车站',
   },
+  scheduleEveryMin: {
+    en: 'Every ~{n} min · scheduled',
+    tc: '約每 {n} 分鐘一班（預定）',
+    sc: '约每 {n} 分钟一班（预定）',
+  },
+  scheduleEveryRange: {
+    en: 'Every {min}-{max} min · scheduled',
+    tc: '約每 {min}-{max} 分鐘一班（預定）',
+    sc: '约每 {min}-{max} 分钟一班（预定）',
+  },
+  scheduleFirstLast: {
+    en: 'First {first} · Last {last}',
+    tc: '頭班 {first} · 尾班 {last}',
+    sc: '头班 {first} · 尾班 {last}',
+  },
+  scheduleHolidayNote: {
+    en: 'Holiday timetable applies',
+    tc: '假日時間表適用',
+    sc: '假日时间表适用',
+  },
+  scheduleTitle: { en: 'Timetable', tc: '時間表', sc: '时间表' },
+  scheduleFullTitle: { en: 'Full timetable', tc: '完整時間表', sc: '完整时间表' },
+  scheduleNoData: { en: 'No timetable available', tc: '暫無時間表', sc: '暂无时间表' },
+  scheduleNow: { en: 'Now', tc: '現時', sc: '现时' },
+  scheduleEveryRow: { en: 'Every ~{n} min', tc: '約每 {n} 分鐘一班', sc: '约每 {n} 分钟一班' },
+  scheduleToday: { en: 'Today', tc: '今日', sc: '今日' },
+  scheduleSpecial: { en: 'Special departures', tc: '特別班次', sc: '特别班次' },
+  scheduleFrequency: { en: 'Frequency', tc: '班次頻率', sc: '班次频率' },
+  scheduleFirstBus: { en: 'First bus', tc: '頭班', sc: '头班' },
+  scheduleLastBus: { en: 'Last bus', tc: '尾班', sc: '尾班' },
+  scheduleDataDate: {
+    en: 'Schedule data: {date}',
+    tc: '時間表數據：{date}',
+    sc: '时间表数据：{date}',
+  },
+  scheduleWeekday: { en: 'Weekdays', tc: '平日', sc: '平日' },
+  scheduleSaturday: { en: 'Saturdays', tc: '星期六', sc: '星期六' },
+  scheduleSunday: { en: 'Sundays', tc: '星期日', sc: '星期日' },
+  scheduleHoliday: { en: 'Holidays', tc: '假日', sc: '假日' },
 }
 
 const mtr: Record<string, TranslationEntry> = {

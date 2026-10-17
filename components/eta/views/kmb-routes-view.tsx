@@ -1,19 +1,28 @@
 'use client'
 
-import { Clock, Search, X } from 'lucide-react'
+import { ChevronDown, Clock, Search, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
+import { Marquee } from '@/components/ui/marquee'
 import { EmptyState } from '@/components/eta/empty-state'
 import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
 import { OperatorFilter } from '@/components/eta/operator-filter'
+import { formatScheduledLine } from '@/components/eta/results-kmb'
+import {
+  SpecialDeparturesLine,
+  DepartureChips,
+  CARD_CHIP_LIMIT,
+} from '@/components/eta/route-details-dialog'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
+import { RouteScheduleSection } from '@/components/eta/route-schedule-section'
 import { Input } from '@/components/ui/input'
 import { RouteStopCard } from '@/components/eta/route-stop-timeline'
 import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes, TickingSoonestPill } from '@/components/eta/ticking-eta'
+import { useHeadwaySchedule } from '@/lib/eta/headway/use-headway-schedule'
 import { formatEtaOrdinals } from '@/lib/eta/kmb-eta-groups'
 import { RouteDrilldown } from '@/components/eta/views/route-drilldown'
 import {
@@ -109,6 +118,7 @@ function hasDuplicateOperators(variants: RouteVariant[]): boolean {
  */
 function KmbRouteStopCard({
   stopEtas,
+  stopId,
   name,
   stopCode,
   seq,
@@ -119,6 +129,8 @@ function KmbRouteStopCard({
   onSelect,
 }: {
   stopEtas: KmbEtaEntryWithLeg[]
+  /** App stop id for per-stop schedule resolution. */
+  stopId: string
   name: string
   stopCode: string | null
   seq: number
@@ -136,12 +148,49 @@ function KmbRouteStopCard({
     [stopEtas]
   )
   const visible = sorted.slice(0, 3)
-  const { t: cardT } = useTranslations(lang)
+  const { t: cardT, tWithParams: cardTWithParams } = useTranslations(lang)
+
+  // Scheduled fallback for the stop card's variant (all entries here share
+  // one variant; the hook is unconditional with a possibly-null key).
+  const cardBaseKey = React.useMemo(() => {
+    const first = stopEtas[0]
+    if (!first) return null
+    return variantBaseKey(first)
+  }, [stopEtas])
+  const cardScheduled = useHeadwaySchedule(cardBaseKey, undefined, stopId)
 
   const panel =
     visible.length === 0 ? (
-      <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-        {cardT('common.noScheduledBuses')}
+      <div className="space-y-2">
+        <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+          {(() => {
+            for (const entry of stopEtas) {
+              const remark =
+                pickLang(
+                  { en: entry.rmk_en ?? '', tc: entry.rmk_tc ?? '', sc: entry.rmk_sc ?? '' },
+                  lang
+                ).trim() || null
+              if (remark) return remark
+            }
+            return cardScheduled &&
+              (cardScheduled.headwayMin != null ||
+                cardScheduled.headwayRange != null ||
+                (cardScheduled.departures != null && cardScheduled.departures.length > 0) ||
+                (cardScheduled.departureGroups != null &&
+                  cardScheduled.departureGroups.length > 0) ||
+                (cardScheduled.first && cardScheduled.last))
+              ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
+              : cardT('common.noScheduledBuses')
+          })()}
+        </div>
+        {cardScheduled?.departureGroups && cardScheduled.departureGroups.length > 0 ? (
+          <SpecialDeparturesLine special={cardScheduled.departureGroups} lang={lang} />
+        ) : cardScheduled?.departures && cardScheduled.departures.length > 0 ? (
+          <DepartureChips departures={cardScheduled.departures} lang={lang} cap={CARD_CHIP_LIMIT} />
+        ) : null}
+        {cardScheduled?.special ? (
+          <SpecialDeparturesLine special={cardScheduled.special} lang={lang} />
+        ) : null}
       </div>
     ) : (
       <div className="space-y-2">
@@ -313,6 +362,8 @@ function KmbRouteStopList({
   lang,
   onSelectStopGroup,
   listKey,
+  expandedKey,
+  onToggleStop,
 }: {
   listKey: string
   currentVariant: RouteVariant
@@ -321,8 +372,9 @@ function KmbRouteStopList({
   etas: Record<string, KmbEtaEntryWithLeg[]>
   lang: UiLanguage
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
+  expandedKey: string | null
+  onToggleStop: (cardKey: string) => void
 }) {
-  const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
   const variantKey = routeVariantKey({
     co: currentVariant.co as Company,
     route: currentVariant.route,
@@ -480,12 +532,13 @@ function KmbRouteStopList({
     return (
       <KmbRouteStopCard
         stopEtas={stopEtas}
+        stopId={rs.stopId}
         name={pickCtbDisplayName(ctb?.name, parsed.name)}
         stopCode={parsed.platform ?? parsed.stopCode}
         seq={seq}
         lang={lang}
         expanded={expandedKey === cardKey}
-        onToggle={() => setExpandedKey((prev) => (prev === cardKey ? null : cardKey))}
+        onToggle={() => onToggleStop(cardKey)}
         selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
         onSelect={
           group && onSelectStopGroup
@@ -527,7 +580,8 @@ function KmbRouteStopList({
           {variantStops.map((rs, index) => (
             <div
               key={`${rs.stopId}:${rs.seq}`}
-              className={cn('ui-cv-row min-w-0 py-1', staggerClassForIndex(index))}
+              id={`kmb-route-stop-${rs.stopId}:${rs.seq}`}
+              className={cn('ui-cv-row min-w-0 scroll-mt-4 py-1', staggerClassForIndex(index))}
               style={{ gridColumn: 3, gridRow: index + 1 }}
             >
               {renderStopCard(rs)}
@@ -549,8 +603,9 @@ function KmbRouteStopList({
                 {section.items.map((rs, itemIdx) => (
                   <div
                     key={`${rs.stopId}:${rs.seq}`}
+                    id={`kmb-route-stop-${rs.stopId}:${rs.seq}`}
                     className={cn(
-                      'ui-cv-row',
+                      'ui-cv-row scroll-mt-4',
                       staggerClassForIndex((sectionStartRows[sectionIdx] ?? 0) + itemIdx)
                     )}
                   >
@@ -750,6 +805,7 @@ export function KmbRoutesView({
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const [operators, setOperators] = React.useState<string[]>([])
   const [sheetCollapsed, setSheetCollapsed] = React.useState(false)
+  const [controlsOpen, setControlsOpen] = React.useState(true)
   const routeStopsAll = usePaneStore((s) => s.kmbRouteStops)
   const setRouteStopsAll = usePaneStore((s) => s.setKmbRouteStops)
   const [fuse, setFuse] = React.useState<RouteFuseInstance | null>(null)
@@ -761,6 +817,10 @@ export function KmbRoutesView({
   const [variantStops, setVariantStops] = React.useState<KmbRouteStopLite[]>([])
   const [stopsVariantKey, setStopsVariantKey] = React.useState<string | null>(null)
   const [etas, setEtas] = React.useState<Record<string, KmbEtaEntryWithLeg[]>>({})
+  const [expandedStop, setExpandedStop] = React.useState<{
+    variantKey: string
+    cardKey: string
+  } | null>(null)
 
   const addFavorite = useAppStore((s) => s.addFavorite)
 
@@ -1033,38 +1093,97 @@ export function KmbRoutesView({
   }, [routePath])
 
   const mapMarkers = React.useMemo(() => {
+    const isCtbRoute = currentVariant ? normalizeOperator(currentVariant.co) === 'ctb' : false
+    const activeCardKey =
+      expandedStop && expandedStop.variantKey === currentVariant?.key ? expandedStop.cardKey : null
     return variantStops
       .map((rs) => {
         const stop = stopsById.get(rs.stopId)
         if (!stop) return null
+        const cardKey = `${rs.stopId}:${rs.seq}`
+        const fullName = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+        const parsed = parseKmbStopNameCached(fullName, {
+          isKmb: isKmbStop(stop),
+          lang,
+        })
+        const ctb = isCtbRoute ? parseCtbStopNameCached(parsed.name) : null
         return {
-          id: rs.stopId,
+          id: cardKey,
           lat: stop.lat,
           lng: stop.lng,
-          title: pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang),
+          title: pickCtbDisplayName(ctb?.name, parsed.name),
+          selected: activeCardKey === cardKey,
         }
       })
-      .filter(Boolean) as Array<{ id: string; lat: number; lng: number; title?: string }>
-  }, [variantStops, stopsById, lang])
+      .filter(Boolean) as Array<{
+      id: string
+      lat: number
+      lng: number
+      title?: string
+      selected?: boolean
+    }>
+  }, [variantStops, stopsById, lang, currentVariant, expandedStop])
 
   const mapPolylines = React.useMemo(() => {
     if (!currentVariant) return []
     return [{ id: currentVariant.key, path: displayPath }]
   }, [currentVariant, displayPath])
 
-  const handleMapStopClick = React.useCallback(
-    (stopId: string) => {
-      if (!onSelectStopGroup) return
-      const group = getStopGroupForClick(stopId, variantStops, stopsById, lang)
-      if (!group) return
-      onSelectStopGroup({
-        stopIds: group.stopIds,
-        title: group.title,
-        route: currentVariant?.route ?? '',
-      })
+  const focusPoint = React.useMemo(() => {
+    if (!expandedStop || expandedStop.variantKey !== currentVariant?.key) return null
+    const match = variantStops.find((rs) => `${rs.stopId}:${rs.seq}` === expandedStop.cardKey)
+    if (!match) return null
+    const stop = stopsById.get(match.stopId)
+    if (!stop) return null
+    return { lat: stop.lat, lng: stop.lng, zoom: 15 }
+  }, [expandedStop, variantStops, stopsById, currentVariant])
+
+  const scrollStopCardIntoView = React.useCallback((cardKey: string) => {
+    if (typeof document === 'undefined') return
+    requestAnimationFrame(() => {
+      document
+        .getElementById(`kmb-route-stop-${cardKey}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    })
+  }, [])
+
+  const handleToggleStop = React.useCallback(
+    (cardKey: string) => {
+      const variantKey = currentVariant?.key
+      if (!variantKey) return
+      setExpandedStop((prev) =>
+        prev && prev.variantKey === variantKey && prev.cardKey === cardKey
+          ? null
+          : { variantKey, cardKey }
+      )
     },
-    [onSelectStopGroup, variantStops, stopsById, lang, currentVariant]
+    [currentVariant]
   )
+
+  const handleMapStopClick = React.useCallback(
+    (id: string) => {
+      const variantKey = currentVariant?.key
+      if (!variantKey) return
+      const directHit = variantStops.some((rs) => `${rs.stopId}:${rs.seq}` === id)
+      const fallbackStop = directHit ? null : variantStops.find((rs) => rs.stopId === id)
+      const match = directHit
+        ? id
+        : fallbackStop
+          ? `${fallbackStop.stopId}:${fallbackStop.seq}`
+          : null
+      if (!match) return
+      setExpandedStop((prev) =>
+        prev && prev.variantKey === variantKey && prev.cardKey === match
+          ? null
+          : { variantKey, cardKey: match }
+      )
+      scrollStopCardIntoView(match)
+    },
+    [variantStops, scrollStopCardIntoView, currentVariant]
+  )
+
+  const expandedStopKey =
+    expandedStop && expandedStop.variantKey === currentVariant?.key ? expandedStop.cardKey : null
 
   const onSaveRoute = () => {
     if (!currentVariant) return
@@ -1099,6 +1218,7 @@ export function KmbRoutesView({
           polylines={isRouteSelected ? mapPolylines : []}
           zoom={isRouteSelected ? 13 : 11}
           fitKey={currentVariant?.key ?? null}
+          focusPoint={focusPoint}
           onMarkerClick={handleMapStopClick}
           ariaLabel={t('common.mapInteractive')}
           className="h-full w-full rounded-none"
@@ -1251,19 +1371,17 @@ export function KmbRoutesView({
                     setSelectedVariant(null)
                   }}
                   title={
-                    <span className="flex min-w-0 flex-col gap-0.5">
-                      <span className="flex flex-wrap items-center gap-2">
-                        <RouteBadge
-                          route={selectedRouteKey.route}
-                          company={selectedRouteKey.co}
-                          size="lg"
-                        />
-                        <span className="text-on-surface-variant m3-label-md uppercase">
-                          {selectedRouteKey.co}
-                        </span>
-                      </span>
+                    <span className="flex min-w-0 items-center gap-2">
+                      <RouteBadge
+                        route={selectedRouteKey.route}
+                        company={selectedRouteKey.co}
+                        size="lg"
+                      />
                       {currentVariant && (
-                        <span className="text-on-surface m3-title-md truncate">
+                        <Marquee
+                          title={`${pickLang(currentVariant.origin, lang)} → ${pickLang(currentVariant.destination, lang)}`}
+                          className="text-on-surface m3-title-md min-w-0 flex-1 font-medium"
+                        >
                           {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
                             co: currentVariant.co,
                             lang,
@@ -1273,67 +1391,95 @@ export function KmbRoutesView({
                             co: currentVariant.co,
                             lang,
                           })}
-                        </span>
+                        </Marquee>
                       )}
+                      <span className="text-on-surface-variant m3-label-md shrink-0 uppercase">
+                        {selectedRouteKey.co}
+                      </span>
                     </span>
                   }
                 >
-                  {variantsForRoute.length > 1 && (
-                    <div
-                      className="flex gap-2 overflow-x-auto pb-1"
-                      role="group"
-                      aria-label={t('common.route')}
+                  {currentVariant && (
+                    <button
+                      type="button"
+                      onClick={() => setControlsOpen((v) => !v)}
+                      aria-expanded={controlsOpen}
+                      className="text-on-surface-variant hover:text-on-surface ui-press inline-flex min-h-[36px] items-center gap-1.5 self-start rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
                     >
-                      {variantsForRoute.map((v) => (
-                        <button
-                          key={v.key}
-                          type="button"
-                          aria-pressed={currentVariant?.key === v.key}
-                          onClick={() => setSelectedVariant(v)}
-                          className={cn(
-                            'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                            currentVariant?.key === v.key
-                              ? 'bg-primary-container text-on-primary-container'
-                              : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
-                          )}
-                        >
-                          <span>
-                            {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}
-                          </span>
-                          <span>
-                            {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
-                              co: v.co,
-                              lang,
-                            })}
-                          </span>
-                          {showOperatorInVariants && (
-                            <span className="m3-label-sm uppercase opacity-80">
-                              {normalizeOperator(v.co)}
-                            </span>
-                          )}
-                          {v.serviceType !== '1' ? (
-                            <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
-                          ) : null}
-                        </button>
-                      ))}
-                    </div>
+                      <span className="m3-label-lg">{t('common.routeDetails')}</span>
+                      {!controlsOpen && (
+                        <span className="m3-label-md max-w-44 truncate font-normal">
+                          {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
+                            co: currentVariant.co,
+                            lang,
+                          })}
+                        </span>
+                      )}
+                      <ChevronDown
+                        className={cn(
+                          'h-4 w-4 transition-transform',
+                          !controlsOpen && '-rotate-90'
+                        )}
+                        aria-hidden
+                      />
+                    </button>
                   )}
 
-                  {currentVariant && (
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-on-surface-variant m3-body-md">
-                        {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
-                          co: currentVariant.co,
-                          lang,
-                        })}{' '}
-                        →{' '}
-                        {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
-                          co: currentVariant.co,
-                          lang,
-                        })}
-                      </div>
-                      <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
-                    </div>
+                  {controlsOpen && (
+                    <>
+                      {variantsForRoute.length > 1 && (
+                        <div
+                          className="flex gap-2 overflow-x-auto pb-1"
+                          role="group"
+                          aria-label={t('common.route')}
+                        >
+                          {variantsForRoute.map((v) => (
+                            <button
+                              key={v.key}
+                              type="button"
+                              aria-pressed={currentVariant?.key === v.key}
+                              onClick={() => setSelectedVariant(v)}
+                              className={cn(
+                                'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                                currentVariant?.key === v.key
+                                  ? 'bg-primary-container text-on-primary-container'
+                                  : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
+                              )}
+                            >
+                              <span>
+                                {v.bound === 'I' ? t('common.inbound') : t('common.outbound')}
+                              </span>
+                              <span>
+                                {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
+                                  co: v.co,
+                                  lang,
+                                })}
+                              </span>
+                              {showOperatorInVariants && (
+                                <span className="m3-label-sm uppercase opacity-80">
+                                  {normalizeOperator(v.co)}
+                                </span>
+                              )}
+                              {v.serviceType !== '1' ? (
+                                <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
+                              ) : null}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+
+                      {currentVariant && (
+                        <div className="flex items-center gap-2">
+                          <div className="min-w-0 flex-1">
+                            <RouteScheduleSection
+                              variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
+                              lang={lang}
+                            />
+                          </div>
+                          <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
+                        </div>
+                      )}
+                    </>
                   )}
                 </RouteDrilldown>
 
@@ -1360,6 +1506,8 @@ export function KmbRoutesView({
                           etas={etas}
                           lang={lang}
                           onSelectStopGroup={onSelectStopGroup}
+                          expandedKey={expandedStopKey}
+                          onToggleStop={handleToggleStop}
                         />
                       )
                     )}

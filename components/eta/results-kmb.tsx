@@ -4,19 +4,23 @@ import { ChevronDown, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
-import { formatEtaOrdinals, groupEtasByVariant } from '@/lib/eta/kmb-eta-groups'
+import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib/eta/kmb-eta-groups'
+import type { ScheduledFallback } from '@/lib/eta/headway/types'
+import {
+  useHeadwayIndex,
+  useHeadwaySchedule,
+  useHeadwaySchedules,
+} from '@/lib/eta/headway/use-headway-schedule'
 import { RouteBadge } from '@/components/eta/route-badge'
+import {
+  RouteDetailsDialog,
+  SpecialDeparturesLine,
+  DepartureChips,
+  CARD_CHIP_LIMIT,
+} from '@/components/eta/route-details-dialog'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes } from '@/components/eta/ticking-eta'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
@@ -88,6 +92,43 @@ function formatRouteVariantLabel(
 
 function formatNoScheduledText(t: (key: string) => string) {
   return t('common.noScheduledBuses')
+}
+
+/** One-line scheduled fallback copy: headway beats range beats first/last. Static text, no ticking. */
+export function formatScheduledLine(
+  scheduled: ScheduledFallback,
+  t: (key: string) => string,
+  tWithParams: (key: string, params: Record<string, string | number>) => string
+): string {
+  if (scheduled.headwayMin != null) {
+    return tWithParams('kmb.scheduleEveryMin', { n: scheduled.headwayMin })
+  }
+  if (scheduled.headwayRange) {
+    return tWithParams('kmb.scheduleEveryRange', {
+      min: scheduled.headwayRange[0],
+      max: scheduled.headwayRange[1],
+    })
+  }
+  if (scheduled.first && scheduled.last) {
+    return tWithParams('kmb.scheduleFirstLast', {
+      first: scheduled.first,
+      last: scheduled.last,
+    })
+  }
+  return t('common.noScheduledBuses')
+}
+
+function formatScheduledSpanLine(
+  scheduled: ScheduledFallback,
+  tWithParams: (key: string, params: Record<string, string | number>) => string,
+  t: (key: string) => string
+): string | null {
+  if (!scheduled.first || !scheduled.last) return null
+  const span = tWithParams('kmb.scheduleFirstLast', {
+    first: scheduled.first,
+    last: scheduled.last,
+  })
+  return scheduled.isHolidayTimetable ? `${span} · ${t('kmb.scheduleHolidayNote')}` : span
 }
 
 function formatEtaLabel(seq: number, lang: UiLanguage) {
@@ -196,24 +237,6 @@ type Props = {
   precomputedGroups?: PrecomputedGroups
 }
 
-/** Shared details dialog shell: each call site passes its own trigger, content stays identical */
-function RouteDetailsDialog({
-  trigger,
-  children,
-}: {
-  trigger: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="bg-surface-container-low rounded-3xl border-0">
-        {children}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 /** Render a single route departure row */
 export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   variantKey,
@@ -229,6 +252,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stopChips,
   expanded,
   onToggleExpand,
+  scheduled,
 }: {
   variantKey: string
   /** Base variant key without leg suffix (co|route|dir|service_type) for route info & fare lookup */
@@ -246,6 +270,8 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   stopChips: StopChips
   expanded?: boolean
   onToggleExpand?: () => void
+  /** Scheduled headway fallback from the TD GTFS index; rendered only when !hasEta */
+  scheduled?: ScheduledFallback | null
 }) {
   const [co = 'kmb', route = ''] = variantKey.split('|')
   const first = items[0]
@@ -276,68 +302,22 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const operatorColor = getOperatorColor(first?.co ?? co)
   const operatorName = formatOperatorLabel(first?.co ?? co, lang)
 
-  const { t } = useTranslations(lang)
+  const { t, tWithParams } = useTranslations(lang)
+
+  // Per-stop schedule refinement: at partial-coverage stops (special-only
+  // termini, span-only subset stops) the variant-level fallback shows buses
+  // that never serve this stop. Once the index loads, the stop-aware
+  // lookup replaces the prop (it already falls back to variant level for
+  // fully covered stops).
+  const headwayIndex = useHeadwayIndex()
+  const stopScheduled = useHeadwaySchedule(baseKey, undefined, stopChips.stopId)
+  const effectiveScheduled = headwayIndex ? stopScheduled : scheduled
 
   const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && Boolean(expanded)
 
   const fareLabel = fare ? formatFareHkd(fare.hkd) : null
   const codeLabel = [stopChips.platform, stopChips.stopCode].filter(Boolean).join(' · ') || null
-
-  const detailsContent = (
-    <>
-      <DialogHeader>
-        <DialogTitle className="m3-title-md text-on-surface break-words">
-          {route} {destination ? `→ ${destination}` : label ? `→ ${label}` : ''}
-        </DialogTitle>
-        <DialogDescription className="sr-only">{t('common.routeAndStopDetails')}</DialogDescription>
-      </DialogHeader>
-
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <div className="text-on-surface-variant m3-label-md">{t('common.stop')}</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-on-surface m3-body-md min-w-0 flex-1 font-medium break-words">
-              {stopChips.name ?? t('common.unknown')}
-            </div>
-            {stopChips.platform ? (
-              <span className="text-on-surface-variant m3-label-md font-mono">
-                {stopChips.platform}
-              </span>
-            ) : null}
-            {stopChips.stopCode ? (
-              <span className="text-on-surface-variant m3-label-md font-mono">
-                {stopChips.stopCode}
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <div className="text-on-surface-variant m3-label-md">{t('common.operator')}</div>
-          <div className="text-on-surface m3-body-md">
-            {formatOperatorLabel(first?.co ?? co, lang)}
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <div className="text-on-surface-variant m3-label-md">{t('common.route')}</div>
-          <div className="text-on-surface m3-body-md break-words">
-            {origin && destination
-              ? `${origin} → ${destination}`
-              : label || destination || t('common.unknown')}
-          </div>
-        </div>
-
-        {fareLabel ? (
-          <div className="space-y-1">
-            <div className="text-on-surface-variant m3-label-md">{t('common.fare')}</div>
-            <div className="text-on-surface m3-body-md font-medium">{fareLabel}</div>
-          </div>
-        ) : null}
-      </div>
-    </>
-  )
 
   const DetailsTextButton = (
     <RouteDetailsDialog
@@ -351,9 +331,19 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
           <span className="m3-label-md">{t('common.details')}</span>
         </button>
       }
-    >
-      {detailsContent}
-    </RouteDetailsDialog>
+      baseKey={baseKey}
+      route={route}
+      co={first?.co ?? co}
+      origin={origin}
+      destination={destination ?? (label || null)}
+      operatorName={operatorName}
+      stopName={stopChips.name}
+      stopId={stopChips.stopId}
+      platform={stopChips.platform}
+      stopCode={stopChips.stopCode}
+      fareLabel={fareLabel}
+      lang={lang}
+    />
   )
 
   const firstEtaNode = first?.eta ? (
@@ -502,7 +492,35 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   // Routes without valid ETAs get a simplified display
   if (!hasEta) {
+    const scheduled = effectiveScheduled
     const remark = getGroupRemark(items, lang)
+    const departures = scheduled?.departures ?? null
+    const departureGroups = scheduled?.departureGroups ?? null
+    const hasScheduleData =
+      scheduled != null &&
+      (scheduled.headwayMin != null ||
+        scheduled.headwayRange != null ||
+        (departures != null && departures.length > 0) ||
+        (departureGroups != null && departureGroups.length > 0) ||
+        (scheduled.first != null && scheduled.last != null))
+    const scheduleLine =
+      scheduled && hasScheduleData ? formatScheduledLine(scheduled, t, tWithParams) : null
+    const spanLine = scheduled ? formatScheduledSpanLine(scheduled, tWithParams, t) : null
+    const showSpanLine =
+      spanLine != null && (scheduled?.headwayMin != null || scheduled?.headwayRange != null)
+    // Split timetables replace the merged chips wherever they exist.
+    const showDepartures = !departureGroups && departures != null && departures.length > 0
+    // Departures-only rows never show the span line, so surface the
+    // holiday note on its own when the holiday timetable applies.
+    const showHolidayNote =
+      !showSpanLine &&
+      (showDepartures || (departureGroups != null && departureGroups.length > 0)) &&
+      (scheduled?.isHolidayTimetable ?? false)
+    const special = scheduled?.special ?? null
+    // Official remarks win over the computed schedule line: the operator's
+    // own "no departures right now" notice stays visible instead of being
+    // replaced by a frequency estimate.
+    const headline = remark ?? scheduleLine ?? formatNoScheduledText(t)
     return (
       <div
         className={cn(
@@ -518,9 +536,28 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
         <div className="space-y-2.5 pl-4">
           {routeHeader({ showEta: false, showSubtitle: true })}
           <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
-            <Info className="h-4 w-4 shrink-0" />
-            {remark || formatNoScheduledText(t)}
+            {scheduleLine && !remark ? (
+              <Clock className="h-4 w-4 shrink-0" />
+            ) : (
+              <Info className="h-4 w-4 shrink-0" />
+            )}
+            {headline}
           </div>
+          {showDepartures ? (
+            <DepartureChips departures={departures ?? []} lang={lang} cap={CARD_CHIP_LIMIT} />
+          ) : null}
+          {showSpanLine ? (
+            <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+              {spanLine}
+            </div>
+          ) : null}
+          {showHolidayNote ? (
+            <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+              {t('kmb.scheduleHolidayNote')}
+            </div>
+          ) : null}
+          {departureGroups ? <SpecialDeparturesLine special={departureGroups} lang={lang} /> : null}
+          {special ? <SpecialDeparturesLine special={special} lang={lang} /> : null}
           {staticFooter}
         </div>
       </div>
@@ -576,6 +613,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById,
   expandedKey,
   onToggleExpand,
+  scheduledByBaseKey,
 }: {
   stopId: string
   stopInfo?: StopInfo
@@ -589,6 +627,7 @@ const StopSection = React.memo(function StopSection({
   stopChipsById: Map<string, StopChips>
   expandedKey?: string | null
   onToggleExpand?: (key: string) => void
+  scheduledByBaseKey?: Record<string, ScheduledFallback | null>
 }) {
   const { t } = useTranslations(lang)
   const stopName = stopInfo ? pickStopName(stopInfo, lang) : `Stop ${stopId}`
@@ -632,6 +671,7 @@ const StopSection = React.memo(function StopSection({
               staggerClass={isFirst ? staggerClassForIndex(idx) : ''}
               expanded={expandedKey === g.key}
               onToggleExpand={() => onToggleExpand?.(g.key)}
+              scheduled={scheduledByBaseKey?.[g.baseKey] ?? null}
             />
           ))}
         </div>
@@ -768,6 +808,43 @@ export const KmbResults = React.memo(function KmbResults({
     return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
+  // Scheduled headway fallbacks for every rendered variant. Keys come from
+  // group baseKeys (co|route|dir|service_type); the hook resolves the
+  // serviceType "1" fallback internally and returns only resolving keys.
+  // Applied after grouping so live order is computed first, then the
+  // no-ETA tail is re-sorted with scheduled variants first.
+  const scheduleBaseKeys = React.useMemo(() => {
+    const keys = new Set<string>()
+    if (useStopSections && precomputedGroups) {
+      for (const groups of Object.values(precomputedGroups.byStopId)) {
+        for (const g of groups) keys.add(g.baseKey)
+      }
+    } else if (precomputedFlat && !multipleStops) {
+      for (const g of precomputedFlat) keys.add(g.baseKey)
+    } else {
+      for (const g of grouped) keys.add(g.baseKey)
+    }
+    return Array.from(keys)
+  }, [useStopSections, precomputedGroups, precomputedFlat, multipleStops, grouped])
+  const scheduledByBaseKey = useHeadwaySchedules(scheduleBaseKeys)
+
+  const sortedFlat = React.useMemo(
+    () => (precomputedFlat ? sortScheduledFirst(precomputedFlat, scheduledByBaseKey) : undefined),
+    [precomputedFlat, scheduledByBaseKey]
+  )
+  const sortedGrouped = React.useMemo(
+    () => sortScheduledFirst(grouped, scheduledByBaseKey),
+    [grouped, scheduledByBaseKey]
+  )
+  const sortedByStopId = React.useMemo(() => {
+    if (!precomputedGroups) return undefined
+    const out: Record<string, EtaGroup[]> = {}
+    for (const [stopId, groups] of Object.entries(precomputedGroups.byStopId)) {
+      out[stopId] = sortScheduledFirst(groups, scheduledByBaseKey)
+    }
+    return out
+  }, [precomputedGroups, scheduledByBaseKey])
+
   // Stagger replay key: query identity only, never live ETA arrays (see the
   // replay rule on staggerClassForIndex). Refresh keeps this key so rows
   // stay still and expand state survives; a new search remounts and replays.
@@ -820,7 +897,7 @@ export const KmbResults = React.memo(function KmbResults({
                 key={stopId}
                 stopId={stopId}
                 stopInfo={stopLookup.get(stopId)}
-                groups={precomputedGroups?.byStopId[stopId] ?? []}
+                groups={sortedByStopId?.[stopId] ?? precomputedGroups?.byStopId[stopId] ?? []}
                 routeInfos={routeInfos}
                 faresByVariantKey={faresByVariantKey}
                 lang={lang}
@@ -830,6 +907,7 @@ export const KmbResults = React.memo(function KmbResults({
                 stopChipsById={stopChipsById}
                 expandedKey={expandedKey}
                 onToggleExpand={onToggleExpand}
+                scheduledByBaseKey={scheduledByBaseKey}
               />
             ))}
 
@@ -851,9 +929,9 @@ export const KmbResults = React.memo(function KmbResults({
               </div>
             ) : null}
           </>
-        ) : precomputedFlat && !multipleStops ? (
+        ) : sortedFlat && !multipleStops ? (
           <StaggerList>
-            {precomputedFlat.map((g, idx) => {
+            {sortedFlat.map((g, idx) => {
               const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
               const stopChips = stopId
                 ? (stopChipsById.get(stopId) ??
@@ -877,15 +955,16 @@ export const KmbResults = React.memo(function KmbResults({
                   stopChips={stopChips}
                   expanded={expandedKey === g.key}
                   onToggleExpand={() => onToggleExpand(g.key)}
+                  scheduled={scheduledByBaseKey[g.baseKey] ?? null}
                 />
               )
             })}
           </StaggerList>
-        ) : grouped.length === 0 ? (
+        ) : sortedGrouped.length === 0 ? (
           <EmptyState title={formatNoScheduledText(t)} />
         ) : (
           <StaggerList>
-            {grouped.map((g, idx) => {
+            {sortedGrouped.map((g, idx) => {
               const stopId = g.items[0]?.stop ? String(g.items[0].stop).trim() : null
               const stopChips = stopId
                 ? (stopChipsById.get(stopId) ??
@@ -909,6 +988,7 @@ export const KmbResults = React.memo(function KmbResults({
                   stopChips={stopChips}
                   expanded={expandedKey === g.key}
                   onToggleExpand={() => onToggleExpand(g.key)}
+                  scheduled={scheduledByBaseKey[g.baseKey] ?? null}
                 />
               )
             })}

@@ -8,17 +8,10 @@ import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib
 import type { ScheduledFallback } from '@/lib/eta/headway/types'
 import { useHeadwaySchedules } from '@/lib/eta/headway/use-headway-schedule'
 import { RouteBadge } from '@/components/eta/route-badge'
+import { RouteDetailsDialog } from '@/components/eta/route-details-dialog'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
 import { TickingKmbMinutes } from '@/components/eta/ticking-eta'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { Marquee } from '@/components/ui/marquee'
 import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
@@ -235,24 +228,6 @@ type Props = {
   precomputedGroups?: PrecomputedGroups
 }
 
-/** Shared details dialog shell: each call site passes its own trigger, content stays identical */
-function RouteDetailsDialog({
-  trigger,
-  children,
-}: {
-  trigger: React.ReactNode
-  children: React.ReactNode
-}) {
-  return (
-    <Dialog>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="bg-surface-container-low rounded-3xl border-0">
-        {children}
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 /** Render a single route departure row */
 export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   variantKey,
@@ -326,77 +301,6 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   const fareLabel = fare ? formatFareHkd(fare.hkd) : null
   const codeLabel = [stopChips.platform, stopChips.stopCode].filter(Boolean).join(' · ') || null
 
-  const detailsContent = (
-    <>
-      <DialogHeader>
-        <DialogTitle className="m3-title-md text-on-surface break-words">
-          {route} {destination ? `→ ${destination}` : label ? `→ ${label}` : ''}
-        </DialogTitle>
-        <DialogDescription className="sr-only">{t('common.routeAndStopDetails')}</DialogDescription>
-      </DialogHeader>
-
-      <div className="space-y-4">
-        <div className="space-y-1">
-          <div className="text-on-surface-variant m3-label-md">{t('common.stop')}</div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="text-on-surface m3-body-md min-w-0 flex-1 font-medium break-words">
-              {stopChips.name ?? t('common.unknown')}
-            </div>
-            {stopChips.platform ? (
-              <span className="text-on-surface-variant m3-label-md font-mono">
-                {stopChips.platform}
-              </span>
-            ) : null}
-            {stopChips.stopCode ? (
-              <span className="text-on-surface-variant m3-label-md font-mono">
-                {stopChips.stopCode}
-              </span>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <div className="text-on-surface-variant m3-label-md">{t('common.operator')}</div>
-          <div className="text-on-surface m3-body-md">
-            {formatOperatorLabel(first?.co ?? co, lang)}
-          </div>
-        </div>
-
-        <div className="space-y-1">
-          <div className="text-on-surface-variant m3-label-md">{t('common.route')}</div>
-          <div className="text-on-surface m3-body-md break-words">
-            {origin && destination
-              ? `${origin} → ${destination}`
-              : label || destination || t('common.unknown')}
-          </div>
-        </div>
-
-        {fareLabel ? (
-          <div className="space-y-1">
-            <div className="text-on-surface-variant m3-label-md">{t('common.fare')}</div>
-            <div className="text-on-surface m3-body-md font-medium">{fareLabel}</div>
-          </div>
-        ) : null}
-
-        {scheduled ? (
-          <div className="space-y-1">
-            <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleTitle')}</div>
-            <div className="text-on-surface m3-body-md font-medium">
-              {formatScheduledLine(scheduled, t, tWithParams)}
-            </div>
-            {scheduled.headwayMin != null || scheduled.headwayRange ? (
-              formatScheduledSpanLine(scheduled, tWithParams, t) ? (
-                <div className="text-on-surface-variant m3-body-md">
-                  {formatScheduledSpanLine(scheduled, tWithParams, t)}
-                </div>
-              ) : null
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </>
-  )
-
   const DetailsTextButton = (
     <RouteDetailsDialog
       trigger={
@@ -409,9 +313,18 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
           <span className="m3-label-md">{t('common.details')}</span>
         </button>
       }
-    >
-      {detailsContent}
-    </RouteDetailsDialog>
+      baseKey={baseKey}
+      route={route}
+      co={first?.co ?? co}
+      origin={origin}
+      destination={destination ?? (label || null)}
+      operatorName={operatorName}
+      stopName={stopChips.name}
+      platform={stopChips.platform}
+      stopCode={stopChips.stopCode}
+      fareLabel={fareLabel}
+      lang={lang}
+    />
   )
 
   const firstEtaNode = first?.eta ? (

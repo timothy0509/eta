@@ -2,6 +2,7 @@ import type {
   DayType,
   HeadwayIndex,
   HeadwayWindow,
+  PatternTimetable,
   ScheduledFallback,
   SpanRange,
   SpecialDayDepartures,
@@ -196,6 +197,66 @@ export function departureGroupsForDay(
     }
   }
   return out.length > 0 ? out : null
+}
+
+/**
+ * TD route ids serving a stop. Null when the stop has full variant
+ * coverage (or no stop was given), meaning every pattern serves it.
+ */
+export function servingSrcForStop(
+  schedule: VariantSchedule,
+  stopId: string | null | undefined
+): Set<string> | null {
+  const cov = stopId ? schedule.stopCov?.[stopId.trim()] : undefined
+  if (!cov || cov.length === 0) return null
+  const serving = new Set<string>()
+  for (const i of cov) {
+    const rid = schedule.src[i]
+    if (rid !== undefined) serving.add(rid)
+  }
+  return serving
+}
+
+/**
+ * Every special pattern timetable with trips on an exact day type:
+ * windowless per-src tables plus window-day specials, each with its TD
+ * route id and origin label. Pass a serving set to keep only patterns
+ * stopping at the current stop; omit for every pattern in the variant.
+ */
+export function patternTimetablesForDay(
+  schedule: VariantSchedule,
+  dayType: DayType,
+  servingSrc?: Set<string> | null
+): PatternTimetable[] {
+  const out: PatternTimetable[] = []
+  const seen = new Set<string>()
+  if (schedule.depBySrc) {
+    const idxs = Object.keys(schedule.depBySrc)
+      .map(Number)
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b)
+    for (const idx of idxs) {
+      const rid = schedule.src[idx]
+      if (rid === undefined || seen.has(rid)) continue
+      if (servingSrc && !servingSrc.has(rid)) continue
+      const entry = schedule.depBySrc[String(idx)]
+      const list = entry?.departures[dayType]
+      if (!list || list.length === 0) continue
+      seen.add(rid)
+      out.push({ src: rid, origin: entry?.origin ?? '', departures: { [dayType]: [...list] } })
+    }
+  }
+  if (schedule.special) {
+    for (const entry of schedule.special) {
+      if (seen.has(entry.src)) continue
+      if (servingSrc && !servingSrc.has(entry.src)) continue
+      const list = entry.departures[dayType]
+      if (!list || list.length === 0) continue
+      seen.add(entry.src)
+      out.push({ src: entry.src, origin: entry.origin, departures: { [dayType]: [...list] } })
+    }
+  }
+  return out
 }
 
 /** Minutes since midnight -> zero-padded "HHMM" (hours may exceed 24). */

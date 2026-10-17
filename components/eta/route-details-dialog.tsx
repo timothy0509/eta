@@ -15,8 +15,10 @@ import {
 import {
   getDayType,
   activeHeadwayIndex,
+  patternTimetablesForDay,
   resolveVariantKey,
   scheduleForStop,
+  servingSrcForStop,
 } from '@/lib/eta/headway/lookup'
 import type { DayType, SpecialDayDepartures, VariantSchedule } from '@/lib/eta/headway/types'
 import { useHeadwayIndex } from '@/lib/eta/headway/use-headway-schedule'
@@ -71,13 +73,38 @@ export function spanHhmmToDisplay(hhmm: string): string {
   return normalized
 }
 
-function daysWithData(schedule: VariantSchedule, stopId?: string | null): DayType[] {
+/** Every special pattern timetable in the variant, with origin labels. */
+export function patternOptions(
+  schedule: VariantSchedule,
+  stopId?: string | null
+): { src: string; origin: string }[] {
+  const serving = servingSrcForStop(schedule, stopId)
+  const out = new Map<string, string>()
+  for (const day of DAY_ORDER) {
+    for (const pattern of patternTimetablesForDay(schedule, day, serving)) {
+      if (!out.has(pattern.src)) out.set(pattern.src, pattern.origin)
+    }
+  }
+  return [...out].map(([src, origin]) => ({ src, origin }))
+}
+
+/** Days carrying the selected timetable: normal service or one pattern. */
+export function timetableDays(
+  schedule: VariantSchedule,
+  stopId: string | null | undefined,
+  patternSrc: string | null
+): DayType[] {
+  if (patternSrc !== null) {
+    const serving = servingSrcForStop(schedule, stopId)
+    return DAY_ORDER.filter((day) =>
+      patternTimetablesForDay(schedule, day, serving).some((entry) => entry.src === patternSrc)
+    )
+  }
   return DAY_ORDER.filter((day) => {
     const resolved = scheduleForStop(schedule, stopId ?? null, day)
     return (
       (resolved.windows?.length ?? 0) > 0 ||
       (resolved.departures?.length ?? 0) > 0 ||
-      (resolved.specials?.length ?? 0) > 0 ||
       (resolved.departureGroups?.length ?? 0) > 0 ||
       resolved.span !== undefined
     )
@@ -98,6 +125,7 @@ export function TimetableTable({
   isToday = false,
   now,
   stopId = null,
+  patternSrc = null,
 }: {
   schedule: VariantSchedule
   dayType: DayType
@@ -107,6 +135,8 @@ export function TimetableTable({
   now?: Date
   /** App stop id for per-stop resolution; omit for the variant-level table. */
   stopId?: string | null
+  /** TD route id selecting one special timetable; null shows the normal timetable. */
+  patternSrc?: string | null
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const tick = useTickingNow(60_000)
@@ -125,28 +155,49 @@ export function TimetableTable({
       ? activeHeadwayIndex(windows, nowDate.getHours() * 60 + nowDate.getMinutes())
       : null
 
-  if (windows.length === 0 && departures.length === 0 && !specials && !departureGroups && !span) {
+  if (patternSrc !== null) {
+    const patterns = patternTimetablesForDay(schedule, dayType, servingSrcForStop(schedule, stopId))
+    const pattern = patterns.find((entry) => entry.src === patternSrc)
+    const list = pattern?.departures[dayType] ?? []
+    if (list.length === 0) {
+      return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
+    }
+    const firstMin = Math.min(...list)
+    const lastMin = Math.max(...list)
+    return (
+      <div className="space-y-2">
+        <FirstLastRow first={minsToDisplay(firstMin)} last={minsToDisplay(lastMin)} lang={lang} />
+        <GroupedDepartures
+          groups={[{ origin: pattern?.origin ?? '', departures: [...list] }]}
+          lang={lang}
+        />
+        {dayType === 'holiday' ? (
+          <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleHolidayNote')}</div>
+        ) : null}
+      </div>
+    )
+  }
+
+  // Normal mode: frequencies plus the merged departure list. Split
+  // timetables reunite here so the plain chip list stays complete.
+  const merged =
+    departures.length > 0
+      ? departures
+      : [...new Set((departureGroups ?? []).flatMap((group) => group.departures))].sort(
+          (a, b) => a - b
+        )
+  if (windows.length === 0 && merged.length === 0 && !span) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
   }
 
   return (
     <div className="space-y-2">
       {span ? (
-        <div className="bg-surface-container-high flex items-center justify-between gap-3 rounded-xl px-3 py-2">
-          <span className="text-on-surface-variant m3-label-md flex items-center gap-1.5">
-            <Clock className="h-3.5 w-3.5" aria-hidden />
-            {t('kmb.scheduleFirstBus')}
-          </span>
-          <span className="text-on-surface font-tabular m3-body-md font-semibold">
-            {spanHhmmToDisplay(span[0])}
-          </span>
-          <span className="text-on-surface-variant m3-label-md flex items-center gap-1.5">
-            {t('kmb.scheduleLastBus')}
-          </span>
-          <span className="text-on-surface font-tabular m3-body-md font-semibold">
-            {spanHhmmToDisplay(span[1])}
-          </span>
-        </div>
+        <FirstLastRow
+          first={spanHhmmToDisplay(span[0])}
+          last={spanHhmmToDisplay(span[1])}
+          lang={lang}
+        />
       ) : null}
       {windows.length > 0 ? (
         <div className="space-y-1.5">
@@ -183,30 +234,9 @@ export function TimetableTable({
             })}
           </ul>
         </div>
-      ) : departureGroups ? (
-        <div className="flex flex-col gap-1.5" role="list" aria-label={t('kmb.scheduleSpecial')}>
-          {departureGroups.map((group, groupIdx) => (
-            <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
-              {group.origin ? (
-                <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
-              ) : null}
-              <div className="flex flex-wrap gap-1.5" role="list">
-                {group.departures.map((depMin, idx) => (
-                  <span
-                    key={`${depMin}:${idx}`}
-                    role="listitem"
-                    className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
-                  >
-                    {minsToDisplay(depMin)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : departures.length > 0 ? (
+      ) : merged.length > 0 ? (
         <div className="flex flex-wrap gap-1.5" role="list" aria-label={t('kmb.scheduleTitle')}>
-          {departures.map((depMin, idx) => (
+          {merged.map((depMin, idx) => (
             <span
               key={`${depMin}:${idx}`}
               role="listitem"
@@ -217,36 +247,57 @@ export function TimetableTable({
           ))}
         </div>
       ) : null}
-      {specials ? (
-        <div className="space-y-1.5 pt-1">
-          <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleSpecial')}</div>
-          {specials.map((group, groupIdx) => (
-            <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
-              {group.origin ? (
-                <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
-              ) : null}
-              <div
-                className="flex flex-wrap gap-1.5"
-                role="list"
-                aria-label={group.origin || t('kmb.scheduleSpecial')}
-              >
-                {group.departures.map((depMin, idx) => (
-                  <span
-                    key={`${depMin}:${idx}`}
-                    role="listitem"
-                    className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
-                  >
-                    {minsToDisplay(depMin)}
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
       {dayType === 'holiday' ? (
         <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleHolidayNote')}</div>
       ) : null}
+    </div>
+  )
+}
+
+/** First/last summary row shared by both timetable modes. */
+function FirstLastRow({ first, last, lang }: { first: string; last: string; lang: UiLanguage }) {
+  const { t } = useTranslations(lang)
+  return (
+    <div className="bg-surface-container-high flex items-center justify-between gap-3 rounded-xl px-3 py-2">
+      <span className="text-on-surface-variant m3-label-md flex items-center gap-1.5">
+        <Clock className="h-3.5 w-3.5" aria-hidden />
+        {t('kmb.scheduleFirstBus')}
+      </span>
+      <span className="text-on-surface font-tabular m3-body-md font-semibold">{first}</span>
+      <span className="text-on-surface-variant m3-label-md flex items-center gap-1.5">
+        {t('kmb.scheduleLastBus')}
+      </span>
+      <span className="text-on-surface font-tabular m3-body-md font-semibold">{last}</span>
+    </div>
+  )
+}
+
+/** Per-pattern departure groups with origin labels, no merged list. */
+function GroupedDepartures({ groups, lang }: { groups: SpecialDayDepartures[]; lang: UiLanguage }) {
+  const { t } = useTranslations(lang)
+  return (
+    <div className="space-y-1.5">
+      <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleSpecial')}</div>
+      <div className="flex flex-col gap-1.5" role="list" aria-label={t('kmb.scheduleSpecial')}>
+        {groups.map((group, groupIdx) => (
+          <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
+            {group.origin ? (
+              <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
+            ) : null}
+            <div className="flex flex-wrap gap-1.5" role="list">
+              {group.departures.map((depMin, idx) => (
+                <span
+                  key={`${depMin}:${idx}`}
+                  role="listitem"
+                  className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                >
+                  {minsToDisplay(depMin)}
+                </span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -318,6 +369,7 @@ export function FullTimetable({
   const index = useHeadwayIndex()
   const { t, tWithParams } = useTranslations(lang)
   const [tab, setTab] = React.useState<DayType | null>(null)
+  const [selectedPattern, setSelectedPattern] = React.useState<string | null>(null)
 
   const schedule = React.useMemo(() => {
     if (!index) return null
@@ -333,7 +385,11 @@ export function FullTimetable({
     return <div className="bg-surface-container-high ui-shimmer h-24 rounded-xl" aria-hidden />
   }
 
-  const available = daysWithData(schedule, stopId)
+  const options = patternOptions(schedule, stopId)
+  const activePattern = options.some((option) => option.src === selectedPattern)
+    ? selectedPattern
+    : null
+  const available = timetableDays(schedule, stopId, activePattern)
   if (available.length === 0) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
   }
@@ -383,7 +439,52 @@ export function FullTimetable({
         lang={lang}
         isToday={active === today}
         stopId={stopId}
+        patternSrc={activePattern}
       />
+      {options.length > 0 ? (
+        <div
+          className="bg-surface-container-high flex gap-1 overflow-x-auto rounded-full p-1"
+          role="group"
+          aria-label={t('kmb.scheduleTitle')}
+        >
+          <button
+            key="normal"
+            type="button"
+            aria-pressed={activePattern === null}
+            onClick={(e) => {
+              e.stopPropagation()
+              setSelectedPattern(null)
+            }}
+            className={cn(
+              'ui-press inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+              activePattern === null
+                ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                : 'text-on-surface-variant hover:text-on-surface'
+            )}
+          >
+            <span className="m3-label-lg">{t('kmb.scheduleNormal')}</span>
+          </button>
+          {options.map((option) => (
+            <button
+              key={option.src}
+              type="button"
+              aria-pressed={activePattern === option.src}
+              onClick={(e) => {
+                e.stopPropagation()
+                setSelectedPattern(option.src)
+              }}
+              className={cn(
+                'ui-press inline-flex min-h-[36px] shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                activePattern === option.src
+                  ? 'bg-surface-container-lowest text-on-surface shadow-sm'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              )}
+            >
+              <span className="m3-label-lg">{option.origin || option.src}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <div className="text-on-surface-variant m3-label-sm">
         {tWithParams('kmb.scheduleDataDate', { date: index.updated })}
       </div>

@@ -237,7 +237,7 @@ export function scheduleForStop(
       departures: groups ? null : variantDepartures ? [...variantDepartures] : null,
       specials: variantWindows ? specialsForDay(schedule, dayType) : null,
       departureGroups: groups,
-      span: spanEntry,
+      span: spanEntry ?? undefined,
     }
   }
   const srcIdx = new Map(schedule.src.map((rid, i) => [rid, i]))
@@ -269,7 +269,7 @@ export function scheduleForStop(
       departures: null,
       specials: specialsForDay(schedule, dayType, serving),
       departureGroups: null,
-      span: spanEntry,
+      span: spanEntry ?? undefined,
     }
   }
   if (fixed.length === 0) {

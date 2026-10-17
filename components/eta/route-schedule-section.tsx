@@ -53,10 +53,8 @@ export function RouteScheduleSection({
     if (!schedule) return null
     const today = getDayType(new Date(), index.holidays)
     const windows = schedule.headway?.[today] ?? schedule.headway?.weekday
-    // Fixed tables resolve exact-day only: borrowing another day's times
-    // would advertise buses that never run.
-    const departures = schedule.departures?.[today]
-    const span = schedule.span[today]
+    const departures = schedule.departures?.[today] ?? schedule.departures?.weekday
+    const span = schedule.span[today] ?? schedule.span.weekday
     if ((!windows || windows.length === 0) && (!departures || departures.length === 0) && !span) {
       return null
     }

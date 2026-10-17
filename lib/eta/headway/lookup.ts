@@ -158,6 +158,46 @@ export function specialsForDay(
   return out.length > 0 ? out : null
 }
 
+/**
+ * Per-src departure groups for an exact day type, with origin labels.
+ * Pass serving rids to keep only those patterns (per-stop filtering);
+ * omit for every pattern in the variant. Returns null when nothing runs
+ * that day. Covers both windowless per-src tables and window-day
+ * specials, so split timetables render wherever fixed trips do.
+ */
+export function departureGroupsForDay(
+  schedule: VariantSchedule,
+  dayType: DayType,
+  servingSrc?: Set<string> | null
+): SpecialDayDepartures[] | null {
+  const out: SpecialDayDepartures[] = []
+  if (schedule.depBySrc) {
+    const idxs = Object.keys(schedule.depBySrc)
+      .map(Number)
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b)
+    for (const idx of idxs) {
+      const rid = schedule.src[idx]
+      if (rid === undefined) continue
+      if (servingSrc && !servingSrc.has(rid)) continue
+      const entry = schedule.depBySrc[String(idx)]
+      const list = entry?.departures[dayType]
+      if (!list || list.length === 0) continue
+      out.push({ origin: entry?.origin ?? '', departures: [...list] })
+    }
+  }
+  if (schedule.special) {
+    for (const entry of schedule.special) {
+      if (servingSrc && !servingSrc.has(entry.src)) continue
+      const list = entry.departures[dayType]
+      if (!list || list.length === 0) continue
+      if (out.some((g) => g.origin === entry.origin)) continue
+      out.push({ origin: entry.origin, departures: [...list] })
+    }
+  }
+  return out.length > 0 ? out : null
+}
+
 /** Minutes since midnight -> zero-padded "HHMM" (hours may exceed 24). */
 function minToHhmm(mins: number): string {
   const h = String(Math.floor(mins / 60)).padStart(2, '0')
@@ -182,6 +222,7 @@ export function scheduleForStop(
   windows: HeadwayWindow[] | null
   departures: number[] | null
   specials: SpecialDayDepartures[] | null
+  departureGroups: SpecialDayDepartures[] | null
   span: SpanRange | null | undefined
 } {
   const spanEntry = pickExactDayTable(schedule.span, dayType)
@@ -189,10 +230,13 @@ export function scheduleForStop(
   const variantDepartures = pickExactDayTable(schedule.departures, dayType)
   const cov = stopId ? schedule.stopCov?.[stopId.trim()] : undefined
   if (!cov || cov.length === 0) {
+    const groups = departureGroupsForDay(schedule, dayType)
     return {
       windows: variantWindows,
-      departures: variantDepartures ? [...variantDepartures] : null,
+      // Split timetables replace the merged list wherever they exist.
+      departures: groups ? null : variantDepartures ? [...variantDepartures] : null,
       specials: variantWindows ? specialsForDay(schedule, dayType) : null,
+      departureGroups: groups,
       span: spanEntry,
     }
   }
@@ -216,7 +260,7 @@ export function scheduleForStop(
     const special = schedule.special?.find((entry) => entry.src === rid)
     pushFixed(special?.departures[dayType])
     const table = schedule.depBySrc?.[String(srcIdx.get(rid))]
-    pushFixed(table?.[dayType])
+    pushFixed(table?.departures[dayType])
   }
   fixed.sort((a, b) => a - b)
   if (windows) {
@@ -224,18 +268,28 @@ export function scheduleForStop(
       windows,
       departures: null,
       specials: specialsForDay(schedule, dayType, serving),
+      departureGroups: null,
       span: spanEntry,
     }
   }
   if (fixed.length === 0) {
     // No frequency route serves this stop and no fixed trip does either
     // today: genuinely no service, not the merged span.
-    return { windows: null, departures: null, specials: null, span: undefined }
+    return {
+      windows: null,
+      departures: null,
+      specials: null,
+      departureGroups: null,
+      span: undefined,
+    }
   }
+  const groups = departureGroupsForDay(schedule, dayType, serving)
   return {
     windows: null,
-    departures: fixed,
+    // Split timetables replace the merged list wherever they exist.
+    departures: groups ? null : fixed,
     specials: null,
+    departureGroups: groups,
     span: [minToHhmm(fixed[0]!), minToHhmm(fixed[fixed.length - 1]!)],
   }
 }
@@ -265,7 +319,15 @@ export function getScheduleForVariant(
     // Span-only entry: no frequency windows, but fixed departures and/or
     // first/last are still useful.
     const departures = resolved.departures
-    if ((!departures || departures.length === 0) && !first && !last) return null
+    const groups = resolved.departureGroups
+    if (
+      (!departures || departures.length === 0) &&
+      (!groups || groups.length === 0) &&
+      !first &&
+      !last
+    ) {
+      return null
+    }
     return {
       headwayMin: null,
       headwayRange: null,
@@ -273,6 +335,7 @@ export function getScheduleForVariant(
       last,
       departures: departures && departures.length > 0 ? [...departures] : null,
       special: null,
+      departureGroups: groups,
       isHolidayTimetable: dayType === 'holiday',
       serviceKey,
     }
@@ -286,6 +349,7 @@ export function getScheduleForVariant(
     last,
     departures: null,
     special: resolved.specials,
+    departureGroups: null,
     isHolidayTimetable: dayType === 'holiday',
     serviceKey,
   }

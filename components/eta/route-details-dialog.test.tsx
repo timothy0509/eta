@@ -142,12 +142,37 @@ describe('TimetableTable', () => {
       freqSrc: [0],
       stopCov: { POTAT: [1] },
     }
-    const { getAllByText, queryByText } = render(
+    const { getAllByText, getByText, queryByText } = render(
       <TimetableTable schedule={mixed} dayType="weekday" lang="en" stopId="POTAT" />
     )
     expect(getAllByText('06:45').length).toBeGreaterThanOrEqual(2)
     expect(getAllByText('06:55').length).toBeGreaterThanOrEqual(2)
+    expect(getByText('PO TAT BUS TERMINUS')).not.toBeNull()
     expect(queryByText('Every ~12 min')).toBeNull()
+    expect(queryByText('Special departures')).toBeNull()
+  })
+
+  it('splits span-only departures into per-pattern groups', () => {
+    const split: VariantSchedule = {
+      src: ['1000492', '8311'],
+      span: { weekday: ['0700', '1740'] },
+      departures: { weekday: [420, 432, 444, 456, 1045, 1060] },
+      depBySrc: {
+        '0': { origin: 'LAM WAH STREET PLAYGROUND', departures: { weekday: [1045, 1060] } },
+        '1': {
+          origin: 'LUNG MUN OASIS BUS TERMINUS',
+          departures: { weekday: [420, 432, 444, 456] },
+        },
+      },
+      stopCov: { SOME_STOP: [1] },
+    }
+    const { getAllByText, getByText, queryByText } = render(
+      <TimetableTable schedule={split} dayType="weekday" lang="en" />
+    )
+    expect(getByText('LAM WAH STREET PLAYGROUND')).not.toBeNull()
+    expect(getByText('LUNG MUN OASIS BUS TERMINUS')).not.toBeNull()
+    expect(getAllByText('07:00').length).toBeGreaterThanOrEqual(2)
+    expect(getByText('17:25')).not.toBeNull()
     expect(queryByText('Special departures')).toBeNull()
   })
 

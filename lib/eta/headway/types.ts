@@ -33,9 +33,10 @@ export interface VariantSchedule {
   /**
    * Optional: per-src fixed departures for windowless days, keyed by src
    * index string. Lets stops filter the merged departures table to the
-   * routes that actually serve them. Present only alongside stopCov.
+   * routes that actually serve them, and lets timetables show each
+   * pattern separately with its origin. Present only alongside stopCov.
    */
-  depBySrc?: Record<string, Partial<Record<DayType, number[]>>>
+  depBySrc?: Record<string, SrcDepartures>
   /**
    * Optional: app stop id -> serving src indexes, only for stops with
    * partial TD-route coverage where the display changes (stops no
@@ -52,6 +53,12 @@ export interface SpecialDepartures {
   departures: Partial<Record<DayType, number[]>>
 }
 
+/** Per-src fixed departures for windowless days, with origin label. */
+export interface SrcDepartures {
+  origin: string
+  departures: Partial<Record<DayType, number[]>>
+}
+
 export interface HeadwayIndex {
   updated: string
   variants: Record<string, VariantSchedule>
@@ -64,6 +71,9 @@ export interface HeadwayIndex {
  * departures holds fixed departure minutes (since midnight, may exceed 1440)
  * for days with trips but no frequency windows. special holds fixed extras
  * for days WITH frequency windows, resolved to the looked-up day.
+ * departureGroups holds per-pattern departures with origin labels when the
+ * variant splits fixed trips across TD routes; shown instead of the merged
+ * departures list.
  */
 export interface ScheduledFallback {
   headwayMin: number | null
@@ -72,6 +82,7 @@ export interface ScheduledFallback {
   last: string | null
   departures: number[] | null
   special: SpecialDayDepartures[] | null
+  departureGroups: SpecialDayDepartures[] | null
   isHolidayTimetable: boolean
   serviceKey: string | null
 }

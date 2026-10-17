@@ -55,8 +55,11 @@ function isVariantSchedule(value: unknown): value is VariantSchedule {
   }
   if (depBySrc !== undefined) {
     if (typeof depBySrc !== 'object' || depBySrc === null) return false
-    for (const table of Object.values(depBySrc as Record<string, unknown>)) {
-      if (!isDeparturesTable(table)) return false
+    for (const entry of Object.values(depBySrc as Record<string, unknown>)) {
+      if (typeof entry !== 'object' || entry === null) return false
+      const record = entry as Record<string, unknown>
+      if (typeof record.origin !== 'string') return false
+      if (!isDeparturesTable(record.departures)) return false
     }
   }
   if (stopCov !== undefined) {

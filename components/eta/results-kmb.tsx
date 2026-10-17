@@ -494,18 +494,21 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
     const scheduled = effectiveScheduled
     const remark = getGroupRemark(items, lang)
     const departures = scheduled?.departures ?? null
+    const departureGroups = scheduled?.departureGroups ?? null
     const hasScheduleData =
       scheduled != null &&
       (scheduled.headwayMin != null ||
         scheduled.headwayRange != null ||
         (departures != null && departures.length > 0) ||
+        (departureGroups != null && departureGroups.length > 0) ||
         (scheduled.first != null && scheduled.last != null))
     const scheduleLine =
       scheduled && hasScheduleData ? formatScheduledLine(scheduled, t, tWithParams) : null
     const spanLine = scheduled ? formatScheduledSpanLine(scheduled, tWithParams, t) : null
     const showSpanLine =
       spanLine != null && (scheduled?.headwayMin != null || scheduled?.headwayRange != null)
-    const showDepartures = departures != null && departures.length > 0
+    // Split timetables replace the merged chips wherever they exist.
+    const showDepartures = !departureGroups && departures != null && departures.length > 0
     const special = scheduled?.special ?? null
     // Official remarks win over the computed schedule line: the operator's
     // own "no departures right now" notice stays visible instead of being
@@ -551,6 +554,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
               {spanLine}
             </div>
           ) : null}
+          {departureGroups ? <SpecialDeparturesLine special={departureGroups} lang={lang} /> : null}
           {special ? <SpecialDeparturesLine special={special} lang={lang} /> : null}
           {staticFooter}
         </div>

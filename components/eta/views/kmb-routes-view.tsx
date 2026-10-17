@@ -172,12 +172,16 @@ function KmbRouteStopCard({
               (cardScheduled.headwayMin != null ||
                 cardScheduled.headwayRange != null ||
                 (cardScheduled.departures != null && cardScheduled.departures.length > 0) ||
+                (cardScheduled.departureGroups != null &&
+                  cardScheduled.departureGroups.length > 0) ||
                 (cardScheduled.first && cardScheduled.last))
               ? formatScheduledLine(cardScheduled, cardT, cardTWithParams)
               : cardT('common.noScheduledBuses')
           })()}
         </div>
-        {cardScheduled?.departures && cardScheduled.departures.length > 0 ? (
+        {cardScheduled?.departureGroups && cardScheduled.departureGroups.length > 0 ? (
+          <SpecialDeparturesLine special={cardScheduled.departureGroups} lang={lang} />
+        ) : cardScheduled?.departures && cardScheduled.departures.length > 0 ? (
           <div className="flex flex-wrap gap-1.5" role="list">
             {cardScheduled.departures.map((depMin, idx) => (
               <span

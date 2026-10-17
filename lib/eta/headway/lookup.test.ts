@@ -389,7 +389,10 @@ describe('scheduleForStop', () => {
   it('hides frequencies at a special-only stop and derives span from specials', () => {
     const resolved = scheduleForStop(COV_214, 'POTAT', 'weekday')
     expect(resolved.windows).toBeNull()
-    expect(resolved.departures).toEqual([405, 415])
+    expect(resolved.departures).toBeNull()
+    expect(resolved.departureGroups).toEqual([
+      { origin: 'PO TAT BUS TERMINUS', departures: [405, 415] },
+    ])
     expect(resolved.specials).toBeNull()
     expect(resolved.span).toEqual(['0645', '0655'])
   })
@@ -416,15 +419,47 @@ describe('scheduleForStop', () => {
       span: { weekday: ['0645', '0710'] },
       departures: { weekday: [405, 410, 412, 418, 424, 430] },
       depBySrc: {
-        '0': { weekday: [405, 412, 418, 424, 430] },
-        '1': { weekday: [410, 430] },
+        '0': {
+          origin: 'YAU TONG BUS TERMINUS',
+          departures: { weekday: [405, 412, 418, 424, 430] },
+        },
+        '1': {
+          origin: 'LAM TIN (KWONG TIN ESTATE) BUS TERMINUS',
+          departures: { weekday: [410, 430] },
+        },
       },
       stopCov: { STOP8096: [1] },
     }
     const resolved = scheduleForStop(schedule, 'STOP8096', 'weekday')
     expect(resolved.windows).toBeNull()
-    expect(resolved.departures).toEqual([410, 430])
+    expect(resolved.departures).toBeNull()
+    expect(resolved.departureGroups).toEqual([
+      { origin: 'LAM TIN (KWONG TIN ESTATE) BUS TERMINUS', departures: [410, 430] },
+    ])
     expect(resolved.span).toEqual(['0650', '0710'])
+  })
+
+  it('splits span-only departures into per-pattern groups at route level', () => {
+    const schedule: VariantSchedule = {
+      src: ['1000492', '8311'],
+      span: { weekday: ['0700', '1740'] },
+      departures: { weekday: [420, 432, 444, 456, 1045, 1060] },
+      depBySrc: {
+        '0': { origin: 'LAM WAH STREET PLAYGROUND', departures: { weekday: [1045, 1060] } },
+        '1': {
+          origin: 'LUNG MUN OASIS BUS TERMINUS',
+          departures: { weekday: [420, 432, 444, 456] },
+        },
+      },
+      stopCov: { SOME_STOP: [1] },
+    }
+    const resolved = scheduleForStop(schedule, null, 'weekday')
+    expect(resolved.windows).toBeNull()
+    expect(resolved.departures).toBeNull()
+    expect(resolved.departureGroups).toEqual([
+      { origin: 'LAM WAH STREET PLAYGROUND', departures: [1045, 1060] },
+      { origin: 'LUNG MUN OASIS BUS TERMINUS', departures: [420, 432, 444, 456] },
+    ])
   })
 
   it('reports no service when no serving route runs that day', () => {
@@ -453,7 +488,10 @@ describe('getScheduleForVariant with stopId', () => {
     const result = getScheduleForVariant(index, 'kmb|214|O|1', date('2026-10-16T10:00:00'), 'POTAT')
     expect(result?.headwayMin).toBeNull()
     expect(result?.headwayRange).toBeNull()
-    expect(result?.departures).toEqual([405, 415])
+    expect(result?.departures).toBeNull()
+    expect(result?.departureGroups).toEqual([
+      { origin: 'PO TAT BUS TERMINUS', departures: [405, 415] },
+    ])
     expect(result?.special).toBeNull()
     expect(result?.first).toBe('06:45')
     expect(result?.last).toBe('06:55')

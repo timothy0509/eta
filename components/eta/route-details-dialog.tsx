@@ -78,6 +78,7 @@ function daysWithData(schedule: VariantSchedule, stopId?: string | null): DayTyp
       (resolved.windows?.length ?? 0) > 0 ||
       (resolved.departures?.length ?? 0) > 0 ||
       (resolved.specials?.length ?? 0) > 0 ||
+      (resolved.departureGroups?.length ?? 0) > 0 ||
       resolved.span !== undefined
     )
   })
@@ -113,6 +114,7 @@ export function TimetableTable({
   const windows = resolved.windows ?? []
   const departures = resolved.departures ?? []
   const specials = resolved.specials
+  const departureGroups = resolved.departureGroups
   const span = resolved.span
   // Weekday fallback windows do not describe today's service, so only
   // highlight when the day-type table exists for today.
@@ -123,7 +125,7 @@ export function TimetableTable({
       ? activeHeadwayIndex(windows, nowDate.getHours() * 60 + nowDate.getMinutes())
       : null
 
-  if (windows.length === 0 && departures.length === 0 && !specials && !span) {
+  if (windows.length === 0 && departures.length === 0 && !specials && !departureGroups && !span) {
     return <div className="text-on-surface-variant m3-body-md">{t('kmb.scheduleNoData')}</div>
   }
 
@@ -180,6 +182,27 @@ export function TimetableTable({
               )
             })}
           </ul>
+        </div>
+      ) : departureGroups ? (
+        <div className="flex flex-col gap-1.5" role="list" aria-label={t('kmb.scheduleSpecial')}>
+          {departureGroups.map((group, groupIdx) => (
+            <div key={`${group.origin}:${groupIdx}`} className="space-y-1">
+              {group.origin ? (
+                <div className="text-on-surface m3-label-md font-medium">{group.origin}</div>
+              ) : null}
+              <div className="flex flex-wrap gap-1.5" role="list">
+                {group.departures.map((depMin, idx) => (
+                  <span
+                    key={`${depMin}:${idx}`}
+                    role="listitem"
+                    className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+                  >
+                    {minsToDisplay(depMin)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       ) : departures.length > 0 ? (
         <div className="flex flex-wrap gap-1.5" role="list" aria-label={t('kmb.scheduleTitle')}>

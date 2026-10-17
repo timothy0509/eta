@@ -28,7 +28,8 @@
  *         "special": [{ "src": "<td_route_id>", "origin": "<first stop>",
  *                        "departures": { "weekday": [depMin,...], ... } }, ...],
  *         "freqSrc": [<src index into "src">, ...],
- *         "depBySrc": { "<src index>": { "weekday": [depMin,...], ... }, ... },
+ *         "depBySrc": { "<src index>": { "origin": "<first stop>",
+ *                        "departures": { "weekday": [depMin,...], ... } }, ... },
  *         "stopCov": { "<app stop id>": [<src index>, ...], ... }
  *       } },
  *     "holidays": ["YYYY-MM-DD", ...] }
@@ -47,7 +48,8 @@
  * trips on an identical pattern are presumably the frequency buses
  * themselves).
  * "freqSrc" lists src indexes with frequency trips, "depBySrc" holds
- * per-src fixed departures for windowless days, and "stopCov" maps app
+ * per-src fixed departures plus first-stop origin for windowless days, and
+ * "stopCov" maps app
  * stop ids (hk-bus-eta unified ids) to the serving src indexes, but only
  * for stops with partial coverage where the display changes: stops no
  * frequency route serves (hide the frequency table there) and stops in
@@ -826,6 +828,7 @@ function buildSnapshot(files, appStops) {
           if (freqIdx.size > 0) entry.freqSrc = [...freqIdx].sort((a, b) => a - b)
           // Per-src fixed departures for windowless days, so stops can
           // filter the merged departures table to their serving routes.
+          // Origins ride along so split timetables can label each group.
           const depBySrc = {}
           for (const [rid, perSrc] of v.fixedBySrc ?? []) {
             const idx = srcIndex.get(rid)
@@ -837,7 +840,12 @@ function buildSnapshot(files, appStops) {
               if (set && set.size > 0) table[day] = [...set].sort((a, b) => a - b)
             }
             if (!table.holiday && table.sunday) table.holiday = [...table.sunday]
-            if (Object.keys(table).length > 0) depBySrc[String(idx)] = table
+            if (Object.keys(table).length > 0) {
+              depBySrc[String(idx)] = {
+                origin: originByStopId.get(perSrc.firstStop) || '',
+                departures: table,
+              }
+            }
           }
           if (Object.keys(depBySrc).length > 0) entry.depBySrc = depBySrc
         }

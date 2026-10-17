@@ -28,7 +28,7 @@ export type RouteSearchEntry = {
   /** Lowercased origin/destination names across all variants, so short workings match. */
   altNames: string[]
   stopCount: number
-  /** Longest single-direction stop count, drives the via-line count. */
+  /** Stop count of the variant backing the via line, drives the via-line count. */
   viaStopCount: number
   variantCount: number
   serviceTypes: string[]
@@ -101,6 +101,61 @@ export function compareRouteEntries(a: RouteSearchEntry, b: RouteSearchEntry): n
   return a.route.localeCompare(b.route, undefined, { numeric: true }) || a.co.localeCompare(b.co)
 }
 
+/**
+ * Rank a bound so outbound sorts before inbound. Outbound (O, 去程) is the
+ * canonical direction; inbound (I, 回程) comes second. Long-form values
+ * ('inbound'/'outbound', any case) map to their short form, and
+ * pseudo-circular 'OI'/'IO' rank as outbound, matching the waypoint file
+ * handling in direct/waypoints.ts where only a literal 'I' takes the
+ * inbound file.
+ */
+export function boundRank(bound: unknown): number {
+  const b = String(bound ?? '')
+    .trim()
+    .toUpperCase()
+  if (b === 'O' || b === 'OUTBOUND') return 0
+  if (b === 'OI' || b === 'IO') return 1
+  if (b === 'I' || b === 'INBOUND') return 2
+  return 3
+}
+
+/** Rank a service type so the normal timetable (1) sorts before specials. */
+export function serviceTypeRank(serviceType: unknown): number {
+  return String(serviceType ?? '') === '1' ? 0 : 1
+}
+
+export type RouteVariantLike = {
+  bound: unknown
+  serviceType: unknown
+}
+
+/**
+ * Sort route variants: normal departures (serviceType 1) first, then
+ * outbound before inbound, then remaining types in natural order.
+ */
+export function compareRouteVariants(a: RouteVariantLike, b: RouteVariantLike): number {
+  return (
+    serviceTypeRank(a.serviceType) - serviceTypeRank(b.serviceType) ||
+    boundRank(a.bound) - boundRank(b.bound) ||
+    String(a.serviceType ?? '').localeCompare(String(b.serviceType ?? ''), undefined, {
+      numeric: true,
+    }) ||
+    String(a.bound ?? '').localeCompare(String(b.bound ?? ''))
+  )
+}
+
+/** Pick the canonical variant for display: normal outbound first. */
+export function pickCanonicalVariant<T extends RouteVariantLike>(variants: T[]): T | null {
+  if (variants.length === 0) return null
+  let best = variants[0] ?? null
+  for (let i = 1; i < variants.length; i += 1) {
+    const candidate = variants[i]
+    if (!best || !candidate) continue
+    if (compareRouteVariants(candidate, best) < 0) best = candidate
+  }
+  return best
+}
+
 function entryDisplayText(
   entry: RouteSearchEntry,
   field: 'origin' | 'destination',
@@ -167,23 +222,46 @@ export function buildRouteSearchIndex(
     const bucket = stopIdsByKey.get(key)
     const stopIds = bucket?.ids ?? []
 
-    // Via line uses one representative variant (the longest
-    // bound|serviceType group in seq order) so O and I stops never mix.
+    // Canonical termini come from the normal outbound variant (O + service
+    // type 1) when it exists. The raw route list order follows the upstream
+    // db dump, so taking variants[0] shows inbound first for some routes
+    // (e.g. 2B, 14) and outbound first for others (e.g. 2A, 2D), which reads
+    // as randomly flipped origins.
+    const canonical = pickCanonicalVariant(variants) ?? first
+
+    // Via line follows the canonical variant's stop group so the via stops
+    // match the header direction. Falls back to the longest direction group
+    // when the canonical group has no rows, so O and I stops never mix.
+    const canonicalGroupKey = `${key}|${String(canonical.bound ?? '')}|${String(
+      canonical.serviceType ?? ''
+    )}`
+    const canonicalRows = rowsByVariantKey.get(canonicalGroupKey)
     let viaStopIds: string[] = []
     let viaStopCount = 0
-    for (const [variantKey, rows] of rowsByVariantKey) {
-      if (!variantKey.startsWith(`${key}|`)) continue
-      const ids: string[] = []
+    if (canonicalRows?.length) {
       const seen = new Set<string>()
-      for (const row of rows) {
+      for (const row of canonicalRows) {
         const stopId = String(row.stopId ?? '').trim()
         if (!stopId || seen.has(stopId)) continue
         seen.add(stopId)
-        ids.push(stopId)
+        viaStopIds.push(stopId)
       }
-      if (ids.length > viaStopIds.length) {
-        viaStopIds = ids
-        viaStopCount = ids.length
+      viaStopCount = viaStopIds.length
+    } else {
+      for (const [variantKey, rows] of rowsByVariantKey) {
+        if (!variantKey.startsWith(`${key}|`)) continue
+        const ids: string[] = []
+        const seen = new Set<string>()
+        for (const row of rows) {
+          const stopId = String(row.stopId ?? '').trim()
+          if (!stopId || seen.has(stopId)) continue
+          seen.add(stopId)
+          ids.push(stopId)
+        }
+        if (ids.length > viaStopIds.length) {
+          viaStopIds = ids
+          viaStopCount = ids.length
+        }
       }
     }
     if (!viaStopIds.length) viaStopIds = bucket?.ids ?? []
@@ -229,15 +307,15 @@ export function buildRouteSearchIndex(
       co,
       route: first.route,
       operators,
-      origin: first.origin,
-      destination: first.destination,
+      origin: canonical.origin,
+      destination: canonical.destination,
       stopIds,
       viaStopIds,
       stopNames,
       haystack,
       altNames,
       stopCount: bucket?.total ?? 0,
-      /** Longest single-direction stop count, drives the via-line count. */
+      /** Stop count of the variant backing the via line, drives the via-line count. */
       viaStopCount,
       variantCount: variants.length,
       serviceTypes,

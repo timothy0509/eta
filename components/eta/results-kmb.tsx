@@ -15,7 +15,8 @@ import { RouteBadge } from '@/components/eta/route-badge'
 import {
   RouteDetailsDialog,
   SpecialDeparturesLine,
-  minsToDisplay,
+  DepartureChips,
+  CARD_CHIP_LIMIT,
 } from '@/components/eta/route-details-dialog'
 import { EmptyState } from '@/components/eta/empty-state'
 import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
@@ -509,6 +510,12 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       spanLine != null && (scheduled?.headwayMin != null || scheduled?.headwayRange != null)
     // Split timetables replace the merged chips wherever they exist.
     const showDepartures = !departureGroups && departures != null && departures.length > 0
+    // Departures-only rows never show the span line, so surface the
+    // holiday note on its own when the holiday timetable applies.
+    const showHolidayNote =
+      !showSpanLine &&
+      (showDepartures || (departureGroups != null && departureGroups.length > 0)) &&
+      (scheduled?.isHolidayTimetable ?? false)
     const special = scheduled?.special ?? null
     // Official remarks win over the computed schedule line: the operator's
     // own "no departures right now" notice stays visible instead of being
@@ -537,21 +544,16 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
             {headline}
           </div>
           {showDepartures ? (
-            <div className="flex flex-wrap gap-1.5" role="list">
-              {departures!.map((depMin, idx) => (
-                <span
-                  key={`${depMin}:${idx}`}
-                  role="listitem"
-                  className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
-                >
-                  {minsToDisplay(depMin)}
-                </span>
-              ))}
-            </div>
+            <DepartureChips departures={departures ?? []} lang={lang} cap={CARD_CHIP_LIMIT} />
           ) : null}
           {showSpanLine ? (
             <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
               {spanLine}
+            </div>
+          ) : null}
+          {showHolidayNote ? (
+            <div className="text-on-surface-variant m3-body-md flex items-center gap-2">
+              {t('kmb.scheduleHolidayNote')}
             </div>
           ) : null}
           {departureGroups ? <SpecialDeparturesLine special={departureGroups} lang={lang} /> : null}

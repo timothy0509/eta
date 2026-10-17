@@ -4,11 +4,12 @@ import { describe, expect, it } from 'vitest'
 
 import { render } from '@/lib/test-utils'
 import {
-  minsToDisplay,
   spanHhmmToDisplay,
   SpecialDeparturesLine,
+  DepartureChips,
   TimetableTable,
 } from '@/components/eta/route-details-dialog'
+import { minsToDisplay } from '@/lib/eta/format'
 import type { VariantSchedule } from '@/lib/eta/headway/types'
 
 describe('minsToDisplay', () => {
@@ -215,6 +216,25 @@ describe('SpecialDeparturesLine', () => {
   it('renders nothing for an empty list', () => {
     const { container } = render(<SpecialDeparturesLine special={[]} lang="en" />)
     expect(container.textContent).toBe('')
+  })
+})
+
+describe('DepartureChips', () => {
+  it('renders every chip without a cap', () => {
+    const { getByText } = render(<DepartureChips departures={[405, 415, 430]} lang="en" />)
+    expect(getByText('06:45')).not.toBeNull()
+    expect(getByText('06:55')).not.toBeNull()
+    expect(getByText('07:10')).not.toBeNull()
+  })
+
+  it('caps chips and folds the rest into +N', () => {
+    const departures = Array.from({ length: 15 }, (_, i) => 400 + i * 5)
+    const { getByText, queryByText } = render(
+      <DepartureChips departures={departures} lang="en" cap={12} />
+    )
+    expect(getByText('06:40')).not.toBeNull()
+    expect(getByText('+3')).not.toBeNull()
+    expect(queryByText('07:50')).toBeNull()
   })
 })
 

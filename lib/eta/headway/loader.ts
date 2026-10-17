@@ -16,7 +16,10 @@ function isDeparturesTable(value: unknown): boolean {
   if (typeof value !== 'object' || value === null) return false
   for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
     if (!isDayTypeKey(key)) return false
-    if (!Array.isArray(entry) || !entry.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+    if (
+      !Array.isArray(entry) ||
+      !entry.every((n) => typeof n === 'number' && Number.isInteger(n) && n >= 0 && n < 2880)
+    ) {
       return false
     }
   }

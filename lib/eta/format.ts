@@ -81,3 +81,11 @@ export function formatFareHkd(hkd: unknown): string | null {
   if (typeof hkd !== 'number' || !Number.isFinite(hkd)) return null
   return `HK$ ${hkd.toFixed(1)}`
 }
+
+/** Minutes since midnight (may exceed 1440 for after-midnight windows) to HH:MM. */
+export function minsToDisplay(mins: number): string {
+  const normalized = ((mins % 1440) + 1440) % 1440
+  const h = Math.floor(normalized / 60)
+  const m = normalized % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}

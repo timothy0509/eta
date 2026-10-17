@@ -826,6 +826,9 @@ function buildSnapshot(files, appStops) {
       if (set && set.size > 0) departures[day] = [...set].sort((a, b) => a - b)
     }
     if (!departures.holiday && departures.sunday) departures.holiday = [...departures.sunday]
+    // Holiday departures never render alongside holiday frequency windows
+    // (the lookup prefers windows), so drop the dead table.
+    if (headway.holiday) delete departures.holiday
     if (Object.keys(departures).length > 0) entry.departures = departures
     // Special departures: fixed trips (never in frequencies.txt) from a TD
     // route, for days that DO have frequency windows. These are extras the
@@ -935,6 +938,8 @@ function buildSnapshot(files, appStops) {
               if (set && set.size > 0) table[day] = [...set].sort((a, b) => a - b)
             }
             if (!table.holiday && table.sunday) table.holiday = [...table.sunday]
+            // As above: no per-src holiday table alongside holiday windows.
+            if (headway.holiday) delete table.holiday
             if (Object.keys(table).length > 0) {
               depBySrc[String(idx)] = {
                 origin: originByStopId.get(perSrc.firstStop) || '',
@@ -979,7 +984,6 @@ function buildSnapshot(files, appStops) {
     const covDepBySrc = {}
     for (const key of keys) {
       const sib = outVariants[key]
-      const sibIdx = new Map(sib.src.map((rid, i) => [rid, i]))
       for (const [day, range] of Object.entries(sib.span ?? {})) {
         if (
           spanFirst[day] === undefined ||

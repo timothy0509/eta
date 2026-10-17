@@ -22,6 +22,7 @@ import type { DayType, SpecialDayDepartures, VariantSchedule } from '@/lib/eta/h
 import { useHeadwayIndex } from '@/lib/eta/headway/use-headway-schedule'
 import { useTranslations } from '@/lib/eta/i18n'
 import { getOperatorColor } from '@/lib/eta/operator-colors'
+import { minsToDisplay } from '@/lib/eta/format'
 import type { UiLanguage } from '@/lib/eta/types'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { cn } from '@/lib/utils'
@@ -53,14 +54,6 @@ const DAY_LABEL_KEYS: Record<DayType, string> = {
   holiday: 'kmb.scheduleHoliday',
 }
 
-/** Minutes since midnight (may exceed 1440 for after-midnight windows) to HH:MM. */
-export function minsToDisplay(mins: number): string {
-  const normalized = ((mins % 1440) + 1440) % 1440
-  const h = Math.floor(normalized / 60)
-  const m = normalized % 60
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-}
-
 /** "HHMM" span endpoint to HH:MM display. Falls back to the raw string. */
 export function spanHhmmToDisplay(hhmm: string): string {
   const normalized = hhmm.trim()
@@ -71,7 +64,7 @@ export function spanHhmmToDisplay(hhmm: string): string {
   return normalized
 }
 
-function daysWithData(schedule: VariantSchedule, stopId?: string | null): DayType[] {
+export function daysWithData(schedule: VariantSchedule, stopId?: string | null): DayType[] {
   return DAY_ORDER.filter((day) => {
     const resolved = scheduleForStop(schedule, stopId ?? null, day)
     return (
@@ -205,17 +198,7 @@ export function TimetableTable({
           ))}
         </div>
       ) : departures.length > 0 ? (
-        <div className="flex flex-wrap gap-1.5" role="list" aria-label={t('kmb.scheduleTitle')}>
-          {departures.map((depMin, idx) => (
-            <span
-              key={`${depMin}:${idx}`}
-              role="listitem"
-              className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
-            >
-              {minsToDisplay(depMin)}
-            </span>
-          ))}
-        </div>
+        <DepartureChips departures={departures} lang={lang} />
       ) : null}
       {specials ? (
         <div className="space-y-1.5 pt-1">
@@ -253,6 +236,50 @@ export function TimetableTable({
 
 /** Max time chips per special group on compact cards; the rest fold into +N. */
 const CARD_SPECIAL_CHIP_LIMIT = 6
+
+/** Max chips on compact no-ETA cards before folding the rest into +N. */
+export const CARD_CHIP_LIMIT = 12
+
+/**
+ * Plain fixed-departure chips with an optional cap. List rows cap the
+ * array (nlb routes carry 200+ departures); the full timetable leaves it
+ * uncapped.
+ */
+export function DepartureChips({
+  departures,
+  lang,
+  cap,
+}: {
+  departures: number[]
+  lang: UiLanguage
+  cap?: number
+}) {
+  const { t } = useTranslations(lang)
+  const capped = typeof cap === 'number' ? cap : departures.length
+  const visible = departures.slice(0, capped)
+  const overflow = departures.length - visible.length
+  return (
+    <div className="flex flex-wrap gap-1.5" role="list" aria-label={t('kmb.scheduleTitle')}>
+      {visible.map((depMin, idx) => (
+        <span
+          key={`${depMin}:${idx}`}
+          role="listitem"
+          className="bg-surface-container-high text-on-surface font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+        >
+          {minsToDisplay(depMin)}
+        </span>
+      ))}
+      {overflow > 0 ? (
+        <span
+          role="listitem"
+          className="bg-surface-container-high text-on-surface-variant font-tabular m3-body-md rounded-lg px-2.5 py-1 font-medium tabular-nums"
+        >
+          +{overflow}
+        </span>
+      ) : null}
+    </div>
+  )
+}
 
 /**
  * Compact special-departures line for no-ETA cards: origin label plus time

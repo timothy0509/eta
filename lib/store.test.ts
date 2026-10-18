@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { FavoritesItem, FavoritesGroup } from './store'
-import { capFavorites, FAVORITES_LIMIT, useAppStore } from './store'
+import { capFavorites, FAVORITES_LIMIT, migratePersistedState, useAppStore } from './store'
 
 // Create a test store without persist middleware
 type AppState = {
@@ -803,19 +803,33 @@ describe('settings prefs', () => {
   })
 
   it('replaceFavorites keeps valid entries and drops the rest', () => {
-    useAppStore
-      .getState()
-      .replaceFavorites([
-        mtrFavorite('good-1'),
-        { id: 'kmb-stop', mode: 'kmb', title: 'Stop', stopId: 'ABC123' },
-        { id: 'no-mode', title: 'Broken' },
-        { mode: 'mtr', sta: 'CEN' },
-        { id: 'bad-mode', mode: 'ferry' },
-        null,
-        'just a string',
-      ])
+    useAppStore.getState().replaceFavorites([
+      mtrFavorite('good-1'),
+      { id: 'kmb-stop', mode: 'kmb', title: 'Stop', stopId: 'ABC123' },
+      {
+        id: 'kmb-route',
+        mode: 'kmb',
+        type: 'route',
+        title: 'Route 1',
+        route: '1',
+        bound: 'outbound',
+        serviceType: '1',
+      },
+      { id: 'no-mode', title: 'Broken' },
+      { id: 'no-title', mode: 'mtr', line: 'TWL', sta: 'CEN' },
+      { id: 'route-no-bound', mode: 'kmb', type: 'route', title: 'R', route: '1' },
+      { id: 'empty-group', mode: 'kmb', title: 'G', stopIds: [] },
+      { id: 'blank-stop', mode: 'kmb', title: 'G', stopIds: [''] },
+      { id: 'mtr-no-line', mode: 'mtr', title: 'Central', sta: 'CEN' },
+      { id: 'mtr-blank-sta', mode: 'mtr', title: 'Central', line: 'TWL', sta: '' },
+      { id: 'lrt-blank', mode: 'lrt', title: 'Stop', stationId: '' },
+      { mode: 'mtr', sta: 'CEN' },
+      { id: 'bad-mode', mode: 'ferry' },
+      null,
+      'just a string',
+    ])
     const favorites = useAppStore.getState().favorites
-    expect(favorites.map((f) => f.id).sort()).toEqual(['good-1', 'kmb-stop'])
+    expect(favorites.map((f) => f.id).sort()).toEqual(['good-1', 'kmb-route', 'kmb-stop'])
     expect(favorites.every((f) => f.pinned === false && f.groupId === null)).toBe(true)
   })
 
@@ -828,5 +842,45 @@ describe('settings prefs', () => {
 
     useAppStore.getState().replaceFavorites({ favorites: [] })
     expect(useAppStore.getState().favorites).toHaveLength(FAVORITES_LIMIT)
+  })
+
+  it('accepts an empty array import as a clear', () => {
+    useAppStore.setState({ favorites: [mtrFavorite('fav-1')] })
+    useAppStore.getState().replaceFavorites([])
+    expect(useAppStore.getState().favorites).toEqual([])
+  })
+})
+
+describe('migratePersistedState', () => {
+  it('falls back to the default radius for v5 payloads without one', () => {
+    const migrated = migratePersistedState({
+      lang: 'en',
+      routeFilterMode: 'advanced',
+      autoRefreshSeconds: 30,
+      favorites: [],
+      favoritesGroups: [],
+      recents: [],
+    })
+    expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated.lang).toBe('en')
+  })
+
+  it('clamps out-of-range radii and rejects non-numbers', () => {
+    expect(migratePersistedState({ nearbyRadiusKm: 99 }).nearbyRadiusKm).toBe(5)
+    expect(migratePersistedState({ nearbyRadiusKm: -1 }).nearbyRadiusKm).toBe(0.5)
+    expect(migratePersistedState({ nearbyRadiusKm: Number.NaN }).nearbyRadiusKm).toBe(2)
+    expect(migratePersistedState({ nearbyRadiusKm: '3' }).nearbyRadiusKm).toBe(2)
+    expect(migratePersistedState({ nearbyRadiusKm: null }).nearbyRadiusKm).toBe(2)
+  })
+
+  it('keeps a valid radius untouched', () => {
+    expect(migratePersistedState({ nearbyRadiusKm: 3.5 }).nearbyRadiusKm).toBe(3.5)
+  })
+
+  it('handles undefined state with full defaults', () => {
+    const migrated = migratePersistedState(undefined)
+    expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated.favorites).toEqual([])
+    expect(migrated.recents).toEqual([])
   })
 })

@@ -1,7 +1,7 @@
 'use client'
 
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
-import { clampNearbyRadiusKm } from '@/lib/eta/nearby-radius'
+import { clampNearbyRadiusKm, NEARBY_RADIUS_DEFAULT_KM } from '@/lib/eta/nearby-radius'
 import { create } from 'zustand'
 import type { StateCreator } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
@@ -166,23 +166,43 @@ const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
 })
 
 // Imported favorites come from a user file, so shape-check before trusting
-// them. Keeps id, mode and the per-mode locator field; display titles and
-// meta are regenerated with defaults where missing.
+// them. Every variant needs its id, mode, title and locator fields, since
+// nothing regenerates them on the way in.
 function isImportableFavorite(item: unknown): item is FavoritesItem {
   if (typeof item !== 'object' || item === null) return false
   const candidate = item as Record<string, unknown>
   if (typeof candidate.id !== 'string' || !candidate.id) return false
+  if (typeof candidate.title !== 'string' || !candidate.title) return false
+  const nonEmptyStrings = (value: unknown): value is string[] =>
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((entry): entry is string => typeof entry === 'string' && entry.length > 0)
   if (candidate.mode === 'kmb') {
+    if (candidate.type === 'route') {
+      return (
+        typeof candidate.route === 'string' &&
+        candidate.route.length > 0 &&
+        typeof candidate.bound === 'string' &&
+        candidate.bound.length > 0 &&
+        typeof candidate.serviceType === 'string' &&
+        candidate.serviceType.length > 0
+      )
+    }
     return (
-      typeof candidate.stopId === 'string' ||
-      (Array.isArray(candidate.stopIds) &&
-        candidate.stopIds.every((id): id is string => typeof id === 'string')) ||
-      typeof candidate.query === 'string' ||
-      candidate.type === 'route'
+      (typeof candidate.stopId === 'string' && candidate.stopId.length > 0) ||
+      nonEmptyStrings(candidate.stopIds) ||
+      (typeof candidate.query === 'string' && candidate.query.length > 0)
     )
   }
-  if (candidate.mode === 'mtr') return typeof candidate.sta === 'string'
-  if (candidate.mode === 'lrt') return typeof candidate.stationId === 'string'
+  if (candidate.mode === 'mtr')
+    return (
+      typeof candidate.sta === 'string' &&
+      candidate.sta.length > 0 &&
+      typeof candidate.line === 'string' &&
+      candidate.line.length > 0
+    )
+  if (candidate.mode === 'lrt')
+    return typeof candidate.stationId === 'string' && candidate.stationId.length > 0
   return false
 }
 
@@ -198,7 +218,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   lang: 'tc',
   routeFilterMode: 'simple',
   autoRefreshSeconds: 15,
-  nearbyRadiusKm: 2,
+  nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
 
   favorites: [],
   favoritesGroups: [],
@@ -213,7 +233,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
       lang: 'tc',
       routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
-      nearbyRadiusKm: 2,
+      nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
     }),
 
   addFavorite: (item) =>
@@ -350,6 +370,33 @@ export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
   return favorites.filter((_, i) => !drop.has(i))
 }
 
+// v4 persisted nav (mode, subView) alongside prefs. Carry those forward
+// once so the upgrade keeps the current view, then v5 writes omit nav
+// through partialize below. v6 adds the persisted nearby radius; older
+// entries fall back to the default and out-of-range values are clamped
+// back into the slider band.
+export function migratePersistedState(persistedState: unknown) {
+  const state = persistedState as Partial<AppState> | undefined
+  const favorites = capFavorites(
+    (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
+  )
+
+  return {
+    mode: state?.mode ?? 'kmb',
+    subView: state?.subView ?? 'stops',
+    lang: state?.lang ?? 'tc',
+    routeFilterMode: state?.routeFilterMode ?? 'simple',
+    autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
+    nearbyRadiusKm:
+      typeof state?.nearbyRadiusKm === 'number'
+        ? clampNearbyRadiusKm(state.nearbyRadiusKm)
+        : NEARBY_RADIUS_DEFAULT_KM,
+    favorites,
+    favoritesGroups: state?.favoritesGroups ?? [],
+    recents: state?.recents ?? [],
+  }
+}
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get, api) => ({
@@ -365,32 +412,7 @@ export const useAppStore = create<AppState>()(
       // synchronously on every set, which mobile browsers persist
       // reliably without a flush hook.
       storage: createJSONStorage(() => localStorage),
-      migrate: (persistedState, _fromVersion) => {
-        const state = persistedState as Partial<AppState> | undefined
-        const favorites = capFavorites(
-          (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
-        )
-
-        // v4 persisted nav (mode, subView) alongside prefs. Carry those
-        // forward once so the upgrade keeps the current view, then v5
-        // writes omit nav through partialize below. v6 adds the persisted
-        // nearby radius; older entries fall back to the 2 km default and
-        // out-of-range values are clamped back into the slider band.
-        return {
-          mode: state?.mode ?? 'kmb',
-          subView: state?.subView ?? 'stops',
-          lang: state?.lang ?? 'tc',
-          routeFilterMode: state?.routeFilterMode ?? 'simple',
-          autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
-          nearbyRadiusKm:
-            typeof state?.nearbyRadiusKm === 'number'
-              ? clampNearbyRadiusKm(state.nearbyRadiusKm)
-              : 2,
-          favorites,
-          favoritesGroups: state?.favoritesGroups ?? [],
-          recents: state?.recents ?? [],
-        }
-      },
+      migrate: (persistedState) => migratePersistedState(persistedState),
       partialize: (state) => ({
         lang: state.lang,
         routeFilterMode: state.routeFilterMode,

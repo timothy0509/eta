@@ -440,6 +440,11 @@ const settings: Record<string, TranslationEntry> = {
   tapAgainToConfirm: { en: 'Tap again to confirm', tc: '再按一次以確認', sc: '再按一次以确认' },
   importFailed: { en: 'Could not read that file.', tc: '無法讀取該檔案。', sc: '无法读取该文件。' },
   imported: { en: '{count} favorites ready', tc: '已有 {count} 項收藏', sc: '已有 {count} 项收藏' },
+  importedPartial: {
+    en: '{kept} of {total} imported, {skipped} skipped',
+    tc: '已匯入 {total} 項中的 {kept} 項，略過 {skipped} 項',
+    sc: '已导入 {total} 项中的 {kept} 项，略过 {skipped} 项',
+  },
   actionFailed: { en: 'Something went wrong.', tc: '操作失敗。', sc: '操作失败。' },
   storage: { en: 'Storage', tc: '儲存空間', sc: '储存空间' },
   clearCache: { en: 'Clear cached timetables', tc: '清除已快取的時間表', sc: '清除已缓存的时间表' },

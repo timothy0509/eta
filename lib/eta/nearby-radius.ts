@@ -9,7 +9,7 @@ export const NEARBY_RADIUS_DEFAULT_KM = 2
  * stays stable across GPS-frame float noise.
  */
 export function clampNearbyRadiusKm(km: number): number {
-  if (Number.isNaN(km)) return 2
+  if (Number.isNaN(km)) return NEARBY_RADIUS_DEFAULT_KM
   const clamped = Math.min(NEARBY_RADIUS_MAX_KM, Math.max(NEARBY_RADIUS_MIN_KM, km))
   return Math.round(clamped * 4) / 4
 }

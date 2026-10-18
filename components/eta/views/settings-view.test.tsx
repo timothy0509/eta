@@ -89,4 +89,39 @@ describe('SettingsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Tap again to confirm' }))
     expect(useAppStore.getState().recents).toHaveLength(0)
   })
+
+  it('reports skipped entries on a partial import', async () => {
+    renderSettings()
+    const file = new File(
+      [
+        JSON.stringify([
+          { id: 'mtr:CEN', mode: 'mtr', title: 'Central', line: 'TWL', sta: 'CEN' },
+          { id: 'broken', title: 'Missing mode' },
+        ]),
+      ],
+      'favorites.json',
+      { type: 'application/json' }
+    )
+    fireEvent.change(screen.getByLabelText('Import'), { target: { files: [file] } })
+    expect(await screen.findByText('1 of 2 imported, 1 skipped')).not.toBeNull()
+    expect(useAppStore.getState().favorites).toHaveLength(1)
+  })
+
+  it('accepts an empty array import and reports zero', async () => {
+    useAppStore.setState({
+      favorites: [{ id: 'mtr:CEN', mode: 'mtr', title: 'Central', line: 'TWL', sta: 'CEN' }],
+    })
+    renderSettings()
+    const file = new File(['[]'], 'empty.json', { type: 'application/json' })
+    fireEvent.change(screen.getByLabelText('Import'), { target: { files: [file] } })
+    expect(await screen.findByText('0 favorites ready')).not.toBeNull()
+    expect(useAppStore.getState().favorites).toHaveLength(0)
+  })
+
+  it('rejects a non-array file', async () => {
+    renderSettings()
+    const file = new File(['{"favorites": []}'], 'bad.json', { type: 'application/json' })
+    fireEvent.change(screen.getByLabelText('Import'), { target: { files: [file] } })
+    expect(await screen.findByText('Could not read that file.')).not.toBeNull()
+  })
 })

@@ -21,7 +21,6 @@ import { useTheme } from 'next-themes'
 import * as React from 'react'
 
 import { FadeIn } from '@/components/m3/motion'
-import packageJson from '@/package.json'
 import { LANG_LABELS, useTranslations } from '@/lib/eta/i18n'
 import { idbClear } from '@/lib/eta/cache/idb'
 import {
@@ -34,6 +33,7 @@ import type { UiLanguage } from '@/lib/eta/types'
 import { useAppStore } from '@/lib/store'
 import type { RouteFilterMode } from '@/lib/store'
 import { cn } from '@/lib/utils'
+import { APP_VERSION } from '@/lib/version'
 
 type Props = {
   lang: UiLanguage
@@ -185,13 +185,22 @@ export function SettingsView({ lang }: Props) {
     if (!file) return
     try {
       const parsed: unknown = JSON.parse(await file.text())
-      if (!Array.isArray(parsed) || parsed.length === 0) {
+      if (!Array.isArray(parsed)) {
         setDataNotice(t('settings.importFailed'))
         return
       }
       replaceFavorites(parsed)
-      const total = useAppStore.getState().favorites.length
-      setDataNotice(tWithParams('settings.imported', { count: total }))
+      const kept = useAppStore.getState().favorites.length
+      const skipped = parsed.length - kept
+      setDataNotice(
+        skipped > 0
+          ? tWithParams('settings.importedPartial', {
+              kept,
+              total: parsed.length,
+              skipped,
+            })
+          : tWithParams('settings.imported', { count: kept })
+      )
     } catch {
       setDataNotice(t('settings.importFailed'))
     }
@@ -441,7 +450,7 @@ export function SettingsView({ lang }: Props) {
           </div>
           <div className="flex items-center justify-between gap-3">
             <dt className="text-on-surface-variant m3-body-md">{t('settings.version')}</dt>
-            <dd className="m3-label-lg tabular-nums">{packageJson.version}</dd>
+            <dd className="m3-label-lg tabular-nums">{APP_VERSION}</dd>
           </div>
           <div className="flex items-start justify-between gap-3">
             <dt className="text-on-surface-variant m3-body-md shrink-0">

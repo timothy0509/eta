@@ -5,7 +5,12 @@ import * as React from 'react'
 
 import type { Company } from 'hk-bus-eta'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
-import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib/eta/kmb-eta-groups'
+import {
+  buildDefaultKey,
+  formatEtaOrdinals,
+  groupEtasByVariant,
+  sortScheduledFirst,
+} from '@/lib/eta/kmb-eta-groups'
 import { routeVariantKey, variantFamilyKey } from '@/lib/eta/eta-db-index'
 import type { ScheduledFallback } from '@/lib/eta/headway/types'
 import {
@@ -257,7 +262,8 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   scheduled,
 }: {
   variantKey: string
-  /** Base variant key without leg suffix (co|route|dir|service_type) for route info & fare lookup */
+  /** Base variant key without leg suffix (co|route|dir|service_type, plus
+   * |gtfsId for region-split variants) for route info & fare lookup */
   baseKey: string
   items: KmbEtaEntryWithLeg[]
   hasEta: boolean
@@ -814,17 +820,19 @@ export const KmbResults = React.memo(function KmbResults({
     if (useStopSections) return []
     if (precomputedFlat && !multipleStops) return []
 
+    // Stop-suffixed keys keep one row per stop for the same variant:
+    // default group key with the stop inserted before the leg, so the
+    // trailing segment stays the leg for arriving-leg detection. The base
+    // derivation strips stop and leg for fare and schedule lookups.
     const buildKeyWithStop = (entry: KmbEtaEntryWithLeg) => {
-      const co = String(entry.co ?? 'kmb')
-      const route = (entry.route ?? '').toUpperCase()
-      const dir = String(entry.dir ?? '')
-      const serviceType = String(entry.service_type ?? '')
-      const legSuffix = entry.leg ?? '_'
-      const stop = entry.stop ?? ''
-      return `${co}|${route}|${dir}|${serviceType}|${legSuffix}|${stop}`
+      const key = buildDefaultKey(entry)
+      const parts = key.split('|')
+      const leg = parts.pop() ?? '_'
+      return [...parts, entry.stop ?? '', leg].join('|')
     }
+    const baseKeyOfStopKey = (key: string) => key.split('|').slice(0, -2).join('|')
 
-    return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop)
+    return groupEtasByVariant(eta, faresByVariantKey ?? {}, buildKeyWithStop, baseKeyOfStopKey)
   }, [eta, multipleStops, useStopSections, precomputedFlat, faresByVariantKey])
 
   // Scheduled headway fallbacks for every rendered variant. Keys come from

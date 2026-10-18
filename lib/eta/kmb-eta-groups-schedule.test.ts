@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { KmbEtaEntryWithLeg } from '@/lib/eta/client'
 
 import type { EtaGroup } from './kmb-eta-groups'
-import { groupEtasByVariant, sortScheduledFirst } from './kmb-eta-groups'
+import { buildDefaultKey, groupEtasByVariant, sortScheduledFirst } from './kmb-eta-groups'
 
 function makeGroup(key: string, baseKey: string, hasEta: boolean): EtaGroup {
   return { key, baseKey, items: [], hasEta, hasFare: true, isArrivingLeg: false }
@@ -167,5 +167,40 @@ describe('groupEtasByVariant regions', () => {
     // Fare-bearing groups sort before fare-less ones.
     expect(groups[0]?.baseKey).toBe('gmb|1|O|1|2006408')
     expect(groups[1]?.baseKey).toBe('gmb|1|O|1|2002337')
+  })
+
+  it('derives variant base keys from stop-suffixed multi-stop keys', () => {
+    // Mirrors buildKeyWithStop in results-kmb: default key with the stop
+    // inserted before the leg. KMB rows keep a 4-part base, GMB rows a
+    // scoped 5-part base, so stop-mode fares resolve in multi-stop mode.
+    const buildKeyWithStop = (entry: KmbEtaEntryWithLeg) => {
+      const key = buildDefaultKey(entry)
+      const parts = key.split('|')
+      const leg = parts.pop() ?? '_'
+      return [...parts, entry.stop ?? '', leg].join('|')
+    }
+    const baseKeyOfStopKey = (key: string) => key.split('|').slice(0, -2).join('|')
+    const groups = groupEtasByVariant(
+      [
+        etaEntry({ co: 'kmb', route: '1A', stop: 'S1', gtfsId: undefined }),
+        etaEntry({ co: 'kmb', route: '1A', stop: 'S2', gtfsId: undefined }),
+        etaEntry({ stop: 'G1', gtfsId: '2006408' }),
+      ],
+      {
+        'kmb|1A|O|1': { hkd: 8.2, source: 'hk-bus-eta' },
+        'gmb|1|O|1|2006408': { hkd: 11.8, source: 'hk-bus-eta' },
+      },
+      buildKeyWithStop,
+      baseKeyOfStopKey
+    )
+    expect(groups).toHaveLength(3)
+    expect(groups.map((g) => g.baseKey).sort()).toEqual([
+      'gmb|1|O|1|2006408',
+      'kmb|1A|O|1',
+      'kmb|1A|O|1',
+    ])
+    // One row per stop for the shared KMB variant, legs still detected.
+    expect(groups.filter((g) => g.baseKey === 'kmb|1A|O|1')).toHaveLength(2)
+    expect(groups.every((g) => !g.isArrivingLeg)).toBe(true)
   })
 })

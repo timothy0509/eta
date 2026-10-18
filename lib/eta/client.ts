@@ -55,13 +55,14 @@ function normalizeFareVariantKey(variant: KmbFareVariant) {
   const route = String(variant.route ?? '').toUpperCase()
   const dir = String(variant.dir ?? '')
   const serviceType = String(variant.serviceType ?? '')
+  const gtfsId = String(variant.gtfsId ?? '').trim()
   const stopId = String(variant.stopId ?? '').trim()
   const destCandidates = (variant.destCandidates ?? [])
     .map((dest) => String(dest ?? '').trim())
     .filter(Boolean)
     .sort()
     .join('~')
-  return `${co}|${route}|${dir}|${serviceType}|${stopId}|${destCandidates}`
+  return `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${stopId}|${destCandidates}`
 }
 
 function isAbortError(error: unknown): boolean {
@@ -172,6 +173,10 @@ export type KmbRouteStopLite = {
   serviceType: string
   seq: number
   stopId: string
+  /** Upstream gtfsId: discriminates same-number routes in different regions. Empty when upstream provides none. */
+  gtfsId: string
+  /** Region group `co|ROUTE|n` matching the index. Empty when unknown (legacy). */
+  region: string
 }
 
 export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
@@ -190,6 +195,8 @@ export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
           serviceType: String(entry.service_type),
           seq: typeof entry.seq === 'string' ? Number(entry.seq) : entry.seq,
           stopId: entry.stop,
+          gtfsId: String(entry.gtfsId ?? '').trim(),
+          region: String(entry.region ?? '').trim(),
         }))
         .filter((entry) => entry.route && entry.stopId)
     },
@@ -202,6 +209,10 @@ export type KmbRouteInfoLite = {
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
+  /** Upstream gtfsId: discriminates same-number routes in different regions. Empty when upstream provides none. */
+  gtfsId: string
+  /** Region group `co|ROUTE|n` matching the index. Empty when unknown (legacy). */
+  region: string
   origin: {
     en: string
     tc: string
@@ -219,6 +230,8 @@ export async function fetchKmbRouteInfo(params: {
   route: string
   direction: 'I' | 'O' | 'inbound' | 'outbound' | string
   serviceType: string
+  /** Upstream gtfsId selecting one region of a same-number family. Omit for the legacy family fallback. */
+  gtfsId?: string
   signal?: AbortSignal
 }): Promise<KmbRouteInfoLite> {
   if (params.signal?.aborted) {
@@ -231,6 +244,8 @@ export async function fetchKmbRouteInfo(params: {
     route: info.route,
     bound: info.bound,
     serviceType: String(info.service_type),
+    gtfsId: String(info.gtfsId ?? '').trim(),
+    region: String(info.region ?? '').trim(),
     origin: {
       en: (info.orig_en ?? '').trim(),
       tc: (info.orig_tc ?? '').trim(),
@@ -296,6 +311,8 @@ export type KmbFareVariant = {
   route: string
   dir: string
   serviceType: string
+  /** Region discriminator for same-number routes (GMB HKI/Kowloon/NT). Empty when unknown. */
+  gtfsId?: string
   stopId: string
   destCandidates?: string[]
 }

@@ -18,6 +18,7 @@ import {
   type KmbEtaEntryWithLeg,
   type KmbRouteInfoLite,
 } from '@/lib/eta/client'
+import { routeVariantKey, parseVariantKey, variantKeyMatches } from '@/lib/eta/eta-db-index'
 import { type KmbGroupMember } from '@/lib/eta/group-view'
 import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
@@ -133,8 +134,17 @@ function GroupMemberSection({
         let etas = stopIds.flatMap((id) => result.byStopId[id] ?? [])
         if (variantKeys && variantKeys.size > 0) {
           etas = etas.filter((entry) => {
-            const key = `${String(entry.co ?? 'kmb')}|${(entry.route ?? '').toUpperCase()}|${entry.dir}|${String(entry.service_type)}`
-            return variantKeys.has(key)
+            const entryKey = routeVariantKey({
+              co: String(entry.co ?? 'kmb') as Company,
+              route: (entry.route ?? '').toUpperCase(),
+              bound: entry.dir,
+              serviceType: String(entry.service_type),
+              gtfsId: entry.gtfsId,
+            })
+            for (const filterKey of variantKeys) {
+              if (variantKeyMatches(filterKey, entryKey)) return true
+            }
+            return false
           })
         }
         setEta(etas)
@@ -142,9 +152,14 @@ function GroupMemberSection({
 
         const missing = Array.from(
           new Set(
-            etas.map(
-              (entry) =>
-                `${String(entry.co ?? 'kmb')}|${(entry.route ?? '').toUpperCase()}|${entry.dir}|${String(entry.service_type)}`
+            etas.map((entry) =>
+              routeVariantKey({
+                co: String(entry.co ?? 'kmb') as Company,
+                route: (entry.route ?? '').toUpperCase(),
+                bound: entry.dir,
+                serviceType: String(entry.service_type),
+                gtfsId: entry.gtfsId,
+              })
             )
           )
         )
@@ -153,12 +168,13 @@ function GroupMemberSection({
         if (missing.length > 0) {
           const fetched = await Promise.allSettled(
             missing.map(async (key) => {
-              const [co = 'kmb', route = '', direction = '', serviceType = ''] = key.split('|')
+              const parsed = parseVariantKey(key)
               const info = await fetchKmbRouteInfo({
-                co: co as Company,
-                route,
-                direction,
-                serviceType,
+                co: (parsed.co || 'kmb') as Company,
+                route: parsed.route,
+                direction: parsed.bound,
+                serviceType: parsed.serviceType,
+                gtfsId: parsed.gtfsId || undefined,
                 signal: controller.signal,
               })
               return { key, info }

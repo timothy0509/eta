@@ -212,6 +212,8 @@ describe('fetchKmbRouteStops', () => {
         service_type: 1,
         seq: '3',
         stop: 'S1',
+        gtfsId: '',
+        region: '',
       },
     ])
 
@@ -342,6 +344,8 @@ describe('fetchKmbRouteInfo abort signal', () => {
       route: '1A',
       bound: 'O',
       service_type: '1',
+      gtfsId: '',
+      region: '',
       orig_en: 'O',
       orig_tc: 'O',
       orig_sc: 'O',

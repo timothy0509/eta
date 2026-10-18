@@ -32,6 +32,15 @@ export function getDayType(date: Date, holidays: string[]): DayType {
 
 function splitBaseKey(baseKey: string): { prefix: string; serviceType: string } | null {
   const parts = baseKey.split('|')
+  // 4-part family keys (co|route|bound|serviceType) plus 5-part scoped keys
+  // with a gtfsId region segment (co|route|bound|serviceType|gtfsId). The
+  // headway index is keyed by family, so scoped keys resolve to their
+  // family before lookup.
+  if (parts.length === 5) {
+    const [co, route, bound, serviceType] = parts
+    if (!co || !route || !bound || !serviceType) return null
+    return { prefix: `${co}|${route}|${bound}`, serviceType }
+  }
   if (parts.length !== 4) return null
   const [co, route, bound, serviceType] = parts
   if (!co || !route || !bound || !serviceType) return null
@@ -39,8 +48,9 @@ function splitBaseKey(baseKey: string): { prefix: string; serviceType: string } 
 }
 
 /**
- * Resolve a variant key against the index. Exact hit first, else retry with
- * serviceType "1". Returns the resolved key, or null when neither exists.
+ * Resolve a variant key against the index. Exact hit first, else the
+ * family key (scoped keys strip their gtfsId segment), else retry with
+ * serviceType "1". Returns the resolved key, or null when none exists.
  */
 export function resolveVariantKey(
   variants: Record<string, VariantSchedule>,
@@ -49,6 +59,8 @@ export function resolveVariantKey(
   if (variants[baseKey]) return baseKey
   const split = splitBaseKey(baseKey)
   if (!split) return null
+  const familyKey = `${split.prefix}|${split.serviceType}`
+  if (familyKey !== baseKey && variants[familyKey]) return familyKey
   if (split.serviceType === '1') return null
   const fallback = `${split.prefix}|1`
   return variants[fallback] ? fallback : null

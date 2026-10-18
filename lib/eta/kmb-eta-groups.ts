@@ -35,19 +35,38 @@ function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
   return false
 }
 
-function buildDefaultKey(entry: KmbEtaEntryWithLeg): string {
+export function buildDefaultKey(entry: KmbEtaEntryWithLeg): string {
   const co = String(entry.co ?? 'kmb')
   const route = (entry.route ?? '').toUpperCase()
   const dir = String(entry.dir ?? '')
   const serviceType = String(entry.service_type ?? '')
+  // Region-aware: same number in different regions (GMB HKI/Kowloon/NT)
+  // must not merge. The gtfsId scope segment is present only when upstream
+  // provides one, so KMB rows keep their exact legacy 5-part shape while
+  // GMB rows gain a discriminator. baseKey is everything but the leg.
+  const gtfsId = String(entry.gtfsId ?? '').trim()
   const legSuffix = entry.leg ?? '_'
-  return `${co}|${route}|${dir}|${serviceType}|${legSuffix}`
+  return gtfsId
+    ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${legSuffix}`
+    : `${co}|${route}|${dir}|${serviceType}|${legSuffix}`
+}
+
+/**
+ * Base key (fare/schedule lookup) of a default group key: everything but
+ * the trailing leg. Key shape is co|route|dir|serviceType|leg, or with a
+ * gtfsId scope segment (co|route|dir|serviceType|gtfsId|leg) for
+ * region-split variants.
+ */
+export function baseKeyOfGroupKey(key: string): string {
+  const parts = key.split('|')
+  return parts.length === 6 ? parts.slice(0, 5).join('|') : parts.slice(0, 4).join('|')
 }
 
 export function groupEtasByVariant(
   eta: KmbEtaEntryWithLeg[],
   faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>,
-  buildKey: (entry: KmbEtaEntryWithLeg) => string = buildDefaultKey
+  buildKey: (entry: KmbEtaEntryWithLeg) => string = buildDefaultKey,
+  baseKeyOfKey: (key: string) => string = baseKeyOfGroupKey
 ): EtaGroup[] {
   const byVariant = new Map<string, KmbEtaEntryWithLeg[]>()
   for (const entry of eta) {
@@ -62,9 +81,9 @@ export function groupEtasByVariant(
     const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq)
     const hasEta = hasValidEta(sorted)
 
+    const baseKey = baseKeyOfKey(key)
     const parts = key.split('|')
-    const baseKey = parts.slice(0, 4).join('|')
-    const legPart = parts[4]
+    const legPart = parts[parts.length - 1]
     const isArrivingLeg = legPart === 'B'
 
     const hasFare = !isArrivingLeg

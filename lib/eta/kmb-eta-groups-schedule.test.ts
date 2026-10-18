@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 
+import type { KmbEtaEntryWithLeg } from '@/lib/eta/client'
+
 import type { EtaGroup } from './kmb-eta-groups'
-import { sortScheduledFirst } from './kmb-eta-groups'
+import { buildDefaultKey, groupEtasByVariant, sortScheduledFirst } from './kmb-eta-groups'
 
 function makeGroup(key: string, baseKey: string, hasEta: boolean): EtaGroup {
   return { key, baseKey, items: [], hasEta, hasFare: true, isArrivingLeg: false }
@@ -114,5 +116,91 @@ describe('sortScheduledFirst', () => {
   it('returns the input unchanged for a single trailing group', () => {
     const groups = [makeGroup('kmb|2B|O|1|_', 'kmb|2B|O|1', false)]
     expect(sortScheduledFirst(groups, { 'kmb|2B|O|1': scheduled })).toBe(groups)
+  })
+})
+
+describe('groupEtasByVariant regions', () => {
+  function etaEntry(overrides: Partial<KmbEtaEntryWithLeg> & { eta?: string }): KmbEtaEntryWithLeg {
+    return {
+      co: 'gmb',
+      route: '1',
+      dir: 'O',
+      service_type: '1',
+      seq: 1,
+      stop: 'S',
+      eta_seq: 1,
+      eta: '2026-08-02T15:20:00+08:00',
+      dest_en: '',
+      dest_tc: '',
+      dest_sc: '',
+      rmk_en: '',
+      rmk_tc: '',
+      rmk_sc: '',
+      data_timestamp: '',
+      leg: null,
+      ...overrides,
+    }
+  }
+
+  it('splits same-number GMB ETAs by gtfsId into separate groups', () => {
+    const groups = groupEtasByVariant(
+      [etaEntry({ gtfsId: '2006408' }), etaEntry({ gtfsId: '2002337' })],
+      {}
+    )
+    expect(groups).toHaveLength(2)
+    expect(groups.map((g) => g.key).sort()).toEqual(['gmb|1|O|1|2002337|_', 'gmb|1|O|1|2006408|_'])
+    expect(groups.map((g) => g.baseKey).sort()).toEqual(['gmb|1|O|1|2002337', 'gmb|1|O|1|2006408'])
+  })
+
+  it('keeps legacy rows without gtfsId on the 4-part base key', () => {
+    const groups = groupEtasByVariant([etaEntry({})], {})
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.key).toBe('kmb|1|O|1|_'.replace('kmb', 'gmb'))
+    expect(groups[0]?.baseKey).toBe('gmb|1|O|1')
+  })
+
+  it('matches fares by scoped baseKey per region', () => {
+    const groups = groupEtasByVariant(
+      [etaEntry({ gtfsId: '2006408' }), etaEntry({ gtfsId: '2002337' })],
+      { 'gmb|1|O|1|2006408': { hkd: 11.8, source: 'hk-bus-eta' } }
+    )
+    // Fare-bearing groups sort before fare-less ones.
+    expect(groups[0]?.baseKey).toBe('gmb|1|O|1|2006408')
+    expect(groups[1]?.baseKey).toBe('gmb|1|O|1|2002337')
+  })
+
+  it('derives variant base keys from stop-suffixed multi-stop keys', () => {
+    // Mirrors buildKeyWithStop in results-kmb: default key with the stop
+    // inserted before the leg. KMB rows keep a 4-part base, GMB rows a
+    // scoped 5-part base, so stop-mode fares resolve in multi-stop mode.
+    const buildKeyWithStop = (entry: KmbEtaEntryWithLeg) => {
+      const key = buildDefaultKey(entry)
+      const parts = key.split('|')
+      const leg = parts.pop() ?? '_'
+      return [...parts, entry.stop ?? '', leg].join('|')
+    }
+    const baseKeyOfStopKey = (key: string) => key.split('|').slice(0, -2).join('|')
+    const groups = groupEtasByVariant(
+      [
+        etaEntry({ co: 'kmb', route: '1A', stop: 'S1', gtfsId: undefined }),
+        etaEntry({ co: 'kmb', route: '1A', stop: 'S2', gtfsId: undefined }),
+        etaEntry({ stop: 'G1', gtfsId: '2006408' }),
+      ],
+      {
+        'kmb|1A|O|1': { hkd: 8.2, source: 'hk-bus-eta' },
+        'gmb|1|O|1|2006408': { hkd: 11.8, source: 'hk-bus-eta' },
+      },
+      buildKeyWithStop,
+      baseKeyOfStopKey
+    )
+    expect(groups).toHaveLength(3)
+    expect(groups.map((g) => g.baseKey).sort()).toEqual([
+      'gmb|1|O|1|2006408',
+      'kmb|1A|O|1',
+      'kmb|1A|O|1',
+    ])
+    // One row per stop for the shared KMB variant, legs still detected.
+    expect(groups.filter((g) => g.baseKey === 'kmb|1A|O|1')).toHaveLength(2)
+    expect(groups.every((g) => !g.isArrivingLeg)).toBe(true)
   })
 })

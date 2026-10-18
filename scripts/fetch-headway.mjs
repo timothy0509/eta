@@ -379,8 +379,7 @@ async function fetchAppStops() {
       }
     }
     const routeList = db?.routeList
-    const routes =
-      routeList && typeof routeList === 'object' ? Object.values(routeList) : null
+    const routes = routeList && typeof routeList === 'object' ? Object.values(routeList) : null
     log(`loaded ${out.size} hk-bus-eta stops for coverage matching`)
     if (routes) log(`loaded ${routes.length} hk-bus-eta routes for variant matching`)
     return { stops: out, routes }
@@ -789,8 +788,7 @@ function buildSnapshot(files, appStops) {
   let totalWindows = 0
   let stopCovVariants = 0
   let stopCovEntries = 0
-  const appStopGrid =
-    appStopMap && appStopMap.size > 0 ? buildStopGrid(appStopMap) : null
+  const appStopGrid = appStopMap && appStopMap.size > 0 ? buildStopGrid(appStopMap) : null
   if (!appStopGrid) log('no app stop grid, skipping per-stop coverage tables')
   const sortedKeys = [...variants.keys()].sort()
   for (const key of sortedKeys) {
@@ -985,10 +983,7 @@ function buildSnapshot(files, appStops) {
     for (const key of keys) {
       const sib = outVariants[key]
       for (const [day, range] of Object.entries(sib.span ?? {})) {
-        if (
-          spanFirst[day] === undefined ||
-          range[0] < spanFirst[day]
-        ) {
+        if (spanFirst[day] === undefined || range[0] < spanFirst[day]) {
           spanFirst[day] = range[0]
         }
         if (spanLast[day] === undefined || range[1] > spanLast[day]) {

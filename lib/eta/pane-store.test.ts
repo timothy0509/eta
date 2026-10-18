@@ -99,13 +99,18 @@ describe('setKmbStops', () => {
 })
 
 describe('setKmbRouteStops', () => {
-  const makeRouteStop = (stopId: string, overrides?: Partial<KmbRouteStopLite>) => ({
+  const makeRouteStop = (
+    stopId: string,
+    overrides?: Partial<KmbRouteStopLite>
+  ): KmbRouteStopLite => ({
     co: 'kmb' as const,
     route: '1A',
     bound: 'O',
     serviceType: '1',
     seq: 1,
     stopId,
+    gtfsId: '',
+    region: '',
     ...overrides,
   })
 

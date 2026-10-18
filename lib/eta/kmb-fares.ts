@@ -118,23 +118,57 @@ export function kmbFareCacheControlHeader() {
 }
 
 /**
- * First variant in a family when the caller has no gtfsId: smallest gtfsId
- * first so legacy lookups resolve deterministically, matching
- * findRouteEntryByFamily.
+ * Family variants in deterministic order (smallest key first, matching
+ * findRouteEntryByFamily) for callers without a gtfsId, so legacy lookups
+ * resolve to the smallest gtfsId.
  */
-function findVariantByFamily(
+function familyVariants(
   byVariantStops: Map<VariantKey, VariantStops>,
   family: { co: string; route: string; bound: string; serviceType: string }
-): VariantStops | undefined {
+): Array<{ key: VariantKey; variant: VariantStops }> {
   const prefix = `${String(family.co ?? 'kmb')}|${normalizeRouteName(family.route)}|${String(
     family.bound ?? ''
   )}|${String(family.serviceType ?? '')}|`
-  let best: { key: VariantKey; variant: VariantStops } | null = null
+  const out: Array<{ key: VariantKey; variant: VariantStops }> = []
   for (const [key, variant] of byVariantStops) {
     if (key !== prefix.slice(0, -1) && !key.startsWith(prefix)) continue
-    if (!best || key < best.key) best = { key, variant }
+    out.push({ key, variant })
   }
-  return best?.variant
+  out.sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0))
+  return out
+}
+
+/**
+ * Family variant holding a stop when the caller has no gtfsId: among the
+ * variants whose stop set contains the stop, prefer the one with the most
+ * occurrences (circular-stop leg info lives there), breaking ties by
+ * smallest key for determinism. A boarding stop served only by a
+ * non-smallest variant (e.g. KMB branch workings with distinct gtfsIds)
+ * still resolves instead of losing its fare. Falls back to the smallest
+ * variant when no set contains the stop.
+ */
+function findVariantByFamilyStop(
+  byVariantStops: Map<VariantKey, VariantStops>,
+  family: { co: string; route: string; bound: string; serviceType: string },
+  stopId: string
+): { key: VariantKey; variant: VariantStops } | undefined {
+  const cands = familyVariants(byVariantStops, family)
+  if (cands.length === 0) return undefined
+  const stop = String(stopId ?? '').trim()
+  const holding = cands.filter((c) => c.variant.stopSeqsByStopId.has(stop))
+  if (holding.length === 0) return cands[0]
+  holding.sort((a, b) => {
+    const countA = a.variant.stopSeqsByStopId.get(stop)?.length ?? 0
+    const countB = b.variant.stopSeqsByStopId.get(stop)?.length ?? 0
+    if (countA !== countB) return countB - countA
+    return a.key < b.key ? -1 : a.key > b.key ? 1 : 0
+  })
+  return holding[0]
+}
+
+/** gtfsId segment of a five-segment variant key. */
+function variantKeyGtfsId(key: VariantKey): string {
+  return key.split('|')[4] ?? ''
 }
 
 /**
@@ -156,14 +190,25 @@ export function getStopToTerminusFare(params: {
 }): KmbFareInfo | null {
   const routeName = normalizeRouteName(params.route)
   const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
-  const variant =
-    params.byVariantStops.get(key) ??
-    findVariantByFamily(params.byVariantStops, {
-      co: params.co,
-      route: routeName,
-      bound: params.dir,
-      serviceType: params.serviceType,
-    })
+  let variant = params.byVariantStops.get(key)
+  // Resolve the fare table against the variant actually used: without a
+  // gtfsId the caller may land on any region of the family, and each
+  // region has its own fare array indexed by its own sequences.
+  let resolvedGtfsId = normalizeGtfsId(params.gtfsId)
+  if (!variant) {
+    const picked = findVariantByFamilyStop(
+      params.byVariantStops,
+      {
+        co: params.co,
+        route: routeName,
+        bound: params.dir,
+        serviceType: params.serviceType,
+      },
+      params.stopId
+    )
+    variant = picked?.variant
+    if (picked) resolvedGtfsId = variantKeyGtfsId(picked.key)
+  }
   if (!variant) return null
 
   const seqs = variant.stopSeqsByStopId.get(String(params.stopId ?? '').trim())
@@ -178,7 +223,7 @@ export function getStopToTerminusFare(params: {
         route: routeName,
         bound: params.dir,
         serviceType: params.serviceType,
-        gtfsId: params.gtfsId,
+        gtfsId: resolvedGtfsId,
       })
     ) ??
     findRouteEntryByFamily(params.routeVariantIndex, {
@@ -235,12 +280,16 @@ export function computeEtaLeg(params: {
   const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
   const variant =
     params.byVariantStops.get(key) ??
-    findVariantByFamily(params.byVariantStops, {
-      co: params.co,
-      route: routeName,
-      bound: params.dir,
-      serviceType: params.serviceType,
-    })
+    findVariantByFamilyStop(
+      params.byVariantStops,
+      {
+        co: params.co,
+        route: routeName,
+        bound: params.dir,
+        serviceType: params.serviceType,
+      },
+      params.stopId
+    )?.variant
   if (!variant) return null
 
   const seqs = variant.stopSeqsByStopId.get(String(params.stopId ?? '').trim())

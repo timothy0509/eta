@@ -1,7 +1,7 @@
 import type { Company, RouteListEntry } from 'hk-bus-eta'
 
 import type { KmbRouteStopLite } from '@/lib/eta/client'
-import { normalizeGtfsId, routeVariantKey } from '@/lib/eta/eta-db-index'
+import { findRouteEntryByFamily, normalizeGtfsId, routeVariantKey } from '@/lib/eta/eta-db-index'
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from '@/lib/eta/kmb-cache'
 
 export type KmbFareInfo = {
@@ -118,6 +118,26 @@ export function kmbFareCacheControlHeader() {
 }
 
 /**
+ * First variant in a family when the caller has no gtfsId: smallest gtfsId
+ * first so legacy lookups resolve deterministically, matching
+ * findRouteEntryByFamily.
+ */
+function findVariantByFamily(
+  byVariantStops: Map<VariantKey, VariantStops>,
+  family: { co: string; route: string; bound: string; serviceType: string }
+): VariantStops | undefined {
+  const prefix = `${String(family.co ?? 'kmb')}|${normalizeRouteName(family.route)}|${String(
+    family.bound ?? ''
+  )}|${String(family.serviceType ?? '')}|`
+  let best: { key: VariantKey; variant: VariantStops } | null = null
+  for (const [key, variant] of byVariantStops) {
+    if (key !== prefix.slice(0, -1) && !key.startsWith(prefix)) continue
+    if (!best || key < best.key) best = { key, variant }
+  }
+  return best?.variant
+}
+
+/**
  * Get fare from current stop to terminus using hk-bus-eta data.
  * The fare arrays in hk-bus-eta are indexed by stop sequence (0-indexed),
  * where each entry represents the fare from that stop to the terminus.
@@ -136,7 +156,14 @@ export function getStopToTerminusFare(params: {
 }): KmbFareInfo | null {
   const routeName = normalizeRouteName(params.route)
   const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
-  const variant = params.byVariantStops.get(key)
+  const variant =
+    params.byVariantStops.get(key) ??
+    findVariantByFamily(params.byVariantStops, {
+      co: params.co,
+      route: routeName,
+      bound: params.dir,
+      serviceType: params.serviceType,
+    })
   if (!variant) return null
 
   const seqs = variant.stopSeqsByStopId.get(String(params.stopId ?? '').trim())
@@ -144,15 +171,22 @@ export function getStopToTerminusFare(params: {
   const onSeq = seqs?.[0]
   if (!onSeq) return null
 
-  const entry = params.routeVariantIndex.get(
-    routeVariantKey({
+  const entry =
+    params.routeVariantIndex.get(
+      routeVariantKey({
+        co: params.co as Company,
+        route: routeName,
+        bound: params.dir,
+        serviceType: params.serviceType,
+        gtfsId: params.gtfsId,
+      })
+    ) ??
+    findRouteEntryByFamily(params.routeVariantIndex, {
       co: params.co as Company,
       route: routeName,
       bound: params.dir,
       serviceType: params.serviceType,
-      gtfsId: params.gtfsId,
     })
-  )
 
   if (!entry) return null
 
@@ -199,7 +233,14 @@ export function computeEtaLeg(params: {
 }): 'A' | 'B' | null {
   const routeName = normalizeRouteName(params.route)
   const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
-  const variant = params.byVariantStops.get(key)
+  const variant =
+    params.byVariantStops.get(key) ??
+    findVariantByFamily(params.byVariantStops, {
+      co: params.co,
+      route: routeName,
+      bound: params.dir,
+      serviceType: params.serviceType,
+    })
   if (!variant) return null
 
   const seqs = variant.stopSeqsByStopId.get(String(params.stopId ?? '').trim())

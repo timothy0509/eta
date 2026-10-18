@@ -6,7 +6,7 @@ import * as React from 'react'
 import type { Company } from 'hk-bus-eta'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { formatEtaOrdinals, groupEtasByVariant, sortScheduledFirst } from '@/lib/eta/kmb-eta-groups'
-import { routeVariantKey } from '@/lib/eta/eta-db-index'
+import { routeVariantKey, variantFamilyKey } from '@/lib/eta/eta-db-index'
 import type { ScheduledFallback } from '@/lib/eta/headway/types'
 import {
   useHeadwayIndex,
@@ -280,18 +280,22 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   // Use baseKey for route info lookup (full key may have leg suffix).
   // Scoped keys (with gtfsId) miss when the pane resolved a different
   // region's info: fall back to any region of the same family for display.
+  const baseFamily = variantFamilyKey(baseKey)
   const routeInfo =
     routeInfos[baseKey] ??
-    Object.values(routeInfos).find((info) => {
-      if (!info) return false
-      const familyKey = routeVariantKey({
-        co: String(info.co ?? 'kmb') as Company,
-        route: String(info.route ?? '').toUpperCase(),
-        bound: String(info.bound ?? ''),
-        serviceType: String(info.serviceType ?? ''),
-      })
-      return baseKey === familyKey || baseKey.startsWith(`${familyKey}|`)
-    })
+    Object.values(routeInfos).find(
+      (info) =>
+        !!info &&
+        variantFamilyKey(
+          routeVariantKey({
+            co: String(info.co ?? 'kmb') as Company,
+            route: String(info.route ?? '').toUpperCase(),
+            bound: String(info.bound ?? ''),
+            serviceType: String(info.serviceType ?? ''),
+            gtfsId: info.gtfsId,
+          })
+        ) === baseFamily
+    )
   const label = formatRouteVariantLabel(
     routeInfo,
     first,

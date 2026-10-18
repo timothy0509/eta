@@ -401,7 +401,7 @@ export async function fetchKmbEtasForStop(
   const serviceType = params.serviceType ? String(params.serviceType) : null
   const language = toHkBusEtaLanguage(params.language)
 
-  const { stopRoutesIndex, routeVariantIndex } = await deps.getIndexes()
+  const { stopRoutesIndex, routeVariantIndex, regionIndex } = await deps.getIndexes()
   const routeEntries = (stopRoutesIndex.get(stopId) ?? []).filter((e) => {
     if (routeFilter && e.route.toUpperCase() !== routeFilter) return false
     if (serviceType && String(e.serviceType) !== serviceType) return false
@@ -445,10 +445,15 @@ export async function fetchKmbEtasForStop(
       candidateMap.set(resolvedKey, { entry, co: re.co, stopIndex: re.seq })
     }
     // Prefer the stop's own region (already component-resolved at index
-    // build); fall back to the family fallback entry resolution. Only set
-    // once per key so the smallest seq wins the same way candidates do.
+    // build); resolve through the region index when the row predates it.
+    // Only set once per key so the smallest seq wins the same way
+    // candidates do.
     if (!regionByVariantKey.has(resolvedKey)) {
-      regionByVariantKey.set(resolvedKey, re.region || '')
+      regionByVariantKey.set(
+        resolvedKey,
+        re.region ||
+          lookupRegion({ regionIndex }, { co: re.co, route: re.route, gtfsId: re.gtfsId })
+      )
     }
   }
 

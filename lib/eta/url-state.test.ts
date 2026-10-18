@@ -314,4 +314,50 @@ describe('decodeUrlState', () => {
     expect(decoded.selectedItem).toHaveProperty('routeFilterMode', 'advanced')
     expect(decoded.state.routeFilterMode).toBeUndefined()
   })
+
+  it('round-trips scoped 5-part entries preserving the region', () => {
+    const input: UrlEncodeInput = {
+      mode: 'kmb',
+      subView: 'stops',
+      lang: 'tc',
+      routeFilterMode: 'advanced',
+      autoRefreshSeconds: 15,
+      kmb: {
+        query: { mode: 'stop', stopId: '1234' },
+        routeFilter: {
+          entries: [{ variantKey: 'gmb|1|O|1|2006408' }],
+        },
+      },
+    }
+    const encoded = encodeUrlState(input)
+    expect(encoded).toContain(`ke=${encodeURIComponent('gmb|1|O|1|2006408')}`)
+    const decoded = decodeUrlState(encoded)
+    expect(decoded.selectedItem).toHaveProperty('routeFilterMode', 'advanced')
+    expect(decoded.selectedItem).toHaveProperty('entries', [{ variantKey: 'gmb|1|O|1|2006408' }])
+  })
+
+  it('compacts empty-scope 5-part entries to 4-part family keys', () => {
+    const input: UrlEncodeInput = {
+      mode: 'kmb',
+      subView: 'stops',
+      lang: 'tc',
+      routeFilterMode: 'advanced',
+      autoRefreshSeconds: 15,
+      kmb: {
+        query: { mode: 'stop', stopId: '1234' },
+        routeFilter: {
+          entries: [{ variantKey: 'kmb|1A|O|1|' }],
+        },
+      },
+    }
+    const encoded = encodeUrlState(input)
+    expect(encoded).toContain(`ke=${encodeURIComponent('kmb|1A|O|1')}`)
+  })
+
+  it('decodes legacy 3-part and 4-part entries', () => {
+    const legacy3 = decodeUrlState('km=stop&ks=1&ke=1A%7CO%7C1')
+    expect(legacy3.selectedItem).toHaveProperty('entries', [{ variantKey: 'kmb|1A|O|1' }])
+    const legacy4 = decodeUrlState('km=stop&ks=1&ke=kmb%7C1A%7CO%7C1')
+    expect(legacy4.selectedItem).toHaveProperty('entries', [{ variantKey: 'kmb|1A|O|1' }])
+  })
 })

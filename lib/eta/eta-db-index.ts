@@ -181,7 +181,8 @@ export function assignRouteRegions(
 
 /**
  * Compute region assignments for every (co, route) family from built
- * route-stop rows. Rows sharing a stop id merge into one region.
+ * route-stop rows. Rows sharing a stop id merge into one region. Rows with
+ * an empty stop id are skipped, so stop-less variants resolve to ''.
  */
 export function computeRouteRegions(
   routeStops: Array<{ co: Company; route: string; stopId: string; gtfsId: string }>
@@ -238,15 +239,19 @@ export type ParsedVariantKey = {
 
 /**
  * Parse a variant key of any known length: legacy 3-part (`route|bound|st`,
- * assumed kmb), legacy 4-part (`co|route|bound|st`), or current 5-part with
- * trailing gtfsId. Group keys carry a leg suffix as a sixth segment; pass
- * `baseKey` (first five) or strip it before calling.
+ * assumed kmb), legacy 4-part (`co|route|bound|st`), current 5-part with
+ * trailing gtfsId, or 6-part group keys with a leg suffix (`A`/`B`/`_`).
+ * The leg suffix is dropped: pass a base key when the leg matters.
  */
 export function parseVariantKey(key: string): ParsedVariantKey {
   const parts = String(key ?? '').split('|')
   if (parts.length === 3) {
     const [route = '', bound = '', serviceType = ''] = parts
     return { co: 'kmb', route, bound, serviceType, gtfsId: '' }
+  }
+  if (parts.length === 6) {
+    const [co = 'kmb', route = '', bound = '', serviceType = '', gtfsId = ''] = parts
+    return { co, route, bound, serviceType, gtfsId: gtfsId ?? '' }
   }
   const [co = 'kmb', route = '', bound = '', serviceType = '', gtfsId = ''] = parts
   return { co, route, bound, serviceType, gtfsId: gtfsId ?? '' }
@@ -269,21 +274,24 @@ export function variantKeyMatches(filterKey: string, entryKey: string): boolean 
 }
 
 /**
- * Legacy family fallback: first index entry matching co|route|bound|st
- * regardless of gtfsId. Used when the caller has no gtfsId (old saves,
- * hand-built keys). Order follows the upstream db dump.
+ * Legacy family fallback: index entry matching co|route|bound|st regardless
+ * of gtfsId, used when the caller has no gtfsId (old saves, hand-built
+ * keys). Deterministic: smallest key wins, which is the smallest gtfsId
+ * since keys sort by segment. Callers that need region …|1 agree with the
+ * region numbering, which also assigns 1 to the smallest gtfsId.
  */
 export function findRouteEntryByFamily(
   routeVariantIndex: Map<string, RouteListEntry>,
   family: { co: Company; route: string; bound: string; serviceType: string }
 ): RouteListEntry | undefined {
   const prefix = `${family.co}|${family.route.toUpperCase()}|${family.bound}|${family.serviceType}|`
+  let best: { key: string; entry: RouteListEntry } | null = null
   for (const [key, entry] of routeVariantIndex) {
-    if (key === prefix.slice(0, -1) || key.startsWith(prefix)) {
-      if (entry.co.includes(family.co)) return entry
-    }
+    if (key !== prefix.slice(0, -1) && !key.startsWith(prefix)) continue
+    if (!entry.co.includes(family.co)) continue
+    if (!best || key < best.key) best = { key, entry }
   }
-  return undefined
+  return best?.entry
 }
 
 export type EtaDbIndexes = {

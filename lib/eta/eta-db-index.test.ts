@@ -214,4 +214,37 @@ describe('buildEtaDbIndexes regions', () => {
       routeVariantKey({ co: 'gmb', route: '1', bound: 'O', serviceType: '1', gtfsId: '2006408' })
     ).toBe('gmb|1|O|1|2006408')
   })
+
+  it('deserializes blobs written before region fields existed', () => {
+    const legacy = {
+      kmbRouteListEntries: [],
+      kmbStops: [],
+      kmbRouteStops: [],
+      mtrRoutes: [],
+      lrtRoutes: [],
+      stationToRouteIndex: [],
+      routeStopSeqIndex: [],
+      stopRoutesIndex: [],
+      routeVariantIndex: [],
+    } as unknown as Parameters<typeof deserializeEtaDbIndexes>[0]
+    const indexes = deserializeEtaDbIndexes(legacy)
+    expect(indexes.regionIndex).toEqual(new Map())
+    expect(indexes.regionByVariantKey).toEqual(new Map())
+  })
+
+  it('resolves legacy lookups deterministically to the smallest gtfsId', async () => {
+    const db = dbWith(
+      [gmbEntry('1', '2006408', ['HKI1']), gmbEntry('1', '2002337', ['KLN1'])],
+      ['HKI1', 'KLN1']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['gmb'] })
+    const { findRouteEntryByFamily } = await import('./eta-db-index')
+    const entry = findRouteEntryByFamily(indexes.routeVariantIndex, {
+      co: 'gmb',
+      route: '1',
+      bound: 'O',
+      serviceType: '1',
+    })
+    expect(entry?.gtfsId).toBe('2002337')
+  })
 })

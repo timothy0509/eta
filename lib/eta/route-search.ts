@@ -6,14 +6,18 @@ import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 
 /**
- * Ranked search over bus routes. One entry per co|route, matching on the
- * route number plus termini and stop names in all three languages.
+ * Ranked search over bus routes. One entry per region (co|route|region):
+ * same-number minibus routes in HKI/Kowloon/NT split into separate entries
+ * so each region's termini and stops stay distinct. Legacy rows without a
+ * region share one entry per co|route as before.
  */
 
 export type RouteSearchEntry = {
   key: string
   co: string
   route: string
+  /** Region group `co|ROUTE|n`. Empty for legacy rows without a region. */
+  region: string
   operators: string[]
   origin: { en: string; tc: string; sc: string }
   destination: { en: string; tc: string; sc: string }
@@ -98,7 +102,11 @@ export function normalizeRouteQuery(query: string): {
 }
 
 export function compareRouteEntries(a: RouteSearchEntry, b: RouteSearchEntry): number {
-  return a.route.localeCompare(b.route, undefined, { numeric: true }) || a.co.localeCompare(b.co)
+  return (
+    a.route.localeCompare(b.route, undefined, { numeric: true }) ||
+    a.co.localeCompare(b.co) ||
+    a.region.localeCompare(b.region)
+  )
 }
 
 /**
@@ -164,13 +172,16 @@ function entryDisplayText(
   return pickLang(entry[field], lang)
 }
 
-function canonicalRouteSearchKey(co: unknown, route: unknown): string {
-  return `${normalizeOperator(String(co ?? ''))}|${String(route ?? '').toUpperCase()}`
+function canonicalRouteSearchKey(co: unknown, route: unknown, region?: unknown): string {
+  const base = `${normalizeOperator(String(co ?? ''))}|${String(route ?? '').toUpperCase()}`
+  const scope = String(region ?? '').trim()
+  return scope ? `${base}|${scope}` : base
 }
 
 /**
- * Build one search entry per co|route from the variant list plus the full
- * route-stop table joined with stop names. Pure and memo-friendly.
+ * Build one search entry per region (co|route|region) from the variant list
+ * plus the full route-stop table joined with stop names. Pure and
+ * memo-friendly.
  */
 export function buildRouteSearchIndex(
   routes: KmbRouteInfoLite[],
@@ -179,18 +190,18 @@ export function buildRouteSearchIndex(
 ): RouteSearchEntry[] {
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {
-    const key = canonicalRouteSearchKey(r.co, r.route)
+    const key = canonicalRouteSearchKey(r.co, r.route, r.region)
     const list = variantsByKey.get(key)
     if (list) list.push(r)
     else variantsByKey.set(key, [r])
   }
 
   const stopIdsByKey = new Map<string, { ids: string[]; seen: Set<string>; total: number }>()
-  // Group raw rows by co|route plus bound plus service type so each
+  // Group raw rows by region plus bound plus service type so each
   // direction stays separate, keeping seq order for the via line.
   const rowsByVariantKey = new Map<string, KmbRouteStopLite[]>()
   for (const rs of routeStops) {
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route)
+    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.region)
     if (!variantsByKey.has(routeKey)) continue
     const variantKey = `${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
     const list = rowsByVariantKey.get(variantKey)
@@ -201,7 +212,7 @@ export function buildRouteSearchIndex(
     rows.sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0))
   }
   for (const rs of routeStops) {
-    const key = canonicalRouteSearchKey(rs.co, rs.route)
+    const key = canonicalRouteSearchKey(rs.co, rs.route, rs.region)
     if (!variantsByKey.has(key)) continue
     let bucket = stopIdsByKey.get(key)
     if (!bucket) {
@@ -306,6 +317,7 @@ export function buildRouteSearchIndex(
       key,
       co,
       route: first.route,
+      region: String(first.region ?? '').trim(),
       operators,
       origin: canonical.origin,
       destination: canonical.destination,
@@ -520,13 +532,13 @@ export function operatorCounts(index: RouteSearchEntry[]): Array<{ code: string;
 }
 
 /**
- * Count distinct co|route values per stop-name group (parsed base name,
+ * Count distinct region entries per stop-name group (parsed base name,
  * lowercased). Stops sharing a name form one group, so the count is the
  * number of routes serving the group. Used to rank via-line candidates
  * so busy interchanges win over quiet stops.
  */
 export function countRoutesByStopName(
-  routeStops: Array<{ co: string; route: string; stopId: string }>,
+  routeStops: Array<{ co: string; route: string; stopId: string; region?: string }>,
   stopsById: Map<string, KmbStopSearchItem>,
   lang: UiLanguage
 ): Map<string, number> {
@@ -543,7 +555,7 @@ export function countRoutesByStopName(
     if (!stopId) continue
     const key = nameByStopId.get(stopId)
     if (!key) continue
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route)
+    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.region)
     let set = byName.get(key)
     if (!set) {
       set = new Set()

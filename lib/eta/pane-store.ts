@@ -32,7 +32,8 @@ function isSameRouteStop(
     a.bound === b.bound &&
     a.serviceType === b.serviceType &&
     a.seq === b.seq &&
-    a.stopId === b.stopId
+    a.stopId === b.stopId &&
+    (a.gtfsId ?? '') === (b.gtfsId ?? '')
   )
 }
 

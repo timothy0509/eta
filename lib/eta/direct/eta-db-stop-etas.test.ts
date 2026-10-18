@@ -65,6 +65,8 @@ function emptyIndexes(): EtaDbIndexes {
     routeStopSeqIndex: new Map(),
     stopRoutesIndex: new Map(),
     routeVariantIndex: new Map(),
+    regionIndex: new Map(),
+    regionByVariantKey: new Map(),
   }
 }
 
@@ -78,9 +80,18 @@ describe('fetchKmbEtasForStop hybrid', () => {
     })
     const indexes = emptyIndexes()
     indexes.stopRoutesIndex.set('STOP1', [
-      { stopId: 'STOP1', co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 0 },
+      {
+        stopId: 'STOP1',
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '',
+        region: '',
+      },
     ])
-    indexes.routeVariantIndex.set('kmb|1A|O|1', kmbEntry)
+    indexes.routeVariantIndex.set('kmb|1A|O|1|', kmbEntry)
 
     const fetchOfficialStopEta = vi.fn().mockResolvedValue({
       data: [
@@ -136,11 +147,29 @@ describe('fetchKmbEtasForStop hybrid', () => {
     })
     const indexes = emptyIndexes()
     indexes.stopRoutesIndex.set('JOINT1', [
-      { stopId: 'JOINT1', co: 'kmb', route: '101', bound: 'I', serviceType: '1', seq: 2 },
-      { stopId: 'JOINT1', co: 'ctb', route: '5B', bound: 'O', serviceType: '1', seq: 4 },
+      {
+        stopId: 'JOINT1',
+        co: 'kmb',
+        route: '101',
+        bound: 'I',
+        serviceType: '1',
+        seq: 2,
+        gtfsId: '',
+        region: '',
+      },
+      {
+        stopId: 'JOINT1',
+        co: 'ctb',
+        route: '5B',
+        bound: 'O',
+        serviceType: '1',
+        seq: 4,
+        gtfsId: '',
+        region: '',
+      },
     ])
-    indexes.routeVariantIndex.set('kmb|101|I|1', kmbEntry)
-    indexes.routeVariantIndex.set('ctb|5B|O|1', ctbEntry)
+    indexes.routeVariantIndex.set('kmb|101|I|1|', kmbEntry)
+    indexes.routeVariantIndex.set('ctb|5B|O|1|', ctbEntry)
 
     const fetchOfficialStopEta = vi.fn().mockResolvedValue({
       data: [
@@ -203,9 +232,18 @@ describe('fetchKmbEtasForStop hybrid', () => {
     })
     const indexes = emptyIndexes()
     indexes.stopRoutesIndex.set('CTB1', [
-      { stopId: 'CTB1', co: 'ctb', route: '1', bound: 'I', serviceType: '1', seq: 1 },
+      {
+        stopId: 'CTB1',
+        co: 'ctb',
+        route: '1',
+        bound: 'I',
+        serviceType: '1',
+        seq: 1,
+        gtfsId: '',
+        region: '',
+      },
     ])
-    indexes.routeVariantIndex.set('ctb|1|I|1', ctbEntry)
+    indexes.routeVariantIndex.set('ctb|1|I|1|', ctbEntry)
 
     const fetchOfficialStopEta = vi.fn()
     const fetchVariantEtas = vi.fn().mockResolvedValue([
@@ -282,9 +320,18 @@ describe('fetchKmbEtasForStop hybrid', () => {
     })
     const indexes = emptyIndexes()
     indexes.stopRoutesIndex.set('STOP1', [
-      { stopId: 'STOP1', co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 0 },
+      {
+        stopId: 'STOP1',
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '',
+        region: '',
+      },
     ])
-    indexes.routeVariantIndex.set('kmb|1A|O|1', kmbEntry)
+    indexes.routeVariantIndex.set('kmb|1A|O|1|', kmbEntry)
     const fetchOfficialStopEta = vi.fn().mockResolvedValue({ data: [] })
     const controller = new AbortController()
 

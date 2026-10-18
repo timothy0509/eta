@@ -93,8 +93,10 @@ function normalizeVariantKeys(entries: string[]): string[] {
     .map((entry) => {
       if (!entry) return ''
       const parts = entry.split('|')
+      // 3-part legacy (route|bound|st, assumed kmb), 4-part family
+      // (co|route|bound|st, any region), or 5-part with gtfsId region scope.
       if (parts.length === 3) return `kmb|${entry}`
-      if (parts.length === 4) return entry
+      if (parts.length === 4 || parts.length === 5) return entry
       // Invalid format: ensure this entry is filtered out
       return ''
     })
@@ -263,7 +265,11 @@ export function encodeUrlState(input: UrlEncodeInput): string {
           const key = entry.variantKey
           if (!key) return ''
           const parts = key.split('|')
-          return parts.length === 4 ? parts.slice(1).join('|') : key
+          // Compact 5-part scoped keys to 4-part family only when the scope
+          // is empty (legacy shape); scoped keys keep their gtfsId segment
+          // so the shared link selects the same region.
+          if (parts.length === 5 && !parts[4]) return parts.slice(0, 4).join('|')
+          return key
         })
         const compact = normalized.filter(Boolean).join(',')
         if (compact) params.set('ke', compact)

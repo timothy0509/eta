@@ -50,6 +50,8 @@ function makeRouteInfoLite(): KmbRouteInfoLite {
     route: '1A',
     bound: 'O',
     serviceType: '1',
+    gtfsId: '',
+    region: '',
     origin: { en: 'O', tc: 'O', sc: 'O' },
     destination: { en: 'D', tc: 'D', sc: 'D' },
     routeEntry: makeRouteListEntry(),
@@ -66,7 +68,9 @@ function emptyIndexes(): EtaDbIndexes {
     stationToRouteIndex: new Map(),
     routeStopSeqIndex: new Map(),
     stopRoutesIndex: new Map(),
-    routeVariantIndex: new Map([['kmb|1A|O|1', makeRouteListEntry()]]),
+    routeVariantIndex: new Map([['kmb|1A|O|1|', makeRouteListEntry()]]),
+    regionIndex: new Map(),
+    regionByVariantKey: new Map(),
   }
 }
 

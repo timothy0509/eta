@@ -28,6 +28,8 @@ function makeRoute(
     route,
     bound,
     serviceType,
+    gtfsId: '',
+    region: '',
     origin: { en: origin, tc: `${origin}繁`, sc: `${origin}简` },
     destination: { en: dest, tc: `${dest}繁`, sc: `${dest}简` },
   }
@@ -52,9 +54,36 @@ const stopsById = new Map<string, KmbStopSearchItem>([
 ])
 
 const routeStops: KmbRouteStopLite[] = [
-  { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 1, stopId: 's1' },
-  { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 2, stopId: 's2' },
-  { co: 'kmb', route: '13M', bound: 'O', serviceType: '1', seq: 1, stopId: 's3' },
+  {
+    co: 'kmb',
+    route: '1A',
+    bound: 'O',
+    serviceType: '1',
+    seq: 1,
+    stopId: 's1',
+    gtfsId: '',
+    region: '',
+  },
+  {
+    co: 'kmb',
+    route: '1A',
+    bound: 'O',
+    serviceType: '1',
+    seq: 2,
+    stopId: 's2',
+    gtfsId: '',
+    region: '',
+  },
+  {
+    co: 'kmb',
+    route: '13M',
+    bound: 'O',
+    serviceType: '1',
+    seq: 1,
+    stopId: 's3',
+    gtfsId: '',
+    region: '',
+  },
 ]
 
 describe('normalizeRouteQuery', () => {
@@ -278,12 +307,66 @@ describe('via line direction', () => {
       makeRoute('kmb', 'X9', 'Outbound Dest', 'Outbound Origin', 'I'),
     ]
     const rows: KmbRouteStopLite[] = [
-      { co: 'kmb', route: 'X9', bound: 'O', serviceType: '1', seq: 1, stopId: 'o1' },
-      { co: 'kmb', route: 'X9', bound: 'O', serviceType: '1', seq: 2, stopId: 'o2' },
-      { co: 'kmb', route: 'X9', bound: 'I', serviceType: '1', seq: 1, stopId: 'i1' },
-      { co: 'kmb', route: 'X9', bound: 'I', serviceType: '1', seq: 2, stopId: 'i2' },
-      { co: 'kmb', route: 'X9', bound: 'I', serviceType: '1', seq: 3, stopId: 'i3' },
-      { co: 'kmb', route: 'X9', bound: 'I', serviceType: '1', seq: 4, stopId: 'i4' },
+      {
+        co: 'kmb',
+        route: 'X9',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'o1',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X9',
+        bound: 'O',
+        serviceType: '1',
+        seq: 2,
+        stopId: 'o2',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X9',
+        bound: 'I',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'i1',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X9',
+        bound: 'I',
+        serviceType: '1',
+        seq: 2,
+        stopId: 'i2',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X9',
+        bound: 'I',
+        serviceType: '1',
+        seq: 3,
+        stopId: 'i3',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X9',
+        bound: 'I',
+        serviceType: '1',
+        seq: 4,
+        stopId: 'i4',
+        gtfsId: '',
+        region: '',
+      },
     ]
     const index = buildRouteSearchIndex(variants, rows, new Map())
     const entry = index.find((e) => e.key === 'kmb|X9')
@@ -297,9 +380,36 @@ describe('via line direction', () => {
       makeRoute('kmb', 'X8', 'Outbound Dest', 'Outbound Origin', 'I'),
     ]
     const rows: KmbRouteStopLite[] = [
-      { co: 'kmb', route: 'X8', bound: 'I', serviceType: '1', seq: 1, stopId: 'i1' },
-      { co: 'kmb', route: 'X8', bound: 'I', serviceType: '1', seq: 2, stopId: 'i2' },
-      { co: 'kmb', route: 'X8', bound: 'I', serviceType: '1', seq: 3, stopId: 'i3' },
+      {
+        co: 'kmb',
+        route: 'X8',
+        bound: 'I',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'i1',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X8',
+        bound: 'I',
+        serviceType: '1',
+        seq: 2,
+        stopId: 'i2',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X8',
+        bound: 'I',
+        serviceType: '1',
+        seq: 3,
+        stopId: 'i3',
+        gtfsId: '',
+        region: '',
+      },
     ]
     const index = buildRouteSearchIndex(variants, rows, new Map())
     const entry = index.find((e) => e.key === 'kmb|X8')
@@ -317,10 +427,46 @@ describe('getKeyStops', () => {
       ['s4', makeStop('s4', 'Other Stop', '他站')],
     ])
     const localRouteStops: KmbRouteStopLite[] = [
-      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 1, stopId: 's1' },
-      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 2, stopId: 's3' },
-      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 3, stopId: 's4' },
-      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 4, stopId: 's2' },
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 's1',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 2,
+        stopId: 's3',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 3,
+        stopId: 's4',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 4,
+        stopId: 's2',
+        gtfsId: '',
+        region: '',
+      },
     ]
     const localRoutes = [
       makeRoute('kmb', '1A', 'Tsim Sha Tsui', 'Kwun Tong', 'O'),
@@ -344,10 +490,46 @@ describe('getKeyStops', () => {
       ['s4', makeStop('s4', 'Other Stop', '他站')],
     ])
     const localRouteStops: KmbRouteStopLite[] = [
-      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 1, stopId: 's1' },
-      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 2, stopId: 's3' },
-      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 3, stopId: 's4' },
-      { co: 'kmb', route: '1A', bound: 'O', serviceType: '1', seq: 4, stopId: 's2' },
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 's1',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 2,
+        stopId: 's3',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 3,
+        stopId: 's4',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: '1A',
+        bound: 'O',
+        serviceType: '1',
+        seq: 4,
+        stopId: 's2',
+        gtfsId: '',
+        region: '',
+      },
     ]
     const localRoutes = [
       makeRoute('kmb', '1A', 'Tsim Sha Tsui', 'Kwun Tong', 'O'),
@@ -368,9 +550,36 @@ describe('getKeyStops', () => {
     ])
     const variants = [makeRoute('kmb', 'X1', 'Stop A', 'Stop C', 'O')]
     const localRouteStops: KmbRouteStopLite[] = [
-      { co: 'kmb', route: 'X1', bound: 'O', serviceType: '1', seq: 1, stopId: 'a' },
-      { co: 'kmb', route: 'X1', bound: 'O', serviceType: '1', seq: 2, stopId: 'b' },
-      { co: 'kmb', route: 'X1', bound: 'O', serviceType: '1', seq: 3, stopId: 'c' },
+      {
+        co: 'kmb',
+        route: 'X1',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'a',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X1',
+        bound: 'O',
+        serviceType: '1',
+        seq: 2,
+        stopId: 'b',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X1',
+        bound: 'O',
+        serviceType: '1',
+        seq: 3,
+        stopId: 'c',
+        gtfsId: '',
+        region: '',
+      },
     ]
     const index = buildRouteSearchIndex(variants, localRouteStops, stops)
     const entry = index.find((e) => e.key === 'kmb|X1')
@@ -392,6 +601,8 @@ describe('getKeyStops', () => {
       serviceType: '1',
       seq: i + 1,
       stopId: `s${i}`,
+      gtfsId: '',
+      region: '',
     }))
     // Extra routes through s3 (Stop D) so it counts as the busy group.
     const extraRoutes: KmbRouteStopLite[] = [1, 2, 3].map((n) => ({
@@ -401,6 +612,8 @@ describe('getKeyStops', () => {
       serviceType: '1',
       seq: 1,
       stopId: 's3',
+      gtfsId: '',
+      region: '',
     }))
     const index = buildRouteSearchIndex(variants, localRouteStops, stops)
     const entry = index.find((e) => e.key === 'kmb|X2')
@@ -432,8 +645,26 @@ describe('getKeyStops', () => {
       ['s2', makeStop('s2', 'mong kok')],
     ])
     const rows: KmbRouteStopLite[] = [
-      { co: 'kmb', route: 'A1', bound: 'O', serviceType: '1', seq: 1, stopId: 's1' },
-      { co: 'kmb', route: 'B2', bound: 'O', serviceType: '1', seq: 1, stopId: 's2' },
+      {
+        co: 'kmb',
+        route: 'A1',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 's1',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'B2',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 's2',
+        gtfsId: '',
+        region: '',
+      },
     ]
     const usage = countRoutesByStopName(rows, stops, 'en')
     expect(usage.get('mong kok')).toBe(2)
@@ -457,17 +688,116 @@ describe('getKeyStops', () => {
     // Interleaved and out of seq order on purpose. O is the longer
     // direction: a..h is 8 stops, I is e,d,c only.
     const rows: KmbRouteStopLite[] = [
-      { co: 'kmb', route: 'X4', bound: 'I', serviceType: '1', seq: 3, stopId: 'c' },
-      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 5, stopId: 'e' },
-      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 1, stopId: 'a' },
-      { co: 'kmb', route: 'X4', bound: 'I', serviceType: '1', seq: 1, stopId: 'e' },
-      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 8, stopId: 'h' },
-      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 2, stopId: 'b' },
-      { co: 'kmb', route: 'X4', bound: 'I', serviceType: '1', seq: 2, stopId: 'd' },
-      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 4, stopId: 'd' },
-      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 7, stopId: 'g' },
-      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 3, stopId: 'c' },
-      { co: 'kmb', route: 'X4', bound: 'O', serviceType: '1', seq: 6, stopId: 'f' },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'I',
+        serviceType: '1',
+        seq: 3,
+        stopId: 'c',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'O',
+        serviceType: '1',
+        seq: 5,
+        stopId: 'e',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'a',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'I',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'e',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'O',
+        serviceType: '1',
+        seq: 8,
+        stopId: 'h',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'O',
+        serviceType: '1',
+        seq: 2,
+        stopId: 'b',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'I',
+        serviceType: '1',
+        seq: 2,
+        stopId: 'd',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'O',
+        serviceType: '1',
+        seq: 4,
+        stopId: 'd',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'O',
+        serviceType: '1',
+        seq: 7,
+        stopId: 'g',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'O',
+        serviceType: '1',
+        seq: 3,
+        stopId: 'c',
+        gtfsId: '',
+        region: '',
+      },
+      {
+        co: 'kmb',
+        route: 'X4',
+        bound: 'O',
+        serviceType: '1',
+        seq: 6,
+        stopId: 'f',
+        gtfsId: '',
+        region: '',
+      },
     ]
     const index = buildRouteSearchIndex(variants, rows, stops)
     const entry = index.find((e) => e.key === 'kmb|X4')
@@ -493,6 +823,8 @@ describe('getKeyStops', () => {
       serviceType: '1',
       seq: i + 1,
       stopId: `s${i}`,
+      gtfsId: '',
+      region: '',
     }))
     const index = buildRouteSearchIndex(variants, localRouteStops, stops)
     const entry = index.find((e) => e.key === 'kmb|X3')

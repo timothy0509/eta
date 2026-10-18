@@ -45,6 +45,12 @@ import {
 } from '@/components/eta/panes/kmb-stop-search'
 import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
 import { setKmbPaneState, usePaneStore } from '@/lib/eta/pane-store'
+import {
+  normalizeGtfsId,
+  parseVariantKey,
+  routeVariantKey,
+  variantKeyMatches,
+} from '@/lib/eta/eta-db-index'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { useTranslations } from '@/lib/eta/i18n'
 
@@ -87,7 +93,13 @@ type RouteStopIndex = {
 function buildRouteStopIndex(routeStops: KmbRouteStopLite[]): RouteStopIndex {
   const byStopId = new Map<string, Set<string>>()
   for (const entry of routeStops) {
-    const key = `${entry.co}|${entry.route.toUpperCase()}|${entry.bound}|${entry.serviceType}`
+    const key = routeVariantKey({
+      co: entry.co,
+      route: entry.route,
+      bound: entry.bound,
+      serviceType: entry.serviceType,
+      gtfsId: entry.gtfsId,
+    })
     let set = byStopId.get(entry.stopId)
     if (!set) {
       set = new Set()
@@ -339,11 +351,11 @@ export function KmbPane({
 
     return variantKeys
       .map((key) => {
-        const [, route = ''] = key.split('|')
+        const parsed = parseVariantKey(key)
         const label = pickRouteVariantLabel(kmbRouteInfos[key])
         return {
           key,
-          route,
+          route: parsed.route,
           label: label || '—',
         }
       })
@@ -364,8 +376,14 @@ export function KmbPane({
     const load = async () => {
       const fetched = await Promise.allSettled(
         missing.map(async (key) => {
-          const [co = 'kmb', route = '', direction = '', serviceType = ''] = key.split('|')
-          const info = await fetchKmbRouteInfo({ co: co as Company, route, direction, serviceType })
+          const parsed = parseVariantKey(key)
+          const info = await fetchKmbRouteInfo({
+            co: (parsed.co || 'kmb') as Company,
+            route: parsed.route,
+            direction: parsed.bound,
+            serviceType: parsed.serviceType,
+            gtfsId: parsed.gtfsId || undefined,
+          })
           return { key, info }
         })
       )
@@ -462,9 +480,20 @@ export function KmbPane({
         let etas = result.byStopId[stopId] ?? []
         if (variantFilterKeys) {
           etas = etas.filter((eta) => {
-            // Use base key (without leg) for variant filter matching
-            const key = `${String(eta.co ?? 'kmb')}|${(eta.route ?? '').toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
-            return variantFilterKeys.has(key)
+            // Match against the entry key: exact, or a legacy 4-part family
+            // key selecting any region. The entry key carries gtfsId when
+            // upstream provides one.
+            const etaKey = routeVariantKey({
+              co: String(eta.co ?? 'kmb') as Company,
+              route: (eta.route ?? '').toUpperCase(),
+              bound: eta.dir,
+              serviceType: String(eta.service_type),
+              gtfsId: eta.gtfsId,
+            })
+            for (const filterKey of variantFilterKeys) {
+              if (variantKeyMatches(filterKey, etaKey)) return true
+            }
+            return false
           })
         }
         filteredByStopId[stopId] = etas
@@ -535,7 +564,10 @@ export function KmbPane({
         const route = (eta.route ?? '').toUpperCase()
         const dir = String(eta.dir ?? '')
         const serviceType = String(eta.service_type ?? '')
-        const vKey = `${co}|${route}|${dir}|${serviceType}`
+        const gtfsId = normalizeGtfsId(eta.gtfsId)
+        const vKey = gtfsId
+          ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}`
+          : `${co}|${route}|${dir}|${serviceType}`
 
         // Skip if we already have this fare or already queued it (use ref for latest state)
         const currentFares = etaStateRef.current.faresByVariantKey
@@ -547,6 +579,7 @@ export function KmbPane({
           route,
           dir,
           serviceType,
+          gtfsId,
           stopId,
           destCandidates: [eta.dest_en, eta.dest_tc, eta.dest_sc].filter(Boolean) as string[],
         })
@@ -648,9 +681,14 @@ export function KmbPane({
           const allEtas = Object.values(fetchResult.filteredByStopId).flat()
           const variantKeysFromEtas = Array.from(
             new Set(
-              allEtas.map(
-                (eta) =>
-                  `${String(eta.co ?? 'kmb')}|${(eta.route ?? '').toUpperCase()}|${eta.dir}|${String(eta.service_type)}`
+              allEtas.map((eta) =>
+                routeVariantKey({
+                  co: String(eta.co ?? 'kmb') as Company,
+                  route: (eta.route ?? '').toUpperCase(),
+                  bound: eta.dir,
+                  serviceType: String(eta.service_type),
+                  gtfsId: eta.gtfsId,
+                })
               )
             )
           )
@@ -664,12 +702,13 @@ export function KmbPane({
           if (missingKeys.length && !controller.signal.aborted) {
             const fetched = await Promise.allSettled(
               missingKeys.slice(0, 30).map(async (key) => {
-                const [co = 'kmb', route = '', direction = '', serviceType = ''] = key.split('|')
+                const parsed = parseVariantKey(key)
                 const info = await fetchKmbRouteInfo({
-                  co: co as Company,
-                  route,
-                  direction,
-                  serviceType,
+                  co: (parsed.co || 'kmb') as Company,
+                  route: parsed.route,
+                  direction: parsed.bound,
+                  serviceType: parsed.serviceType,
+                  gtfsId: parsed.gtfsId || undefined,
                 })
                 return { key, info }
               })
@@ -813,11 +852,13 @@ export function KmbPane({
     if (selectedItem.id === lastSelectedIdRef.current) return
 
     const nextRouteFilterMode = selectedItem.routeFilterMode ?? 'simple'
-    const restoredEntries = (selectedItem.entries ?? []).map((entry, idx) => ({
-      id: `restored-${idx}`,
-      variantKey:
-        entry.variantKey.split('|').length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey,
-    }))
+    const restoredEntries = (selectedItem.entries ?? []).map((entry, idx) => {
+      const parts = entry.variantKey.split('|')
+      return {
+        id: `restored-${idx}`,
+        variantKey: parts.length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey,
+      }
+    })
 
     const nextDraftSelection =
       'stopId' in selectedItem

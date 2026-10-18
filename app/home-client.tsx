@@ -408,6 +408,7 @@ export default function HomeClient() {
       return {
         co: selectedItem.co ?? 'kmb',
         route: selectedItem.route,
+        region: selectedItem.region,
         bound: selectedItem.bound,
         serviceType: selectedItem.serviceType,
       }

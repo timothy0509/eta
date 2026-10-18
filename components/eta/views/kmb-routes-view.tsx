@@ -44,7 +44,7 @@ import {
 import type { Company } from 'hk-bus-eta'
 
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
-import { routeVariantKey } from '@/lib/eta/eta-db-index'
+import { findRouteEntryByFamily, routeVariantKey } from '@/lib/eta/eta-db-index'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
 import {
   FARE_UNKNOWN_COLOR,
@@ -96,13 +96,18 @@ type RouteVariant = {
   route: string
   bound: string
   serviceType: string
+  gtfsId: string
+  region: string
   origin: { en: string; tc: string; sc: string }
   destination: { en: string; tc: string; sc: string }
 }
 
+/** Selected region entry (search hit), not just co|route: same-number
+ * minibus routes in different regions are separate selections. */
 type RouteSelection = {
   co: string
   route: string
+  region: string
 }
 
 function variantBaseKey(entry: {
@@ -112,8 +117,11 @@ function variantBaseKey(entry: {
   dir?: string
   serviceType?: string
   service_type?: string | number
+  gtfsId?: string
 }): string {
-  return `${normalizeOperator(entry.co)}|${String(entry.route ?? '').toUpperCase()}|${entry.bound ?? entry.dir ?? ''}|${String(entry.serviceType ?? entry.service_type ?? '')}`
+  const base = `${normalizeOperator(entry.co)}|${String(entry.route ?? '').toUpperCase()}|${entry.bound ?? entry.dir ?? ''}|${String(entry.serviceType ?? entry.service_type ?? '')}`
+  const gtfsId = String(entry.gtfsId ?? '').trim()
+  return gtfsId ? `${base}|${gtfsId}` : base
 }
 
 function hasDuplicateOperators(variants: RouteVariant[]): boolean {
@@ -390,6 +398,7 @@ function KmbRouteStopList({
     route: currentVariant.route,
     bound: currentVariant.bound,
     serviceType: currentVariant.serviceType,
+    gtfsId: currentVariant.gtfsId,
   })
   const [faresBySeq, setFaresBySeq] = React.useState<Record<number, number>>({})
 
@@ -398,7 +407,14 @@ function KmbRouteStopList({
     getEtaDbIndexes()
       .then(({ routeVariantIndex }) => {
         if (cancelled) return
-        const entry = routeVariantIndex.get(variantKey)
+        const entry =
+          routeVariantIndex.get(variantKey) ??
+          findRouteEntryByFamily(routeVariantIndex, {
+            co: currentVariant.co as Company,
+            route: currentVariant.route,
+            bound: currentVariant.bound,
+            serviceType: currentVariant.serviceType,
+          })
         setFaresBySeq(entry ? getFaresBySeq(entry, currentVariant.co) : {})
       })
       .catch(() => {
@@ -681,6 +697,8 @@ function useKmbRouteList() {
             route: entry.route,
             bound: entry.bound,
             serviceType: String(entry.service_type),
+            gtfsId: String(entry.gtfsId ?? '').trim(),
+            region: String(entry.region ?? '').trim(),
             origin: {
               en: (entry.orig_en ?? '').trim(),
               tc: (entry.orig_tc ?? '').trim(),
@@ -737,7 +755,14 @@ function useKmbStops() {
 
 function useKmbRouteGeometry(
   params: {
-    variant: { key: string; co: string; route: string; bound: string; serviceType: string } | null
+    variant: {
+      key: string
+      co: string
+      route: string
+      bound: string
+      serviceType: string
+      gtfsId: string
+    } | null
     points: GeoPoint[]
   },
   { stopsVariantKey }: { stopsVariantKey: string | null }
@@ -752,26 +777,34 @@ function useKmbRouteGeometry(
     if (!variant || params.points.length < 2) return
     let cancelled = false
     const load = async () => {
-      // gtfsId and the per-operator bound live on the raw eta-db entry; the
-      // client's lite route objects strip both.
-      let gtfsId: string | null = null
+      // The per-operator bound lives on the raw eta-db entry. The variant
+      // already carries its gtfsId, so geometry resolves to the same
+      // region's waypoint file without an extra lookup.
+      const gtfsId = String(variant.gtfsId ?? '').trim() || null
       let perCoBound: string | null = null
       try {
         const { routeVariantIndex } = await getEtaDbIndexes()
-        const entry = routeVariantIndex.get(
-          routeVariantKey({
+        const entry =
+          routeVariantIndex.get(
+            routeVariantKey({
+              co: normalizeOperator(variant.co) as Company,
+              route: variant.route,
+              bound: variant.bound,
+              serviceType: variant.serviceType,
+              gtfsId: variant.gtfsId,
+            })
+          ) ??
+          findRouteEntryByFamily(routeVariantIndex, {
             co: normalizeOperator(variant.co) as Company,
             route: variant.route,
             bound: variant.bound,
             serviceType: variant.serviceType,
           })
-        )
         if (entry) {
-          gtfsId = entry.gtfsId
           perCoBound = entry.bound[entry.co[0]] ?? null
         }
       } catch {
-        gtfsId = null
+        perCoBound = null
       }
       if (cancelled) return
       return getRouteDisplayGeometry({
@@ -800,7 +833,13 @@ export function KmbRoutesView({
   onSelectStopGroup,
 }: {
   lang: UiLanguage
-  initialSelection?: { co: string; route: string; bound?: string; serviceType?: string }
+  initialSelection?: {
+    co: string
+    route: string
+    region?: string
+    bound?: string
+    serviceType?: string
+  }
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
 }) {
   const { t, tWithParams } = useTranslations(lang)
@@ -836,20 +875,25 @@ export function KmbRoutesView({
 
   const routeEntries = React.useMemo(() => {
     const map = new Map<string, RouteSelection>()
+    // One entry per region so same-number minibus routes in different
+    // regions never merge, even before the search index builds.
     for (const r of routes) {
       const co = normalizeOperator(String(r.co ?? 'kmb'))
-      const key = `${co}|${r.route}`
-      if (!map.has(key)) map.set(key, { co, route: r.route })
+      const region = String(r.region ?? '').trim()
+      const key = region ? `${co}|${r.route}|${region}` : `${co}|${r.route}`
+      if (!map.has(key)) map.set(key, { co, route: r.route, region })
     }
-    return Array.from(map.values()).sort((a, b) =>
-      a.route.localeCompare(b.route, undefined, { numeric: true })
+    return Array.from(map.values()).sort(
+      (a, b) =>
+        a.route.localeCompare(b.route, undefined, { numeric: true }) ||
+        a.region.localeCompare(b.region)
     )
   }, [routes])
 
   const initialKey = React.useMemo(
     () =>
       initialSelection
-        ? `${normalizeOperator(initialSelection.co)}|${initialSelection.route}|${initialSelection.bound ?? ''}|${initialSelection.serviceType ?? ''}`
+        ? `${normalizeOperator(initialSelection.co)}|${initialSelection.route}|${initialSelection.region ?? ''}|${initialSelection.bound ?? ''}|${initialSelection.serviceType ?? ''}`
         : '',
     [initialSelection]
   )
@@ -858,7 +902,12 @@ export function KmbRoutesView({
     if (!initialSelection || routes.length === 0) return null
     const co = normalizeOperator(initialSelection.co)
     const route = initialSelection.route
-    return routeEntries.find((e) => normalizeOperator(e.co) === co && e.route === route) ?? null
+    const region = initialSelection.region
+    const inRegion = routeEntries.filter((e) => normalizeOperator(e.co) === co && e.route === route)
+    if (region !== undefined) {
+      return inRegion.find((e) => e.region === region) ?? null
+    }
+    return inRegion[0] ?? null
   }, [initialSelection, routes, routeEntries])
 
   const autoVariant = React.useMemo(() => {
@@ -866,7 +915,10 @@ export function KmbRoutesView({
     const co = normalizeOperator(initialSelection.co)
     const route = initialSelection.route
     const matchingVariants = routes.filter(
-      (r) => r.route === route && normalizeOperator(String(r.co ?? 'kmb')) === co
+      (r) =>
+        r.route === route &&
+        normalizeOperator(String(r.co ?? 'kmb')) === co &&
+        String(r.region ?? '').trim() === autoRouteKey.region
     )
     if (!matchingVariants.length) return null
     const matchedVariant =
@@ -888,12 +940,17 @@ export function KmbRoutesView({
       )?.source ??
       matchingVariants[0]
     if (!target) return null
+    const targetGtfsId = String(target.gtfsId ?? '').trim()
     return {
-      key: `${target.co}|${target.route}|${target.bound}|${target.serviceType}`,
+      key: targetGtfsId
+        ? `${target.co}|${target.route}|${target.bound}|${target.serviceType}|${targetGtfsId}`
+        : `${target.co}|${target.route}|${target.bound}|${target.serviceType}`,
       co: String(target.co ?? 'kmb'),
       route: target.route,
       bound: target.bound,
       serviceType: target.serviceType,
+      gtfsId: targetGtfsId,
+      region: String(target.region ?? '').trim(),
       origin: target.origin,
       destination: target.destination,
     }
@@ -1011,11 +1068,16 @@ export function KmbRoutesView({
     for (const r of routes) {
       if (
         r.route !== selectedRouteKey.route ||
-        normalizeOperator(String(r.co ?? 'kmb')) !== selectedRouteKey.co
+        normalizeOperator(String(r.co ?? 'kmb')) !== selectedRouteKey.co ||
+        String(r.region ?? '').trim() !== selectedRouteKey.region
       ) {
         continue
       }
-      const key = `${r.co}|${r.route}|${r.bound}|${r.serviceType}`
+      const gtfsId = String(r.gtfsId ?? '').trim()
+      const region = String(r.region ?? '').trim()
+      const key = gtfsId
+        ? `${r.co}|${r.route}|${r.bound}|${r.serviceType}|${gtfsId}`
+        : `${r.co}|${r.route}|${r.bound}|${r.serviceType}`
       if (map.has(key)) continue
       map.set(key, {
         key,
@@ -1023,6 +1085,8 @@ export function KmbRoutesView({
         route: r.route,
         bound: r.bound,
         serviceType: r.serviceType,
+        gtfsId,
+        region,
         origin: r.origin,
         destination: r.destination,
       })
@@ -1051,6 +1115,7 @@ export function KmbRoutesView({
     const load = async () => {
       const co = normalizeOperator(currentVariant.co)
       const variantKey = variantBaseKey(currentVariant)
+      const currentGtfsId = String(currentVariant.gtfsId ?? '').trim()
       const allRouteStops = routeStopsAll.length > 0 ? routeStopsAll : await fetchKmbRouteStops()
       if (cancelled) return
       const filtered = allRouteStops
@@ -1059,7 +1124,8 @@ export function KmbRoutesView({
             rs.route === currentVariant.route &&
             normalizeOperator(rs.co) === co &&
             rs.bound === currentVariant.bound &&
-            rs.serviceType === currentVariant.serviceType
+            rs.serviceType === currentVariant.serviceType &&
+            (currentGtfsId ? String(rs.gtfsId ?? '').trim() === currentGtfsId : true)
         )
         .sort((a, b) => a.seq - b.seq)
       setVariantStops(filtered)
@@ -1074,7 +1140,13 @@ export function KmbRoutesView({
       if (cancelled) return
       const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
       for (const [stopId, entries] of Object.entries(res.byStopId)) {
-        filteredEtas[stopId] = (entries ?? []).filter((eta) => variantBaseKey(eta) === variantKey)
+        filteredEtas[stopId] = (entries ?? []).filter((eta) => {
+          if (variantBaseKey(eta) !== variantKey) return false
+          // Same-number regions share the number filter: keep only the
+          // selected region's gtfsId when the variant has one.
+          if (!currentGtfsId) return true
+          return String(eta.gtfsId ?? '').trim() === currentGtfsId
+        })
       }
       setEtas(filteredEtas)
     }
@@ -1206,8 +1278,12 @@ export function KmbRoutesView({
 
   const onSaveRoute = () => {
     if (!currentVariant) return
+    const gtfsId = String(currentVariant.gtfsId ?? '').trim()
+    const region = String(currentVariant.region ?? '').trim()
     const item: FavoritesItem = {
-      id: `kmb:route:${currentVariant.co}:${currentVariant.route}:${currentVariant.bound}:${currentVariant.serviceType}`,
+      id: gtfsId
+        ? `kmb:route:${currentVariant.co}:${currentVariant.route}:${currentVariant.bound}:${currentVariant.serviceType}:${gtfsId}`
+        : `kmb:route:${currentVariant.co}:${currentVariant.route}:${currentVariant.bound}:${currentVariant.serviceType}`,
       mode: 'kmb',
       type: 'route',
       title: `${currentVariant.route} ${formatKmbRouteEndpointName(
@@ -1218,6 +1294,8 @@ export function KmbRoutesView({
       co: currentVariant.co,
       bound: currentVariant.bound,
       serviceType: currentVariant.serviceType,
+      gtfsId: gtfsId || undefined,
+      region: region || undefined,
       origin: currentVariant.origin,
       destination: currentVariant.destination,
     }
@@ -1326,6 +1404,7 @@ export function KmbRoutesView({
                             setSelectedRouteKey({
                               co: hit.entry.co,
                               route: hit.entry.route,
+                              region: hit.entry.region,
                             })
                           }
                         />
@@ -1674,6 +1753,7 @@ export function KmbRoutesView({
                                 setSelectedRouteKey({
                                   co: hit.entry.co,
                                   route: hit.entry.route,
+                                  region: hit.entry.region,
                                 })
                               }
                             />

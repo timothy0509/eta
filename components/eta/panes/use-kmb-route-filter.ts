@@ -1,5 +1,6 @@
 import type { RouteFilterState } from '@/components/eta/route-filter'
 import type { StopSearchSelection } from '@/components/eta/stop-search'
+import { parseVariantKey } from '@/lib/eta/eta-db-index'
 import type { RouteFilterMode } from '@/lib/store'
 
 export type KmbQuery =
@@ -36,7 +37,7 @@ export function buildRouteFilterString(
 
   if (entries.length) {
     const routesFromEntries = new Set(
-      entries.map((e) => e.variantKey.split('|')[1]).filter(Boolean)
+      entries.map((e) => parseVariantKey(e.variantKey).route.toUpperCase()).filter(Boolean)
     )
     return Array.from(routesFromEntries).join(',')
   } else if (requestedRoutes) {

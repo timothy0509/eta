@@ -5,6 +5,7 @@ import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
 import { useTranslations } from '@/lib/eta/i18n'
+import { parseVariantKey } from '@/lib/eta/eta-db-index'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
 import type { RouteFilterMode } from '@/lib/store'
@@ -20,7 +21,7 @@ export type RouteFilterState = {
 }
 
 export type RouteFilterOption = {
-  key: string // `${co}|${route}|${direction}|${serviceType}`
+  key: string // `${co}|${route}|${direction}|${serviceType}` plus optional `|${gtfsId}` region scope
   route: string
   label: string
 }
@@ -39,13 +40,11 @@ export function countActiveFilters(state: RouteFilterState): number {
 }
 
 function getCompanyFromVariantKey(key: string) {
-  const [co] = key.split('|')
-  return co || 'kmb'
+  return parseVariantKey(key).co || 'kmb'
 }
 
 function getDirectionFromVariantKey(key: string) {
-  const parts = key.split('|')
-  return parts[2] ?? ''
+  return parseVariantKey(key).bound ?? ''
 }
 
 function sortOptions(options: RouteFilterOption[]) {

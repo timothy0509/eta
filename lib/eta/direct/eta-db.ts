@@ -16,7 +16,11 @@ import {
 } from '@/lib/eta/direct/eta-db-list'
 import {
   buildEtaDbIndexes,
+  computeRouteRegions,
+  findRouteEntryByFamily,
+  lookupRegion,
   normalizeBound,
+  normalizeGtfsId,
   normalizeStopId,
   routeVariantKey,
   serializeEtaDbIndexes,
@@ -194,18 +198,39 @@ export async function listKmbStops(): Promise<KmbStopSearchItem[]> {
 
 export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
   const { kmbRouteListEntries } = await getEtaDbIndexes()
+  // Regions need the stop-sharing components, which only exist after rows
+  // are built. Derive them from a light projection here.
+  const regionsByFamily = computeRouteRegions(
+    kmbRouteListEntries.flatMap((entry) =>
+      entry.co.flatMap((co) =>
+        (entry.stops[co] ?? []).map((stopId) => ({
+          co,
+          route: entry.route,
+          stopId,
+          gtfsId: normalizeGtfsId(entry.gtfsId),
+        }))
+      )
+    )
+  )
   return kmbRouteListEntries.flatMap((entry) =>
     entry.co
       .filter((co) => isBusCompany(co) && entry.stops[co]?.length)
-      .map((co) => ({
-        co,
-        route: entry.route,
-        bound: normalizeBound(entry.bound[co]),
-        serviceType: entry.serviceType,
-        origin: mapEtaLangToUi(entry.orig),
-        destination: mapEtaLangToUi(entry.dest),
-        routeEntry: entry,
-      }))
+      .map((co) => {
+        const gtfsId = normalizeGtfsId(entry.gtfsId)
+        return {
+          co,
+          route: entry.route,
+          bound: normalizeBound(entry.bound[co]),
+          serviceType: entry.serviceType,
+          gtfsId,
+          region:
+            regionsByFamily.get(`${co}|${String(entry.route ?? '').toUpperCase()}`)?.get(gtfsId) ??
+            '',
+          origin: mapEtaLangToUi(entry.orig),
+          destination: mapEtaLangToUi(entry.dest),
+          routeEntry: entry,
+        }
+      })
   )
 }
 
@@ -219,12 +244,15 @@ export async function findKmbRouteInfo(params: {
   route: string
   bound: string
   serviceType: string
+  /** Upstream gtfsId disambiguating same-number routes across regions
+   * (GMB HKI/Kowloon/NT). Omit for the legacy family fallback (first match). */
+  gtfsId?: string
   signal?: AbortSignal
 }): Promise<KmbRouteInfoLite | null> {
   if (params.signal?.aborted) {
     throw new DOMException('The operation was aborted.', 'AbortError')
   }
-  const { routeVariantIndex } = await getEtaDbIndexes()
+  const { routeVariantIndex, regionIndex } = await getEtaDbIndexes()
   if (params.signal?.aborted) {
     throw new DOMException('The operation was aborted.', 'AbortError')
   }
@@ -232,23 +260,28 @@ export async function findKmbRouteInfo(params: {
   const bound = normalizeBound(params.bound)
   const serviceType = String(params.serviceType ?? '')
   const co = (params.co ?? 'kmb') as Company
+  const gtfsId = normalizeGtfsId(params.gtfsId)
 
-  const entry = routeVariantIndex.get(
-    routeVariantKey({
+  const entry =
+    routeVariantIndex.get(routeVariantKey({ co, route: routeName, bound, serviceType, gtfsId })) ??
+    findRouteEntryByFamily(routeVariantIndex, {
       co,
       route: routeName,
       bound,
       serviceType,
     })
-  )
 
   if (!entry || !entry.co.includes(co)) return null
+
+  const entryGtfsId = normalizeGtfsId(entry.gtfsId)
 
   return {
     co,
     route: entry.route,
     bound: normalizeBound(entry.bound[co]),
     serviceType: entry.serviceType,
+    gtfsId: entryGtfsId,
+    region: lookupRegion({ regionIndex }, { co, route: entry.route, gtfsId: entryGtfsId }),
     origin: mapEtaLangToUi(entry.orig),
     destination: mapEtaLangToUi(entry.dest),
     routeEntry: entry,
@@ -262,6 +295,10 @@ export type KmbEta = Eta & {
   serviceType: string
   seq: number
   etaSeq: number
+  /** Region discriminator for same-number routes (GMB HKI/Kowloon/NT). Empty when unknown (e.g. KMB official rows). */
+  gtfsId?: string
+  /** Region group `co|ROUTE|n` matching StopRouteEntry.region. Empty when unknown. */
+  region?: string
   data_timestamp?: string
   dest_tc?: string
   dest_sc?: string
@@ -374,18 +411,44 @@ export async function fetchKmbEtasForStop(
   if (routeEntries.length === 0) return [] as KmbEta[]
 
   const candidateMap = new Map<string, { entry: RouteListEntry; co: Company; stopIndex: number }>()
+  // Resolved region per 5-part variant key, carried onto ETAs for grouping.
+  const regionByVariantKey = new Map<string, string>()
   for (const re of routeEntries) {
     const variantKey = routeVariantKey({
       co: re.co,
       route: re.route,
       bound: re.bound,
       serviceType: re.serviceType,
+      gtfsId: re.gtfsId,
     })
-    const entry = routeVariantIndex.get(variantKey)
+    const entry =
+      routeVariantIndex.get(variantKey) ??
+      findRouteEntryByFamily(routeVariantIndex, {
+        co: re.co,
+        route: re.route,
+        bound: re.bound,
+        serviceType: re.serviceType,
+      })
     if (!entry) continue
-    const existing = candidateMap.get(variantKey)
+    // Resolve the key against the entry actually used: the stop's own
+    // gtfsId may be empty (legacy index) or the lookup fell back to the
+    // family entry, so key by the entry so grouping/fares stay consistent.
+    const resolvedKey = routeVariantKey({
+      co: re.co,
+      route: entry.route,
+      bound: normalizeBound(entry.bound[re.co]),
+      serviceType: entry.serviceType,
+      gtfsId: entry.gtfsId,
+    })
+    const existing = candidateMap.get(resolvedKey)
     if (!existing || re.seq < existing.stopIndex) {
-      candidateMap.set(variantKey, { entry, co: re.co, stopIndex: re.seq })
+      candidateMap.set(resolvedKey, { entry, co: re.co, stopIndex: re.seq })
+    }
+    // Prefer the stop's own region (already component-resolved at index
+    // build); fall back to the family fallback entry resolution. Only set
+    // once per key so the smallest seq wins the same way candidates do.
+    if (!regionByVariantKey.has(resolvedKey)) {
+      regionByVariantKey.set(resolvedKey, re.region || '')
     }
   }
 
@@ -395,6 +458,12 @@ export async function fetchKmbEtasForStop(
 
   const results: KmbEta[] = []
   const signal = params.signal
+
+  // Region per resolved 5-part variant key for downstream grouping/fares.
+  // Prefer the stop entry's own region (component-resolved at index build);
+  // the resolved key only differs when falling back to a family entry.
+  const regionForVariantKey = (variantKey: string): string =>
+    regionByVariantKey.get(variantKey) ?? ''
 
   const fetchNonKmb = () =>
     promisePool(
@@ -411,12 +480,23 @@ export async function fetchKmbEtasForStop(
           seq: stopIndex,
           language,
         })
+        const gtfsId = normalizeGtfsId(entry.gtfsId)
+        const variantKey = routeVariantKey({
+          co,
+          route: entry.route,
+          bound: normalizeBound(entry.bound[co]),
+          serviceType: entry.serviceType,
+          gtfsId: entry.gtfsId,
+        })
+        const region = regionForVariantKey(variantKey)
         return etas.map((eta, idx) => ({
           ...eta,
           co: eta.co ?? co,
           route: entry.route,
           dir: normalizeBound(entry.bound[co]),
           serviceType: entry.serviceType,
+          gtfsId,
+          region,
           seq: stopIndex + 1,
           etaSeq: idx + 1,
         })) as KmbEta[]

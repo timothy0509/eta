@@ -1,5 +1,7 @@
 export const NEARBY_RADIUS_MIN_KM = 0.5
 export const NEARBY_RADIUS_MAX_KM = 5
+export const NEARBY_RADIUS_STEP_KM = 0.25
+export const NEARBY_RADIUS_DEFAULT_KM = 2
 
 /**
  * Clamps the nearby-search radius so the slider (and programmatic changes)

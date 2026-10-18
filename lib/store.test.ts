@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { FavoritesItem, FavoritesGroup } from './store'
-import { capFavorites, FAVORITES_LIMIT } from './store'
+import { capFavorites, FAVORITES_LIMIT, useAppStore } from './store'
 
 // Create a test store without persist middleware
 type AppState = {
@@ -734,5 +734,99 @@ describe('capFavorites', () => {
     expect(capped[2].id).toBe('mid-unpinned')
     // Oldest unpinned entries fall off first; the pinned one survives.
     expect(capped.some((f) => f.id === 'old-pinned')).toBe(true)
+  })
+})
+
+describe('settings prefs', () => {
+  const mtrFavorite = (id: string): FavoritesItem => ({
+    id,
+    mode: 'mtr',
+    title: `Station ${id}`,
+    line: 'TWL',
+    sta: id.toUpperCase(),
+  })
+
+  beforeEach(() => {
+    useAppStore.setState({
+      lang: 'tc',
+      routeFilterMode: 'simple',
+      autoRefreshSeconds: 15,
+      nearbyRadiusKm: 2,
+      favorites: [],
+      favoritesGroups: [],
+      recents: [],
+    })
+  })
+
+  it('clamps the nearby radius into the slider band', () => {
+    useAppStore.getState().setNearbyRadiusKm(99)
+    expect(useAppStore.getState().nearbyRadiusKm).toBe(5)
+    useAppStore.getState().setNearbyRadiusKm(-1)
+    expect(useAppStore.getState().nearbyRadiusKm).toBe(0.5)
+    useAppStore.getState().setNearbyRadiusKm(1.26)
+    expect(useAppStore.getState().nearbyRadiusKm).toBe(1.25)
+  })
+
+  it('persists the nearby radius alongside the other prefs', () => {
+    useAppStore.getState().setNearbyRadiusKm(3)
+    const raw = localStorage.getItem('hk-eta')
+    expect(raw).not.toBeNull()
+    const parsed = JSON.parse(raw as string) as {
+      version: number
+      state: { nearbyRadiusKm: number }
+    }
+    expect(parsed.version).toBe(6)
+    expect(parsed.state.nearbyRadiusKm).toBe(3)
+  })
+
+  it('resetPrefs restores defaults but keeps saved data', () => {
+    useAppStore.setState({
+      lang: 'en',
+      routeFilterMode: 'advanced',
+      autoRefreshSeconds: 60,
+      nearbyRadiusKm: 4,
+      favorites: [mtrFavorite('fav-1')],
+    })
+    useAppStore.getState().resetPrefs()
+    const state = useAppStore.getState()
+    expect(state.lang).toBe('tc')
+    expect(state.routeFilterMode).toBe('simple')
+    expect(state.autoRefreshSeconds).toBe(15)
+    expect(state.nearbyRadiusKm).toBe(2)
+    expect(state.favorites).toHaveLength(1)
+  })
+
+  it('clearFavorites empties the list', () => {
+    useAppStore.setState({ favorites: [mtrFavorite('fav-1'), mtrFavorite('fav-2')] })
+    useAppStore.getState().clearFavorites()
+    expect(useAppStore.getState().favorites).toEqual([])
+  })
+
+  it('replaceFavorites keeps valid entries and drops the rest', () => {
+    useAppStore
+      .getState()
+      .replaceFavorites([
+        mtrFavorite('good-1'),
+        { id: 'kmb-stop', mode: 'kmb', title: 'Stop', stopId: 'ABC123' },
+        { id: 'no-mode', title: 'Broken' },
+        { mode: 'mtr', sta: 'CEN' },
+        { id: 'bad-mode', mode: 'ferry' },
+        null,
+        'just a string',
+      ])
+    const favorites = useAppStore.getState().favorites
+    expect(favorites.map((f) => f.id).sort()).toEqual(['good-1', 'kmb-stop'])
+    expect(favorites.every((f) => f.pinned === false && f.groupId === null)).toBe(true)
+  })
+
+  it('replaceFavorites caps oversized imports and rejects non-arrays', () => {
+    const oversized = Array.from({ length: FAVORITES_LIMIT + 10 }, (_, i) =>
+      mtrFavorite(`fav-${i}`)
+    )
+    useAppStore.getState().replaceFavorites(oversized)
+    expect(useAppStore.getState().favorites).toHaveLength(FAVORITES_LIMIT)
+
+    useAppStore.getState().replaceFavorites({ favorites: [] })
+    expect(useAppStore.getState().favorites).toHaveLength(FAVORITES_LIMIT)
   })
 })

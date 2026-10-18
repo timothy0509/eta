@@ -1,6 +1,7 @@
 'use client'
 
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
+import { clampNearbyRadiusKm } from '@/lib/eta/nearby-radius'
 import { create } from 'zustand'
 import type { StateCreator } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
@@ -104,13 +105,14 @@ type NavSlice = {
   setSubView: (subView: SubView) => void
 }
 
-// Persisted prefs slice: language, filter defaults, refresh interval plus
-// favorites, groups and recents. Field names stay backward compatible so
-// old favorites still decode after the v4 to v5 bump.
+// Persisted prefs slice: language, filter defaults, refresh interval,
+// nearby radius plus favorites, groups and recents. Field names stay
+// backward compatible so old favorites still decode after the v5 to v6 bump.
 type PrefsSlice = {
   lang: UiLanguage
   routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
+  nearbyRadiusKm: number
 
   favorites: FavoritesItem[]
   favoritesGroups: FavoritesGroup[]
@@ -119,6 +121,9 @@ type PrefsSlice = {
   setLang: (lang: UiLanguage) => void
   setRouteFilterMode: (mode: RouteFilterMode) => void
   setAutoRefreshSeconds: (seconds: number) => void
+  setNearbyRadiusKm: (km: number) => void
+  /** Restore display and update prefs to defaults. Saved data is untouched. */
+  resetPrefs: () => void
   addFavorite: (item: FavoritesItem) => void
   removeFavorite: (id: string) => void
   toggleFavoritePin: (id: string) => void
@@ -131,6 +136,12 @@ type PrefsSlice = {
 
   addRecent: (item: FavoritesItem) => void
   clearRecents: () => void
+  clearFavorites: () => void
+  /**
+   * Replace the whole favorites list, used by file import. Entries that
+   * fail validation are dropped, the rest are capped like manual saves.
+   */
+  replaceFavorites: (items: unknown) => void
 }
 
 type AppState = NavSlice & PrefsSlice
@@ -154,6 +165,27 @@ const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
   groupId: item.groupId ?? null,
 })
 
+// Imported favorites come from a user file, so shape-check before trusting
+// them. Keeps id, mode and the per-mode locator field; display titles and
+// meta are regenerated with defaults where missing.
+function isImportableFavorite(item: unknown): item is FavoritesItem {
+  if (typeof item !== 'object' || item === null) return false
+  const candidate = item as Record<string, unknown>
+  if (typeof candidate.id !== 'string' || !candidate.id) return false
+  if (candidate.mode === 'kmb') {
+    return (
+      typeof candidate.stopId === 'string' ||
+      (Array.isArray(candidate.stopIds) &&
+        candidate.stopIds.every((id): id is string => typeof id === 'string')) ||
+      typeof candidate.query === 'string' ||
+      candidate.type === 'route'
+    )
+  }
+  if (candidate.mode === 'mtr') return typeof candidate.sta === 'string'
+  if (candidate.mode === 'lrt') return typeof candidate.stationId === 'string'
+  return false
+}
+
 const createNavSlice: StateCreator<AppState, [], [], NavSlice> = (set) => ({
   mode: 'kmb',
   subView: 'stops',
@@ -166,6 +198,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   lang: 'tc',
   routeFilterMode: 'simple',
   autoRefreshSeconds: 15,
+  nearbyRadiusKm: 2,
 
   favorites: [],
   favoritesGroups: [],
@@ -174,6 +207,14 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   setLang: (lang) => set({ lang }),
   setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
   setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
+  setNearbyRadiusKm: (km) => set({ nearbyRadiusKm: clampNearbyRadiusKm(km) }),
+  resetPrefs: () =>
+    set({
+      lang: 'tc',
+      routeFilterMode: 'simple',
+      autoRefreshSeconds: 15,
+      nearbyRadiusKm: 2,
+    }),
 
   addFavorite: (item) =>
     set((state) => {
@@ -282,6 +323,15 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
     }),
 
   clearRecents: () => set({ recents: [] }),
+
+  clearFavorites: () => set({ favorites: [] }),
+
+  replaceFavorites: (items) =>
+    set(() => {
+      if (!Array.isArray(items)) return {}
+      const valid = items.filter(isImportableFavorite)
+      return { favorites: capFavorites(valid.map((item) => withFavoriteMeta(item))) }
+    }),
 })
 
 // Newest saves win. The list is newest-first (addFavorite prepends), so the
@@ -308,7 +358,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 5,
+      version: 6,
       // Direct persist write. The previous 300 ms debounced localStorage
       // wrapper plus beforeunload flush could lose the last write on
       // mobile, where beforeunload often never fires. Zustand now writes
@@ -323,13 +373,19 @@ export const useAppStore = create<AppState>()(
 
         // v4 persisted nav (mode, subView) alongside prefs. Carry those
         // forward once so the upgrade keeps the current view, then v5
-        // writes omit nav through partialize below.
+        // writes omit nav through partialize below. v6 adds the persisted
+        // nearby radius; older entries fall back to the 2 km default and
+        // out-of-range values are clamped back into the slider band.
         return {
           mode: state?.mode ?? 'kmb',
           subView: state?.subView ?? 'stops',
           lang: state?.lang ?? 'tc',
           routeFilterMode: state?.routeFilterMode ?? 'simple',
           autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
+          nearbyRadiusKm:
+            typeof state?.nearbyRadiusKm === 'number'
+              ? clampNearbyRadiusKm(state.nearbyRadiusKm)
+              : 2,
           favorites,
           favoritesGroups: state?.favoritesGroups ?? [],
           recents: state?.recents ?? [],
@@ -339,6 +395,7 @@ export const useAppStore = create<AppState>()(
         lang: state.lang,
         routeFilterMode: state.routeFilterMode,
         autoRefreshSeconds: state.autoRefreshSeconds,
+        nearbyRadiusKm: state.nearbyRadiusKm,
         favorites: state.favorites,
         favoritesGroups: state.favoritesGroups,
         recents: state.recents,

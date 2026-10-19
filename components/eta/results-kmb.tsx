@@ -3,7 +3,6 @@
 import { ChevronDown, Clock, Info, Loader2 } from 'lucide-react'
 import * as React from 'react'
 
-import type { Company } from 'hk-bus-eta'
 import type { EtaGroup, PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import {
   buildDefaultKey,
@@ -11,7 +10,7 @@ import {
   groupEtasByVariant,
   sortScheduledFirst,
 } from '@/lib/eta/kmb-eta-groups'
-import { routeVariantKey, variantFamilyKey } from '@/lib/eta/eta-db-index'
+import { variantFamilyKey } from '@/lib/eta/eta-db-index'
 import type { ScheduledFallback } from '@/lib/eta/headway/types'
 import {
   useHeadwayIndex,
@@ -42,20 +41,21 @@ import { useTranslations } from '@/lib/eta/i18n'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
 
+const OPERATOR_LABELS: Record<string, { en: string; tc: string; sc: string }> = {
+  kmb: { en: 'KMB', tc: '九巴', sc: '九巴' },
+  ctb: { en: 'CTB', tc: '城巴', sc: '城巴' },
+  nwfb: { en: 'NWFB', tc: '新巴', sc: '新巴' },
+  nlb: { en: 'NLB', tc: '嶼巴', sc: '屿巴' },
+  gmb: { en: 'GMB', tc: '小巴', sc: '小巴' },
+  lrtfeeder: { en: 'LRTF', tc: '港鐵巴士', sc: '轻铁接驳' },
+  sunferry: { en: 'SF', tc: '新渡輪', sc: '新渡轮' },
+  hkkf: { en: 'HKKF', tc: '港九小輪', sc: '港九小轮' },
+  fortuneferry: { en: 'FF', tc: '富裕小輪', sc: '富裕小轮' },
+}
+
 function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
   const key = normalizeOperator(co)
-  const map: Record<string, { en: string; tc: string; sc: string }> = {
-    kmb: { en: 'KMB', tc: '九巴', sc: '九巴' },
-    ctb: { en: 'CTB', tc: '城巴', sc: '城巴' },
-    nwfb: { en: 'NWFB', tc: '新巴', sc: '新巴' },
-    nlb: { en: 'NLB', tc: '嶼巴', sc: '屿巴' },
-    gmb: { en: 'GMB', tc: '小巴', sc: '小巴' },
-    lrtfeeder: { en: 'LRTF', tc: '港鐵巴士', sc: '轻铁接驳' },
-    sunferry: { en: 'SF', tc: '新渡輪', sc: '新渡轮' },
-    hkkf: { en: 'HKKF', tc: '港九小輪', sc: '港九小轮' },
-    fortuneferry: { en: 'FF', tc: '富裕小輪', sc: '富裕小轮' },
-  }
-  const label = map[key] ?? { en: key.toUpperCase(), tc: key, sc: key }
+  const label = OPERATOR_LABELS[key] ?? { en: key.toUpperCase(), tc: key, sc: key }
   return pickLang(label, lang)
 }
 
@@ -286,22 +286,21 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   // Use baseKey for route info lookup (full key may have leg suffix).
   // Scoped keys (with gtfsId) miss when the pane resolved a different
   // region's info: fall back to any region of the same family for display.
+  // Memoized so ETA polls that replace the routeInfos object do not rebuild
+  // key strings for every info on every row render.
   const baseFamily = variantFamilyKey(baseKey)
-  const routeInfo =
-    routeInfos[baseKey] ??
-    Object.values(routeInfos).find(
-      (info) =>
-        !!info &&
-        variantFamilyKey(
-          routeVariantKey({
-            co: String(info.co ?? 'kmb') as Company,
-            route: String(info.route ?? '').toUpperCase(),
-            bound: String(info.bound ?? ''),
-            serviceType: String(info.serviceType ?? ''),
-            gtfsId: info.gtfsId,
-          })
-        ) === baseFamily
-    )
+  const routeInfo = React.useMemo(() => {
+    const direct = routeInfos[baseKey]
+    if (direct) return direct
+    for (const info of Object.values(routeInfos)) {
+      if (!info) continue
+      const family =
+        `${String(info.co ?? 'kmb').toLowerCase()}|${String(info.route ?? '').toUpperCase()}|` +
+        `${String(info.bound ?? '')}|${String(info.serviceType ?? '')}`
+      if (family === baseFamily) return info
+    }
+    return undefined
+  }, [routeInfos, baseKey, baseFamily])
   const label = formatRouteVariantLabel(
     routeInfo,
     first,

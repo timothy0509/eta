@@ -82,10 +82,15 @@ function pickExactDayTable<T>(
 
 function hhmmToDisplay(hhmm: string): string | null {
   const normalized = hhmm.trim()
-  if (!/^\d{3,4}$/.test(normalized)) return null
-  const padded = normalized.padStart(4, '0')
-  const hh = Number(padded.slice(0, 2))
-  const mm = Number(padded.slice(2, 4))
+  const len = normalized.length
+  if (len !== 3 && len !== 4) return null
+  for (let i = 0; i < len; i += 1) {
+    const code = normalized.charCodeAt(i)
+    if (code < 48 || code > 57) return null
+  }
+  const padded = len === 3 ? `0${normalized}` : normalized
+  const hh = (padded.charCodeAt(0) - 48) * 10 + (padded.charCodeAt(1) - 48)
+  const mm = (padded.charCodeAt(2) - 48) * 10 + (padded.charCodeAt(3) - 48)
   if (hh > 23 || mm > 59) return null
   return `${padded.slice(0, 2)}:${padded.slice(2, 4)}`
 }
@@ -127,12 +132,15 @@ function findActiveHeadway(windows: HeadwayWindow[], mins: number): number | nul
 }
 
 function distinctHeadwayRange(windows: HeadwayWindow[]): [number, number] | null {
-  const values = [...new Set(windows.map((w) => w[2]))].sort((a, b) => a - b)
-  if (values.length < 2) return null
-  const first = values[0]
-  const last = values[values.length - 1]
-  if (first === undefined || last === undefined) return null
-  return [first, last]
+  let min: number | null = null
+  let max: number | null = null
+  for (const w of windows) {
+    const v = w[2]
+    if (min === null || v < min) min = v
+    if (max === null || v > max) max = v
+  }
+  if (min === null || max === null || min === max) return null
+  return [min, max]
 }
 
 /**
@@ -187,11 +195,13 @@ export function departureGroupsForDay(
     }
   }
   if (schedule.special) {
+    const seenOrigins = new Set(out.map((g) => g.origin))
     for (const entry of schedule.special) {
       if (servingSrc && !servingSrc.has(entry.src)) continue
       const list = entry.departures[dayType]
       if (!list || list.length === 0) continue
-      if (out.some((g) => g.origin === entry.origin)) continue
+      if (seenOrigins.has(entry.origin)) continue
+      seenOrigins.add(entry.origin)
       out.push({ origin: entry.origin, departures: [...list] })
     }
   }

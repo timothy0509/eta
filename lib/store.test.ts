@@ -512,28 +512,6 @@ describe('store favorites', () => {
 
 describe('store migration', () => {
   it('migrates v1 favorites without meta to v2 with default pinned and groupId', () => {
-    // Simulate the migrate function from store.ts
-    const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
-      ...item,
-      pinned: item.pinned ?? false,
-      groupId: item.groupId ?? null,
-    })
-
-    const migrate = (persistedState: unknown) => {
-      const state = persistedState as { favorites?: FavoritesItem[] } | undefined
-      const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
-
-      return {
-        mode: 'kmb' as const,
-        lang: 'tc' as const,
-        routeFilterMode: 'simple' as const,
-        autoRefreshSeconds: 15,
-        favorites,
-        favoritesGroups: [],
-        recents: [],
-      }
-    }
-
     const v1State = {
       favorites: [
         {
@@ -547,34 +525,13 @@ describe('store migration', () => {
       ],
     }
 
-    const migrated = migrate(v1State)
+    const migrated = migratePersistedState(v1State)
 
     expect(migrated.favorites[0].pinned).toBe(false)
     expect(migrated.favorites[0].groupId).toBeNull()
   })
 
   it('preserves existing pinned and groupId values during migration', () => {
-    const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
-      ...item,
-      pinned: item.pinned ?? false,
-      groupId: item.groupId ?? null,
-    })
-
-    const migrate = (persistedState: unknown) => {
-      const state = persistedState as { favorites?: FavoritesItem[] } | undefined
-      const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
-
-      return {
-        mode: 'kmb' as const,
-        lang: 'tc' as const,
-        routeFilterMode: 'simple' as const,
-        autoRefreshSeconds: 15,
-        favorites,
-        favoritesGroups: [{ id: 'group-1', name: 'Work' }],
-        recents: [],
-      }
-    }
-
     const v1State = {
       favorites: [
         {
@@ -587,88 +544,48 @@ describe('store migration', () => {
           groupId: 'group-1',
         },
       ],
+      favoritesGroups: [{ id: 'group-1', name: 'Work' }],
     }
 
-    const migrated = migrate(v1State)
+    const migrated = migratePersistedState(v1State)
 
     expect(migrated.favorites[0].pinned).toBe(true)
     expect(migrated.favorites[0].groupId).toBe('group-1')
+    expect(migrated.favoritesGroups).toEqual([{ id: 'group-1', name: 'Work' }])
   })
 
   it('preserves other state fields during migration', () => {
-    const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
-      ...item,
-      pinned: item.pinned ?? false,
-      groupId: item.groupId ?? null,
-    })
-
-    const migrate = (persistedState: unknown) => {
-      const state = persistedState as
-        | {
-            mode?: 'kmb' | 'mtr' | 'lrt'
-            lang?: 'en' | 'tc' | 'sc'
-            routeFilterMode?: 'simple' | 'advanced'
-            autoRefreshSeconds?: number
-            favorites?: FavoritesItem[]
-          }
-        | undefined
-      const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
-
-      return {
-        mode: state?.mode ?? 'kmb',
-        lang: state?.lang ?? 'tc',
-        routeFilterMode: state?.routeFilterMode ?? 'simple',
-        autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
-        favorites,
-        favoritesGroups: [],
-        recents: [],
-      }
-    }
-
     const v1State = {
       mode: 'mtr' as const,
       lang: 'en' as const,
-      routeFilterMode: 'advanced' as const,
       autoRefreshSeconds: 30,
       favorites: [],
     }
 
-    const migrated = migrate(v1State)
+    const migrated = migratePersistedState(v1State)
 
     expect(migrated.mode).toBe('mtr')
     expect(migrated.lang).toBe('en')
-    expect(migrated.routeFilterMode).toBe('advanced')
     expect(migrated.autoRefreshSeconds).toBe(30)
   })
 
-  it('handles undefined persisted state with defaults', () => {
-    const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
-      ...item,
-      pinned: item.pinned ?? false,
-      groupId: item.groupId ?? null,
+  it('drops the removed route filter mode during migration', () => {
+    const migrated = migratePersistedState({
+      mode: 'kmb',
+      routeFilterMode: 'advanced',
+      favorites: [],
     })
 
-    const migrate = (persistedState: unknown) => {
-      const state = persistedState as { favorites?: FavoritesItem[] } | undefined
-      const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
+    expect(migrated).not.toHaveProperty('routeFilterMode')
+  })
 
-      return {
-        mode: 'kmb' as const,
-        lang: 'tc' as const,
-        routeFilterMode: 'simple' as const,
-        autoRefreshSeconds: 15,
-        favorites,
-        favoritesGroups: [],
-        recents: [],
-      }
-    }
-
-    const migrated = migrate(undefined)
+  it('handles undefined persisted state with defaults', () => {
+    const migrated = migratePersistedState(undefined)
 
     expect(migrated.mode).toBe('kmb')
     expect(migrated.lang).toBe('tc')
-    expect(migrated.routeFilterMode).toBe('simple')
     expect(migrated.autoRefreshSeconds).toBe(15)
+    expect(migrated.nearbyRadiusKm).toBe(2)
     expect(migrated.favorites).toEqual([])
     expect(migrated.favoritesGroups).toEqual([])
     expect(migrated.recents).toEqual([])
@@ -749,7 +666,6 @@ describe('settings prefs', () => {
   beforeEach(() => {
     useAppStore.setState({
       lang: 'tc',
-      routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
       nearbyRadiusKm: 2,
       favorites: [],
@@ -775,14 +691,13 @@ describe('settings prefs', () => {
       version: number
       state: { nearbyRadiusKm: number }
     }
-    expect(parsed.version).toBe(6)
+    expect(parsed.version).toBe(7)
     expect(parsed.state.nearbyRadiusKm).toBe(3)
   })
 
   it('resetPrefs restores defaults but keeps saved data', () => {
     useAppStore.setState({
       lang: 'en',
-      routeFilterMode: 'advanced',
       autoRefreshSeconds: 60,
       nearbyRadiusKm: 4,
       favorites: [mtrFavorite('fav-1')],
@@ -790,7 +705,6 @@ describe('settings prefs', () => {
     useAppStore.getState().resetPrefs()
     const state = useAppStore.getState()
     expect(state.lang).toBe('tc')
-    expect(state.routeFilterMode).toBe('simple')
     expect(state.autoRefreshSeconds).toBe(15)
     expect(state.nearbyRadiusKm).toBe(2)
     expect(state.favorites).toHaveLength(1)
@@ -852,7 +766,7 @@ describe('settings prefs', () => {
 })
 
 describe('migratePersistedState', () => {
-  it('falls back to the default radius for v5 payloads without one', () => {
+  it('falls back to the default radius for v6 payloads without one', () => {
     const migrated = migratePersistedState({
       lang: 'en',
       routeFilterMode: 'advanced',
@@ -863,6 +777,7 @@ describe('migratePersistedState', () => {
     })
     expect(migrated.nearbyRadiusKm).toBe(2)
     expect(migrated.lang).toBe('en')
+    expect(migrated).not.toHaveProperty('routeFilterMode')
   })
 
   it('clamps out-of-range radii and rejects non-numbers', () => {

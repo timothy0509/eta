@@ -2,37 +2,25 @@ import { describe, expect, it } from 'vitest'
 import { encodeUrlState, decodeUrlState } from './url-state'
 import type { UrlEncodeInput } from './url-state'
 
+const BASE_INPUT: UrlEncodeInput = {
+  mode: 'kmb',
+  subView: 'stops',
+  lang: 'tc',
+  autoRefreshSeconds: 15,
+}
+
 describe('encodeUrlState', () => {
   it('returns empty string for default state', () => {
-    const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
-    }
-    expect(encodeUrlState(input)).toBe('')
+    expect(encodeUrlState({ ...BASE_INPUT })).toBe('')
   })
 
   it('encodes non-default mode', () => {
-    const input: UrlEncodeInput = {
-      mode: 'mtr',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
-    }
+    const input: UrlEncodeInput = { ...BASE_INPUT, mode: 'mtr' }
     expect(encodeUrlState(input)).toContain('m=mtr')
   })
 
   it('omits prefs by default so share URLs stay nav-only', () => {
-    const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'en',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 30,
-    }
+    const input: UrlEncodeInput = { ...BASE_INPUT, lang: 'en', autoRefreshSeconds: 30 }
     const encoded = encodeUrlState(input)
     expect(encoded).not.toContain('l=')
     expect(encoded).not.toContain('ar=')
@@ -41,26 +29,19 @@ describe('encodeUrlState', () => {
 
   it('encodes prefs only on explicit Share', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
+      ...BASE_INPUT,
       lang: 'en',
-      routeFilterMode: 'advanced',
       autoRefreshSeconds: 30,
       includePrefs: true,
     }
     const encoded = encodeUrlState(input)
     expect(encoded).toContain('l=en')
-    expect(encoded).toContain('rfm=advanced')
     expect(encoded).toContain('ar=30')
   })
 
   it('encodes KMB stop query', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
+      ...BASE_INPUT,
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
       },
@@ -72,11 +53,7 @@ describe('encodeUrlState', () => {
 
   it('encodes KMB stops query', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
+      ...BASE_INPUT,
       kmb: {
         query: { mode: 'stops', stopIds: ['1234', '5678'] },
       },
@@ -88,11 +65,7 @@ describe('encodeUrlState', () => {
 
   it('encodes KMB contains query', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
+      ...BASE_INPUT,
       kmb: {
         query: { mode: 'contains', query: '1A' },
       },
@@ -103,36 +76,18 @@ describe('encodeUrlState', () => {
   })
 
   it('encodes MTR station', () => {
-    const input: UrlEncodeInput = {
-      mode: 'mtr',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
-      mtr: { sta: 'CEN' },
-    }
+    const input: UrlEncodeInput = { ...BASE_INPUT, mode: 'mtr', mtr: { sta: 'CEN' } }
     expect(encodeUrlState(input)).toContain('ms=CEN')
   })
 
   it('encodes LRT station', () => {
-    const input: UrlEncodeInput = {
-      mode: 'lrt',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
-      lrt: { stationId: '100' },
-    }
+    const input: UrlEncodeInput = { ...BASE_INPUT, mode: 'lrt', lrt: { stationId: '100' } }
     expect(encodeUrlState(input)).toContain('ls=100')
   })
 
-  it('encodes advanced KMB entries without the prefs flag', () => {
+  it('encodes KMB entries without the prefs flag', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'advanced',
-      autoRefreshSeconds: 15,
+      ...BASE_INPUT,
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {
@@ -143,6 +98,18 @@ describe('encodeUrlState', () => {
     const encoded = encodeUrlState(input)
     expect(encoded).toContain('ke=')
     expect(encoded).not.toContain('rfm=')
+  })
+
+  it('encodes KMB route text', () => {
+    const input: UrlEncodeInput = {
+      ...BASE_INPUT,
+      kmb: {
+        query: { mode: 'stop', stopId: '1234' },
+        routeFilter: { routes: '1A' },
+      },
+    }
+    const encoded = encodeUrlState(input)
+    expect(encoded).toContain('kr=1A')
   })
 })
 
@@ -211,10 +178,11 @@ describe('decodeUrlState', () => {
     expect(result.state.autoRefreshSeconds).toBeUndefined()
   })
 
-  it('keeps legacy rfm on the KMB selection without touching global state', () => {
+  it('ignores the legacy rfm flag without touching global state', () => {
     const result = decodeUrlState('km=stop&ks=1234&rfm=advanced')
-    expect(result.state.routeFilterMode).toBeUndefined()
-    expect(result.selectedItem).toHaveProperty('routeFilterMode', 'advanced')
+    expect(result.state).not.toHaveProperty('routeFilterMode')
+    expect(result.selectedItem).not.toHaveProperty('routeFilterMode')
+    expect(result.selectedItem).toHaveProperty('stopId', '1234')
   })
 
   it('decodes sub view parameter', () => {
@@ -223,13 +191,7 @@ describe('decodeUrlState', () => {
   })
 
   it('encodes non-default sub view', () => {
-    const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'routes',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
-    }
+    const input: UrlEncodeInput = { ...BASE_INPUT, subView: 'routes' }
     expect(encodeUrlState(input)).toContain('v=routes')
   })
 
@@ -265,9 +227,10 @@ describe('decodeUrlState', () => {
     expect(result.state.subView).toBe('stops')
     expect(result.state.lang).toBeUndefined()
     expect(result.state.autoRefreshSeconds).toBeUndefined()
-    expect(result.state.routeFilterMode).toBeUndefined()
+    expect(result.state).not.toHaveProperty('routeFilterMode')
     expect(result.selectedItem).not.toBeNull()
     expect(result.selectedItem).toHaveProperty('stopId', '1234')
+    expect(result.selectedItem).not.toHaveProperty('routeFilterMode')
   })
 
   it('ignores unknown keys and fills gaps with defaults at the call site', () => {
@@ -279,11 +242,7 @@ describe('decodeUrlState', () => {
 
   it('round-trips nav-only KMB stop state', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'simple',
-      autoRefreshSeconds: 15,
+      ...BASE_INPUT,
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
       },
@@ -295,13 +254,9 @@ describe('decodeUrlState', () => {
     expect(decoded.selectedItem).toHaveProperty('stopId', '1234')
   })
 
-  it('round-trips advanced KMB entries back to an advanced selection', () => {
+  it('round-trips KMB entries back to a filtered selection', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'advanced',
-      autoRefreshSeconds: 15,
+      ...BASE_INPUT,
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {
@@ -311,17 +266,13 @@ describe('decodeUrlState', () => {
     }
     const encoded = encodeUrlState(input)
     const decoded = decodeUrlState(encoded)
-    expect(decoded.selectedItem).toHaveProperty('routeFilterMode', 'advanced')
-    expect(decoded.state.routeFilterMode).toBeUndefined()
+    expect(decoded.selectedItem).toHaveProperty('entries', [{ variantKey: 'kmb|1A|1|1' }])
+    expect(decoded.selectedItem).not.toHaveProperty('routeFilterMode')
   })
 
   it('round-trips scoped 5-part entries preserving the region', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'advanced',
-      autoRefreshSeconds: 15,
+      ...BASE_INPUT,
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {
@@ -332,17 +283,12 @@ describe('decodeUrlState', () => {
     const encoded = encodeUrlState(input)
     expect(encoded).toContain(`ke=${encodeURIComponent('gmb|1|O|1|2006408')}`)
     const decoded = decodeUrlState(encoded)
-    expect(decoded.selectedItem).toHaveProperty('routeFilterMode', 'advanced')
     expect(decoded.selectedItem).toHaveProperty('entries', [{ variantKey: 'gmb|1|O|1|2006408' }])
   })
 
   it('compacts empty-scope 5-part entries to 4-part family keys', () => {
     const input: UrlEncodeInput = {
-      mode: 'kmb',
-      subView: 'stops',
-      lang: 'tc',
-      routeFilterMode: 'advanced',
-      autoRefreshSeconds: 15,
+      ...BASE_INPUT,
       kmb: {
         query: { mode: 'stop', stopId: '1234' },
         routeFilter: {

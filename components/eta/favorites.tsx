@@ -162,7 +162,7 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
 
         // Build suffix from saved data
         let suffix = ''
-        if (item.routeFilterMode === 'advanced' && item.entries?.length) {
+        if (item.entries?.length) {
           suffix = formatRouteCount(item.entries.length, t)
         } else if (item.route) {
           suffix = ` · ${item.route}`
@@ -200,7 +200,7 @@ const FavoriteItemDisplay = React.memo(function FavoriteItemDisplay({
 
         // Build suffix from saved data
         let suffix = ''
-        if (item.routeFilterMode === 'advanced' && item.entries?.length) {
+        if (item.entries?.length) {
           suffix = formatRouteCount(item.entries.length, t)
         } else if (item.route) {
           suffix = ` · ${item.route}`

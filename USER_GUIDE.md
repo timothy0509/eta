@@ -292,7 +292,7 @@ Share specific views with others:
 2. **Use stop codes** - Faster than typing full names (e.g., "KT313" vs "Kwun Tong Ferry Pier")
 3. **Group your favorites** - Organize by location or purpose
 4. **Enable auto-refresh** - Set to 15s for the best balance of accuracy and performance
-5. **Use advanced filtering** - Filter specific route variants to reduce clutter
+5. **Filter by direction** - Tap a route badge to narrow to exact directions and reduce clutter
 
 ### 🎯 Power User Features
 

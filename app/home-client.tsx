@@ -98,7 +98,6 @@ const useAppStoreState = () =>
       mode: s.mode,
       subView: s.subView,
       lang: s.lang,
-      routeFilterMode: s.routeFilterMode,
       autoRefreshSeconds: s.autoRefreshSeconds,
     }))
   )
@@ -109,7 +108,6 @@ const useAppStoreActions = () =>
       setMode: s.setMode,
       setSubView: s.setSubView,
       setLang: s.setLang,
-      setRouteFilterMode: s.setRouteFilterMode,
       addFavorite: s.addFavorite,
       addRecent: s.addRecent,
     }))
@@ -252,9 +250,8 @@ function LrtResultsFromStore({ fallbackLang }: { fallbackLang: UiLanguage }) {
 }
 
 export default function HomeClient() {
-  const { mode, subView, lang, routeFilterMode, autoRefreshSeconds } = useAppStoreState()
-  const { setMode, setSubView, setLang, setRouteFilterMode, addFavorite, addRecent } =
-    useAppStoreActions()
+  const { mode, subView, lang, autoRefreshSeconds } = useAppStoreState()
+  const { setMode, setSubView, setLang, addFavorite, addRecent } = useAppStoreActions()
 
   const setKmbStops = usePaneStore((s) => s.setKmbStops)
 
@@ -270,7 +267,7 @@ export default function HomeClient() {
   // Pane-store snapshots are read-only here. Panes write their own
   // snapshots, and the URL hook below only reads them for encoding.
   // The hook hydrates nav-only state so shared links never overwrite
-  // recipient lang, refresh interval, or filter mode.
+  // recipient lang or refresh interval.
   const { selectedItem, setSelectedItem } = useUrlSync({
     kmbQuery: kmbQuerySummary,
     kmbRouteFilter,
@@ -391,16 +388,13 @@ export default function HomeClient() {
     (item: FavoritesItem) => {
       setSelectedItem(item)
       setMode(item.mode)
-      if (item.mode === 'kmb' && 'routeFilterMode' in item) {
-        setRouteFilterMode(item.routeFilterMode ?? 'simple')
-      }
       if (item.mode === 'kmb' && 'type' in item && item.type === 'route') {
         setSubView('routes')
       } else {
         setSubView('stops')
       }
     },
-    [setMode, setRouteFilterMode, setSelectedItem, setSubView]
+    [setMode, setSelectedItem, setSubView]
   )
 
   const kmbRouteInitialSelection = React.useMemo(() => {
@@ -424,7 +418,6 @@ export default function HomeClient() {
         title,
         stopIds,
         route,
-        routeFilterMode: 'simple',
       }
       setSelectedItem(item)
       setMode('kmb')
@@ -477,8 +470,6 @@ export default function HomeClient() {
       {mode === 'kmb' && (
         <KmbPane
           lang={lang}
-          routeFilterMode={routeFilterMode}
-          onRouteFilterModeChange={setRouteFilterMode}
           onAddRecent={addRecent}
           onAddFavorite={addFavorite}
           canFavoriteRef={canFavoriteRef}

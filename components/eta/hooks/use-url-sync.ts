@@ -19,22 +19,20 @@ export type UrlSyncPaneBits = {
 
 /**
  * Owns URL hydration (decode-on-mount into nav state only) and URL encoding
- * (encode-on-change back to the address bar). Prefs such as lang, filter
- * mode, and refresh interval are never read from or written to the URL, so
- * a shared link never overwrites saved preferences. Pane-store snapshots
- * arrive as arguments so this hook is the only place that couples pane
- * state to the URL.
+ * (encode-on-change back to the address bar). Prefs such as lang and refresh
+ * interval are never read from or written to the URL, so a shared link never
+ * overwrites saved preferences. Pane-store snapshots arrive as arguments so
+ * this hook is the only place that couples pane state to the URL.
  */
 export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: UrlSyncPaneBits) {
-  // lang, routeFilterMode, and autoRefreshSeconds are read only to satisfy
-  // the encode input shape. They are never written from the URL and never
-  // encoded without includePrefs, so prefs stay out of the address bar.
-  const { mode, subView, lang, routeFilterMode, autoRefreshSeconds } = useAppStore(
+  // lang and autoRefreshSeconds are read only to satisfy the encode input
+  // shape. They are never written from the URL and never encoded without
+  // includePrefs, so prefs stay out of the address bar.
+  const { mode, subView, lang, autoRefreshSeconds } = useAppStore(
     useShallow((s) => ({
       mode: s.mode,
       subView: s.subView,
       lang: s.lang,
-      routeFilterMode: s.routeFilterMode,
       autoRefreshSeconds: s.autoRefreshSeconds,
     }))
   )
@@ -70,7 +68,7 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
       const nextMode = decoded.state.mode ?? decoded.selectedItem?.mode
       if (nextMode) setMode(nextMode)
       if (decoded.state.subView) setSubView(decoded.state.subView)
-      // decode never populates lang, routeFilterMode, or autoRefreshSeconds:
+      // decode never populates lang or autoRefreshSeconds:
       // hydrate applies nav only so a shared link never overwrites prefs.
       // Decoded ids are deterministic, so re-hydrating the same URL keeps
       // the existing selection object instead of churning pane restores.
@@ -83,7 +81,6 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
         mode: decoded.state.mode ?? mode,
         subView: decoded.state.subView ?? subView,
         lang,
-        routeFilterMode,
         autoRefreshSeconds,
         kmb: null,
         mtr: { sta: null },
@@ -91,7 +88,7 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
       })
       didHydrateFromUrlRef.current = true
     },
-    [autoRefreshSeconds, lang, mode, routeFilterMode, setMode, setSelectedItem, setSubView, subView]
+    [autoRefreshSeconds, lang, mode, setMode, setSelectedItem, setSubView, subView]
   )
 
   React.useEffect(() => {
@@ -121,7 +118,6 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
       mode,
       subView,
       lang,
-      routeFilterMode,
       autoRefreshSeconds,
       kmb: kmbQuery
         ? {
@@ -148,7 +144,6 @@ export function useUrlSync({ kmbQuery, kmbRouteFilter, mtrSta, lrtStationId }: U
     mode,
     mtrSta,
     pathname,
-    routeFilterMode,
     router,
     subView,
   ])

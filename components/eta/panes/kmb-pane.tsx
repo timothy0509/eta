@@ -27,7 +27,7 @@ import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
-import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
+import type { FavoritesItem } from '@/lib/store'
 import { precomputeRenderGroups, type PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { initialEtaState, etaReducer } from '@/components/eta/panes/kmb-reducer'
 import {
@@ -60,8 +60,6 @@ import { useTranslations } from '@/lib/eta/i18n'
 
 type Props = {
   lang: UiLanguage
-  routeFilterMode: RouteFilterMode
-  onRouteFilterModeChange: (mode: RouteFilterMode) => void
   onAddRecent: (item: FavoritesItem) => void
   onAddFavorite: (item: FavoritesItem) => void
   canFavoriteRef: React.MutableRefObject<boolean>
@@ -154,8 +152,6 @@ export type KmbPaneState = {
 
 export function KmbPane({
   lang,
-  routeFilterMode,
-  onRouteFilterModeChange,
   onAddRecent,
   onAddFavorite,
   canFavoriteRef,
@@ -204,16 +200,11 @@ export function KmbPane({
 
   // Keep refs for stable callback access without triggering recreations
   const routeFilterEntriesRef = React.useRef(routeFilter.entries)
-  const routeFilterModeRef = React.useRef(routeFilterMode)
   const etaStateRef = React.useRef(etaState)
 
   React.useEffect(() => {
     routeFilterEntriesRef.current = routeFilter.entries
   }, [routeFilter.entries])
-
-  React.useEffect(() => {
-    routeFilterModeRef.current = routeFilterMode
-  }, [routeFilterMode])
 
   React.useEffect(() => {
     etaStateRef.current = etaState
@@ -433,9 +424,9 @@ export function KmbPane({
 
   const getRouteFilterString = React.useCallback(
     (query: KmbQuery) => {
-      return buildRouteFilterString(routeFilter, routeFilterMode, query.route)
+      return buildRouteFilterString(routeFilter, query.route)
     },
-    [routeFilter, routeFilterMode]
+    [routeFilter]
   )
 
   // Fetch ETAs for a specific set of stop IDs and merge into state
@@ -851,7 +842,6 @@ export function KmbPane({
     if (isKmbRouteFavorite(selectedItem)) return
     if (selectedItem.id === lastSelectedIdRef.current) return
 
-    const nextRouteFilterMode = selectedItem.routeFilterMode ?? 'simple'
     const restoredEntries = (selectedItem.entries ?? []).map((entry, idx) => {
       const parts = entry.variantKey.split('|')
       return {
@@ -873,9 +863,6 @@ export function KmbPane({
     queueMicrotask(() => {
       if (cancelled) return
 
-      if (nextRouteFilterMode !== routeFilterMode) {
-        onRouteFilterModeChange(nextRouteFilterMode)
-      }
       setRouteFilter({
         routes: selectedItem.route ?? '',
         entries: restoredEntries,
@@ -891,7 +878,7 @@ export function KmbPane({
     return () => {
       cancelled = true
     }
-  }, [onRouteFilterModeChange, routeFilterMode, selectedItem])
+  }, [selectedItem])
 
   const prevQueryContextRef = React.useRef<KmbQueryContext | undefined>(undefined)
   React.useEffect(() => {
@@ -901,26 +888,19 @@ export function KmbPane({
     const currentContext: KmbQueryContext = {
       selection: kmbDraftStopSelection,
       routeFilter,
-      routeFilterMode,
     }
     const prev = prevQueryContextRef.current
     prevQueryContextRef.current = currentContext
 
     if (!hasKmbQueryContextChanged(prev, currentContext)) return
 
-    const nextQuery = buildKmbQueryFromDraft(kmbDraftStopSelection, routeFilter, routeFilterMode)
+    const nextQuery = buildKmbQueryFromDraft(kmbDraftStopSelection, routeFilter)
 
     dispatchEta({ type: 'RESET' })
 
     setKmbQuery(nextQuery)
     void refreshKmbEtaRef.current(nextQuery, { toastOnError: false, isInitialLoad: true })
-  }, [
-    kmbDraftStopSelection,
-    kmbRouteStops.length,
-    routeFilter,
-    routeFilterMode,
-    routeFilter.entries,
-  ])
+  }, [kmbDraftStopSelection, kmbRouteStops.length, routeFilter, routeFilter.entries])
 
   const kmbResultsInfo = React.useMemo(() => {
     if (!kmbQuery) {
@@ -967,7 +947,6 @@ export function KmbPane({
 
   const onSave = useKmbSave({
     lang,
-    routeFilterMode,
     routeFilter,
     kmbQuery,
     kmbDraftStopSelection,
@@ -1095,8 +1074,6 @@ export function KmbPane({
 
       <RouteFilter
         lang={lang}
-        mode={routeFilterMode}
-        onModeChange={onRouteFilterModeChange}
         value={routeFilter}
         options={kmbRouteStops.length ? kmbAvailableRouteVariants : []}
         onChange={(next) => setRouteFilter(next)}

@@ -7,35 +7,32 @@ import {
 } from './use-kmb-route-filter'
 
 describe('buildRouteFilterString', () => {
-  it('extracts route numbers from advanced entries', () => {
-    const result = buildRouteFilterString(
-      {
-        routes: '',
-        entries: [
-          { id: '1', variantKey: 'kmb|1|O|1' },
-          { id: '2', variantKey: 'kmb|2A|I|1' },
-        ],
-      },
-      'advanced'
-    )
+  it('extracts route numbers from direction entries', () => {
+    const result = buildRouteFilterString({
+      routes: '',
+      entries: [
+        { id: '1', variantKey: 'kmb|1|O|1' },
+        { id: '2', variantKey: 'kmb|2A|I|1' },
+      ],
+    })
 
     expect(result).toBe('1,2A')
   })
 
-  it('uses query.route in simple mode', () => {
-    const result = buildRouteFilterString({ routes: '3,4', entries: [] }, 'simple', '1,2')
+  it('uses query.route when no other filter state is present', () => {
+    const result = buildRouteFilterString({ routes: '3,4', entries: [] }, '1,2')
 
     expect(result).toBe('1,2')
   })
 
-  it('falls back to routeFilter.routes in simple mode when query.route is missing', () => {
-    const result = buildRouteFilterString({ routes: '1, 2A', entries: [] }, 'simple')
+  it('falls back to routeFilter.routes when query.route is missing', () => {
+    const result = buildRouteFilterString({ routes: '1, 2A', entries: [] })
 
     expect(result).toBe('1,2A')
   })
 
   it('returns undefined when no filter state is present', () => {
-    const result = buildRouteFilterString({ routes: '', entries: [] }, 'simple')
+    const result = buildRouteFilterString({ routes: '', entries: [] })
 
     expect(result).toBeUndefined()
   })
@@ -46,7 +43,6 @@ describe('buildRouteFilterString', () => {
         routes: '9',
         entries: [{ id: '1', variantKey: 'kmb|5|O|1' }],
       },
-      'advanced',
       '1'
     )
 
@@ -55,11 +51,10 @@ describe('buildRouteFilterString', () => {
 })
 
 describe('buildKmbQueryFromDraft', () => {
-  it('includes route from routeFilter.routes in simple mode', () => {
+  it('includes route from routeFilter.routes', () => {
     const result = buildKmbQueryFromDraft(
       { type: 'stop', stopId: '1234' },
-      { routes: '1,2', entries: [] },
-      'simple'
+      { routes: '1,2', entries: [] }
     )
 
     expect(result).toEqual({
@@ -70,19 +65,19 @@ describe('buildKmbQueryFromDraft', () => {
     })
   })
 
-  it('omits route in advanced mode', () => {
+  it('keeps route text alongside direction entries', () => {
     const result = buildKmbQueryFromDraft(
       { type: 'stop', stopId: '1234' },
       {
         routes: '1',
         entries: [{ id: '1', variantKey: 'kmb|1|O|1' }],
-      },
-      'advanced'
+      }
     )
 
     expect(result).toEqual({
       mode: 'stop',
       stopId: '1234',
+      route: '1',
       serviceType: '1',
     })
   })
@@ -92,7 +87,6 @@ describe('hasKmbQueryContextChanged', () => {
   const baseContext = {
     selection: { type: 'stop' as const, stopId: '1234' },
     routeFilter: { routes: '', entries: [] },
-    routeFilterMode: 'simple' as const,
   }
 
   it('returns true when there is no previous context', () => {
@@ -112,7 +106,7 @@ describe('hasKmbQueryContextChanged', () => {
     expect(hasKmbQueryContextChanged(baseContext, next)).toBe(true)
   })
 
-  it('returns true when simple route filter routes change', () => {
+  it('returns true when route text changes', () => {
     const next = {
       ...baseContext,
       routeFilter: { routes: '1,2A', entries: [] },
@@ -121,19 +115,9 @@ describe('hasKmbQueryContextChanged', () => {
     expect(hasKmbQueryContextChanged(baseContext, next)).toBe(true)
   })
 
-  it('returns true when route filter mode changes', () => {
-    const next = {
-      ...baseContext,
-      routeFilterMode: 'advanced' as const,
-    }
-
-    expect(hasKmbQueryContextChanged(baseContext, next)).toBe(true)
-  })
-
-  it('returns true when advanced entries change', () => {
+  it('returns true when direction entries change', () => {
     const prev = {
       ...baseContext,
-      routeFilterMode: 'advanced' as const,
       routeFilter: {
         routes: '',
         entries: [{ id: '1', variantKey: 'kmb|1|O|1' }],
@@ -153,15 +137,14 @@ describe('hasKmbQueryContextChanged', () => {
     expect(hasKmbQueryContextChanged(prev, next)).toBe(true)
   })
 
-  it('ignores simple route string changes in advanced mode', () => {
+  it('returns false when only the route text object identity changes', () => {
     const prev = {
       ...baseContext,
-      routeFilterMode: 'advanced' as const,
       routeFilter: { routes: '1', entries: [] },
     }
     const next = {
       ...prev,
-      routeFilter: { routes: '2', entries: [] },
+      routeFilter: { routes: '1', entries: [] },
     }
 
     expect(hasKmbQueryContextChanged(prev, next)).toBe(false)

@@ -1,5 +1,5 @@
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
-import type { FavoritesItem, RouteFilterMode } from '@/lib/store'
+import type { FavoritesItem } from '@/lib/store'
 
 const SUB_VIEWS = new Set<SubView>(['routes', 'stops', 'nearby', 'saved', 'settings'])
 
@@ -21,12 +21,11 @@ export type UrlEncodeInput = {
   mode: TransportMode
   subView: SubView
   lang: UiLanguage
-  routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
-  // Prefs (lang, routeFilterMode, autoRefreshSeconds) are nav-only by
-  // default: encode omits them unless an explicit Share passes
-  // includePrefs. Hydrate must apply nav without writing into prefs so a
-  // shared link never overwrites saved lang, refresh, or filter.
+  // Prefs (lang, autoRefreshSeconds) are nav-only by default: encode omits
+  // them unless an explicit Share passes includePrefs. Hydrate must apply
+  // nav without writing into prefs so a shared link never overwrites saved
+  // lang or refresh.
   includePrefs?: boolean
   kmb?: {
     query: KmbQuerySummary | null
@@ -49,9 +48,8 @@ export type UrlDecodeResult = {
     subView?: SubView
     // Legacy prefs fields stay on the type so existing consumers compile
     // unchanged, but decode never populates them: hydrate applies nav only
-    // so a shared link never overwrites saved lang, refresh, or filter.
+    // so a shared link never overwrites saved lang or refresh.
     lang?: UiLanguage
-    routeFilterMode?: RouteFilterMode
     autoRefreshSeconds?: number
   }
   selectedItem: FavoritesItem | null
@@ -61,7 +59,6 @@ const DEFAULTS = {
   mode: 'kmb' as TransportMode,
   subView: 'stops' as SubView,
   lang: 'tc' as UiLanguage,
-  routeFilterMode: 'simple' as RouteFilterMode,
   autoRefreshSeconds: 15,
 }
 
@@ -72,11 +69,6 @@ function parseTransportMode(value: string | null): TransportMode | null {
 
 function parseSubView(value: string | null): SubView | null {
   if (value && SUB_VIEWS.has(value as SubView)) return value as SubView
-  return null
-}
-
-function parseRouteFilterMode(value: string | null): RouteFilterMode | null {
-  if (value === 'simple' || value === 'advanced') return value
   return null
 }
 
@@ -106,7 +98,6 @@ function normalizeVariantKeys(entries: string[]): string[] {
 function buildKmbSelectedItem(input: {
   query: KmbQuerySummary
   route?: string | null
-  routeFilterMode: RouteFilterMode
   entries?: { variantKey: string }[] | null
 }): FavoritesItem {
   const queryToken =
@@ -116,13 +107,10 @@ function buildKmbSelectedItem(input: {
         ? input.query.stopIds.join(',')
         : input.query.query
 
-  const routeToken =
-    input.routeFilterMode === 'advanced'
-      ? (input.entries ?? [])
-          .map((entry) => entry.variantKey)
-          .filter(Boolean)
-          .join(',')
-      : (input.route ?? '')
+  const entries = (input.entries ?? []).filter((entry) => entry.variantKey)
+  const routeToken = entries.length
+    ? entries.map((entry) => entry.variantKey).join(',')
+    : (input.route ?? '')
 
   const idSuffix = routeToken ? `:${routeToken}` : ':all'
   const id = `url:kmb:${input.query.mode}:${queryToken}${idSuffix}`
@@ -131,9 +119,8 @@ function buildKmbSelectedItem(input: {
     id,
     mode: 'kmb' as const,
     title: 'Shared search',
-    routeFilterMode: input.routeFilterMode,
-    entries: input.routeFilterMode === 'advanced' ? (input.entries ?? []) : undefined,
-    route: input.routeFilterMode === 'simple' ? (input.route ?? undefined) : undefined,
+    entries,
+    route: input.route ?? undefined,
   }
 
   if (input.query.mode === 'stop') {
@@ -161,12 +148,10 @@ export function decodeUrlState(search: string): UrlDecodeResult {
 
   const explicitMode = parseTransportMode(params.get('m'))
   const subView = parseSubView(params.get('v'))
-  // Legacy prefs keys (l, ar, and rfm as a global) are intentionally not
-  // applied: hydrate applies nav only so a shared link never overwrites
-  // saved lang, refresh, or filter. rfm below feeds the KMB selected item
-  // only, never global state. Unknown keys are ignored, gaps fall back to
-  // defaults at the call site.
-  const routeFilterModeParam = parseRouteFilterMode(params.get('rfm'))
+  // Legacy prefs keys (l, ar, and the removed rfm mode flag) are
+  // intentionally not applied: hydrate applies nav only so a shared link
+  // never overwrites saved lang or refresh. Unknown keys are ignored, gaps
+  // fall back to defaults at the call site.
 
   const kmbMode = params.get('km')
   const kmbRoute = params.get('kr')
@@ -196,16 +181,12 @@ export function decodeUrlState(search: string): UrlDecodeResult {
   if (inferredMode) state.mode = inferredMode
   if (subView) state.subView = subView
 
-  const derivedRouteFilterMode = routeFilterModeParam ?? (kmbEntries.length ? 'advanced' : null)
-
   let selectedItem: FavoritesItem | null = null
 
   if (inferredMode === 'kmb' && kmbQuery) {
-    const filterMode = derivedRouteFilterMode ?? DEFAULTS.routeFilterMode
     selectedItem = buildKmbSelectedItem({
       query: kmbQuery,
       route: kmbRoute,
-      routeFilterMode: filterMode,
       entries: kmbEntries,
     })
   } else if (inferredMode === 'mtr' && mtrSta) {
@@ -234,14 +215,10 @@ export function encodeUrlState(input: UrlEncodeInput): string {
   if (input.mode !== DEFAULTS.mode) params.set('m', input.mode)
   if (input.subView !== DEFAULTS.subView) params.set('v', input.subView)
   // Nav-only by default. Prefs travel only on explicit Share so a shared
-  // link never overwrites the recipient's saved lang, refresh, or filter.
-  // Legacy l and ar keys are ignored on decode; rfm still feeds the KMB
-  // selection below.
+  // link never overwrites the recipient's saved lang or refresh.
+  // Legacy l, ar and rfm keys are ignored on decode.
   if (input.includePrefs) {
     if (input.lang !== DEFAULTS.lang) params.set('l', input.lang)
-    if (input.routeFilterMode !== DEFAULTS.routeFilterMode) {
-      params.set('rfm', input.routeFilterMode)
-    }
     if (input.autoRefreshSeconds !== DEFAULTS.autoRefreshSeconds) {
       params.set('ar', String(input.autoRefreshSeconds))
     }
@@ -258,26 +235,23 @@ export function encodeUrlState(input: UrlEncodeInput): string {
       if (query.query) params.set('kq', query.query)
     }
 
-    if (input.routeFilterMode === 'advanced') {
-      const entries = routeFilter?.entries ?? []
-      if (entries.length) {
-        const normalized = entries.map((entry) => {
-          const key = entry.variantKey
-          if (!key) return ''
-          const parts = key.split('|')
-          // Compact 5-part scoped keys to 4-part family only when the scope
-          // is empty (legacy shape); scoped keys keep their gtfsId segment
-          // so the shared link selects the same region.
-          if (parts.length === 5 && !parts[4]) return parts.slice(0, 4).join('|')
-          return key
-        })
-        const compact = normalized.filter(Boolean).join(',')
-        if (compact) params.set('ke', compact)
-      }
-    } else {
-      const routes = routeFilter?.routes?.trim()
-      if (routes) params.set('kr', routes)
+    const entries = routeFilter?.entries ?? []
+    if (entries.length) {
+      const normalized = entries.map((entry) => {
+        const key = entry.variantKey
+        if (!key) return ''
+        const parts = key.split('|')
+        // Compact 5-part scoped keys to 4-part family only when the scope
+        // is empty (legacy shape); scoped keys keep their gtfsId segment
+        // so the shared link selects the same region.
+        if (parts.length === 5 && !parts[4]) return parts.slice(0, 4).join('|')
+        return key
+      })
+      const compact = normalized.filter(Boolean).join(',')
+      if (compact) params.set('ke', compact)
     }
+    const routes = routeFilter?.routes?.trim()
+    if (routes) params.set('kr', routes)
   }
 
   if (input.mode === 'mtr' && input.mtr?.sta) {

@@ -407,19 +407,6 @@ const settings: Record<string, TranslationEntry> = {
     tc: '等候時結果自動更新的頻率。關閉則暫停背景更新。',
     sc: '等候时结果自动更新的频率。关闭则暂停后台更新。',
   },
-  routeFilter: { en: 'Route filter', tc: '路線篩選', sc: '路线筛选' },
-  routeFilterSimple: { en: 'Simple', tc: '簡單', sc: '简单' },
-  routeFilterAdvanced: { en: 'Advanced', tc: '進階', sc: '进阶' },
-  routeFilterSimpleDesc: {
-    en: 'Filter by one route number',
-    tc: '按單一路線編號篩選',
-    sc: '按单一路线编号筛选',
-  },
-  routeFilterAdvancedDesc: {
-    en: 'Pick exact directions per route',
-    tc: '按每條路線選擇具體方向',
-    sc: '按每条路线选择具体方向',
-  },
   nearbyDesc: {
     en: 'Default search distance for the Nearby tab.',
     tc: '「附近」分頁的預設搜尋距離。',
@@ -456,9 +443,9 @@ const settings: Record<string, TranslationEntry> = {
   cacheCleared: { en: 'Cache cleared.', tc: '快取已清除。', sc: '缓存已清除。' },
   resetSettings: { en: 'Reset all settings', tc: '重設所有設定', sc: '重置所有设定' },
   resetSettingsDesc: {
-    en: 'Restores appearance, language, refresh, filter and radius defaults. Saved stops stay.',
-    tc: '還原外觀、語言、刷新、篩選及半徑預設值，收藏不受影響。',
-    sc: '还原外观、语言、刷新、筛选及半径默认值，收藏不受影响。',
+    en: 'Restores appearance, language, refresh and radius defaults. Saved stops stay.',
+    tc: '還原外觀、語言、刷新及半徑預設值，收藏不受影響。',
+    sc: '还原外观、语言、刷新及半径默认值，收藏不受影响。',
   },
   settingsReset: {
     en: 'Settings reset to defaults.',

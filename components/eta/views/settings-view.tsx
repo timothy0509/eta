@@ -6,7 +6,6 @@ import {
   Download,
   Globe,
   Info,
-  ListFilter,
   MapPin,
   Monitor,
   Moon,
@@ -31,7 +30,6 @@ import {
 import { isLanguageSupported } from '@/lib/eta/types'
 import type { UiLanguage } from '@/lib/eta/types'
 import { useAppStore } from '@/lib/store'
-import type { RouteFilterMode } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { APP_VERSION } from '@/lib/version'
 
@@ -51,19 +49,6 @@ const THEME_OPTIONS = [
     descKey: 'settings.themeSystemDesc',
   },
 ] as const
-
-const ROUTE_FILTER_OPTIONS: { value: RouteFilterMode; descKey: string; titleKey: string }[] = [
-  {
-    value: 'simple',
-    titleKey: 'settings.routeFilterSimple',
-    descKey: 'settings.routeFilterSimpleDesc',
-  },
-  {
-    value: 'advanced',
-    titleKey: 'settings.routeFilterAdvanced',
-    descKey: 'settings.routeFilterAdvancedDesc',
-  },
-]
 
 function Section({
   icon: Icon,
@@ -150,8 +135,6 @@ export function SettingsView({ lang }: Props) {
   const setLang = useAppStore((s) => s.setLang)
   const autoRefreshSeconds = useAppStore((s) => s.autoRefreshSeconds)
   const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds)
-  const routeFilterMode = useAppStore((s) => s.routeFilterMode)
-  const setRouteFilterMode = useAppStore((s) => s.setRouteFilterMode)
   const nearbyRadiusKm = useAppStore((s) => s.nearbyRadiusKm)
   const setNearbyRadiusKm = useAppStore((s) => s.setNearbyRadiusKm)
   const resetPrefs = useAppStore((s) => s.resetPrefs)
@@ -303,54 +286,30 @@ export function SettingsView({ lang }: Props) {
         </div>
       </Section>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Section icon={ListFilter} title={t('settings.routeFilter')}>
-          <div className="flex flex-col gap-2">
-            {ROUTE_FILTER_OPTIONS.map(({ value, titleKey, descKey }) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setRouteFilterMode(value)}
-                aria-pressed={routeFilterMode === value}
-                className={cn(
-                  'min-h-[44px] rounded-2xl px-4 py-2 text-left transition-colors',
-                  routeFilterMode === value
-                    ? 'bg-primary-container text-on-primary-container'
-                    : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
-                )}
-              >
-                <span className="m3-label-lg block">{t(titleKey)}</span>
-                <span className="m3-label-md block opacity-70">{t(descKey)}</span>
-              </button>
-            ))}
-          </div>
-        </Section>
-
-        <Section icon={MapPin} title={t('common.nearby')} desc={t('settings.nearbyDesc')}>
-          <div className="flex items-center gap-3">
-            <label
-              className="text-on-surface-variant m3-label-md whitespace-nowrap"
-              htmlFor="settings-radius"
-            >
-              {t('common.searchRadius')}
-            </label>
-            <input
-              id="settings-radius"
-              type="range"
-              min={NEARBY_RADIUS_MIN_KM}
-              max={NEARBY_RADIUS_MAX_KM}
-              step={NEARBY_RADIUS_STEP_KM}
-              value={nearbyRadiusKm}
-              onChange={(event) => setNearbyRadiusKm(Number(event.target.value))}
-              className="text-primary ui-press w-full min-w-32"
-              aria-label={t('common.searchRadius')}
-            />
-            <span className="text-on-surface-variant m3-label-md w-14 shrink-0 text-right tabular-nums">
-              {`${Math.round(nearbyRadiusKm * 10) / 10} km`}
-            </span>
-          </div>
-        </Section>
-      </div>
+      <Section icon={MapPin} title={t('common.nearby')} desc={t('settings.nearbyDesc')}>
+        <div className="flex items-center gap-3">
+          <label
+            className="text-on-surface-variant m3-label-md whitespace-nowrap"
+            htmlFor="settings-radius"
+          >
+            {t('common.searchRadius')}
+          </label>
+          <input
+            id="settings-radius"
+            type="range"
+            min={NEARBY_RADIUS_MIN_KM}
+            max={NEARBY_RADIUS_MAX_KM}
+            step={NEARBY_RADIUS_STEP_KM}
+            value={nearbyRadiusKm}
+            onChange={(event) => setNearbyRadiusKm(Number(event.target.value))}
+            className="text-primary ui-press w-full min-w-32"
+            aria-label={t('common.searchRadius')}
+          />
+          <span className="text-on-surface-variant m3-label-md w-14 shrink-0 text-right tabular-nums">
+            {`${Math.round(nearbyRadiusKm * 10) / 10} km`}
+          </span>
+        </div>
+      </Section>
 
       <Section
         icon={Bookmark}

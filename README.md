@@ -9,7 +9,7 @@ A clean, fast ETA (Estimated Time of Arrival) web application for Hong Kong publ
 - Real-time arrival times for KMB bus routes
 - Stop search by name/code with infinite scroll + fuzzy matching
 - Stop grouping for the same stop name (e.g., opposite road sides)
-- Route filtering (simple comma-separated or advanced multi-select)
+- Route filtering by route number or exact direction variants
 - Color-coded route badges by type (Airport, Overnight, Cross-harbour, etc.)
 - **Fare information** for routes with supported fare data
 
@@ -148,7 +148,7 @@ components/
     results-lrt.tsx     # LRT schedule display
     results-mtr.tsx     # MTR schedule display
     route-badge.tsx     # Color-coded route badge component
-    route-filter.tsx    # Route filter (simple/advanced modes)
+    route-filter.tsx    # Route filter badges and direction picker
     station-search.tsx  # MTR station search
     stop-search.tsx     # KMB stop search
   ui/                    # shadcn/ui components

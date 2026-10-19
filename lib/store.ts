@@ -6,8 +6,6 @@ import { create } from 'zustand'
 import type { StateCreator } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 
-export type RouteFilterMode = 'simple' | 'advanced'
-
 type FavoritesMeta = {
   pinned?: boolean
   groupId?: string | null
@@ -21,11 +19,11 @@ export type FavoritesItem = FavoritesMeta &
         mode: 'kmb'
         title: string
         stopId: string
-        // Route filter - simple mode (legacy field name for backward compat)
+        // Route number text plus exact direction variant keys. Either,
+        // both, or neither may be set; variant selections win when both
+        // are present.
         route?: string
         serviceType?: string
-        // Extended route filter fields
-        routeFilterMode?: RouteFilterMode
         entries?: { variantKey: string }[]
       }
     // KMB: grouped stops (multiple stops with same name)
@@ -34,8 +32,6 @@ export type FavoritesItem = FavoritesMeta &
         mode: 'kmb'
         title: string
         stopIds: string[]
-        // Route filter
-        routeFilterMode?: RouteFilterMode
         route?: string
         entries?: { variantKey: string }[]
       }
@@ -45,11 +41,8 @@ export type FavoritesItem = FavoritesMeta &
         mode: 'kmb'
         title: string
         query: string
-        // Route filter - simple mode (legacy field name for backward compat)
         route?: string
         serviceType?: string
-        // Extended route filter fields
-        routeFilterMode?: RouteFilterMode
         entries?: { variantKey: string }[]
       }
     // KMB: saved route
@@ -105,12 +98,12 @@ type NavSlice = {
   setSubView: (subView: SubView) => void
 }
 
-// Persisted prefs slice: language, filter defaults, refresh interval,
-// nearby radius plus favorites, groups and recents. Field names stay
-// backward compatible so old favorites still decode after the v5 to v6 bump.
+// Persisted prefs slice: language, refresh interval and nearby radius
+// plus favorites, groups and recents. Field names stay backward compatible
+// so old favorites still decode after the v6 to v7 bump, which dropped the
+// route filter mode: one unified filter replaced the simple/advanced split.
 type PrefsSlice = {
   lang: UiLanguage
-  routeFilterMode: RouteFilterMode
   autoRefreshSeconds: number
   nearbyRadiusKm: number
 
@@ -119,7 +112,6 @@ type PrefsSlice = {
   recents: RecentItem[]
 
   setLang: (lang: UiLanguage) => void
-  setRouteFilterMode: (mode: RouteFilterMode) => void
   setAutoRefreshSeconds: (seconds: number) => void
   setNearbyRadiusKm: (km: number) => void
   /** Restore display and update prefs to defaults. Saved data is untouched. */
@@ -216,7 +208,6 @@ const createNavSlice: StateCreator<AppState, [], [], NavSlice> = (set) => ({
 
 const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   lang: 'tc',
-  routeFilterMode: 'simple',
   autoRefreshSeconds: 15,
   nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
 
@@ -225,13 +216,11 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   recents: [],
 
   setLang: (lang) => set({ lang }),
-  setRouteFilterMode: (routeFilterMode) => set({ routeFilterMode }),
   setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
   setNearbyRadiusKm: (km) => set({ nearbyRadiusKm: clampNearbyRadiusKm(km) }),
   resetPrefs: () =>
     set({
       lang: 'tc',
-      routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
       nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
     }),
@@ -374,7 +363,9 @@ export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
 // once so the upgrade keeps the current view, then v5 writes omit nav
 // through partialize below. v6 adds the persisted nearby radius; older
 // entries fall back to the default and out-of-range values are clamped
-// back into the slider band.
+// back into the slider band. v7 drops the route filter mode: the
+// simple/advanced split is gone, one filter covers both. Stored mode values
+// are ignored, saved route text and direction selections keep working.
 export function migratePersistedState(persistedState: unknown) {
   const state = persistedState as Partial<AppState> | undefined
   const favorites = capFavorites(
@@ -385,7 +376,6 @@ export function migratePersistedState(persistedState: unknown) {
     mode: state?.mode ?? 'kmb',
     subView: state?.subView ?? 'stops',
     lang: state?.lang ?? 'tc',
-    routeFilterMode: state?.routeFilterMode ?? 'simple',
     autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
     nearbyRadiusKm:
       typeof state?.nearbyRadiusKm === 'number'
@@ -405,7 +395,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 6,
+      version: 7,
       // Direct persist write. The previous 300 ms debounced localStorage
       // wrapper plus beforeunload flush could lose the last write on
       // mobile, where beforeunload often never fires. Zustand now writes
@@ -415,7 +405,6 @@ export const useAppStore = create<AppState>()(
       migrate: (persistedState) => migratePersistedState(persistedState),
       partialize: (state) => ({
         lang: state.lang,
-        routeFilterMode: state.routeFilterMode,
         autoRefreshSeconds: state.autoRefreshSeconds,
         nearbyRadiusKm: state.nearbyRadiusKm,
         favorites: state.favorites,

@@ -33,7 +33,6 @@ describe('SettingsView', () => {
   beforeEach(() => {
     useAppStore.setState({
       lang: 'en',
-      routeFilterMode: 'simple',
       autoRefreshSeconds: 15,
       nearbyRadiusKm: 2,
       favorites: [],
@@ -49,7 +48,6 @@ describe('SettingsView', () => {
       'Appearance',
       'Language',
       'Auto Refresh',
-      'Route filter',
       'Nearby',
       'Saved data',
       'Storage',
@@ -59,12 +57,6 @@ describe('SettingsView', () => {
     }
     expect(document.body.textContent).not.toMatch(/settings\.[a-zA-Z]+/)
     expect(document.body.textContent).not.toMatch(/common\.[a-zA-Z]+/)
-  })
-
-  it('switches the persisted route filter mode', () => {
-    renderSettings()
-    fireEvent.click(screen.getByRole('button', { name: /Advanced/ }))
-    expect(useAppStore.getState().routeFilterMode).toBe('advanced')
   })
 
   it('changes the persisted nearby radius', () => {

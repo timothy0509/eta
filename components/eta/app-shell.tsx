@@ -2,32 +2,18 @@
 
 import {
   Bus,
-  Globe,
   Heart,
   MapPin,
-  Moon,
   Navigation,
   Route,
   Settings,
-  Sun,
   TrainFront,
   TramFront,
 } from 'lucide-react'
-import { useTheme } from 'next-themes'
 import * as React from 'react'
 
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
-import { isLanguageSupported } from '@/lib/eta/types'
-import { LANG_LABELS, useTranslations } from '@/lib/eta/i18n'
-import { useAppStore } from '@/lib/store'
+import { useTranslations } from '@/lib/eta/i18n'
 import { cn } from '@/lib/utils'
 
 const MODES: Array<{
@@ -120,59 +106,6 @@ function useSlidingIndicator<T extends HTMLElement>(activeId: string, extraKey: 
 
   return { containerRef, buttonRefs, indicator }
 }
-function ThemeToggle({ label }: { label: string }) {
-  const { resolvedTheme, setTheme } = useTheme()
-  const dark = resolvedTheme === 'dark'
-  return (
-    <button
-      type="button"
-      onClick={() => setTheme(dark ? 'light' : 'dark')}
-      aria-label={label}
-      title={label}
-      className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
-    >
-      {dark ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-    </button>
-  )
-}
-
-function LanguageMenu({ lang, mode }: { lang: UiLanguage; mode: TransportMode }) {
-  const setLang = useAppStore((s) => s.setLang)
-  const scSupported = isLanguageSupported(mode, 'sc')
-  const { t } = useTranslations(lang)
-  const label = t('common.language')
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          aria-label={label}
-          title={label}
-          className="text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-primary/30 flex min-h-[44px] min-w-[44px] items-center justify-center gap-1 rounded-full px-2 transition-colors focus-visible:ring-2 focus-visible:outline-none"
-        >
-          <Globe className="h-5 w-5" />
-          <span className="m3-label-md hidden font-semibold xl:inline">{LANG_LABELS[lang]}</span>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-44">
-        <DropdownMenuLabel>{label}</DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        {(Object.keys(LANG_LABELS) as UiLanguage[]).map((l) => (
-          <DropdownMenuCheckboxItem
-            key={l}
-            checked={lang === l}
-            disabled={l === 'sc' && !scSupported}
-            onCheckedChange={(checked) => {
-              if (checked === true) setLang(l)
-            }}
-          >
-            {l === 'en' ? 'English' : l === 'tc' ? '繁體中文' : '简体中文'}
-          </DropdownMenuCheckboxItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
 
 type TopAppBarProps = {
   lang: UiLanguage
@@ -245,11 +178,6 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
             })}
           </div>
         </nav>
-
-        <div className="flex shrink-0 items-center">
-          <LanguageMenu lang={lang} mode={mode} />
-          <ThemeToggle label={t('common.toggleTheme')} />
-        </div>
       </div>
     </header>
   )

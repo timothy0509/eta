@@ -359,16 +359,22 @@ function matchEntrySync(
     return { entry, score: 1, matchReason: { kind: 'number', text: entry.route } }
   }
 
-  const termini: Array<{ raw: string; display: string }> = []
+  const termini: Array<{ lowered: string; display: string }> = []
   for (const field of ['origin', 'destination'] as const) {
     const record = entry[field]
-    termini.push({ raw: record.en, display: entryDisplayText(entry, field, lang) })
-    termini.push({ raw: record.tc, display: entryDisplayText(entry, field, lang) })
-    termini.push({ raw: record.sc, display: entryDisplayText(entry, field, lang) })
+    const display = entryDisplayText(entry, field, lang)
+    for (const raw of [record.en, record.tc, record.sc]) {
+      termini.push({
+        lowered: String(raw ?? '')
+          .trim()
+          .toLowerCase(),
+        display,
+      })
+    }
   }
   if (norm.lower) {
     for (const t of termini) {
-      if (t.raw.trim().toLowerCase() === norm.lower) {
+      if (t.lowered === norm.lower) {
         return { entry, score: 2, matchReason: { kind: 'terminus', text: t.display } }
       }
     }
@@ -380,7 +386,7 @@ function matchEntrySync(
   }
   if (norm.lower) {
     for (const t of termini) {
-      if (t.raw.trim().toLowerCase().startsWith(norm.lower)) {
+      if (t.lowered.startsWith(norm.lower)) {
         return { entry, score: 3, matchReason: { kind: 'terminus', text: t.display } }
       }
     }
@@ -390,7 +396,7 @@ function matchEntrySync(
       }
     }
     for (const t of termini) {
-      if (t.raw.toLowerCase().includes(norm.lower)) {
+      if (t.lowered.includes(norm.lower)) {
         return { entry, score: 4, matchReason: { kind: 'terminus', text: t.display } }
       }
     }
@@ -405,6 +411,7 @@ function matchEntrySync(
     return { entry, score: 5, matchReason: { kind: 'number', text: entry.route } }
   }
 
+  if (!norm.lower) return null
   for (const name of entry.stopNames) {
     if (name.startsWith(norm.lower)) {
       return {
@@ -418,7 +425,7 @@ function matchEntrySync(
     }
   }
   for (const name of entry.stopNames) {
-    if (norm.lower && name.includes(norm.lower)) {
+    if (name.includes(norm.lower)) {
       return {
         entry,
         score: 7,

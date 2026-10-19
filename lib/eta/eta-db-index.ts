@@ -271,16 +271,28 @@ export function variantFamilyKey(key: string): string {
  * gtfsIds never match, so GMB regions stay separate. */
 export function variantKeyMatches(filterKey: string, entryKey: string): boolean {
   if (filterKey === entryKey) return true
-  if (String(filterKey ?? '').split('|').length === 4) {
-    return entryKey === filterKey || entryKey.startsWith(`${filterKey}|`)
+  const filter = String(filterKey ?? '')
+  // Fast path: legacy 4-part family keys match any region of the family.
+  // Count pipes instead of splitting twice.
+  let pipes = 0
+  for (let i = 0; i < filter.length; i += 1) if (filter.charCodeAt(i) === 124) pipes += 1
+  if (pipes === 3) {
+    return entryKey === filter || entryKey.startsWith(`${filter}|`)
   }
-  if (variantFamilyKey(filterKey) === variantFamilyKey(entryKey)) {
-    const filterGtfs = parseVariantKey(filterKey).gtfsId.trim()
-    const entryGtfs = parseVariantKey(entryKey).gtfsId.trim()
-    if (!filterGtfs || !entryGtfs) return true
-    if (filterGtfs === entryGtfs) return true
+  const parsedFilter = parseVariantKey(filter)
+  const parsedEntry = parseVariantKey(entryKey)
+  if (
+    parsedFilter.co.toLowerCase() !== parsedEntry.co.toLowerCase() ||
+    parsedFilter.route.toUpperCase() !== parsedEntry.route.toUpperCase() ||
+    parsedFilter.bound !== parsedEntry.bound ||
+    parsedFilter.serviceType !== parsedEntry.serviceType
+  ) {
+    return false
   }
-  return false
+  const filterGtfs = parsedFilter.gtfsId.trim()
+  const entryGtfs = parsedEntry.gtfsId.trim()
+  if (!filterGtfs || !entryGtfs) return true
+  return filterGtfs === entryGtfs
 }
 
 /**

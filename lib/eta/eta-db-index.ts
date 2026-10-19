@@ -260,15 +260,25 @@ export function parseVariantKey(key: string): ParsedVariantKey {
 /** Family key without gtfsId: `co|ROUTE|bound|serviceType`. Matches every region. */
 export function variantFamilyKey(key: string): string {
   const parsed = parseVariantKey(key)
-  return `${parsed.co}|${parsed.route.toUpperCase()}|${parsed.bound}|${parsed.serviceType}`
+  return `${String(parsed.co ?? '').toLowerCase()}|${parsed.route.toUpperCase()}|${parsed.bound}|${parsed.serviceType}`
 }
 
-/** True when a stored filter key selects an entry key: exact match, or a
- * legacy 4-part family key matching any region of that family. */
+/** True when a stored filter key selects an entry key: exact match, a
+ * legacy 4-part family key matching any region of that family, or a
+ * 5-part family match where either side lacks a gtfsId (KMB official
+ * stop-eta rows carry no gtfsId while the index does, e.g. filter
+ * `kmb|1A|O|1|1053` vs entry `kmb|1A|O|1|`). Two different non-empty
+ * gtfsIds never match, so GMB regions stay separate. */
 export function variantKeyMatches(filterKey: string, entryKey: string): boolean {
   if (filterKey === entryKey) return true
   if (String(filterKey ?? '').split('|').length === 4) {
     return entryKey === filterKey || entryKey.startsWith(`${filterKey}|`)
+  }
+  if (variantFamilyKey(filterKey) === variantFamilyKey(entryKey)) {
+    const filterGtfs = parseVariantKey(filterKey).gtfsId.trim()
+    const entryGtfs = parseVariantKey(entryKey).gtfsId.trim()
+    if (!filterGtfs || !entryGtfs) return true
+    if (filterGtfs === entryGtfs) return true
   }
   return false
 }

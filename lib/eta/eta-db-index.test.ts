@@ -10,6 +10,7 @@ import {
   groupRegionStops,
   routeVariantKey,
   serializeEtaDbIndexes,
+  variantKeyMatches,
 } from './eta-db-index'
 
 function routeEntry(route: string, co: Company[], stopsByCo: Partial<Record<Company, string[]>>) {
@@ -246,5 +247,28 @@ describe('buildEtaDbIndexes regions', () => {
       serviceType: '1',
     })
     expect(entry?.gtfsId).toBe('2002337')
+  })
+})
+
+describe('variantKeyMatches', () => {
+  it('matches a KMB filter with gtfsId against an official ETA without gtfsId', () => {
+    expect(variantKeyMatches('kmb|1A|O|1|1053', 'kmb|1A|O|1|')).toBe(true)
+  })
+
+  it('matches a legacy empty-gtfsId filter against an indexed entry with gtfsId', () => {
+    expect(variantKeyMatches('kmb|1A|O|1|', 'kmb|1A|O|1|1053')).toBe(true)
+  })
+
+  it('keeps different GMB regions separate', () => {
+    expect(variantKeyMatches('gmb|1|O|1|2006408', 'gmb|1|O|1|2002337')).toBe(false)
+  })
+
+  it('matches exact keys and legacy 4-part family keys', () => {
+    expect(variantKeyMatches('gmb|1|O|1|2006408', 'gmb|1|O|1|2006408')).toBe(true)
+    expect(variantKeyMatches('kmb|1|O|1', 'kmb|1|O|1|1053')).toBe(true)
+  })
+
+  it('rejects different bounds within the same family', () => {
+    expect(variantKeyMatches('kmb|1A|O|1|1053', 'kmb|1A|I|1|')).toBe(false)
   })
 })

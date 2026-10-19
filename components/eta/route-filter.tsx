@@ -8,7 +8,6 @@ import { useTranslations } from '@/lib/eta/i18n'
 import { parseVariantKey } from '@/lib/eta/eta-db-index'
 import type { UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
-import type { RouteFilterMode } from '@/lib/store'
 
 export type RouteFilterEntry = {
   id: string
@@ -62,22 +61,12 @@ function groupOptionsByRoute(opts: RouteFilterOption[]): Map<string, RouteFilter
   return grouped
 }
 
-function isRouteActive(
-  route: string,
-  variants: RouteFilterOption[],
-  selectedKeys: Set<string>,
-  mode: RouteFilterMode
-) {
-  if (mode === 'advanced') {
-    return variants.some((v) => selectedKeys.has(v.key))
-  }
+function isRouteActive(route: string, variants: RouteFilterOption[], selectedKeys: Set<string>) {
   return selectedKeys.has(route) || variants.some((v) => selectedKeys.has(v.key))
 }
 
 type Props = {
   lang: UiLanguage
-  mode: RouteFilterMode
-  onModeChange?: (mode: RouteFilterMode) => void
   value: RouteFilterState
   onChange: (value: RouteFilterState) => void
   options?: RouteFilterOption[]
@@ -88,7 +77,7 @@ function createId() {
   return Math.random().toString(36).slice(2, 10)
 }
 
-export function RouteFilter({ lang, mode, onModeChange, value, onChange, options }: Props) {
+export function RouteFilter({ lang, value, onChange, options }: Props) {
   const opts = React.useMemo(() => sortOptions(options ?? []), [options])
   const groupedByRoute = React.useMemo(() => groupOptionsByRoute(opts), [opts])
   const routeNumbers = React.useMemo(
@@ -137,7 +126,7 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
     }
     const routes = (value.routes ?? '')
       .split(',')
-      .map((r) => r.trim())
+      .map((r) => r.trim().toUpperCase())
       .filter(Boolean)
     return new Set(routes)
   }, [value.entries, value.routes])
@@ -149,12 +138,9 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
       const next = exists
         ? entries.filter((e) => e.variantKey !== opt.key)
         : [...entries, { id: createId(), variantKey: opt.key }]
-      if (!exists && mode !== 'advanced') {
-        onModeChange?.('advanced')
-      }
       onChange({ ...value, entries: next, routes: '' })
     },
-    [mode, onChange, onModeChange, value]
+    [onChange, value]
   )
 
   const clearAll = React.useCallback(() => {
@@ -230,7 +216,7 @@ export function RouteFilter({ lang, mode, onModeChange, value, onChange, options
             {routeNumbers.map((route) => {
               const variants = groupedByRoute.get(route) ?? []
               const company = getCompanyFromVariantKey(variants[0]?.key ?? '')
-              const active = isRouteActive(route, variants, selectedKeys, mode)
+              const active = isRouteActive(route, variants, selectedKeys)
               const focused = focusedRoute === route
               const tooltip = variants.map((v) => v.label).join(' · ')
 

@@ -5,7 +5,6 @@ import type { KmbPaneState } from '@/components/eta/panes/kmb-pane'
 import type { MtrPaneState } from '@/components/eta/panes/mtr-pane'
 import type { LrtPaneState } from '@/components/eta/panes/lrt-pane'
 import type { KmbRouteStopLite } from '@/lib/eta/client'
-import { clampNearbyRadiusKm as clampRadius } from '@/lib/eta/nearby-radius'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 
 type PaneStore = {
@@ -16,9 +15,6 @@ type PaneStore = {
   setKmbStops: (stops: KmbStopSearchItem[]) => void
   kmbRouteStops: KmbRouteStopLite[]
   setKmbRouteStops: (stops: KmbRouteStopLite[]) => void
-  /** Transient nearby-search radius in km; UI-local, never persisted. */
-  nearbyRadiusKm: number
-  setNearbyRadiusKm: (km: number) => void
 }
 
 function isSameRouteStop(
@@ -54,8 +50,6 @@ export const usePaneStore = create<PaneStore>()((set) => ({
   kmb: null,
   mtr: null,
   lrt: null,
-  nearbyRadiusKm: 2,
-  setNearbyRadiusKm: (km) => set({ nearbyRadiusKm: clampRadius(km) }),
   kmbStops: [],
   // The full stop list is ~6k entries. Only replace it when the contents
   // actually changed so refetches never rewrite the last query's list

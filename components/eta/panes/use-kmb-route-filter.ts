@@ -1,7 +1,6 @@
 import type { RouteFilterState } from '@/components/eta/route-filter'
 import type { StopSearchSelection } from '@/components/eta/stop-search'
 import { parseVariantKey } from '@/lib/eta/eta-db-index'
-import type { RouteFilterMode } from '@/lib/store'
 
 export type KmbQuery =
   | {
@@ -25,11 +24,11 @@ export type KmbQuery =
 
 /**
  * Builds a route filter string from the current filter state.
- * Used to pass to the KMB ETA API.
+ * Selected direction variants take precedence; otherwise the saved route
+ * text and the query route feed the KMB ETA API.
  */
 export function buildRouteFilterString(
   routeFilter: RouteFilterState,
-  routeFilterMode: RouteFilterMode,
   queryRoute?: string
 ): string | undefined {
   const entries = routeFilter.entries ?? []
@@ -44,11 +43,9 @@ export function buildRouteFilterString(
     return requestedRoutes.join(',')
   }
 
-  if (routeFilterMode === 'simple') {
-    const routesFromFilter = normalizeKmbRoutesInput(routeFilter.routes?.trim() ?? '')
-    if (routesFromFilter) {
-      return routesFromFilter.join(',')
-    }
+  const routesFromFilter = normalizeKmbRoutesInput(routeFilter.routes?.trim() ?? '')
+  if (routesFromFilter) {
+    return routesFromFilter.join(',')
   }
 
   return undefined
@@ -57,7 +54,6 @@ export function buildRouteFilterString(
 export type KmbQueryContext = {
   selection: StopSearchSelection | undefined
   routeFilter: RouteFilterState
-  routeFilterMode: RouteFilterMode
 }
 
 function selectionKey(selection: StopSearchSelection): string {
@@ -80,14 +76,11 @@ export function hasKmbQueryContextChanged(
   if (!prev) return true
   if (!next.selection) return false
   if (!prev.selection) return true
-  if (prev.routeFilterMode !== next.routeFilterMode) return true
   if (selectionKey(prev.selection) !== selectionKey(next.selection)) return true
 
-  if (next.routeFilterMode === 'simple') {
-    const prevRoutes = prev.routeFilter.routes?.trim() ?? ''
-    const nextRoutes = next.routeFilter.routes?.trim() ?? ''
-    if (prevRoutes !== nextRoutes) return true
-  }
+  const prevRoutes = prev.routeFilter.routes?.trim() ?? ''
+  const nextRoutes = next.routeFilter.routes?.trim() ?? ''
+  if (prevRoutes !== nextRoutes) return true
 
   const prevEntryKeys = entryKeys(prev.routeFilter.entries)
   const nextEntryKeys = entryKeys(next.routeFilter.entries)
@@ -100,10 +93,9 @@ export function hasKmbQueryContextChanged(
  */
 export function buildKmbQueryFromDraft(
   selection: StopSearchSelection,
-  routeFilter: RouteFilterState,
-  routeFilterMode: RouteFilterMode
+  routeFilter: RouteFilterState
 ): KmbQuery {
-  const route = routeFilterMode === 'simple' ? routeFilter.routes?.trim() || undefined : undefined
+  const route = routeFilter.routes?.trim() || undefined
 
   if (selection.type === 'stop') {
     return {

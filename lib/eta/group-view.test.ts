@@ -27,7 +27,6 @@ const grouped = (
   mode: 'kmb',
   title: stopIds.join(','),
   stopIds,
-  routeFilterMode: 'simple',
   groupId: groupId ?? null,
   ...extra,
 })
@@ -35,9 +34,8 @@ const grouped = (
 describe('collectKmbGroupMembers', () => {
   it('keeps mixed members with their filters intact and in favorites order', () => {
     const favorites: FavoritesItem[] = [
-      single('a', '1', 'g1', { route: '1A', routeFilterMode: 'simple' }),
+      single('a', '1', 'g1', { route: '1A' }),
       grouped('b', ['2', '3'], 'g1', {
-        routeFilterMode: 'advanced',
         entries: [{ variantKey: 'kmb|1A|O|1' }],
       }),
       single('c', '4', 'g1'),
@@ -45,9 +43,8 @@ describe('collectKmbGroupMembers', () => {
     ]
     const members = collectKmbGroupMembers(favorites, 'g1')
     expect(members.map((m) => m.id)).toEqual(['a', 'b', 'c'])
-    expect(members[0]).toMatchObject({ route: '1A', routeFilterMode: 'simple' })
+    expect(members[0]).toMatchObject({ route: '1A' })
     expect(members[1]).toMatchObject({
-      routeFilterMode: 'advanced',
       entries: [{ variantKey: 'kmb|1A|O|1' }],
     })
   })
@@ -108,7 +105,6 @@ describe('buildGroupStopsItem', () => {
       mode: 'kmb',
       title: 'Home',
       stopIds: ['1', '2', '3'],
-      routeFilterMode: 'simple',
     })
   })
 
@@ -133,11 +129,9 @@ describe('buildGroupStopsItem', () => {
     const members: KmbGroupMember[] = [
       single('a', '1', 'g1', {
         route: '1A',
-        routeFilterMode: 'advanced',
         entries: [{ variantKey: 'kmb|1A|O|1' }],
       }) as KmbGroupMember,
       grouped('b', ['2'], 'g1', {
-        routeFilterMode: 'advanced',
         entries: [{ variantKey: 'kmb|2|O|1' }],
       }) as KmbGroupMember,
     ]
@@ -146,7 +140,7 @@ describe('buildGroupStopsItem', () => {
     expect(first?.id).toBe('kmb:group:1,2')
     expect(second?.id).toBe('kmb:group:2,1')
     expect(buildGroupStopsItem(members, 'Home')).toEqual(first)
-    expect(first).toMatchObject({ mode: 'kmb', title: 'Home', routeFilterMode: 'simple' })
+    expect(first).toMatchObject({ mode: 'kmb', title: 'Home' })
     expect(first).not.toHaveProperty('route')
     expect(first).not.toHaveProperty('entries')
     expect(first).not.toHaveProperty('stopId')

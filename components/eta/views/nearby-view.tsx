@@ -12,6 +12,7 @@ import { useGeolocation, type GeolocationErrorCode } from '@/components/eta/use-
 import { fetchKmbStops } from '@/lib/eta/client'
 import { computeNearbyStops, formatDistanceKm, haversineDistanceKm } from '@/lib/eta/geo'
 import { usePaneStore } from '@/lib/eta/pane-store'
+import { useAppStore } from '@/lib/store'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang, pickLangZh } from '@/lib/eta/pick-lang'
 import { useTranslations } from '@/lib/eta/i18n'
@@ -416,8 +417,8 @@ function KmbNearbyView({
   onSelectStopGroup,
   t,
 }: SharedViewProps) {
-  const radiusKm = usePaneStore((s) => s.nearbyRadiusKm)
-  const setRadiusKm = usePaneStore((s) => s.setNearbyRadiusKm)
+  const radiusKm = useAppStore((s) => s.nearbyRadiusKm)
+  const setRadiusKm = useAppStore((s) => s.setNearbyRadiusKm)
   const { stops, loading, error } = useKmbNearbyStops(location, radiusKm)
 
   const mapCenter = React.useMemo(() => {
@@ -604,8 +605,8 @@ function MtrNearbyView({
   | 'onSelectMtrStation'
   | 't'
 >) {
-  const radiusKm = usePaneStore((s) => s.nearbyRadiusKm)
-  const setRadiusKm = usePaneStore((s) => s.setNearbyRadiusKm)
+  const radiusKm = useAppStore((s) => s.nearbyRadiusKm)
+  const setRadiusKm = useAppStore((s) => s.setNearbyRadiusKm)
   const lines = useMtrStationsByLine()
   const nearby = React.useMemo(
     () => (location ? computeNearbyStops(location, MTR_STATIONS, NEARBY_LIMIT, radiusKm) : []),
@@ -799,8 +800,8 @@ function LrtNearbyView({
   | 'onSelectLrtStation'
   | 't'
 >) {
-  const radiusKm = usePaneStore((s) => s.nearbyRadiusKm)
-  const setRadiusKm = usePaneStore((s) => s.setNearbyRadiusKm)
+  const radiusKm = useAppStore((s) => s.nearbyRadiusKm)
+  const setRadiusKm = useAppStore((s) => s.setNearbyRadiusKm)
   const { routes, loading, error, retry } = useLrtRouteStations()
   const routeGroups = useLrtStationsByRoute(routes)
 

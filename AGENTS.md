@@ -98,7 +98,7 @@ Tests live next to source as `*.test.ts`, matched by `**/*.{test,spec}.{ts,tsx}`
 
 - `lib/store.ts` is the persisted global store (mode, subView, lang, favorites, recents, groups, auto-refresh seconds, route filter mode). Persistence uses a 300 ms debounced localStorage wrapper with `beforeunload` flush. Keep field names backward compatible, old favorites still decode.
 - `lib/eta/pane-store.ts` is transient per-pane state. Put anything that should not survive reload there.
-- URL is the shareable state. `lib/eta/url-state.ts` owns `encodeUrlState` and `decodeUrlState`. DEFAULTS are mode kmb, subView stops, lang tc, route filter simple, refresh 15s. Valid refresh values are 0, 10, 15, 30, 60. Any new persisted or URL-visible state must round-trip through these functions and keep old links working.
+- URL is the shareable state. `lib/eta/url-state.ts` owns `encodeUrlState` and `decodeUrlState`. DEFAULTS are mode kmb, subView stops, lang tc, refresh 15s. Valid refresh values are 0, 10, 15, 30, 60. Any new persisted or URL-visible state must round-trip through these functions and keep old links working.
 
 ### Data layer
 

@@ -1,7 +1,7 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { FavoritesItem, FavoritesGroup } from './store'
-import { capFavorites, FAVORITES_LIMIT } from './store'
+import { capFavorites, FAVORITES_LIMIT, migratePersistedState, useAppStore } from './store'
 
 // Create a test store without persist middleware
 type AppState = {
@@ -512,28 +512,6 @@ describe('store favorites', () => {
 
 describe('store migration', () => {
   it('migrates v1 favorites without meta to v2 with default pinned and groupId', () => {
-    // Simulate the migrate function from store.ts
-    const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
-      ...item,
-      pinned: item.pinned ?? false,
-      groupId: item.groupId ?? null,
-    })
-
-    const migrate = (persistedState: unknown) => {
-      const state = persistedState as { favorites?: FavoritesItem[] } | undefined
-      const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
-
-      return {
-        mode: 'kmb' as const,
-        lang: 'tc' as const,
-        routeFilterMode: 'simple' as const,
-        autoRefreshSeconds: 15,
-        favorites,
-        favoritesGroups: [],
-        recents: [],
-      }
-    }
-
     const v1State = {
       favorites: [
         {
@@ -547,34 +525,13 @@ describe('store migration', () => {
       ],
     }
 
-    const migrated = migrate(v1State)
+    const migrated = migratePersistedState(v1State)
 
     expect(migrated.favorites[0].pinned).toBe(false)
     expect(migrated.favorites[0].groupId).toBeNull()
   })
 
   it('preserves existing pinned and groupId values during migration', () => {
-    const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
-      ...item,
-      pinned: item.pinned ?? false,
-      groupId: item.groupId ?? null,
-    })
-
-    const migrate = (persistedState: unknown) => {
-      const state = persistedState as { favorites?: FavoritesItem[] } | undefined
-      const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
-
-      return {
-        mode: 'kmb' as const,
-        lang: 'tc' as const,
-        routeFilterMode: 'simple' as const,
-        autoRefreshSeconds: 15,
-        favorites,
-        favoritesGroups: [{ id: 'group-1', name: 'Work' }],
-        recents: [],
-      }
-    }
-
     const v1State = {
       favorites: [
         {
@@ -587,88 +544,48 @@ describe('store migration', () => {
           groupId: 'group-1',
         },
       ],
+      favoritesGroups: [{ id: 'group-1', name: 'Work' }],
     }
 
-    const migrated = migrate(v1State)
+    const migrated = migratePersistedState(v1State)
 
     expect(migrated.favorites[0].pinned).toBe(true)
     expect(migrated.favorites[0].groupId).toBe('group-1')
+    expect(migrated.favoritesGroups).toEqual([{ id: 'group-1', name: 'Work' }])
   })
 
   it('preserves other state fields during migration', () => {
-    const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
-      ...item,
-      pinned: item.pinned ?? false,
-      groupId: item.groupId ?? null,
-    })
-
-    const migrate = (persistedState: unknown) => {
-      const state = persistedState as
-        | {
-            mode?: 'kmb' | 'mtr' | 'lrt'
-            lang?: 'en' | 'tc' | 'sc'
-            routeFilterMode?: 'simple' | 'advanced'
-            autoRefreshSeconds?: number
-            favorites?: FavoritesItem[]
-          }
-        | undefined
-      const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
-
-      return {
-        mode: state?.mode ?? 'kmb',
-        lang: state?.lang ?? 'tc',
-        routeFilterMode: state?.routeFilterMode ?? 'simple',
-        autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
-        favorites,
-        favoritesGroups: [],
-        recents: [],
-      }
-    }
-
     const v1State = {
       mode: 'mtr' as const,
       lang: 'en' as const,
-      routeFilterMode: 'advanced' as const,
       autoRefreshSeconds: 30,
       favorites: [],
     }
 
-    const migrated = migrate(v1State)
+    const migrated = migratePersistedState(v1State)
 
     expect(migrated.mode).toBe('mtr')
     expect(migrated.lang).toBe('en')
-    expect(migrated.routeFilterMode).toBe('advanced')
     expect(migrated.autoRefreshSeconds).toBe(30)
   })
 
-  it('handles undefined persisted state with defaults', () => {
-    const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
-      ...item,
-      pinned: item.pinned ?? false,
-      groupId: item.groupId ?? null,
+  it('drops the removed route filter mode during migration', () => {
+    const migrated = migratePersistedState({
+      mode: 'kmb',
+      routeFilterMode: 'advanced',
+      favorites: [],
     })
 
-    const migrate = (persistedState: unknown) => {
-      const state = persistedState as { favorites?: FavoritesItem[] } | undefined
-      const favorites = (state?.favorites ?? []).map((favorite) => withFavoriteMeta(favorite))
+    expect(migrated).not.toHaveProperty('routeFilterMode')
+  })
 
-      return {
-        mode: 'kmb' as const,
-        lang: 'tc' as const,
-        routeFilterMode: 'simple' as const,
-        autoRefreshSeconds: 15,
-        favorites,
-        favoritesGroups: [],
-        recents: [],
-      }
-    }
-
-    const migrated = migrate(undefined)
+  it('handles undefined persisted state with defaults', () => {
+    const migrated = migratePersistedState(undefined)
 
     expect(migrated.mode).toBe('kmb')
     expect(migrated.lang).toBe('tc')
-    expect(migrated.routeFilterMode).toBe('simple')
     expect(migrated.autoRefreshSeconds).toBe(15)
+    expect(migrated.nearbyRadiusKm).toBe(2)
     expect(migrated.favorites).toEqual([])
     expect(migrated.favoritesGroups).toEqual([])
     expect(migrated.recents).toEqual([])
@@ -734,5 +651,151 @@ describe('capFavorites', () => {
     expect(capped[2].id).toBe('mid-unpinned')
     // Oldest unpinned entries fall off first; the pinned one survives.
     expect(capped.some((f) => f.id === 'old-pinned')).toBe(true)
+  })
+})
+
+describe('settings prefs', () => {
+  const mtrFavorite = (id: string): FavoritesItem => ({
+    id,
+    mode: 'mtr',
+    title: `Station ${id}`,
+    line: 'TWL',
+    sta: id.toUpperCase(),
+  })
+
+  beforeEach(() => {
+    useAppStore.setState({
+      lang: 'tc',
+      autoRefreshSeconds: 15,
+      nearbyRadiusKm: 2,
+      favorites: [],
+      favoritesGroups: [],
+      recents: [],
+    })
+  })
+
+  it('clamps the nearby radius into the slider band', () => {
+    useAppStore.getState().setNearbyRadiusKm(99)
+    expect(useAppStore.getState().nearbyRadiusKm).toBe(5)
+    useAppStore.getState().setNearbyRadiusKm(-1)
+    expect(useAppStore.getState().nearbyRadiusKm).toBe(0.5)
+    useAppStore.getState().setNearbyRadiusKm(1.26)
+    expect(useAppStore.getState().nearbyRadiusKm).toBe(1.25)
+  })
+
+  it('persists the nearby radius alongside the other prefs', () => {
+    useAppStore.getState().setNearbyRadiusKm(3)
+    const raw = localStorage.getItem('hk-eta')
+    expect(raw).not.toBeNull()
+    const parsed = JSON.parse(raw as string) as {
+      version: number
+      state: { nearbyRadiusKm: number }
+    }
+    expect(parsed.version).toBe(7)
+    expect(parsed.state.nearbyRadiusKm).toBe(3)
+  })
+
+  it('resetPrefs restores defaults but keeps saved data', () => {
+    useAppStore.setState({
+      lang: 'en',
+      autoRefreshSeconds: 60,
+      nearbyRadiusKm: 4,
+      favorites: [mtrFavorite('fav-1')],
+    })
+    useAppStore.getState().resetPrefs()
+    const state = useAppStore.getState()
+    expect(state.lang).toBe('tc')
+    expect(state.autoRefreshSeconds).toBe(15)
+    expect(state.nearbyRadiusKm).toBe(2)
+    expect(state.favorites).toHaveLength(1)
+  })
+
+  it('clearFavorites empties the list', () => {
+    useAppStore.setState({ favorites: [mtrFavorite('fav-1'), mtrFavorite('fav-2')] })
+    useAppStore.getState().clearFavorites()
+    expect(useAppStore.getState().favorites).toEqual([])
+  })
+
+  it('replaceFavorites keeps valid entries and drops the rest', () => {
+    useAppStore.getState().replaceFavorites([
+      mtrFavorite('good-1'),
+      { id: 'kmb-stop', mode: 'kmb', title: 'Stop', stopId: 'ABC123' },
+      {
+        id: 'kmb-route',
+        mode: 'kmb',
+        type: 'route',
+        title: 'Route 1',
+        route: '1',
+        bound: 'outbound',
+        serviceType: '1',
+      },
+      { id: 'no-mode', title: 'Broken' },
+      { id: 'no-title', mode: 'mtr', line: 'TWL', sta: 'CEN' },
+      { id: 'route-no-bound', mode: 'kmb', type: 'route', title: 'R', route: '1' },
+      { id: 'empty-group', mode: 'kmb', title: 'G', stopIds: [] },
+      { id: 'blank-stop', mode: 'kmb', title: 'G', stopIds: [''] },
+      { id: 'mtr-no-line', mode: 'mtr', title: 'Central', sta: 'CEN' },
+      { id: 'mtr-blank-sta', mode: 'mtr', title: 'Central', line: 'TWL', sta: '' },
+      { id: 'lrt-blank', mode: 'lrt', title: 'Stop', stationId: '' },
+      { mode: 'mtr', sta: 'CEN' },
+      { id: 'bad-mode', mode: 'ferry' },
+      null,
+      'just a string',
+    ])
+    const favorites = useAppStore.getState().favorites
+    expect(favorites.map((f) => f.id).sort()).toEqual(['good-1', 'kmb-route', 'kmb-stop'])
+    expect(favorites.every((f) => f.pinned === false && f.groupId === null)).toBe(true)
+  })
+
+  it('replaceFavorites caps oversized imports and rejects non-arrays', () => {
+    const oversized = Array.from({ length: FAVORITES_LIMIT + 10 }, (_, i) =>
+      mtrFavorite(`fav-${i}`)
+    )
+    useAppStore.getState().replaceFavorites(oversized)
+    expect(useAppStore.getState().favorites).toHaveLength(FAVORITES_LIMIT)
+
+    useAppStore.getState().replaceFavorites({ favorites: [] })
+    expect(useAppStore.getState().favorites).toHaveLength(FAVORITES_LIMIT)
+  })
+
+  it('accepts an empty array import as a clear', () => {
+    useAppStore.setState({ favorites: [mtrFavorite('fav-1')] })
+    useAppStore.getState().replaceFavorites([])
+    expect(useAppStore.getState().favorites).toEqual([])
+  })
+})
+
+describe('migratePersistedState', () => {
+  it('falls back to the default radius for v6 payloads without one', () => {
+    const migrated = migratePersistedState({
+      lang: 'en',
+      routeFilterMode: 'advanced',
+      autoRefreshSeconds: 30,
+      favorites: [],
+      favoritesGroups: [],
+      recents: [],
+    })
+    expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated.lang).toBe('en')
+    expect(migrated).not.toHaveProperty('routeFilterMode')
+  })
+
+  it('clamps out-of-range radii and rejects non-numbers', () => {
+    expect(migratePersistedState({ nearbyRadiusKm: 99 }).nearbyRadiusKm).toBe(5)
+    expect(migratePersistedState({ nearbyRadiusKm: -1 }).nearbyRadiusKm).toBe(0.5)
+    expect(migratePersistedState({ nearbyRadiusKm: Number.NaN }).nearbyRadiusKm).toBe(2)
+    expect(migratePersistedState({ nearbyRadiusKm: '3' }).nearbyRadiusKm).toBe(2)
+    expect(migratePersistedState({ nearbyRadiusKm: null }).nearbyRadiusKm).toBe(2)
+  })
+
+  it('keeps a valid radius untouched', () => {
+    expect(migratePersistedState({ nearbyRadiusKm: 3.5 }).nearbyRadiusKm).toBe(3.5)
+  })
+
+  it('handles undefined state with full defaults', () => {
+    const migrated = migratePersistedState(undefined)
+    expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated.favorites).toEqual([])
+    expect(migrated.recents).toEqual([])
   })
 })

@@ -8,7 +8,7 @@ export type KmbGroupMember = Extract<
 /**
  * Collect the viewable KMB members of a favorites group, in favorites order.
  * Keeps single-stop (`stopId`) and grouped (`stopIds`) members with their
- * saved filters (`route`/`entries`/`routeFilterMode`) intact. Skips contains
+ * saved filters (`route`/`entries`) intact. Skips contains
  * queries, saved routes (`type: 'route'`), MTR/LRT items, and members with
  * no usable stop ids.
  */
@@ -40,8 +40,7 @@ export function collectKmbGroupMembers(
  * stop id remains.
  *
  * Per-member filters (`route`/`entries`) are intentionally dropped: the
- * stop-mode view shows every route serving the unioned stops under
- * `routeFilterMode: 'simple'`.
+ * stop-mode view shows every route serving the unioned stops.
  *
  * The returned id (`kmb:group:<comma-joined-stop-ids>`) is stable for a given
  * stop set.
@@ -67,6 +66,5 @@ export function buildGroupStopsItem(
     mode: 'kmb',
     title: groupName,
     stopIds,
-    routeFilterMode: 'simple',
   }
 }

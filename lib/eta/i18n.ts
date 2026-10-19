@@ -388,6 +388,80 @@ const favorites: Record<string, TranslationEntry> = {
   },
 }
 
+const settings: Record<string, TranslationEntry> = {
+  subheading: {
+    en: 'Make the app work the way you ride.',
+    tc: '按你的乘車習慣調整應用程式。',
+    sc: '按你的乘车习惯调整应用程序。',
+  },
+  themeLightDesc: { en: 'Always light', tc: '永遠使用淺色', sc: '永远使用浅色' },
+  themeDarkDesc: { en: 'Always dark', tc: '永遠使用深色', sc: '永远使用深色' },
+  themeSystemDesc: { en: 'Follow the device', tc: '跟隨系統', sc: '跟随系统' },
+  languageNote: {
+    en: 'MTR and Light Rail support English and Traditional Chinese only.',
+    tc: '港鐵及輕鐵只支援英文及繁體中文。',
+    sc: '港铁及轻铁只支持英文及繁体中文。',
+  },
+  refreshDesc: {
+    en: 'How often results update while you wait. Off pauses background updates.',
+    tc: '等候時結果自動更新的頻率。關閉則暫停背景更新。',
+    sc: '等候时结果自动更新的频率。关闭则暂停后台更新。',
+  },
+  nearbyDesc: {
+    en: 'Default search distance for the Nearby tab.',
+    tc: '「附近」分頁的預設搜尋距離。',
+    sc: '“附近”分页的默认搜索距离。',
+  },
+  savedData: { en: 'Saved data', tc: '已儲存資料', sc: '已储存资料' },
+  favoritesCount: { en: '{count} saved', tc: '已收藏 {count} 項', sc: '已收藏 {count} 项' },
+  recentsCount: { en: '{count} recent', tc: '{count} 項最近記錄', sc: '最近记录 {count} 项' },
+  exportImportDesc: {
+    en: 'Back up favorites to a file, or restore from one. Importing replaces the current list.',
+    tc: '將收藏備份成檔案，或從檔案還原。匯入會取代現有收藏。',
+    sc: '将收藏备份成文件，或从文件还原。导入会取代现有收藏。',
+  },
+  exportFavorites: { en: 'Export', tc: '匯出', sc: '导出' },
+  importFavorites: { en: 'Import', tc: '匯入', sc: '导入' },
+  clearHistory: { en: 'Clear search history', tc: '清除搜尋記錄', sc: '清除搜索记录' },
+  clearFavorites: { en: 'Clear all favorites', tc: '清除全部收藏', sc: '清除全部收藏' },
+  tapAgainToConfirm: { en: 'Tap again to confirm', tc: '再按一次以確認', sc: '再按一次以确认' },
+  importFailed: { en: 'Could not read that file.', tc: '無法讀取該檔案。', sc: '无法读取该文件。' },
+  imported: { en: '{count} favorites ready', tc: '已有 {count} 項收藏', sc: '已有 {count} 项收藏' },
+  importedPartial: {
+    en: '{kept} of {total} imported, {skipped} skipped',
+    tc: '已匯入 {total} 項中的 {kept} 項，略過 {skipped} 項',
+    sc: '已导入 {total} 项中的 {kept} 项，略过 {skipped} 项',
+  },
+  actionFailed: { en: 'Something went wrong.', tc: '操作失敗。', sc: '操作失败。' },
+  storage: { en: 'Storage', tc: '儲存空間', sc: '储存空间' },
+  clearCache: { en: 'Clear cached timetables', tc: '清除已快取的時間表', sc: '清除已缓存的时间表' },
+  clearCacheDesc: {
+    en: 'Deletes downloaded stop and schedule data. It reloads next time you visit.',
+    tc: '刪除已下載的車站及時間表資料，下次使用時會重新載入。',
+    sc: '删除已下载的车站及时间表资料，下次使用时会重新载入。',
+  },
+  cacheCleared: { en: 'Cache cleared.', tc: '快取已清除。', sc: '缓存已清除。' },
+  resetSettings: { en: 'Reset all settings', tc: '重設所有設定', sc: '重置所有设定' },
+  resetSettingsDesc: {
+    en: 'Restores appearance, language, refresh and radius defaults. Saved stops stay.',
+    tc: '還原外觀、語言、刷新及半徑預設值，收藏不受影響。',
+    sc: '还原外观、语言、刷新及半径默认值，收藏不受影响。',
+  },
+  settingsReset: {
+    en: 'Settings reset to defaults.',
+    tc: '設定已還原為預設值。',
+    sc: '设定已还原为默认值。',
+  },
+  about: { en: 'About', tc: '關於', sc: '关于' },
+  dataSources: { en: 'Data sources', tc: '資料來源', sc: '资料来源' },
+  dataSourcesNote: {
+    en: 'Stop and schedule data comes from the operators’ open data feeds and is cached on your device.',
+    tc: '車站及時間表資料來自各營辦商的開放數據，並快取於你的裝置上。',
+    sc: '车站及时间表资料来自各营办商的开放数据，并缓存于你的设备上。',
+  },
+  version: { en: 'Version', tc: '版本', sc: '版本' },
+}
+
 const errors: Record<string, TranslationEntry> = {
   noResults: { en: 'No results.', tc: '無結果。', sc: '无结果。' },
   updateFailedGeneric: { en: 'Update failed', tc: '更新失敗', sc: '更新失败' },
@@ -399,6 +473,7 @@ export const translations = {
   mtr,
   lrt,
   favorites,
+  settings,
   errors,
 }
 

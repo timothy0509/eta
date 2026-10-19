@@ -43,16 +43,15 @@ function memberStopIds(member: KmbGroupMember): string[] {
 
 /** Route filter string for one saved member, mirroring the KMB pane. */
 function memberRouteFilter(member: KmbGroupMember): string | undefined {
-  const mode = member.routeFilterMode ?? 'simple'
   const entries = (member.entries ?? []).map((entry, index) => ({
     id: `group-${member.id}-${index}`,
     variantKey: entry.variantKey,
   }))
   const route = 'route' in member ? member.route : undefined
-  return buildRouteFilterString({ routes: route ?? '', entries }, mode, route)
+  return buildRouteFilterString({ routes: route ?? '', entries }, route)
 }
 
-/** Exact variant keys for advanced-mode members (client-side filter, like the pane). */
+/** Exact variant keys for direction-specific members (client-side filter, like the pane). */
 function memberVariantKeys(member: KmbGroupMember): Set<string> | null {
   const entries = member.entries ?? []
   return entries.length ? new Set(entries.map((entry) => entry.variantKey)) : null
@@ -245,7 +244,7 @@ function GroupMemberSection({
   }, [member, stopsById, lang])
 
   const suffix = React.useMemo(() => {
-    if (member.routeFilterMode === 'advanced' && member.entries?.length) {
+    if (member.entries?.length) {
       const count = member.entries.length
       return ` · ${count} ${count === 1 ? t('kmb.routeSingular') : t('kmb.routes')}`
     }

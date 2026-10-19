@@ -19,7 +19,7 @@ const OPTIONS = [
 
 function Harness() {
   const [value, setValue] = useState<RouteFilterState>({ routes: '', entries: [] })
-  return <RouteFilter lang="en" mode="simple" value={value} onChange={setValue} options={OPTIONS} />
+  return <RouteFilter lang="en" value={value} onChange={setValue} options={OPTIONS} />
 }
 
 describe('countActiveFilters', () => {

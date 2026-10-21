@@ -402,8 +402,12 @@ export function KmbPane({
     if (!(routeFilter.entries ?? []).length) return
     if (!kmbRouteStops.length) return
 
+    // Match by family, not exact string: restored saves and shared links
+    // may carry legacy 4-part keys (co|route|bound|st) while the index uses
+    // canonical 5-part keys with a gtfsId segment. Exact equality would wipe
+    // those entries right after restore.
     const nextEntries = (routeFilter.entries ?? []).filter((entry) =>
-      kmbAvailableRouteVariants.some((opt) => opt.key === entry.variantKey)
+      kmbAvailableRouteVariants.some((opt) => variantKeyMatches(entry.variantKey, opt.key))
     )
 
     if (nextEntries.length === (routeFilter.entries ?? []).length) return
@@ -1058,12 +1062,11 @@ export function KmbPane({
               isKmb: isKmbStop(firstStop),
               lang,
             })
-            const firstStopId = stopIds[0]!
             onAddRecent({
               id: `kmb:${stopIds.join(',')}:__stops__`,
               mode: 'kmb',
               title: name,
-              stopId: firstStopId,
+              stopIds,
             })
           }
         }}

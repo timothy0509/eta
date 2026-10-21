@@ -29,6 +29,24 @@ type UseKmbSaveOptions = {
   onAddRecent: (item: FavoritesItem) => void
 }
 
+/**
+ * Dedupe token for a saved stop search, derived from the actual filter
+ * content: the sorted direction variant keys when variants are selected,
+ * else the route text, else the unfiltered marker. Re-saving the same stop
+ * with different filters must create a new favorite instead of being
+ * silently dropped by the id dedupe in addFavorite; the same filter set in
+ * any selection order still yields the same token so true duplicates
+ * collapse.
+ */
+function filterIdToken(route: string | undefined, entries: RouteFilterState['entries']): string {
+  const keys = (entries ?? [])
+    .map((entry) => entry.variantKey)
+    .filter(Boolean)
+    .sort()
+  if (keys.length) return `adv:${keys.join('~')}`
+  return route ?? '__all__'
+}
+
 export function useKmbSave({
   lang,
   routeFilter,
@@ -91,7 +109,7 @@ export function useKmbSave({
       })
       const title = `${name}${routeSuffix}`
 
-      const idPart = routeCount > 0 ? `adv:${routeCount}` : (route ?? '__all__')
+      const idPart = filterIdToken(route, routeFilter.entries)
       item = {
         id: `kmb:${stopId}:${idPart}:1`,
         mode: 'kmb',
@@ -112,7 +130,7 @@ export function useKmbSave({
       })
       const title = `${name}${routeSuffix}`
 
-      const idPart = routeCount > 0 ? `adv:${routeCount}` : (route ?? '__all__')
+      const idPart = filterIdToken(route, routeFilter.entries)
       item = {
         id: `kmb:stops:${stopIds.join(',')}:${idPart}`,
         mode: 'kmb',
@@ -124,7 +142,7 @@ export function useKmbSave({
     } else if (containsQuery.length >= 3) {
       const title = `${translations.common.searchContainsPrefix[lang]}${containsQuery}${routeSuffix}`
 
-      const idPart = routeCount > 0 ? `adv:${routeCount}` : (route ?? '__all__')
+      const idPart = filterIdToken(route, routeFilter.entries)
       item = {
         id: `kmb:contains:${containsQuery}:${idPart}:1`,
         mode: 'kmb',

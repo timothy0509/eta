@@ -4,6 +4,7 @@ import { CalendarDays, Clock, MapPin, Ticket } from 'lucide-react'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
+import { Marquee } from '@/components/ui/marquee'
 import {
   Dialog,
   DialogContent,
@@ -123,9 +124,9 @@ export function TimetableTable({
   }
 
   return (
-    <div className="space-y-2">
+    <div className="min-w-0 space-y-2">
       {span ? (
-        <div className="bg-surface-container-high flex items-center justify-between gap-3 rounded-xl px-3 py-2">
+        <div className="bg-surface-container-high flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl px-3 py-2">
           <span className="text-on-surface-variant m3-label-md flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5" aria-hidden />
             {t('kmb.scheduleFirstBus')}
@@ -156,18 +157,18 @@ export function TimetableTable({
                     active ? 'bg-primary-container text-on-primary-container' : 'text-on-surface'
                   )}
                 >
-                  <span className="m3-body-md font-tabular font-medium tabular-nums">
+                  <span className="m3-body-md font-tabular shrink-0 font-medium tabular-nums">
                     {minsToDisplay(startMin)}–{minsToDisplay(endMin)}
                   </span>
                   {active ? (
-                    <span className="m3-label-sm flex items-center gap-2 font-medium">
+                    <span className="m3-label-sm flex min-w-0 items-center justify-end gap-2 text-right font-medium">
                       {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
                       <span className="bg-on-primary-container text-primary-container m3-label-sm rounded-full px-1.5 py-px font-semibold">
                         {t('kmb.scheduleNow')}
                       </span>
                     </span>
                   ) : (
-                    <span className="m3-body-md text-on-surface-variant">
+                    <span className="m3-body-md text-on-surface-variant min-w-0 text-right">
                       {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
                     </span>
                   )}
@@ -373,9 +374,9 @@ export function FullTimetable({
         : (available[0] ?? 'weekday')
 
   return (
-    <div className="space-y-3">
+    <div className="min-w-0 space-y-3">
       <div
-        className="bg-surface-container-high flex gap-1 overflow-x-auto rounded-full p-1"
+        className="bg-surface-container-high flex max-w-full gap-1 overflow-x-auto rounded-full p-1"
         role="group"
         aria-label={t('kmb.scheduleFullTitle')}
       >
@@ -448,14 +449,14 @@ export function RouteDetailsDialog({
   return (
     <Dialog>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="bg-surface-container-low max-h-[85dvh] gap-0 overflow-y-auto rounded-3xl border-0 p-0">
+      <DialogContent className="bg-surface-container-low max-h-[85dvh] gap-0 overflow-x-hidden overflow-y-auto rounded-3xl border-0 p-0 sm:max-w-xl">
         <div
           className="h-1.5 w-full shrink-0"
           style={{ backgroundColor: operatorColor }}
           aria-hidden
         />
-        <div className="space-y-5 p-5 sm:p-6">
-          <DialogHeader className="text-left">
+        <div className="min-w-0 space-y-5 p-5 sm:p-6">
+          <DialogHeader className="min-w-0 text-left">
             <div className="flex flex-wrap items-center gap-2 pr-8">
               <RouteBadge route={route} company={co} size="lg" />
               <span className="bg-surface-container-high text-on-surface-variant m3-label-md rounded-full px-2.5 py-1">
@@ -463,12 +464,12 @@ export function RouteDetailsDialog({
               </span>
             </div>
             <DialogTitle className="sr-only">{screenReaderTitle}</DialogTitle>
-            <DialogDescription className="text-on-surface m3-title-md font-medium break-words">
-              {routeLine || t('common.route')}
+            <DialogDescription className="text-on-surface m3-title-md min-w-0 font-medium">
+              <Marquee title={routeLine || undefined}>{routeLine || t('common.route')}</Marquee>
             </DialogDescription>
           </DialogHeader>
 
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
             <div className="bg-surface-container-high flex items-start gap-2.5 rounded-2xl px-3.5 py-3">
               <MapPin className="text-on-surface-variant mt-0.5 h-4 w-4 shrink-0" aria-hidden />
               <div className="min-w-0 flex-1">
@@ -496,7 +497,7 @@ export function RouteDetailsDialog({
             </div>
           </div>
 
-          <section aria-label={t('kmb.scheduleFullTitle')}>
+          <section aria-label={t('kmb.scheduleFullTitle')} className="min-w-0">
             <div className="text-on-surface-variant m3-label-md mb-2 flex items-center gap-1.5">
               <CalendarDays className="h-3.5 w-3.5" aria-hidden />
               {t('kmb.scheduleFullTitle')}

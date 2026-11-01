@@ -171,3 +171,49 @@ describe('computeEtaLeg region handling', () => {
     ).toBe('A')
   })
 })
+
+describe('byFamily fast path parity', () => {
+  it('precomputed families stay smallest-key first', () => {
+    const stops = [
+      routeStop('kmb', '83X', 'I', '1', '8492', 'SHARED', 1),
+      routeStop('kmb', '83X', 'I', '1', '1348', 'SHARED', 1),
+      routeStop('kmb', '83X', 'I', '1', '8492', 'BRANCH', 2),
+    ]
+    const index = computeKmbRouteVariantStops(stops)
+    const family = index.byFamily.get('kmb|83X|I|1')
+    expect(family?.map((v) => v.variantKey)).toEqual(['kmb|83X|I|1|1348', 'kmb|83X|I|1|8492'])
+  })
+
+  it('prefers most occurrences, then smallest key, via the fast path', () => {
+    const stops = [
+      routeStop('kmb', 'C1', 'O', '1', '100', 'LOOP', 1),
+      routeStop('kmb', 'C1', 'O', '1', '200', 'LOOP', 1),
+      routeStop('kmb', 'C1', 'O', '1', '200', 'LOOP', 9),
+    ]
+    const index = computeKmbRouteVariantStops(stops)
+    // etaSeq 8 is closer to the repeated variant's last occurrence.
+    expect(
+      computeEtaLeg({
+        co: 'kmb',
+        route: 'C1',
+        dir: 'O',
+        serviceType: '1',
+        stopId: 'LOOP',
+        etaSeq: 8,
+        byVariantStops: index,
+      })
+    ).toBe('B')
+    // A stop held by no variant falls back to the smallest key.
+    expect(
+      computeEtaLeg({
+        co: 'kmb',
+        route: 'C1',
+        dir: 'O',
+        serviceType: '1',
+        stopId: 'NOWHERE',
+        etaSeq: 1,
+        byVariantStops: index,
+      })
+    ).toBe(null)
+  })
+})

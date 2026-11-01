@@ -24,7 +24,7 @@ export type EtaAction =
         keepTimestamp?: boolean
       }
     }
-  | { type: 'REFRESH_ERROR'; error: string }
+  | { type: 'REFRESH_ERROR'; error: string; keepPrevious?: boolean }
   | {
       type: 'APPEND_STOPS'
       payload: {
@@ -57,7 +57,18 @@ export function etaReducer(state: EtaState, action: EtaAction): EtaState {
   switch (action.type) {
     case 'REFRESH_START':
       return { ...state, loading: true, error: null }
-    case 'REFRESH_SUCCESS':
+    case 'REFRESH_SUCCESS': {
+      // Visible-only auto-refresh fetches a subset of stops. Merge their
+      // stale flags into the existing map so off-screen stops keep theirs
+      // instead of looking fresh on a timestamp they did not earn. Entries
+      // for stops outside loadedStopIds are pruned so a new search does not
+      // let departed stops vote on the global flag or grow the map.
+      const loaded = new Set(action.payload.loadedStopIds)
+      const mergedStale: EtaState['staleByStopId'] = {}
+      for (const [stopId, entry] of Object.entries(state.staleByStopId)) {
+        if (loaded.has(stopId)) mergedStale[stopId] = entry
+      }
+      Object.assign(mergedStale, action.payload.staleByStopId)
       return {
         ...state,
         byStopId: action.payload.byStopId,
@@ -65,25 +76,35 @@ export function etaReducer(state: EtaState, action: EtaAction): EtaState {
         faresByVariantKey: action.payload.faresByVariantKey ?? state.faresByVariantKey,
         loading: false,
         error: null,
-        stale: Boolean(
-          action.payload.staleByStopId &&
-          Object.values(action.payload.staleByStopId).some((entry) => entry.stale)
-        ),
-        staleByStopId: action.payload.staleByStopId ?? {},
+        stale: Object.values(mergedStale).some((entry) => entry.stale),
+        staleByStopId: mergedStale,
         // Cache hits carry data as old as the entry, not this poll tick.
         // Keep the previous timestamp so "just now" and the age-based
         // stale check reflect the data, not the poll.
         lastUpdatedAt: action.payload.keepTimestamp ? state.lastUpdatedAt : Date.now(),
       }
-    case 'REFRESH_ERROR':
+    }
+    case 'REFRESH_ERROR': {
+      // Transient stop failures keep their previous rows; a whole-refresh
+      // failure blanks them. This branch is the whole-refresh path, so it
+      // only clears rows on a genuine unknown error when told to.
+      const staleAll = Object.fromEntries(
+        Object.entries(state.staleByStopId).map(([stopId, entry]) => [
+          stopId,
+          { stale: true, ageMs: entry.ageMs ?? null },
+        ])
+      )
       return {
         ...state,
         loading: false,
         error: action.error,
         stale: true,
-        staleByStopId: {},
+        staleByStopId: action.keepPrevious ? staleAll : {},
+        byStopId: action.keepPrevious ? state.byStopId : {},
       }
-    case 'APPEND_STOPS':
+    }
+    case 'APPEND_STOPS': {
+      const mergedStale = { ...state.staleByStopId, ...(action.payload.staleByStopId ?? {}) }
       return {
         ...state,
         byStopId: { ...state.byStopId, ...action.payload.byStopId },
@@ -93,8 +114,13 @@ export function etaReducer(state: EtaState, action: EtaAction): EtaState {
           ...(action.payload.faresByVariantKey ?? {}),
         },
         loading: false,
-        staleByStopId: { ...state.staleByStopId, ...(action.payload.staleByStopId ?? {}) },
+        // Appended stops arrive with their own stale flags; recompute the
+        // header flag so a stale appended stop is visible.
+        stale: Object.values(mergedStale).some((entry) => entry.stale),
+        staleByStopId: mergedStale,
+        lastUpdatedAt: Date.now(),
       }
+    }
     case 'FARES_SUCCESS':
       return {
         ...state,

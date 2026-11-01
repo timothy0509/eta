@@ -211,9 +211,13 @@ export function KmbPane({
   }, [etaState])
 
   // ========== OPTIMIZATION: Build search index once when stops load ==========
+  // The index carries the pre-parsed rows StopSearch needs, so the 6k list
+  // is normalized once per pane load instead of once per consumer.
+  // version is a length stamp only; the memo key includes lang because the
+  // parsed rows are language-specific.
   const stopSearchIndex = React.useMemo<StopSearchIndex>(() => {
-    return buildStopSearchIndex(kmbStops)
-  }, [kmbStops])
+    return buildStopSearchIndex(kmbStops, lang)
+  }, [kmbStops, lang])
 
   // ========== OPTIMIZATION: Build route-stop index once when routeStops load ==========
   const routeStopIndex = React.useMemo<RouteStopIndex>(() => {
@@ -669,7 +673,7 @@ export function KmbPane({
 
         if (controller.signal.aborted) return
 
-        // Note: fetchStopEtas already dispatches REFRESH_SUCCESS
+        // Note: fetchStopEtas already dispatches REFRESH_SUCCESS or REFRESH_ERROR.
 
         // ========== OPTIMIZATION: Use route-stop index for variant key lookup ==========
         if (fetchResult) {
@@ -730,7 +734,9 @@ export function KmbPane({
         if (isAbort) return
 
         const message = error instanceof Error ? error.message : 'Failed to load ETAs'
-        dispatchEta({ type: 'REFRESH_ERROR', error: message })
+        // A failed new query must not keep the previous search's rows under
+        // the new title. Refreshes of the same query keep theirs, marked stale.
+        dispatchEta({ type: 'REFRESH_ERROR', error: message, keepPrevious: !isNewQuery })
 
         if (options?.toastOnError) {
           const { toast } = await import('sonner')
@@ -787,7 +793,7 @@ export function KmbPane({
       if (isAbort) return
 
       const message = error instanceof Error ? error.message : 'Failed to load more stops'
-      dispatchEta({ type: 'REFRESH_ERROR', error: message })
+      dispatchEta({ type: 'REFRESH_ERROR', error: message, keepPrevious: true })
     } finally {
       loadMoreLoadingRef.current = false
     }
@@ -968,13 +974,18 @@ export function KmbPane({
     return { mode: 'contains', query: kmbQuery.query }
   }, [kmbQuery])
 
-  // ========== OPTIMIZATION: Precompute render groups to avoid work during render ==========
-  const precomputedGroups = React.useMemo<PrecomputedGroups>(() => {
-    return precomputeRenderGroups(kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey)
-  }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey])
-
   const hasQuery = Boolean(kmbQuery)
   const multipleStops = kmbQuery?.mode === 'stops' || kmbQuery?.mode === 'contains'
+
+  // ========== OPTIMIZATION: Precompute render groups to avoid work during render ==========
+  // Flat mode reads .flat, sectioned modes read .byStopId. Skip the other
+  // half so every poll does not group everything twice.
+  const precomputedGroups = React.useMemo<PrecomputedGroups>(() => {
+    return precomputeRenderGroups(kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey, {
+      flat: !multipleStops,
+      byStop: multipleStops,
+    })
+  }, [kmbEtaByStopId, loadedStopIds, kmbFaresByVariantKey, multipleStops])
   const title = kmbResultsInfo.title
   const stopCode = kmbResultsInfo.code
 
@@ -1042,6 +1053,7 @@ export function KmbPane({
       <StopSearch
         lang={lang}
         stops={kmbStops}
+        searchIndex={stopSearchIndex}
         value={kmbDraftStopSelection}
         onSelectStop={(stop) => {
           setKmbDraftStopSelection({ type: 'stop', stopId: stop.stopId })

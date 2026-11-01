@@ -133,9 +133,12 @@ function LrtRouteStopCard({
 export function LrtRoutesView({
   lang,
   onSelectStation,
+  autoRefreshSeconds,
 }: {
   lang: UiLanguage
   onSelectStation?: (stationId: string, name: string) => void
+  /** Honours the global refresh setting, including off (0). */
+  autoRefreshSeconds?: number
 }) {
   const { t } = useTranslations(lang)
   const [routes, setRoutes] = React.useState<RouteListEntry[]>([])
@@ -221,21 +224,30 @@ export function LrtRoutesView({
 
     void load()
 
-    const interval = window.setInterval(() => {
-      void load()
-    }, 30_000)
-
     const onVisibility = () => {
       if (document.visibilityState === 'visible') void load()
     }
     document.addEventListener('visibilitychange', onVisibility)
+
+    // Follow the global refresh setting instead of a hardcoded 30s.
+    // Off (0) still loads once and still reloads on tab-visible.
+    const intervalMs = (autoRefreshSeconds ?? 30) * 1000
+    if (intervalMs <= 0) {
+      return () => {
+        cancelled = true
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
+    }
+    const interval = window.setInterval(() => {
+      void load()
+    }, intervalMs)
 
     return () => {
       cancelled = true
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [selectedRoute, stationIds, lang])
+  }, [selectedRoute, stationIds, lang, autoRefreshSeconds])
 
   const lineColor = selectedRoute ? getLineColor(selectedRoute.route) : LINE_COLOR_FALLBACK
 

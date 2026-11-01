@@ -87,3 +87,33 @@ describe('getCachedValue abort handling', () => {
     expect(followUpFetcher).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('getCachedValue persistence', () => {
+  it('still resolves when the persist write rejects on quota', async () => {
+    mockIdbGet.mockResolvedValue(null)
+    mockIdbSet.mockRejectedValueOnce(new DOMException('quota', 'QuotaExceededError'))
+
+    const result = await getCachedValue({
+      key: 'quota-key',
+      policyKey: 'test-shared-quota',
+      policy: persistPolicy,
+      fetcher: async () => 'network-value',
+    })
+
+    expect(result.value).toBe('network-value')
+    expect(result.cached).toBe(false)
+
+    // Memory cache was still populated, so a follow-up is a cache hit.
+    mockIdbSet.mockResolvedValue(undefined as unknown as boolean)
+    const followUp = await getCachedValue({
+      key: 'quota-key',
+      policyKey: 'test-shared-quota',
+      policy: persistPolicy,
+      fetcher: async () => {
+        throw new Error('must not fetch')
+      },
+    })
+    expect(followUp.value).toBe('network-value')
+    expect(followUp.cached).toBe(true)
+  })
+})

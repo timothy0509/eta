@@ -47,16 +47,18 @@ function formatNoScheduledText(t: (key: string) => string) {
 /** Single route group card. Mirrors the bus RouteDepartureRow. */
 const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   group,
+  platformId,
   lang,
   staggerClass,
   expanded,
   onToggleExpand,
 }: {
   group: LrtRouteGroup
+  platformId: number
   lang: UiLanguage
   staggerClass?: string
   expanded: boolean
-  onToggleExpand: () => void
+  onToggleExpand?: (key: string) => void
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const { routeNo, items, hasEta } = group
@@ -64,8 +66,9 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   const routeColor = getLineColor(routeNo)
   const dest = pickLangZh({ en: group.destEn, zh: group.destCh }, lang)
 
-  const expandable = hasEta && items.length >= 1
+  const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && expanded
+  const onToggle = onToggleExpand ? () => onToggleExpand(`${platformId}:${group.key}`) : undefined
 
   const firstArriving = first ? isEntryArriving(first, lang) : false
   const firstTimeText = first ? getLrtDisplayTime(first, lang) : '—'
@@ -228,14 +231,30 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
     )
   }
 
-  // Non-expandable rows happen only for groups without ETAs, handled above.
-  // This guard exists so TypeScript narrows onToggleExpand below.
-  if (!expandable) return null
+  // A group with ETAs but no toggle handler renders as a static card,
+  // mirroring the KMB no-expand path: the route must never vanish.
+  if (!expandable) {
+    return (
+      <div
+        className={cn(
+          'bg-surface-container relative overflow-hidden rounded-2xl border border-transparent py-3.5 pr-3 pl-0',
+          staggerClass
+        )}
+      >
+        <span
+          className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
+          style={{ backgroundColor: routeColor }}
+          aria-hidden
+        />
+        <div className="space-y-2.5 pl-4">{routeHeader({ showEta: true, showSubtitle: true })}</div>
+      </div>
+    )
+  }
 
   return (
     <ExpandableEtaRow
       expanded={isExpanded}
-      onToggle={onToggleExpand}
+      onToggle={onToggle ?? (() => {})}
       color={routeColor}
       className={staggerClass}
       panel={etaPanel}
@@ -283,10 +302,11 @@ const LrtPlatformSection = React.memo(function LrtPlatformSection({
             <LrtRouteDepartureRow
               key={g.key}
               group={g}
+              platformId={platformId}
               lang={lang}
               staggerClass={isFirst ? staggerClassForIndex(idx) : ''}
               expanded={expandedKey === `${platformId}:${g.key}`}
-              onToggleExpand={() => onToggleExpand?.(`${platformId}:${g.key}`)}
+              onToggleExpand={onToggleExpand}
             />
           ))}
         </div>

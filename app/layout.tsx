@@ -51,10 +51,12 @@ const dnsPrefetchHosts = Array.from(
   )
 ).sort()
 
+// Variable font: one preloaded file covers 100-900 instead of three static
+// faces. Inter is the UI font, so all three faces were preloading on first
+// paint before.
 const inter = Inter({
   variable: '--font-inter',
   subsets: ['latin'],
-  weight: ['400', '500', '700'],
   display: 'swap',
   preload: true,
 })
@@ -149,7 +151,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <head>
         {preconnectHosts.map((host) => (
-          <link key={host} rel="preconnect" href={host} />
+          // API/tile fetches are CORS, so the warmed socket must be a CORS
+          // socket or the browser opens a second connection on first fetch.
+          <link key={host} rel="preconnect" href={host} crossOrigin="anonymous" />
         ))}
         {dnsPrefetchHosts.map((host) => (
           <link key={host} rel="dns-prefetch" href={host} />

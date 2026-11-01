@@ -111,6 +111,9 @@ function GroupMemberSection({
   const [loading, setLoading] = React.useState(stopIds.length > 0)
   const [error, setError] = React.useState<string | null>(null)
   const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
+  const onToggleExpand = React.useCallback((key: string) => {
+    setExpandedKey((prev) => (prev === key ? null : key))
+  }, [])
   const [retrySeq, setRetrySeq] = React.useState(0)
   const fetchedInfoKeys = React.useRef(new Set<string>())
 
@@ -311,9 +314,7 @@ function GroupMemberSection({
                 lang={lang}
                 stopChips={chips}
                 expanded={expandedKey === group.key}
-                onToggleExpand={() =>
-                  setExpandedKey((prev) => (prev === group.key ? null : group.key))
-                }
+                onToggleExpand={onToggleExpand}
                 scheduled={scheduledByBaseKey[group.baseKey] ?? null}
               />
             )

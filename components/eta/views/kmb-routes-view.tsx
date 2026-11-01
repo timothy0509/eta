@@ -460,6 +460,44 @@ function KmbRouteStopList({
     return map
   }, [variantStops])
 
+  // Same-base grouping for the "view ETAs" click, precomputed once per
+  // list render. Calling it per card re-parses every stop name per card.
+  const stopGroups = React.useMemo(() => {
+    const baseByStopId = new Map<string, string>()
+    for (const rs of variantStops) {
+      if (baseByStopId.has(rs.stopId)) continue
+      const stop = stopsById.get(rs.stopId)
+      if (!stop) continue
+      const name = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+      const parsed = parseKmbStopNameCached(name, { isKmb: isKmbStop(stop), lang })
+      baseByStopId.set(rs.stopId, parsed.name)
+    }
+    const idsByBase = new Map<string, string[]>()
+    for (const rs of variantStops) {
+      const base = baseByStopId.get(rs.stopId)
+      if (!base) continue
+      const list = idsByBase.get(base)
+      if (list) {
+        if (!list.includes(rs.stopId)) list.push(rs.stopId)
+      } else {
+        idsByBase.set(base, [rs.stopId])
+      }
+    }
+    const out = new Map<string, { stopIds: string[]; title: string }>()
+    for (const [base, stopIds] of idsByBase) {
+      if (stopIds.length === 0) continue
+      out.set(stopIds[0]!, { stopIds, title: base })
+      for (const stopId of stopIds.slice(1)) {
+        const first = baseByStopId.get(stopId)
+        if (first !== undefined && !out.has(stopId)) {
+          // Same base reachable from any member stop.
+          out.set(stopId, { stopIds, title: base })
+        }
+      }
+    }
+    return out
+  }, [variantStops, stopsById, lang])
+
   // First stop row per section, so entrance stagger stays global
   // across sections. The list remounts on `listKey`, which replays the
   // stagger on variant change but keeps rows still on refresh.
@@ -553,7 +591,9 @@ function KmbRouteStopList({
     // Split the street off the already-parsed name so joint KMB/CTB stops
     // keep the EN title-casing.
     const ctb = isCtbRoute ? parseCtbStopNameCached(parsed.name) : null
-    const group = getStopGroupForClick(rs.stopId, variantStops, stopsById, lang)
+    // Same-base grouping was precomputed once per list render (O(n)), not
+    // per card. A 100-stop route was doing ~10k name comparisons before.
+    const group = stopGroups.get(rs.stopId)
     const cardKey = `${rs.stopId}:${rs.seq}`
     return (
       <KmbRouteStopCard
@@ -645,39 +685,6 @@ function KmbRouteStopList({
       )}
     </div>
   )
-}
-
-function getStopGroupForClick(
-  clickedStopId: string,
-  variantStops: KmbRouteStopLite[],
-  stopsById: Map<string, KmbStopSearchItem>,
-  lang: UiLanguage
-): { stopIds: string[]; title: string } | null {
-  const clickedStop = stopsById.get(clickedStopId)
-  if (!clickedStop) return null
-
-  const clickedName = pickLang(
-    { en: clickedStop.nameEn, tc: clickedStop.nameTc, sc: clickedStop.nameSc },
-    lang
-  )
-  const clickedParsed = parseKmbStopNameCached(clickedName, {
-    isKmb: isKmbStop(clickedStop),
-    lang,
-  })
-  const baseName = clickedParsed.name
-
-  const sameBase = variantStops
-    .map((rs) => ({ rs, stop: stopsById.get(rs.stopId) }))
-    .filter(({ stop }) => {
-      if (!stop) return false
-      const name = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
-      const parsed = parseKmbStopNameCached(name, { isKmb: isKmbStop(stop), lang })
-      return parsed.name === baseName
-    })
-    .map(({ rs }) => rs.stopId)
-
-  if (!sameBase.length) return null
-  return { stopIds: sameBase, title: baseName }
 }
 
 function useKmbRouteList() {

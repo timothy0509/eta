@@ -94,6 +94,29 @@ const nextConfig: NextConfig = {
         source: '/(.*)',
         headers: securityHeaders,
       },
+      {
+        // Generated data, not content-hashed: a day of caching plus SWR beats
+        // revalidating 477 KB of headway JSON on every visit.
+        // Twin rule in vercel.json: keep both in sync (Vercel merges the two).
+        source: '/headway/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
+      {
+        // Basemap archive is range-fetched and rebuilt every few days.
+        // Twin rule in vercel.json: keep both in sync (Vercel merges the two).
+        source: '/map/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=86400, stale-while-revalidate=604800',
+          },
+        ],
+      },
     ]
   },
 }

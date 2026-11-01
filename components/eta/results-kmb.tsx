@@ -277,7 +277,8 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   staggerClass?: string
   stopChips: StopChips
   expanded?: boolean
-  onToggleExpand?: () => void
+  /** Stable handler; the row closes over its own variantKey so React.memo holds. */
+  onToggleExpand?: (key: string) => void
   /** Scheduled headway fallback from the TD GTFS index; rendered only when !hasEta */
   scheduled?: ScheduledFallback | null
 }) {
@@ -339,6 +340,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
 
   const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && Boolean(expanded)
+  const onToggle = onToggleExpand ? () => onToggleExpand(variantKey) : undefined
 
   const fareLabel = fare ? formatFareHkd(fare.hkd) : null
   const codeLabel = [stopChips.platform, stopChips.stopCode].filter(Boolean).join(' · ') || null
@@ -468,6 +470,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
                     dataTimestamp={entry.data_timestamp}
                     lang={lang}
                     variant="panel"
+                    active={isExpanded}
                   />
                 </div>
                 {remark ? (
@@ -494,6 +497,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
                   lang={lang}
                   variant="plain"
                   className="text-on-surface font-tabular text-base font-semibold tracking-tight sm:text-lg"
+                  active={isExpanded}
                 />
               </div>
               {remark ? (
@@ -612,7 +616,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   return (
     <ExpandableEtaRow
       expanded={isExpanded}
-      onToggle={onToggleExpand!}
+      onToggle={onToggle ?? (() => {})}
       color={operatorColor}
       className={staggerClass}
       panel={etaPanel}
@@ -696,7 +700,7 @@ const StopSection = React.memo(function StopSection({
               }
               staggerClass={isFirst ? staggerClassForIndex(idx) : ''}
               expanded={expandedKey === g.key}
-              onToggleExpand={() => onToggleExpand?.(g.key)}
+              onToggleExpand={onToggleExpand}
               scheduled={scheduledByBaseKey?.[g.baseKey] ?? null}
             />
           ))}
@@ -877,10 +881,12 @@ export const KmbResults = React.memo(function KmbResults({
   // replay rule on staggerClassForIndex). Refresh keeps this key so rows
   // stay still and expand state survives; a new search remounts and replays.
   const listSignature = React.useMemo(() => {
-    if (useStopSections) return `keyphrase:${(loadedStopIds ?? []).join(',')}`
-    if (multipleStops && loadedStopIds) return `multi:${loadedStopIds.join(',')}`
+    // Query identity, not the loaded window: appending a page of stops must
+    // not remount every row and replay the stagger mid-scroll.
+    if (useStopSections) return `keyphrase:${title}`
+    if (multipleStops) return `multi:${title}`
     return `single:${title}:${stopCode ?? ''}:${routesFilter ?? ''}`
-  }, [useStopSections, loadedStopIds, multipleStops, title, stopCode, routesFilter])
+  }, [useStopSections, multipleStops, title, stopCode, routesFilter])
 
   return (
     <div>
@@ -982,7 +988,7 @@ export const KmbResults = React.memo(function KmbResults({
                   staggerClass={cn('ui-cv-row', staggerClass)}
                   stopChips={stopChips}
                   expanded={expandedKey === g.key}
-                  onToggleExpand={() => onToggleExpand(g.key)}
+                  onToggleExpand={onToggleExpand}
                   scheduled={scheduledByBaseKey[g.baseKey] ?? null}
                 />
               )
@@ -1015,7 +1021,7 @@ export const KmbResults = React.memo(function KmbResults({
                   staggerClass={cn('ui-cv-row', staggerClass)}
                   stopChips={stopChips}
                   expanded={expandedKey === g.key}
-                  onToggleExpand={() => onToggleExpand(g.key)}
+                  onToggleExpand={onToggleExpand}
                   scheduled={scheduledByBaseKey[g.baseKey] ?? null}
                 />
               )

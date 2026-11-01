@@ -47,10 +47,19 @@ function getSharedTick() {
   return sharedNow
 }
 
-function useSharedTick(): number {
-  const [now, setNow] = React.useState(() => getSharedTick())
-  React.useEffect(() => subscribeSharedTick(() => setNow(getSharedTick())), [])
-  return now
+const noopSubscribe = () => () => {}
+
+/**
+ * `active` false keeps the label out of the tick subscription entirely, so
+ * ETAs inside collapsed rows stop re-rendering every 15s. The current value
+ * is still read during render, so expanding a row shows the right minute.
+ */
+function useSharedTick(active = true): number {
+  return React.useSyncExternalStore(
+    active ? subscribeSharedTick : noopSubscribe,
+    getSharedTick,
+    getSharedTick
+  )
 }
 
 function formatMinutesDisplay(
@@ -74,14 +83,17 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   lang,
   variant = 'header',
   className,
+  active = true,
 }: {
   eta?: string | null
   dataTimestamp?: string | null
   lang: UiLanguage
   variant?: 'header' | 'panel' | 'plain'
   className?: string
+  /** False inside collapsed panels: render the value without ticking. */
+  active?: boolean
 }) {
-  const now = useSharedTick()
+  const now = useSharedTick(active)
   const { t, tWithParams } = useTranslations(lang)
   const minutes =
     eta != null ? formatRelativeMinutesWithDrift(eta, dataTimestamp ?? undefined, now) : null

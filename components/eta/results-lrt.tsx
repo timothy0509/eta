@@ -47,16 +47,18 @@ function formatNoScheduledText(t: (key: string) => string) {
 /** Single route group card. Mirrors the bus RouteDepartureRow. */
 const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   group,
+  platformId,
   lang,
   staggerClass,
   expanded,
   onToggleExpand,
 }: {
   group: LrtRouteGroup
+  platformId: number
   lang: UiLanguage
   staggerClass?: string
   expanded: boolean
-  onToggleExpand: () => void
+  onToggleExpand?: (key: string) => void
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const { routeNo, items, hasEta } = group
@@ -66,6 +68,7 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
 
   const expandable = hasEta && items.length >= 1
   const isExpanded = expandable && expanded
+  const onToggle = onToggleExpand ? () => onToggleExpand(`${platformId}:${group.key}`) : undefined
 
   const firstArriving = first ? isEntryArriving(first, lang) : false
   const firstTimeText = first ? getLrtDisplayTime(first, lang) : '—'
@@ -235,7 +238,7 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   return (
     <ExpandableEtaRow
       expanded={isExpanded}
-      onToggle={onToggleExpand}
+      onToggle={onToggle!}
       color={routeColor}
       className={staggerClass}
       panel={etaPanel}
@@ -283,10 +286,11 @@ const LrtPlatformSection = React.memo(function LrtPlatformSection({
             <LrtRouteDepartureRow
               key={g.key}
               group={g}
+              platformId={platformId}
               lang={lang}
               staggerClass={isFirst ? staggerClassForIndex(idx) : ''}
               expanded={expandedKey === `${platformId}:${g.key}`}
-              onToggleExpand={() => onToggleExpand?.(`${platformId}:${g.key}`)}
+              onToggleExpand={onToggleExpand}
             />
           ))}
         </div>

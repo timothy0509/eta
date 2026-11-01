@@ -101,12 +101,16 @@ export async function getCachedValue<T>(params: {
   throwIfAborted(signal)
 
   const fetchPromise = fetcher()
-    .then(async (value) => {
+    .then((value) => {
       if (!signal?.aborted) {
         caches.fresh.set(key, value, policy.ttlMs)
         if (policy.persist) {
           const meta = createMetaForPolicy(policy)
-          await idbSet(key, { value, ...meta })
+          // Persistence must never fail a read: a full quota rejects after
+          // the network already succeeded and memory is already populated.
+          void Promise.resolve()
+            .then(() => idbSet(key, { value, ...meta }))
+            .catch(() => {})
         }
       }
       caches.inFlight.delete(key)

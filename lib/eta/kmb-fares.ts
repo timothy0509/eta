@@ -24,9 +24,13 @@ export type VariantStops = {
 let cachedVariantStops: {
   expiresAtMs: number
   byVariantKey: Map<VariantKey, VariantStops>
+  byFamily: Map<string, VariantStops[]>
 } | null = null
 
-let inFlightVariantStops: Promise<Map<VariantKey, VariantStops>> | null = null
+let inFlightVariantStops: Promise<{
+  byVariantKey: Map<VariantKey, VariantStops>
+  byFamily: Map<string, VariantStops[]>
+}> | null = null
 
 function normalizeRouteName(route: string): string {
   return String(route ?? '')
@@ -46,8 +50,24 @@ function variantKey(
   )}|${normalizeGtfsId(gtfsId)}`
 }
 
-export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]) {
-  const byVariantKey = new Map<VariantKey, VariantStops>()
+export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]): Map<
+  VariantKey,
+  VariantStops
+> & {
+  byFamily?: Map<string, VariantStops[]>
+} {
+  const byVariantKey: Map<VariantKey, VariantStops> & {
+    byFamily?: Map<string, VariantStops[]>
+  } = new Map()
+  // Family lookup so per-row leg resolution does not rescan the whole map.
+  // Keyed by co|ROUTE|bound|serviceType, values presorted smallest-key first
+  // to keep the "most occurrences wins, then smallest key" tie-break stable.
+  const byFamily = new Map<string, VariantStops[]>()
+
+  const familyKey = (co: string, route: string, bound: string, serviceType: string) =>
+    `${String(co ?? 'kmb')}|${normalizeRouteName(route)}|${String(bound ?? '')}|${String(
+      serviceType ?? ''
+    )}`
 
   for (const rs of routeStops) {
     const key = variantKey(rs.co, rs.route, rs.bound, rs.serviceType, rs.gtfsId)
@@ -58,11 +78,21 @@ export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]) {
     if (!existing) {
       const stopSeqsByStopId = new Map<string, number[]>()
       stopSeqsByStopId.set(stopId, [rs.seq])
-      byVariantKey.set(key, {
+      const created = {
         variantKey: key,
         stopSeqsByStopId,
         terminusSeq: rs.seq,
-      })
+      }
+      byVariantKey.set(key, created)
+      const family = familyKey(rs.co, rs.route, rs.bound, rs.serviceType)
+      const list = byFamily.get(family)
+      if (list) {
+        const insertIdx = list.findIndex((v) => v.variantKey > key)
+        if (insertIdx === -1) list.push(created)
+        else list.splice(insertIdx, 0, created)
+      } else {
+        byFamily.set(family, [created])
+      }
     } else {
       const seqs = existing.stopSeqsByStopId.get(stopId)
       if (seqs) {
@@ -80,17 +110,32 @@ export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]) {
     }
   }
 
+  for (const variant of byVariantKey.values()) {
+    const [co, route, bound, serviceType] = variant.variantKey.split('|')
+    const family = familyKey(co ?? 'kmb', route ?? '', bound ?? '', serviceType ?? '')
+    const list = byFamily.get(family)
+    if (list && !list.includes(variant)) {
+      const insertIdx = list.findIndex((v) => v.variantKey > variant.variantKey)
+      if (insertIdx === -1) list.push(variant)
+      else list.splice(insertIdx, 0, variant)
+    }
+  }
+
+  byVariantKey.byFamily = byFamily
   return byVariantKey
 }
 
-export async function getCachedKmbVariantStops(fetchRouteStops: () => Promise<KmbRouteStopLite[]>) {
+export async function getCachedKmbVariantStops(
+  fetchRouteStops: () => Promise<KmbRouteStopLite[]>
+): Promise<Map<VariantKey, VariantStops> & { byFamily?: Map<string, VariantStops[]> }> {
   const now = Date.now()
   if (cachedVariantStops && cachedVariantStops.expiresAtMs > now) {
-    return cachedVariantStops.byVariantKey
+    return attachFamily(cachedVariantStops.byVariantKey, cachedVariantStops.byFamily)
   }
 
   if (inFlightVariantStops) {
-    return await inFlightVariantStops
+    const { byVariantKey, byFamily } = await inFlightVariantStops
+    return attachFamily(byVariantKey, byFamily)
   }
 
   inFlightVariantStops = (async () => {
@@ -102,15 +147,37 @@ export async function getCachedKmbVariantStops(fetchRouteStops: () => Promise<Km
       cachedVariantStops = {
         expiresAtMs: now + ttlSeconds * 1000,
         byVariantKey,
+        byFamily: byVariantKey.byFamily ?? new Map(),
       }
 
-      return byVariantKey
+      return { byVariantKey, byFamily: byVariantKey.byFamily ?? new Map() }
     } finally {
       inFlightVariantStops = null
     }
   })()
 
-  return await inFlightVariantStops
+  const { byVariantKey, byFamily } = await inFlightVariantStops
+  return attachFamily(byVariantKey, byFamily)
+}
+
+function attachFamily(
+  byVariantKey: Map<VariantKey, VariantStops>,
+  byFamily: Map<string, VariantStops[]>
+): Map<VariantKey, VariantStops> & { byFamily?: Map<string, VariantStops[]> } {
+  return Object.assign(byVariantKey, { byFamily })
+}
+
+function familyLookup(
+  byVariantStops: Map<VariantKey, VariantStops>,
+  family: { co: string; route: string; bound: string; serviceType: string }
+): VariantStops[] | undefined {
+  const attached = byVariantStops as Map<VariantKey, VariantStops> & {
+    byFamily?: Map<string, VariantStops[]>
+  }
+  const key = `${String(family.co ?? 'kmb')}|${normalizeRouteName(family.route)}|${String(
+    family.bound ?? ''
+  )}|${String(family.serviceType ?? '')}`
+  return attached.byFamily?.get(key)
 }
 
 export function kmbFareCacheControlHeader() {
@@ -152,7 +219,11 @@ function findVariantByFamilyStop(
   family: { co: string; route: string; bound: string; serviceType: string },
   stopId: string
 ): { key: VariantKey; variant: VariantStops } | undefined {
-  const cands = familyVariants(byVariantStops, family)
+  // Fast path: precomputed family list, already smallest-key first.
+  const precomputed = familyLookup(byVariantStops, family)
+  const cands = precomputed
+    ? precomputed.map((variant) => ({ key: variant.variantKey, variant }))
+    : familyVariants(byVariantStops, family)
   if (cands.length === 0) return undefined
   const stop = String(stopId ?? '').trim()
   const holding = cands.filter((c) => c.variant.stopSeqsByStopId.has(stop))

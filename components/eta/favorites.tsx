@@ -296,6 +296,8 @@ type FavoriteRowProps = {
   onAssignGroup: (favoriteId: string, groupId: string | null) => void
   onDelete: (id: string) => void
   draggable?: boolean
+  /** False on long lists: plain row with Up/Down buttons, no motion runtime. */
+  motionEnabled?: boolean
   staggerClass?: string
   onMoveUp?: () => void
   onMoveDown?: () => void
@@ -320,7 +322,8 @@ function FavoriteRow({
   onMoveDown,
   disableMoveUp,
   disableMoveDown,
-}: FavoriteRowProps) {
+  motionEnabled = true,
+}: FavoriteRowProps & { motionEnabled?: boolean }) {
   const dragControls = useDragControls()
   const prevPinned = React.useRef(item.pinned)
   const [pinPopped, setPinPopped] = React.useState(false)
@@ -336,7 +339,7 @@ function FavoriteRow({
 
   const content = (
     <div className="flex items-center gap-3">
-      {draggable && (
+      {(draggable || !motionEnabled) && (
         <>
           <div className="flex flex-col">
             <button
@@ -409,13 +412,17 @@ function FavoriteRow({
 
   // Draggable rows skip the CSS entrance: its fill-mode transform would
   // override framer's drag transform. The stagger delay alone is a no-op there.
+  // Long lists skip the motion runtime entirely (see motionEnabled).
   const rowClass = cn(
     'bg-surface-container-low border-outline-variant/50 rounded-2xl border px-3 py-2.5',
     !draggable && 'ui-animate-in ui-cv-row',
+    // Long lists skip the motion runtime: rows keep the CSS entrance and
+    // the Up/Down buttons still reorder.
+    draggable && !motionEnabled && 'ui-animate-in ui-cv-row',
     staggerClass
   )
 
-  if (draggable) {
+  if (draggable && motionEnabled) {
     return (
       <Reorder.Item
         value={item}
@@ -729,6 +736,9 @@ export function FavoritesAndRecents({ lang, onSelect, onOpenInStops }: Props) {
 
   const pinnedItems = React.useMemo(() => favorites.filter((f) => f.pinned), [favorites])
   const unpinnedItems = React.useMemo(() => favorites.filter((f) => !f.pinned), [favorites])
+  // Drag reorder mounts a framer-motion runtime per row. Past ~30 items the
+  // plain rows with Up/Down buttons take over instead.
+  const canDragReorder = pinnedItems.length + unpinnedItems.length <= 30
 
   const handleReorderPinned = (next: FavoritesItem[]) => {
     reorderFavorites([...next, ...unpinnedItems])
@@ -968,36 +978,64 @@ export function FavoritesAndRecents({ lang, onSelect, onOpenInStops }: Props) {
                       <div className="text-on-surface-variant m3-label-md px-1">
                         {t('favorites.pinned')}
                       </div>
-                      <Reorder.Group
-                        axis="y"
-                        values={pinnedItems}
-                        onReorder={handleReorderPinned}
-                        className="space-y-2"
-                      >
-                        {pinnedItems.map((f, idx) => (
-                          <FavoriteRow
-                            key={f.id}
-                            item={f}
-                            lang={lang}
-                            maps={maps}
-                            groupName={
-                              groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
-                            }
-                            favoritesGroups={favoritesGroups}
-                            t={t}
-                            onSelect={onSelect}
-                            onTogglePin={toggleFavoritePin}
-                            onAssignGroup={assignFavoriteGroup}
-                            onDelete={removeFavorite}
-                            draggable
-                            staggerClass={staggerClassForIndex(idx)}
-                            onMoveUp={() => moveFavorite(f.id, 'up')}
-                            onMoveDown={() => moveFavorite(f.id, 'down')}
-                            disableMoveUp={idx === 0}
-                            disableMoveDown={idx === pinnedItems.length - 1}
-                          />
-                        ))}
-                      </Reorder.Group>
+                      {canDragReorder ? (
+                        <Reorder.Group
+                          axis="y"
+                          values={pinnedItems}
+                          onReorder={handleReorderPinned}
+                          className="space-y-2"
+                        >
+                          {pinnedItems.map((f, idx) => (
+                            <FavoriteRow
+                              key={f.id}
+                              item={f}
+                              lang={lang}
+                              maps={maps}
+                              groupName={
+                                groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
+                              }
+                              favoritesGroups={favoritesGroups}
+                              t={t}
+                              onSelect={onSelect}
+                              onTogglePin={toggleFavoritePin}
+                              onAssignGroup={assignFavoriteGroup}
+                              onDelete={removeFavorite}
+                              draggable
+                              staggerClass={staggerClassForIndex(idx)}
+                              onMoveUp={() => moveFavorite(f.id, 'up')}
+                              onMoveDown={() => moveFavorite(f.id, 'down')}
+                              disableMoveUp={idx === 0}
+                              disableMoveDown={idx === pinnedItems.length - 1}
+                            />
+                          ))}
+                        </Reorder.Group>
+                      ) : (
+                        <div className="space-y-2">
+                          {pinnedItems.map((f, idx) => (
+                            <FavoriteRow
+                              key={f.id}
+                              item={f}
+                              lang={lang}
+                              maps={maps}
+                              groupName={
+                                groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
+                              }
+                              favoritesGroups={favoritesGroups}
+                              t={t}
+                              onSelect={onSelect}
+                              onTogglePin={toggleFavoritePin}
+                              onAssignGroup={assignFavoriteGroup}
+                              onDelete={removeFavorite}
+                              motionEnabled={false}
+                              staggerClass={staggerClassForIndex(idx)}
+                              onMoveUp={() => moveFavorite(f.id, 'up')}
+                              onMoveDown={() => moveFavorite(f.id, 'down')}
+                              disableMoveUp={idx === 0}
+                              disableMoveDown={idx === pinnedItems.length - 1}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1006,36 +1044,64 @@ export function FavoritesAndRecents({ lang, onSelect, onOpenInStops }: Props) {
                       <div className="text-on-surface-variant m3-label-md px-1">
                         {t('favorites.unpinned')}
                       </div>
-                      <Reorder.Group
-                        axis="y"
-                        values={unpinnedItems}
-                        onReorder={handleReorderUnpinned}
-                        className="space-y-2"
-                      >
-                        {unpinnedItems.map((f, idx) => (
-                          <FavoriteRow
-                            key={f.id}
-                            item={f}
-                            lang={lang}
-                            maps={maps}
-                            groupName={
-                              groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
-                            }
-                            favoritesGroups={favoritesGroups}
-                            t={t}
-                            onSelect={onSelect}
-                            onTogglePin={toggleFavoritePin}
-                            onAssignGroup={assignFavoriteGroup}
-                            onDelete={removeFavorite}
-                            draggable
-                            staggerClass={staggerClassForIndex(idx)}
-                            onMoveUp={() => moveFavorite(f.id, 'up')}
-                            onMoveDown={() => moveFavorite(f.id, 'down')}
-                            disableMoveUp={idx === 0}
-                            disableMoveDown={idx === unpinnedItems.length - 1}
-                          />
-                        ))}
-                      </Reorder.Group>
+                      {canDragReorder ? (
+                        <Reorder.Group
+                          axis="y"
+                          values={unpinnedItems}
+                          onReorder={handleReorderUnpinned}
+                          className="space-y-2"
+                        >
+                          {unpinnedItems.map((f, idx) => (
+                            <FavoriteRow
+                              key={f.id}
+                              item={f}
+                              lang={lang}
+                              maps={maps}
+                              groupName={
+                                groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
+                              }
+                              favoritesGroups={favoritesGroups}
+                              t={t}
+                              onSelect={onSelect}
+                              onTogglePin={toggleFavoritePin}
+                              onAssignGroup={assignFavoriteGroup}
+                              onDelete={removeFavorite}
+                              draggable
+                              staggerClass={staggerClassForIndex(idx)}
+                              onMoveUp={() => moveFavorite(f.id, 'up')}
+                              onMoveDown={() => moveFavorite(f.id, 'down')}
+                              disableMoveUp={idx === 0}
+                              disableMoveDown={idx === unpinnedItems.length - 1}
+                            />
+                          ))}
+                        </Reorder.Group>
+                      ) : (
+                        <div className="space-y-2">
+                          {unpinnedItems.map((f, idx) => (
+                            <FavoriteRow
+                              key={f.id}
+                              item={f}
+                              lang={lang}
+                              maps={maps}
+                              groupName={
+                                groupNameById.get(f.groupId ?? '') ?? t('favorites.unassigned')
+                              }
+                              favoritesGroups={favoritesGroups}
+                              t={t}
+                              onSelect={onSelect}
+                              onTogglePin={toggleFavoritePin}
+                              onAssignGroup={assignFavoriteGroup}
+                              onDelete={removeFavorite}
+                              motionEnabled={false}
+                              staggerClass={staggerClassForIndex(idx)}
+                              onMoveUp={() => moveFavorite(f.id, 'up')}
+                              onMoveDown={() => moveFavorite(f.id, 'down')}
+                              disableMoveUp={idx === 0}
+                              disableMoveDown={idx === unpinnedItems.length - 1}
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

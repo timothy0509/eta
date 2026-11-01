@@ -3,7 +3,12 @@ import { describe, expect, it } from 'vitest'
 import type { KmbEtaEntryWithLeg } from '@/lib/eta/client'
 
 import type { EtaGroup } from './kmb-eta-groups'
-import { buildDefaultKey, groupEtasByVariant, sortScheduledFirst } from './kmb-eta-groups'
+import {
+  buildDefaultKey,
+  groupEtasByVariant,
+  precomputeRenderGroups,
+  sortScheduledFirst,
+} from './kmb-eta-groups'
 
 function makeGroup(key: string, baseKey: string, hasEta: boolean): EtaGroup {
   return { key, baseKey, items: [], hasEta, hasFare: true, isArrivingLeg: false }
@@ -202,5 +207,19 @@ describe('groupEtasByVariant regions', () => {
     // One row per stop for the shared KMB variant, legs still detected.
     expect(groups.filter((g) => g.baseKey === 'kmb|1A|O|1')).toHaveLength(2)
     expect(groups.every((g) => !g.isArrivingLeg)).toBe(true)
+  })
+})
+
+describe('precomputeRenderGroups halves', () => {
+  it('skips the flat half in sectioned modes', () => {
+    const result = precomputeRenderGroups({ s1: [] }, ['s1'], {}, { flat: false, byStop: true })
+    expect(result.flat).toEqual([])
+    expect(result.byStopId.s1).toEqual([])
+  })
+
+  it('skips the byStop half in flat mode', () => {
+    const result = precomputeRenderGroups({ s1: [] }, ['s1'], {}, { flat: true, byStop: false })
+    expect(result.flat).toEqual([])
+    expect(result.byStopId.s1).toEqual([])
   })
 })

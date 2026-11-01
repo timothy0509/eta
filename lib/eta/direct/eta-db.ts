@@ -105,10 +105,26 @@ function mapEtaLangToUi(eta: { en: string; zh: string }) {
   }
 }
 
+let recordInFlight: Promise<EtaDbCacheValue> | null = null
+
+/**
+ * Dedupes concurrent cold reads of the ETA DB. The default stops view asks for
+ * the indexes from the pane, the route-stops effect and the idle prefetch at
+ * the same time; without this each one structured-clones the same multi-MB
+ * IndexedDB record before the memory cache is filled.
+ */
 async function getEtaDbRecord(): Promise<EtaDbCacheValue> {
   const memory = etaDbCache.get(ETA_DB_CACHE_KEY)
   if (memory) return memory
+  if (!recordInFlight) {
+    recordInFlight = loadEtaDbRecord().finally(() => {
+      recordInFlight = null
+    })
+  }
+  return recordInFlight
+}
 
+async function loadEtaDbRecord(): Promise<EtaDbCacheValue> {
   const [stored, storedMd5] = await Promise.all([
     idbGet<EtaDbCacheValue>(ETA_DB_CACHE_KEY),
     idbGet<string>(ETA_DB_MD5_KEY),

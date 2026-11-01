@@ -150,16 +150,32 @@ export function sortScheduledFirst(
 export function precomputeRenderGroups(
   etaByStopId: Record<string, KmbEtaEntryWithLeg[]>,
   loadedStopIds: string[],
-  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>,
+  opts?: { flat?: boolean; byStop?: boolean }
 ): PrecomputedGroups {
+  // Each caller reads only one half. Build the other only when asked so a
+  // poll does not group everything twice.
+  const wantFlat = opts?.flat ?? true
+  const wantByStop = opts?.byStop ?? true
+
   const byStopId: Record<string, EtaGroup[]> = {}
-  for (const stopId of loadedStopIds) {
-    const eta = etaByStopId[stopId] ?? []
-    byStopId[stopId] = groupEtasByVariant(eta, faresByVariantKey)
+  if (wantByStop) {
+    for (const stopId of loadedStopIds) {
+      const eta = etaByStopId[stopId] ?? []
+      byStopId[stopId] = groupEtasByVariant(eta, faresByVariantKey)
+    }
+  } else {
+    for (const stopId of loadedStopIds) {
+      byStopId[stopId] = []
+    }
   }
 
-  const allEtas = loadedStopIds.flatMap((stopId) => etaByStopId[stopId] ?? [])
-  const flat = groupEtasByVariant(allEtas, faresByVariantKey)
+  const flat = wantFlat
+    ? groupEtasByVariant(
+        loadedStopIds.flatMap((stopId) => etaByStopId[stopId] ?? []),
+        faresByVariantKey
+      )
+    : []
 
   return { byStopId, flat }
 }

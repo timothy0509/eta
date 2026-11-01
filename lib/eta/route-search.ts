@@ -412,6 +412,9 @@ function matchEntrySync(
   }
 
   if (!norm.lower) return null
+  // The haystack is the lowercase route, terminus and stop-name text. If the
+  // query is not in it at all, the stop-name loops below cannot match either.
+  if (!entry.haystack.includes(norm.lower)) return null
   for (const name of entry.stopNames) {
     if (name.startsWith(norm.lower)) {
       return {

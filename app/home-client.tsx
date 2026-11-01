@@ -529,12 +529,20 @@ export default function HomeClient() {
     if (mode === 'mtr')
       return (
         <PaneEnter key="routes:mtr">
-          <MtrRoutesView lang={lang} onSelectStation={onSelectMtrStationFromRoute} />
+          <MtrRoutesView
+            lang={lang}
+            onSelectStation={onSelectMtrStationFromRoute}
+            autoRefreshSeconds={autoRefreshSeconds}
+          />
         </PaneEnter>
       )
     return (
       <PaneEnter key="routes:lrt">
-        <LrtRoutesView lang={lang} onSelectStation={onSelectLrtStationFromRoute} />
+        <LrtRoutesView
+          lang={lang}
+          onSelectStation={onSelectLrtStationFromRoute}
+          autoRefreshSeconds={autoRefreshSeconds}
+        />
       </PaneEnter>
     )
   }

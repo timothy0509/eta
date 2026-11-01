@@ -5,6 +5,7 @@ import * as React from 'react'
 
 import { CommandItem } from '@/components/ui/command'
 import { StationSearchCombobox } from '@/components/eta/station-search-combobox'
+import type { StopSearchIndex } from '@/components/eta/panes/kmb-stop-search'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLang, pickSecondaryName } from '@/lib/eta/pick-lang'
@@ -228,7 +229,8 @@ export function StopSearch({
   onSelectStop,
   onSelectStops,
   onSelectContains,
-}: Props) {
+  searchIndex,
+}: Props & { searchIndex?: StopSearchIndex }) {
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
   const listId = React.useId()
@@ -297,7 +299,12 @@ export function StopSearch({
   }, [value, stopById, lang, t])
 
   const stopComputed = React.useMemo<StopComputed[]>(() => {
+    // The pane pre-parses every stop once when the language-specific index
+    // is built. Fall back to the local parse only when the pane did not
+    // hand one down (tests, other callers).
     return stops.map((stop) => {
+      const pre = searchIndex?.computedById.get(stop.stopId)
+      if (pre) return { stopId: stop.stopId, ...pre, stop }
       const fullName = formatStopName(stop, lang)
       const parsed = parseKmbStopNameCached(fullName, { isKmb: isKmbStop(stop), lang })
       const baseName = parsed.name
@@ -327,7 +334,7 @@ export function StopSearch({
         stop,
       }
     })
-  }, [stops, lang])
+  }, [stops, lang, searchIndex])
 
   // Fuse loads only when the popover opens so the fuzzy index stays out
   // of the initial bundle and idle CPU. Prefix matches stay synchronous.

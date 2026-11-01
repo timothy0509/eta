@@ -191,9 +191,12 @@ function MtrRouteStopCard({
 export function MtrRoutesView({
   lang,
   onSelectStation,
+  autoRefreshSeconds,
 }: {
   lang: UiLanguage
   onSelectStation?: (sta: string, line: string, name: string) => void
+  /** Honours the global refresh setting, including off (0). */
+  autoRefreshSeconds?: number
 }) {
   const { t } = useTranslations(lang)
   const [selectedLine, setSelectedLine] = React.useState<string | null>(null)
@@ -264,6 +267,8 @@ export function MtrRoutesView({
 
   React.useEffect(() => {
     if (!selectedLine || stationStas.length === 0) return
+    // Off means off: previously this view polled every 30s no matter what.
+    if (autoRefreshSeconds === 0) return
 
     let cancelled = false
     let inFlight = false
@@ -299,9 +304,12 @@ export function MtrRoutesView({
 
     void load()
 
+    // Follow the global refresh setting instead of a hardcoded 30s.
+    const intervalMs = (autoRefreshSeconds ?? 30) * 1000
+    if (intervalMs <= 0) return undefined
     const interval = window.setInterval(() => {
       void load()
-    }, 30_000)
+    }, intervalMs)
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') void load()
@@ -313,7 +321,7 @@ export function MtrRoutesView({
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [selectedLine, stationStas, lang])
+  }, [selectedLine, stationStas, lang, autoRefreshSeconds])
 
   const lineColor = selectedLine ? getLineColor(selectedLine) : LINE_COLOR_FALLBACK
 

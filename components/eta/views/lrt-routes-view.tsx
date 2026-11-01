@@ -133,9 +133,12 @@ function LrtRouteStopCard({
 export function LrtRoutesView({
   lang,
   onSelectStation,
+  autoRefreshSeconds,
 }: {
   lang: UiLanguage
   onSelectStation?: (stationId: string, name: string) => void
+  /** Honours the global refresh setting, including off (0). */
+  autoRefreshSeconds?: number
 }) {
   const { t } = useTranslations(lang)
   const [routes, setRoutes] = React.useState<RouteListEntry[]>([])
@@ -182,6 +185,8 @@ export function LrtRoutesView({
 
   React.useEffect(() => {
     if (!selectedRoute || stationIds.length === 0) return
+    // Off means off: previously this view polled every 30s no matter what.
+    if (autoRefreshSeconds === 0) return
 
     let cancelled = false
     let inFlight = false
@@ -221,9 +226,12 @@ export function LrtRoutesView({
 
     void load()
 
+    // Follow the global refresh setting instead of a hardcoded 30s.
+    const intervalMs = (autoRefreshSeconds ?? 30) * 1000
+    if (intervalMs <= 0) return undefined
     const interval = window.setInterval(() => {
       void load()
-    }, 30_000)
+    }, intervalMs)
 
     const onVisibility = () => {
       if (document.visibilityState === 'visible') void load()
@@ -235,7 +243,7 @@ export function LrtRoutesView({
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [selectedRoute, stationIds, lang])
+  }, [selectedRoute, stationIds, lang, autoRefreshSeconds])
 
   const lineColor = selectedRoute ? getLineColor(selectedRoute.route) : LINE_COLOR_FALLBACK
 

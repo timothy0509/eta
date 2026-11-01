@@ -3,6 +3,8 @@
 import { RefreshCw } from 'lucide-react'
 import * as React from 'react'
 
+import { Marquee } from '@/components/ui/marquee'
+
 import { formatUiTime } from '@/lib/eta/format'
 import { useTranslations } from '@/lib/eta/i18n'
 import { formatRelativeAgeLabel, isStaleByAge } from '@/lib/eta/stale'
@@ -48,8 +50,8 @@ export function ResultsHeader({
     <div className="mb-5 flex items-start justify-between gap-3">
       <div className="min-w-0 flex-1">
         <div className="flex min-w-0 items-start gap-2">
-          <h2 className="text-on-surface m3-title-lg min-w-0 flex-1 truncate font-semibold tracking-tight">
-            {title}
+          <h2 className="text-on-surface m3-title-lg min-w-0 flex-1 font-semibold tracking-tight">
+            <Marquee title={title}>{title}</Marquee>
           </h2>
           {titleAddon}
         </div>

@@ -734,7 +734,9 @@ export function KmbPane({
         if (isAbort) return
 
         const message = error instanceof Error ? error.message : 'Failed to load ETAs'
-        dispatchEta({ type: 'REFRESH_ERROR', error: message, keepPrevious: true })
+        // A failed new query must not keep the previous search's rows under
+        // the new title. Refreshes of the same query keep theirs, marked stale.
+        dispatchEta({ type: 'REFRESH_ERROR', error: message, keepPrevious: !isNewQuery })
 
         if (options?.toastOnError) {
           const { toast } = await import('sonner')

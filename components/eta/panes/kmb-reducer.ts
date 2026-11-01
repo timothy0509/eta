@@ -103,7 +103,8 @@ export function etaReducer(state: EtaState, action: EtaAction): EtaState {
         byStopId: action.keepPrevious ? state.byStopId : {},
       }
     }
-    case 'APPEND_STOPS':
+    case 'APPEND_STOPS': {
+      const mergedStale = { ...state.staleByStopId, ...(action.payload.staleByStopId ?? {}) }
       return {
         ...state,
         byStopId: { ...state.byStopId, ...action.payload.byStopId },
@@ -113,8 +114,13 @@ export function etaReducer(state: EtaState, action: EtaAction): EtaState {
           ...(action.payload.faresByVariantKey ?? {}),
         },
         loading: false,
-        staleByStopId: { ...state.staleByStopId, ...(action.payload.staleByStopId ?? {}) },
+        // Appended stops arrive with their own stale flags; recompute the
+        // header flag so a stale appended stop is visible.
+        stale: Object.values(mergedStale).some((entry) => entry.stale),
+        staleByStopId: mergedStale,
+        lastUpdatedAt: Date.now(),
       }
+    }
     case 'FARES_SUCCESS':
       return {
         ...state,

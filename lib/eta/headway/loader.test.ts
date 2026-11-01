@@ -73,3 +73,35 @@ describe('loadHeadwayIndex validation', () => {
     expect(await loadHeadwayIndex()).toBeNull()
   })
 })
+
+describe('loadHeadwayIndex production shallow check', () => {
+  // isHeadwayIndex branches on process.env.NODE_ENV at call time, but the
+  // test runner pins NODE_ENV=test. Stub it per-test with vi.stubEnv.
+  it('accepts corrupt internals the shallow probe cannot see', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    try {
+      // Deep validation would reject the bad day-type key; the prod probe
+      // only checks the envelope plus span presence, so this loads.
+      mockIndex(indexWith({ ...validVariant, departures: { someday: [405] } }))
+      const index = await loadHeadwayIndex()
+      expect(index?.updated).toBe('2026-10-16')
+    } finally {
+      vi.unstubAllEnvs()
+      __resetHeadwayIndexCacheForTests()
+    }
+  })
+
+  it('still rejects variants with a missing or malformed span', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    try {
+      mockIndex(indexWith({ src: ['1001'], headway: { weekday: [[335, 425, 15]] } }))
+      expect(await loadHeadwayIndex()).toBeNull()
+      __resetHeadwayIndexCacheForTests()
+      mockIndex(indexWith({ ...validVariant, span: 'soon' }))
+      expect(await loadHeadwayIndex()).toBeNull()
+    } finally {
+      vi.unstubAllEnvs()
+      __resetHeadwayIndexCacheForTests()
+    }
+  })
+})

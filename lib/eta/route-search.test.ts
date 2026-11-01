@@ -840,3 +840,19 @@ describe('getKeyStops', () => {
     }
   })
 })
+
+describe('haystack early-exit regression lock', () => {
+  const stopIndex = buildRouteSearchIndex(routes, routeStops, stopsById)
+
+  it('still matches stop-name queries the haystack prefilter must not drop', () => {
+    for (const query of ['Mong Kok', '旺角']) {
+      const hits = searchRouteIndex(stopIndex, query)
+      expect(hits.map((h) => h.entry.key)).toContain('kmb|1A')
+    }
+  })
+
+  it('returns no stop hits for a query absent from every haystack', () => {
+    const hits = searchRouteIndex(stopIndex, 'zzz-no-such-place-zzz')
+    expect(hits.filter((h) => h.matchReason?.kind === 'stop')).toEqual([])
+  })
+})

@@ -224,18 +224,23 @@ export function LrtRoutesView({
 
     void load()
 
-    // Follow the global refresh setting instead of a hardcoded 30s.
-    // Off (0) still loads once above, it just does not poll.
-    const intervalMs = (autoRefreshSeconds ?? 30) * 1000
-    if (intervalMs <= 0) return undefined
-    const interval = window.setInterval(() => {
-      void load()
-    }, intervalMs)
-
     const onVisibility = () => {
       if (document.visibilityState === 'visible') void load()
     }
     document.addEventListener('visibilitychange', onVisibility)
+
+    // Follow the global refresh setting instead of a hardcoded 30s.
+    // Off (0) still loads once and still reloads on tab-visible.
+    const intervalMs = (autoRefreshSeconds ?? 30) * 1000
+    if (intervalMs <= 0) {
+      return () => {
+        cancelled = true
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
+    }
+    const interval = window.setInterval(() => {
+      void load()
+    }, intervalMs)
 
     return () => {
       cancelled = true

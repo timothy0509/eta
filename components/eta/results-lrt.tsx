@@ -231,16 +231,30 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
     )
   }
 
-  // Non-expandable rows happen only for groups without ETAs (handled
-  // above) or rows rendered without a toggle handler. The guard keeps
-  // TypeScript narrow and makes a missing handler render nothing instead
-  // of crashing on the click below.
-  if (!expandable) return null
+  // A group with ETAs but no toggle handler renders as a static card,
+  // mirroring the KMB no-expand path: the route must never vanish.
+  if (!expandable) {
+    return (
+      <div
+        className={cn(
+          'bg-surface-container relative overflow-hidden rounded-2xl border border-transparent py-3.5 pr-3 pl-0',
+          staggerClass
+        )}
+      >
+        <span
+          className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
+          style={{ backgroundColor: routeColor }}
+          aria-hidden
+        />
+        <div className="space-y-2.5 pl-4">{routeHeader({ showEta: true, showSubtitle: true })}</div>
+      </div>
+    )
+  }
 
   return (
     <ExpandableEtaRow
       expanded={isExpanded}
-      onToggle={onToggle!}
+      onToggle={onToggle ?? (() => {})}
       color={routeColor}
       className={staggerClass}
       panel={etaPanel}

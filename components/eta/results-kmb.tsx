@@ -616,7 +616,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   return (
     <ExpandableEtaRow
       expanded={isExpanded}
-      onToggle={onToggle!}
+      onToggle={onToggle ?? (() => {})}
       color={operatorColor}
       className={staggerClass}
       panel={etaPanel}

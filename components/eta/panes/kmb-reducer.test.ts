@@ -100,3 +100,31 @@ describe('etaReducer stale flags', () => {
     expect(next.staleByStopId.a?.stale).toBe(true)
   })
 })
+
+describe('APPEND_STOPS stale handling', () => {
+  it('recomputes the global flag and stamps the timestamp', () => {
+    const loaded = etaReducer(initialEtaState, {
+      type: 'REFRESH_SUCCESS',
+      payload: {
+        byStopId: { a: [] },
+        loadedStopIds: ['a'],
+        staleByStopId: { a: { stale: false, ageMs: 0 } },
+      },
+    })
+    expect(loaded.stale).toBe(false)
+
+    const next = etaReducer(loaded, {
+      type: 'APPEND_STOPS',
+      payload: {
+        byStopId: { b: [] },
+        newStopIds: ['b'],
+        staleByStopId: { b: { stale: true, ageMs: null } },
+      },
+    })
+
+    expect(next.loadedStopIds).toEqual(['a', 'b'])
+    expect(next.staleByStopId.b).toEqual({ stale: true, ageMs: null })
+    expect(next.stale).toBe(true)
+    expect(next.lastUpdatedAt).not.toBeNull()
+  })
+})

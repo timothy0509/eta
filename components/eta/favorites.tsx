@@ -323,7 +323,7 @@ function FavoriteRow({
   disableMoveUp,
   disableMoveDown,
   motionEnabled = true,
-}: FavoriteRowProps & { motionEnabled?: boolean }) {
+}: FavoriteRowProps) {
   const dragControls = useDragControls()
   const prevPinned = React.useRef(item.pinned)
   const [pinPopped, setPinPopped] = React.useState(false)
@@ -736,9 +736,10 @@ export function FavoritesAndRecents({ lang, onSelect, onOpenInStops }: Props) {
 
   const pinnedItems = React.useMemo(() => favorites.filter((f) => f.pinned), [favorites])
   const unpinnedItems = React.useMemo(() => favorites.filter((f) => !f.pinned), [favorites])
-  // Drag reorder mounts a framer-motion runtime per row. Past ~30 items the
-  // plain rows with Up/Down buttons take over instead.
-  const canDragReorder = pinnedItems.length + unpinnedItems.length <= 30
+  // Drag reorder mounts a framer-motion runtime per row. Past ~30 items per
+  // group the plain rows with Up/Down buttons take over instead.
+  const canDragPinned = pinnedItems.length <= 30
+  const canDragUnpinned = unpinnedItems.length <= 30
 
   const handleReorderPinned = (next: FavoritesItem[]) => {
     reorderFavorites([...next, ...unpinnedItems])
@@ -978,7 +979,7 @@ export function FavoritesAndRecents({ lang, onSelect, onOpenInStops }: Props) {
                       <div className="text-on-surface-variant m3-label-md px-1">
                         {t('favorites.pinned')}
                       </div>
-                      {canDragReorder ? (
+                      {canDragPinned ? (
                         <Reorder.Group
                           axis="y"
                           values={pinnedItems}
@@ -1044,7 +1045,7 @@ export function FavoritesAndRecents({ lang, onSelect, onOpenInStops }: Props) {
                       <div className="text-on-surface-variant m3-label-md px-1">
                         {t('favorites.unpinned')}
                       </div>
-                      {canDragReorder ? (
+                      {canDragUnpinned ? (
                         <Reorder.Group
                           axis="y"
                           values={unpinnedItems}

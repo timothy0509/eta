@@ -50,18 +50,18 @@ function variantKey(
   )}|${normalizeGtfsId(gtfsId)}`
 }
 
-export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]): Map<
-  VariantKey,
-  VariantStops
-> & {
-  byFamily?: Map<string, VariantStops[]>
-} {
-  const byVariantKey: Map<VariantKey, VariantStops> & {
-    byFamily?: Map<string, VariantStops[]>
-  } = new Map()
+/** Variant index with a precomputed family lookup for O(1) resolution. */
+export type KmbVariantStopsIndex = {
+  byVariantKey: Map<VariantKey, VariantStops>
+  /** co|ROUTE|bound|serviceType -> variants, smallest key first. */
+  byFamily: Map<string, VariantStops[]>
+}
+
+export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]): KmbVariantStopsIndex {
+  const byVariantKey = new Map<VariantKey, VariantStops>()
   // Family lookup so per-row leg resolution does not rescan the whole map.
-  // Keyed by co|ROUTE|bound|serviceType, values presorted smallest-key first
-  // to keep the "most occurrences wins, then smallest key" tie-break stable.
+  // Values stay presorted smallest-key first to keep the "most occurrences
+  // wins, then smallest key" tie-break stable.
   const byFamily = new Map<string, VariantStops[]>()
 
   const familyKey = (co: string, route: string, bound: string, serviceType: string) =>
@@ -110,77 +110,54 @@ export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]): Map
     }
   }
 
-  // Second pass is a no-op in practice: the first loop already inserts
-  // every variant into its family list. Kept as a repair step so a future
-  // change to the first loop cannot silently drop a variant from lookup.
-  for (const variant of byVariantKey.values()) {
-    const [co, route, bound, serviceType] = variant.variantKey.split('|')
-    const family = familyKey(co ?? 'kmb', route ?? '', bound ?? '', serviceType ?? '')
-    const list = byFamily.get(family)
-    if (list && !list.includes(variant)) {
-      const insertIdx = list.findIndex((v) => v.variantKey > variant.variantKey)
-      if (insertIdx === -1) list.push(variant)
-      else list.splice(insertIdx, 0, variant)
-    }
-  }
-
-  byVariantKey.byFamily = byFamily
-  return byVariantKey
+  return { byVariantKey, byFamily }
 }
 
 export async function getCachedKmbVariantStops(
   fetchRouteStops: () => Promise<KmbRouteStopLite[]>
-): Promise<Map<VariantKey, VariantStops> & { byFamily?: Map<string, VariantStops[]> }> {
+): Promise<KmbVariantStopsIndex> {
   const now = Date.now()
   if (cachedVariantStops && cachedVariantStops.expiresAtMs > now) {
-    return attachFamily(cachedVariantStops.byVariantKey, cachedVariantStops.byFamily)
+    return {
+      byVariantKey: cachedVariantStops.byVariantKey,
+      byFamily: cachedVariantStops.byFamily,
+    }
   }
 
   if (inFlightVariantStops) {
-    const { byVariantKey, byFamily } = await inFlightVariantStops
-    return attachFamily(byVariantKey, byFamily)
+    return await inFlightVariantStops
   }
 
   inFlightVariantStops = (async () => {
     try {
       const routeStops = await fetchRouteStops()
-      const byVariantKey = computeKmbRouteVariantStops(routeStops)
+      const index = computeKmbRouteVariantStops(routeStops)
 
       const ttlSeconds = secondsUntilNextKmbDailyUpdate()
       cachedVariantStops = {
         expiresAtMs: now + ttlSeconds * 1000,
-        byVariantKey,
-        byFamily: byVariantKey.byFamily ?? new Map(),
+        byVariantKey: index.byVariantKey,
+        byFamily: index.byFamily,
       }
 
-      return { byVariantKey, byFamily: byVariantKey.byFamily ?? new Map() }
+      return index
     } finally {
       inFlightVariantStops = null
     }
   })()
 
-  const { byVariantKey, byFamily } = await inFlightVariantStops
-  return attachFamily(byVariantKey, byFamily)
-}
-
-function attachFamily(
-  byVariantKey: Map<VariantKey, VariantStops>,
-  byFamily: Map<string, VariantStops[]>
-): Map<VariantKey, VariantStops> & { byFamily?: Map<string, VariantStops[]> } {
-  return Object.assign(byVariantKey, { byFamily })
+  return await inFlightVariantStops
 }
 
 function familyLookup(
-  byVariantStops: Map<VariantKey, VariantStops>,
+  index: KmbVariantStopsIndex | Map<VariantKey, VariantStops>,
   family: { co: string; route: string; bound: string; serviceType: string }
 ): VariantStops[] | undefined {
-  const attached = byVariantStops as Map<VariantKey, VariantStops> & {
-    byFamily?: Map<string, VariantStops[]>
-  }
+  if (index instanceof Map) return undefined
   const key = `${String(family.co ?? 'kmb')}|${normalizeRouteName(family.route)}|${String(
     family.bound ?? ''
   )}|${String(family.serviceType ?? '')}`
-  return attached.byFamily?.get(key)
+  return index.byFamily.get(key)
 }
 
 export function kmbFareCacheControlHeader() {
@@ -218,7 +195,7 @@ function familyVariants(
  * variant when no set contains the stop.
  */
 function findVariantByFamilyStop(
-  byVariantStops: Map<VariantKey, VariantStops>,
+  byVariantStops: KmbVariantStopsIndex,
   family: { co: string; route: string; bound: string; serviceType: string },
   stopId: string
 ): { key: VariantKey; variant: VariantStops } | undefined {
@@ -226,7 +203,7 @@ function findVariantByFamilyStop(
   const precomputed = familyLookup(byVariantStops, family)
   const cands = precomputed
     ? precomputed.map((variant) => ({ key: variant.variantKey, variant }))
-    : familyVariants(byVariantStops, family)
+    : familyVariants(byVariantStops.byVariantKey, family)
   if (cands.length === 0) return undefined
   const stop = String(stopId ?? '').trim()
   const holding = cands.filter((c) => c.variant.stopSeqsByStopId.has(stop))
@@ -259,12 +236,12 @@ export function getStopToTerminusFare(params: {
   stopId: string
   // For disambiguation: KMB ETA provides destination strings; use them if possible.
   etaDestCandidates?: string[]
-  byVariantStops: Map<VariantKey, VariantStops>
+  byVariantStops: KmbVariantStopsIndex
   routeVariantIndex: Map<string, RouteListEntry>
 }): KmbFareInfo | null {
   const routeName = normalizeRouteName(params.route)
   const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
-  let variant = params.byVariantStops.get(key)
+  let variant = params.byVariantStops.byVariantKey.get(key)
   // Resolve the fare table against the variant actually used: without a
   // gtfsId the caller may land on any region of the family, and each
   // region has its own fare array indexed by its own sequences.
@@ -348,12 +325,12 @@ export function computeEtaLeg(params: {
   gtfsId?: string
   stopId: string
   etaSeq: number
-  byVariantStops: Map<VariantKey, VariantStops>
+  byVariantStops: KmbVariantStopsIndex
 }): 'A' | 'B' | null {
   const routeName = normalizeRouteName(params.route)
   const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
   const variant =
-    params.byVariantStops.get(key) ??
+    params.byVariantStops.byVariantKey.get(key) ??
     findVariantByFamilyStop(
       params.byVariantStops,
       {

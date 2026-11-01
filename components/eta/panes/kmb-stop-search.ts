@@ -21,7 +21,8 @@ export type StopSearchIndex = {
   normalizedNames: Map<string, string>
   /** Pre-parsed display rows keyed by stopId. */
   computedById: Map<string, StopSearchComputed>
-  version: number
+  /** Input stamp (language + length) so a consumer can tell a rebuild happened. */
+  version: string
 }
 
 export type StopSearchComputed = {
@@ -68,7 +69,9 @@ export function buildStopSearchIndex(
         .trim(),
     })
   }
-  return { normalizedNames, computedById, version: stops.length }
+  // version stamps the input length plus language so a consumer can tell
+  // a rebuild happened; the pane memo keys on [kmbStops, lang] directly.
+  return { normalizedNames, computedById, version: `${lang}:${stops.length}` }
 }
 
 export function searchStopsByContains(

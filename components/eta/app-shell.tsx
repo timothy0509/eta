@@ -164,7 +164,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   aria-label={m.labels[lang]}
                   title={m.labels[lang]}
                   className={cn(
-                    'relative z-10 flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-full px-1 py-1 text-xs font-medium transition-colors min-[500px]:gap-1.5 min-[500px]:px-2 min-[500px]:text-[13px] sm:min-h-[36px] sm:py-1',
+                    'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1 rounded-full px-1 py-1 text-xs font-medium transition-colors min-[500px]:gap-1.5 min-[500px]:px-2 min-[500px]:text-[13px] sm:min-h-[36px] sm:py-1',
                     active
                       ? 'text-on-secondary-container'
                       : 'text-on-surface-variant hover:text-on-surface'

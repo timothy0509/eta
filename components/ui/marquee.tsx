@@ -50,6 +50,16 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
         return
       }
 
+      // Users who opted out of motion get static text instead of a
+      // scrolling heading, even when the content overflows.
+      if (reduceMotion) {
+        if (lastMeasureRef.current.overflowing) {
+          lastMeasureRef.current = { overflowing: false, distance: 0, duration: 5 }
+          setNeedsMarquee(false)
+        }
+        return
+      }
+
       if (speed <= 0) return
       // Distance to scroll = one copy width + gap
       const gap = 32 // 2rem = 32px
@@ -69,19 +79,30 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
       setAnimDuration(duration)
     }
 
+    const reduceMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+
     // Small delay to ensure DOM is ready
-    requestAnimationFrame(check)
+    let raf = requestAnimationFrame(check)
 
     // jsdom and SSR have no ResizeObserver; without it the initial
     // measurement stands and content stays static, which is fine.
-    if (typeof ResizeObserver === 'undefined') return
+    if (typeof ResizeObserver === 'undefined') {
+      return () => cancelAnimationFrame(raf)
+    }
 
     const resizeObserver = new ResizeObserver(() => {
-      requestAnimationFrame(check)
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(check)
     })
     resizeObserver.observe(container)
 
-    return () => resizeObserver.disconnect()
+    return () => {
+      cancelAnimationFrame(raf)
+      resizeObserver.disconnect()
+    }
   }, [children, speed])
 
   return (

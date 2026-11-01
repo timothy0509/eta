@@ -378,6 +378,11 @@ const favorites: Record<string, TranslationEntry> = {
   thisWeek: { en: 'This week', tc: '本週', sc: '本周' },
   earlier: { en: 'Earlier', tc: '更早', sc: '更早' },
   drag: { en: 'Drag to reorder', tc: '拖曳以重新排序', sc: '拖曳以重新排序' },
+  reorderHint: {
+    en: 'Press the up or down arrow key to move this entry.',
+    tc: '按向上或向下方向鍵移動此項目。',
+    sc: '按向上或向下方向键移动此项目。',
+  },
   assignToGroup: { en: 'Assign to group', tc: '加入分組', sc: '加入分组' },
   viewGroup: { en: 'View stops', tc: '查看車站', sc: '查看车站' },
   openInStops: { en: 'Open in Stops', tc: '在車站頁開啟', sc: '在车站页开启' },

@@ -320,6 +320,7 @@ function FavoriteRow({
   disableMoveDown,
 }: FavoriteRowProps) {
   const dragControls = useDragControls()
+  const hintId = React.useId()
   const prevPinned = React.useRef(item.pinned)
   const [pinPopped, setPinPopped] = React.useState(false)
   React.useEffect(() => {
@@ -336,8 +337,10 @@ function FavoriteRow({
     <div className="flex items-center gap-3">
       {draggable && (
         <div
-          className="text-on-surface-variant hover:text-on-surface cursor-grab rounded-full p-2 focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
+          className="text-on-surface-variant hover:text-on-surface flex min-h-[44px] min-w-[44px] cursor-grab items-center justify-center rounded-full focus-visible:ring-2 focus-visible:outline-none active:cursor-grabbing"
           aria-label={t('favorites.drag')}
+          aria-describedby={hintId}
+          aria-disabled={disableMoveUp && disableMoveDown}
           title={`${t('favorites.drag')} (${t('favorites.moveUp')} / ${t('favorites.moveDown')})`}
           onPointerDown={(event) => dragControls.start(event)}
           role="button"
@@ -354,7 +357,10 @@ function FavoriteRow({
             }
           }}
         >
-          <GripVertical className="h-4 w-4" />
+          <GripVertical className="h-4 w-4" aria-hidden />
+          <span id={hintId} className="sr-only">
+            {t('favorites.reorderHint')}
+          </span>
         </div>
       )}
       <div className="bg-surface-container-high flex h-9 w-9 shrink-0 items-center justify-center rounded-full">

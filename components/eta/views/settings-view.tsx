@@ -55,16 +55,14 @@ function Section({
   title,
   desc,
   children,
-  id,
 }: {
   icon: React.ComponentType<{ className?: string }>
   title: string
   desc?: string
   children: React.ReactNode
-  id: string
 }) {
   return (
-    <section id={id} className="card-m3 scroll-mt-24 p-5">
+    <section className="card-m3 p-5">
       <h2 className="m3-title-md flex items-center gap-2">
         <Icon className="h-5 w-5" />
         {title}
@@ -217,6 +215,28 @@ export function SettingsView({ lang }: Props) {
   ]
   const [activeId, setActiveId] = React.useState('settings-appearance')
   const activeLabel = categories.find((c) => c.id === activeId)?.label ?? ''
+  const tabRefs = React.useRef(new Map<string, HTMLButtonElement>())
+
+  const handleTabListKeyDown = (event: React.KeyboardEvent) => {
+    const order = categories.map((c) => c.id)
+    const current = order.indexOf(activeId)
+    let next = -1
+    if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+      next = (current + 1) % order.length
+    } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+      next = (current - 1 + order.length) % order.length
+    } else if (event.key === 'Home') {
+      next = 0
+    } else if (event.key === 'End') {
+      next = order.length - 1
+    } else {
+      return
+    }
+    event.preventDefault()
+    const nextId = order[next]
+    setActiveId(nextId)
+    tabRefs.current.get(nextId)?.focus()
+  }
 
   return (
     <FadeIn className="mx-auto max-w-4xl">
@@ -229,6 +249,7 @@ export function SettingsView({ lang }: Props) {
         <div
           role="tablist"
           aria-label={t('common.settings')}
+          onKeyDown={handleTabListKeyDown}
           className="bg-surface-container-low border-outline-variant/20 flex gap-1 overflow-x-auto rounded-2xl border p-1.5 shadow-sm lg:sticky lg:top-[4.5rem] lg:flex-col lg:overflow-visible"
         >
           {categories.map(({ id, icon: Icon, label }) => {
@@ -238,7 +259,14 @@ export function SettingsView({ lang }: Props) {
                 key={id}
                 type="button"
                 role="tab"
+                id={`${id}-tab`}
                 aria-selected={active}
+                aria-controls="settings-panel"
+                tabIndex={active ? 0 : -1}
+                ref={(el) => {
+                  if (el) tabRefs.current.set(id, el)
+                  else tabRefs.current.delete(id)
+                }}
                 onClick={() => setActiveId(id)}
                 className={cn(
                   'm3-label-lg ui-press flex shrink-0 items-center gap-2.5 rounded-xl px-3 py-2.5 transition-colors focus-visible:ring-2 focus-visible:outline-none lg:w-full',
@@ -254,9 +282,15 @@ export function SettingsView({ lang }: Props) {
           })}
         </div>
 
-        <div className="min-w-0" role="tabpanel" aria-label={activeLabel}>
+        <div
+          className="min-w-0"
+          role="tabpanel"
+          id="settings-panel"
+          aria-labelledby={`${activeId}-tab`}
+          aria-label={activeLabel}
+        >
           {activeId === 'settings-appearance' && (
-            <Section id="settings-appearance" icon={Palette} title={t('common.appearance')}>
+            <Section icon={Palette} title={t('common.appearance')}>
               <div className="flex flex-col gap-2">
                 {THEME_OPTIONS.map(({ value, icon: Icon, labelKey, descKey }) => (
                   <button
@@ -282,12 +316,7 @@ export function SettingsView({ lang }: Props) {
             </Section>
           )}
           {activeId === 'settings-language' && (
-            <Section
-              id="settings-language"
-              icon={Globe}
-              title={t('common.language')}
-              desc={t('settings.languageNote')}
-            >
+            <Section icon={Globe} title={t('common.language')} desc={t('settings.languageNote')}>
               <div className="flex flex-wrap gap-2">
                 {(['en', 'tc', 'sc'] as const).map((l) => {
                   const disabled = l === 'sc' && !scSupported
@@ -315,12 +344,7 @@ export function SettingsView({ lang }: Props) {
             </Section>
           )}
           {activeId === 'settings-refresh' && (
-            <Section
-              id="settings-refresh"
-              icon={Timer}
-              title={t('common.autoRefresh')}
-              desc={t('settings.refreshDesc')}
-            >
+            <Section icon={Timer} title={t('common.autoRefresh')} desc={t('settings.refreshDesc')}>
               <div className="flex flex-wrap gap-2">
                 {REFRESH_OPTIONS.map((s) => (
                   <button
@@ -342,12 +366,7 @@ export function SettingsView({ lang }: Props) {
             </Section>
           )}
           {activeId === 'settings-nearby' && (
-            <Section
-              id="settings-nearby"
-              icon={MapPin}
-              title={t('common.nearby')}
-              desc={t('settings.nearbyDesc')}
-            >
+            <Section icon={MapPin} title={t('common.nearby')} desc={t('settings.nearbyDesc')}>
               <div className="flex items-center gap-3">
                 <label
                   className="text-on-surface-variant m3-label-md whitespace-nowrap"
@@ -374,7 +393,6 @@ export function SettingsView({ lang }: Props) {
           )}
           {activeId === 'settings-saved' && (
             <Section
-              id="settings-saved"
               icon={Bookmark}
               title={t('settings.savedData')}
               desc={t('settings.exportImportDesc')}
@@ -433,10 +451,14 @@ export function SettingsView({ lang }: Props) {
                 />
               </div>
               <Notice message={dataNotice} />
+              <p className="text-on-surface-variant m3-label-md mt-3 flex items-center gap-1.5">
+                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                {t('favorites.tip')}
+              </p>
             </Section>
           )}
           {activeId === 'settings-storage' && (
-            <Section id="settings-storage" icon={Database} title={t('settings.storage')}>
+            <Section icon={Database} title={t('settings.storage')}>
               <div className="flex flex-col gap-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <p className="text-on-surface-variant m3-body-md max-w-md">
@@ -466,7 +488,7 @@ export function SettingsView({ lang }: Props) {
             </Section>
           )}
           {activeId === 'settings-about' && (
-            <Section id="settings-about" icon={Info} title={t('settings.about')}>
+            <Section icon={Info} title={t('settings.about')}>
               <dl className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
                   <dt className="text-on-surface-variant m3-body-md">
@@ -491,12 +513,6 @@ export function SettingsView({ lang }: Props) {
                 {t('settings.dataSourcesNote')}
               </p>
             </Section>
-          )}
-          {activeId === 'settings-saved' && (
-            <p className="text-on-surface-variant m3-label-md flex items-center gap-1.5 px-1 pb-2">
-              <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-              {t('favorites.tip')}
-            </p>
           )}
         </div>
       </div>

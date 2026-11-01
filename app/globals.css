@@ -378,6 +378,12 @@
   animation-play-state: paused;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+}
+
 /* -----------------------------
  * UI motion primitives
  * (tokens live in the merged :root above)

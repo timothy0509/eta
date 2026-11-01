@@ -664,8 +664,10 @@ const StopSection = React.memo(function StopSection({
       ref={stopRef}
       className={cn('ui-cv-auto', !isFirst && 'border-outline-variant mt-5 border-t pt-5')}
     >
-      <div className="mb-2 flex items-center gap-2">
-        <h3 className="text-on-surface m3-title-md min-w-0 truncate">{parsed.name}</h3>
+      <div className="mb-2 flex min-w-0 items-center gap-2">
+        <h3 className="text-on-surface m3-title-md min-w-0 flex-1 font-medium">
+          <Marquee title={parsed.name}>{parsed.name}</Marquee>
+        </h3>
         {stopCodeBadge ? (
           <span className="text-on-surface-variant m3-label-md shrink-0 font-mono">
             {stopCodeBadge}

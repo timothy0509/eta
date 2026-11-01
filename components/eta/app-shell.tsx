@@ -134,7 +134,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
             ref={containerRef}
             role="group"
             aria-label={t('common.transportMode')}
-            className="bg-surface-container-high/70 relative flex w-full max-w-[420px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
+            className="bg-surface-container-high/70 relative flex w-full max-w-[320px] items-center rounded-full p-1 ring-1 ring-[var(--outline-variant)]/20"
           >
             <span
               aria-hidden
@@ -164,13 +164,13 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
                   aria-label={m.labels[lang]}
                   title={m.labels[lang]}
                   className={cn(
-                    'relative z-10 flex min-h-[44px] flex-1 items-center justify-center gap-1 rounded-full px-1 text-xs font-medium transition-colors min-[500px]:gap-1.5 min-[500px]:px-2 min-[500px]:text-[13px] sm:py-2 sm:text-sm',
+                    'relative z-10 flex min-h-[40px] flex-1 items-center justify-center gap-1 rounded-full px-1 py-1 text-xs font-medium transition-colors min-[500px]:gap-1.5 min-[500px]:px-2 min-[500px]:text-[13px] sm:min-h-[36px] sm:py-1',
                     active
                       ? 'text-on-secondary-container'
                       : 'text-on-surface-variant hover:text-on-surface'
                   )}
                 >
-                  <Icon className="h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
                   <span className="hidden truncate sm:inline">{m.labels[lang]}</span>
                   <span className="truncate sm:hidden">{MODE_SHORT_LABELS[m.mode]}</span>
                 </button>

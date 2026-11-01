@@ -72,6 +72,10 @@ export function Marquee({ children, className, speed = 30, title }: Props) {
     // Small delay to ensure DOM is ready
     requestAnimationFrame(check)
 
+    // jsdom and SSR have no ResizeObserver; without it the initial
+    // measurement stands and content stays static, which is fine.
+    if (typeof ResizeObserver === 'undefined') return
+
     const resizeObserver = new ResizeObserver(() => {
       requestAnimationFrame(check)
     })

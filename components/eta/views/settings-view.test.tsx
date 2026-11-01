@@ -41,10 +41,9 @@ describe('SettingsView', () => {
     })
   })
 
-  it('renders every section with translated strings', () => {
+  it('lists every category in the sidebar and shows one panel at a time', () => {
     renderSettings()
-    for (const heading of [
-      'Settings',
+    for (const label of [
       'Appearance',
       'Language',
       'Auto Refresh',
@@ -53,14 +52,21 @@ describe('SettingsView', () => {
       'Storage',
       'About',
     ]) {
-      expect(screen.getByRole('heading', { name: heading })).not.toBeNull()
+      expect(screen.getByRole('tab', { name: label })).not.toBeNull()
     }
+    // Default panel is appearance; other panels stay hidden.
+    expect(screen.getByRole('heading', { name: 'Appearance' })).not.toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Storage' })).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: 'Storage' }))
+    expect(screen.getByRole('heading', { name: 'Storage' })).not.toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Appearance' })).toBeNull()
     expect(document.body.textContent).not.toMatch(/settings\.[a-zA-Z]+/)
     expect(document.body.textContent).not.toMatch(/common\.[a-zA-Z]+/)
   })
 
   it('changes the persisted nearby radius', () => {
     renderSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Nearby' }))
     const slider = screen.getByLabelText('Search radius') as HTMLInputElement
     fireEvent.change(slider, { target: { value: '3.5' } })
     expect(useAppStore.getState().nearbyRadiusKm).toBe(3.5)
@@ -75,6 +81,7 @@ describe('SettingsView', () => {
       sta: 'CEN',
     })
     renderSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Saved data' }))
     const clearButton = screen.getByRole('button', { name: 'Clear search history' })
     fireEvent.click(clearButton)
     expect(useAppStore.getState().recents).toHaveLength(1)
@@ -84,6 +91,7 @@ describe('SettingsView', () => {
 
   it('reports skipped entries on a partial import', async () => {
     renderSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Saved data' }))
     const file = new File(
       [
         JSON.stringify([
@@ -104,6 +112,7 @@ describe('SettingsView', () => {
       favorites: [{ id: 'mtr:CEN', mode: 'mtr', title: 'Central', line: 'TWL', sta: 'CEN' }],
     })
     renderSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Saved data' }))
     const file = new File(['[]'], 'empty.json', { type: 'application/json' })
     fireEvent.change(screen.getByLabelText('Import'), { target: { files: [file] } })
     expect(await screen.findByText('0 favorites ready')).not.toBeNull()
@@ -112,6 +121,7 @@ describe('SettingsView', () => {
 
   it('rejects a non-array file', async () => {
     renderSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'Saved data' }))
     const file = new File(['{"favorites": []}'], 'bad.json', { type: 'application/json' })
     fireEvent.change(screen.getByLabelText('Import'), { target: { files: [file] } })
     expect(await screen.findByText('Could not read that file.')).not.toBeNull()

@@ -80,8 +80,8 @@ export function RouteScheduleSection({
           <ChevronRight className="text-on-surface-variant ml-auto h-4 w-4 shrink-0" aria-hidden />
         </button>
       </DialogTrigger>
-      <DialogContent className="bg-surface-container-low max-h-[85dvh] gap-0 overflow-y-auto rounded-3xl border-0 p-0">
-        <div className="space-y-4 p-5 sm:p-6">
+      <DialogContent className="bg-surface-container-low max-h-[85dvh] gap-0 overflow-x-hidden overflow-y-auto rounded-3xl border-0 p-0 sm:max-w-xl">
+        <div className="min-w-0 space-y-4 p-5 sm:p-6">
           <DialogHeader className="text-left">
             <DialogTitle className="text-on-surface m3-title-lg">
               {t('kmb.scheduleFullTitle')}

@@ -110,6 +110,9 @@ export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]): Map
     }
   }
 
+  // Second pass is a no-op in practice: the first loop already inserts
+  // every variant into its family list. Kept as a repair step so a future
+  // change to the first loop cannot silently drop a variant from lookup.
   for (const variant of byVariantKey.values()) {
     const [co, route, bound, serviceType] = variant.variantKey.split('|')
     const family = familyKey(co ?? 'kmb', route ?? '', bound ?? '', serviceType ?? '')

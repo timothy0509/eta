@@ -31,6 +31,32 @@ describe('etaReducer stale flags', () => {
     expect(next.stale).toBe(false)
   })
 
+  it('prunes stops that left the loaded set', () => {
+    const withHidden = etaReducer(initialEtaState, {
+      type: 'REFRESH_SUCCESS',
+      payload: {
+        byStopId: {},
+        loadedStopIds: ['a', 'b'],
+        staleByStopId: {
+          a: { stale: true, ageMs: 60_000 },
+          b: { stale: false, ageMs: 0 },
+        },
+      },
+    })
+
+    const next = etaReducer(withHidden, {
+      type: 'REFRESH_SUCCESS',
+      payload: {
+        byStopId: {},
+        loadedStopIds: ['c'],
+        staleByStopId: { c: { stale: false, ageMs: 0 } },
+      },
+    })
+
+    expect(next.staleByStopId).toEqual({ c: { stale: false, ageMs: 0 } })
+    expect(next.stale).toBe(false)
+  })
+
   it('keeps the global stale flag when any merged stop is stale', () => {
     const state = etaReducer(initialEtaState, {
       type: 'REFRESH_SUCCESS',

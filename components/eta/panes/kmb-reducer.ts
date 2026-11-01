@@ -60,8 +60,15 @@ export function etaReducer(state: EtaState, action: EtaAction): EtaState {
     case 'REFRESH_SUCCESS': {
       // Visible-only auto-refresh fetches a subset of stops. Merge their
       // stale flags into the existing map so off-screen stops keep theirs
-      // instead of looking fresh on a timestamp they did not earn.
-      const mergedStale = { ...state.staleByStopId, ...(action.payload.staleByStopId ?? {}) }
+      // instead of looking fresh on a timestamp they did not earn. Entries
+      // for stops outside loadedStopIds are pruned so a new search does not
+      // let departed stops vote on the global flag or grow the map.
+      const loaded = new Set(action.payload.loadedStopIds)
+      const mergedStale: EtaState['staleByStopId'] = {}
+      for (const [stopId, entry] of Object.entries(state.staleByStopId)) {
+        if (loaded.has(stopId)) mergedStale[stopId] = entry
+      }
+      Object.assign(mergedStale, action.payload.staleByStopId)
       return {
         ...state,
         byStopId: action.payload.byStopId,

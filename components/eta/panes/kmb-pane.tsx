@@ -213,6 +213,8 @@ export function KmbPane({
   // ========== OPTIMIZATION: Build search index once when stops load ==========
   // The index carries the pre-parsed rows StopSearch needs, so the 6k list
   // is normalized once per pane load instead of once per consumer.
+  // version is a length stamp only; the memo key includes lang because the
+  // parsed rows are language-specific.
   const stopSearchIndex = React.useMemo<StopSearchIndex>(() => {
     return buildStopSearchIndex(kmbStops, lang)
   }, [kmbStops, lang])

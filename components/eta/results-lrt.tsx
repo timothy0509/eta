@@ -66,7 +66,7 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   const routeColor = getLineColor(routeNo)
   const dest = pickLangZh({ en: group.destEn, zh: group.destCh }, lang)
 
-  const expandable = hasEta && items.length >= 1
+  const expandable = Boolean(onToggleExpand) && hasEta && items.length >= 1
   const isExpanded = expandable && expanded
   const onToggle = onToggleExpand ? () => onToggleExpand(`${platformId}:${group.key}`) : undefined
 
@@ -231,8 +231,10 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
     )
   }
 
-  // Non-expandable rows happen only for groups without ETAs, handled above.
-  // This guard exists so TypeScript narrows onToggleExpand below.
+  // Non-expandable rows happen only for groups without ETAs (handled
+  // above) or rows rendered without a toggle handler. The guard keeps
+  // TypeScript narrow and makes a missing handler render nothing instead
+  // of crashing on the click below.
   if (!expandable) return null
 
   return (

@@ -267,8 +267,6 @@ export function MtrRoutesView({
 
   React.useEffect(() => {
     if (!selectedLine || stationStas.length === 0) return
-    // Off means off: previously this view polled every 30s no matter what.
-    if (autoRefreshSeconds === 0) return
 
     let cancelled = false
     let inFlight = false
@@ -305,6 +303,7 @@ export function MtrRoutesView({
     void load()
 
     // Follow the global refresh setting instead of a hardcoded 30s.
+    // Off (0) still loads once above, it just does not poll.
     const intervalMs = (autoRefreshSeconds ?? 30) * 1000
     if (intervalMs <= 0) return undefined
     const interval = window.setInterval(() => {

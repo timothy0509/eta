@@ -668,6 +668,7 @@ describe('settings prefs', () => {
       lang: 'tc',
       autoRefreshSeconds: 15,
       nearbyRadiusKm: 2,
+      timetableDetail: 5,
       favorites: [],
       favoritesGroups: [],
       recents: [],
@@ -691,8 +692,15 @@ describe('settings prefs', () => {
       version: number
       state: { nearbyRadiusKm: number }
     }
-    expect(parsed.version).toBe(7)
+    expect(parsed.version).toBe(8)
     expect(parsed.state.nearbyRadiusKm).toBe(3)
+  })
+
+  it('clamps the timetable detail into the 1-5 slider band', () => {
+    useAppStore.getState().setTimetableDetail(99)
+    expect(useAppStore.getState().timetableDetail).toBe(5)
+    useAppStore.getState().setTimetableDetail(-1)
+    expect(useAppStore.getState().timetableDetail).toBe(1)
   })
 
   it('resetPrefs restores defaults but keeps saved data', () => {
@@ -700,6 +708,7 @@ describe('settings prefs', () => {
       lang: 'en',
       autoRefreshSeconds: 60,
       nearbyRadiusKm: 4,
+      timetableDetail: 1,
       favorites: [mtrFavorite('fav-1')],
     })
     useAppStore.getState().resetPrefs()
@@ -707,6 +716,7 @@ describe('settings prefs', () => {
     expect(state.lang).toBe('tc')
     expect(state.autoRefreshSeconds).toBe(15)
     expect(state.nearbyRadiusKm).toBe(2)
+    expect(state.timetableDetail).toBe(5)
     expect(state.favorites).toHaveLength(1)
   })
 
@@ -776,6 +786,7 @@ describe('migratePersistedState', () => {
       recents: [],
     })
     expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated.timetableDetail).toBe(5)
     expect(migrated.lang).toBe('en')
     expect(migrated).not.toHaveProperty('routeFilterMode')
   })
@@ -795,7 +806,15 @@ describe('migratePersistedState', () => {
   it('handles undefined state with full defaults', () => {
     const migrated = migratePersistedState(undefined)
     expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated.timetableDetail).toBe(5)
     expect(migrated.favorites).toEqual([])
     expect(migrated.recents).toEqual([])
+  })
+
+  it('clamps out-of-range timetable detail levels', () => {
+    expect(migratePersistedState({ timetableDetail: 99 }).timetableDetail).toBe(5)
+    expect(migratePersistedState({ timetableDetail: -1 }).timetableDetail).toBe(1)
+    expect(migratePersistedState({ timetableDetail: '3' }).timetableDetail).toBe(5)
+    expect(migratePersistedState({ timetableDetail: 3 }).timetableDetail).toBe(3)
   })
 })

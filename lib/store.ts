@@ -2,6 +2,7 @@
 
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { clampNearbyRadiusKm, NEARBY_RADIUS_DEFAULT_KM } from '@/lib/eta/nearby-radius'
+import { clampTimetableDetail, TIMETABLE_DETAIL_DEFAULT } from '@/lib/eta/timetable-detail'
 import { create } from 'zustand'
 import type { StateCreator } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
@@ -106,6 +107,7 @@ type PrefsSlice = {
   lang: UiLanguage
   autoRefreshSeconds: number
   nearbyRadiusKm: number
+  timetableDetail: number
 
   favorites: FavoritesItem[]
   favoritesGroups: FavoritesGroup[]
@@ -114,6 +116,7 @@ type PrefsSlice = {
   setLang: (lang: UiLanguage) => void
   setAutoRefreshSeconds: (seconds: number) => void
   setNearbyRadiusKm: (km: number) => void
+  setTimetableDetail: (detail: number) => void
   /** Restore display and update prefs to defaults. Saved data is untouched. */
   resetPrefs: () => void
   addFavorite: (item: FavoritesItem) => void
@@ -210,6 +213,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   lang: 'tc',
   autoRefreshSeconds: 15,
   nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
+  timetableDetail: TIMETABLE_DETAIL_DEFAULT,
 
   favorites: [],
   favoritesGroups: [],
@@ -218,11 +222,13 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   setLang: (lang) => set({ lang }),
   setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
   setNearbyRadiusKm: (km) => set({ nearbyRadiusKm: clampNearbyRadiusKm(km) }),
+  setTimetableDetail: (detail) => set({ timetableDetail: clampTimetableDetail(detail) }),
   resetPrefs: () =>
     set({
       lang: 'tc',
       autoRefreshSeconds: 15,
       nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
+      timetableDetail: TIMETABLE_DETAIL_DEFAULT,
     }),
 
   addFavorite: (item) =>
@@ -366,6 +372,7 @@ export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
 // back into the slider band. v7 drops the route filter mode: the
 // simple/advanced split is gone, one filter covers both. Stored mode values
 // are ignored, saved route text and direction selections keep working.
+// v8 adds the timetable detail level; older entries fall back to full detail.
 export function migratePersistedState(persistedState: unknown) {
   const state = persistedState as Partial<AppState> | undefined
   const favorites = capFavorites(
@@ -381,6 +388,10 @@ export function migratePersistedState(persistedState: unknown) {
       typeof state?.nearbyRadiusKm === 'number'
         ? clampNearbyRadiusKm(state.nearbyRadiusKm)
         : NEARBY_RADIUS_DEFAULT_KM,
+    timetableDetail:
+      typeof state?.timetableDetail === 'number'
+        ? clampTimetableDetail(state.timetableDetail)
+        : TIMETABLE_DETAIL_DEFAULT,
     favorites,
     favoritesGroups: state?.favoritesGroups ?? [],
     recents: state?.recents ?? [],
@@ -395,7 +406,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 7,
+      version: 8,
       // Direct persist write. The previous 300 ms debounced localStorage
       // wrapper plus beforeunload flush could lose the last write on
       // mobile, where beforeunload often never fires. Zustand now writes
@@ -407,6 +418,7 @@ export const useAppStore = create<AppState>()(
         lang: state.lang,
         autoRefreshSeconds: state.autoRefreshSeconds,
         nearbyRadiusKm: state.nearbyRadiusKm,
+        timetableDetail: state.timetableDetail,
         favorites: state.favorites,
         favoritesGroups: state.favoritesGroups,
         recents: state.recents,

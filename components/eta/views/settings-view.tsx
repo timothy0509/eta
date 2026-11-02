@@ -2,6 +2,7 @@
 
 import {
   Bookmark,
+  CalendarDays,
   Database,
   Download,
   Globe,
@@ -27,6 +28,7 @@ import {
   NEARBY_RADIUS_MIN_KM,
   NEARBY_RADIUS_STEP_KM,
 } from '@/lib/eta/nearby-radius'
+import { TIMETABLE_DETAIL_MAX, TIMETABLE_DETAIL_MIN } from '@/lib/eta/timetable-detail'
 import { isLanguageSupported } from '@/lib/eta/types'
 import type { UiLanguage } from '@/lib/eta/types'
 import { useAppStore } from '@/lib/store'
@@ -137,6 +139,8 @@ export function SettingsView({ lang }: Props) {
   const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds)
   const nearbyRadiusKm = useAppStore((s) => s.nearbyRadiusKm)
   const setNearbyRadiusKm = useAppStore((s) => s.setNearbyRadiusKm)
+  const timetableDetail = useAppStore((s) => s.timetableDetail)
+  const setTimetableDetail = useAppStore((s) => s.setTimetableDetail)
   const resetPrefs = useAppStore((s) => s.resetPrefs)
   const favorites = useAppStore((s) => s.favorites)
   const recents = useAppStore((s) => s.recents)
@@ -209,6 +213,7 @@ export function SettingsView({ lang }: Props) {
     { id: 'settings-language', icon: Globe, label: t('common.language') },
     { id: 'settings-refresh', icon: Timer, label: t('common.autoRefresh') },
     { id: 'settings-nearby', icon: MapPin, label: t('common.nearby') },
+    { id: 'settings-timetable', icon: CalendarDays, label: t('settings.timetableTitle') },
     { id: 'settings-saved', icon: Bookmark, label: t('settings.savedData') },
     { id: 'settings-storage', icon: Database, label: t('settings.storage') },
     { id: 'settings-about', icon: Info, label: t('settings.about') },
@@ -387,6 +392,36 @@ export function SettingsView({ lang }: Props) {
                 />
                 <span className="text-on-surface-variant m3-label-md w-14 shrink-0 text-right tabular-nums">
                   {`${Math.round(nearbyRadiusKm * 10) / 10} km`}
+                </span>
+              </div>
+            </Section>
+          )}
+          {activeId === 'settings-timetable' && (
+            <Section
+              icon={CalendarDays}
+              title={t('settings.timetableTitle')}
+              desc={t('settings.timetableDesc')}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-on-surface-variant m3-label-md shrink-0">
+                  {t('settings.timetableLeast')}
+                </span>
+                <input
+                  id="settings-timetable-detail"
+                  type="range"
+                  min={TIMETABLE_DETAIL_MIN}
+                  max={TIMETABLE_DETAIL_MAX}
+                  step={1}
+                  value={timetableDetail}
+                  onChange={(event) => setTimetableDetail(Number(event.target.value))}
+                  className="text-primary ui-press w-full min-w-32"
+                  aria-label={t('settings.timetableTitle')}
+                />
+                <span className="text-on-surface-variant m3-label-md shrink-0">
+                  {t('settings.timetableMost')}
+                </span>
+                <span className="text-on-surface-variant m3-label-md w-20 shrink-0 text-right tabular-nums">
+                  {tWithParams('settings.timetableLevel', { n: timetableDetail })}
                 </span>
               </div>
             </Section>

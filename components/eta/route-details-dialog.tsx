@@ -24,6 +24,8 @@ import { useHeadwayIndex } from '@/lib/eta/headway/use-headway-schedule'
 import { useTranslations } from '@/lib/eta/i18n'
 import { getOperatorColor } from '@/lib/eta/operator-colors'
 import { minsToDisplay } from '@/lib/eta/format'
+import { simplifyHeadwayWindows, TIMETABLE_DETAIL_DEFAULT } from '@/lib/eta/timetable-detail'
+import { useAppStore } from '@/lib/store'
 import type { UiLanguage } from '@/lib/eta/types'
 import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { cn } from '@/lib/utils'
@@ -92,6 +94,7 @@ export function TimetableTable({
   isToday = false,
   now,
   stopId = null,
+  detail,
 }: {
   schedule: VariantSchedule
   dayType: DayType
@@ -101,11 +104,15 @@ export function TimetableTable({
   now?: Date
   /** App stop id for per-stop resolution; omit for the variant-level table. */
   stopId?: string | null
+  /** Detail override for tests; defaults to the persisted setting. */
+  detail?: number
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const tick = useTickingNow(60_000)
+  const storedDetail = useAppStore((s) => s.timetableDetail)
   const resolved = scheduleForStop(schedule, stopId, dayType)
   const windows = resolved.windows ?? []
+  const merged = simplifyHeadwayWindows(windows, detail ?? storedDetail ?? TIMETABLE_DETAIL_DEFAULT)
   const departures = resolved.departures ?? []
   const specials = resolved.specials
   const departureGroups = resolved.departureGroups
@@ -116,7 +123,10 @@ export function TimetableTable({
   const nowDate = now ?? new Date(tick)
   const activeIdx =
     isToday && hasExactTable
-      ? activeHeadwayIndex(windows, nowDate.getHours() * 60 + nowDate.getMinutes())
+      ? activeHeadwayIndex(
+          merged.map((w) => [w.startMin, w.endMin, w.minHeadway]),
+          nowDate.getHours() * 60 + nowDate.getMinutes()
+        )
       : null
 
   if (windows.length === 0 && departures.length === 0 && !specials && !departureGroups && !span) {
@@ -142,15 +152,22 @@ export function TimetableTable({
           </span>
         </div>
       ) : null}
-      {windows.length > 0 ? (
+      {merged.length > 0 ? (
         <div className="space-y-1.5">
           <div className="text-on-surface-variant m3-label-md">{t('kmb.scheduleFrequency')}</div>
           <ul className="divide-outline-variant/15 divide-y">
-            {windows.map(([startMin, endMin, headwayMin], idx) => {
+            {merged.map((window, idx) => {
               const active = idx === activeIdx
+              const label =
+                window.minHeadway === window.maxHeadway
+                  ? tWithParams('kmb.scheduleEveryRow', { n: window.minHeadway })
+                  : tWithParams('kmb.scheduleEveryRangeRow', {
+                      min: window.minHeadway,
+                      max: window.maxHeadway,
+                    })
               return (
                 <li
-                  key={`${startMin}-${endMin}-${headwayMin}:${idx}`}
+                  key={`${window.startMin}-${window.endMin}-${window.minHeadway}-${window.maxHeadway}:${idx}`}
                   aria-current={active ? 'time' : undefined}
                   className={cn(
                     '-mx-2 flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 transition-colors',
@@ -158,18 +175,18 @@ export function TimetableTable({
                   )}
                 >
                   <span className="m3-body-md font-tabular shrink-0 font-medium tabular-nums">
-                    {minsToDisplay(startMin)}–{minsToDisplay(endMin)}
+                    {minsToDisplay(window.startMin)}–{minsToDisplay(window.endMin)}
                   </span>
                   {active ? (
                     <span className="m3-label-sm flex min-w-0 items-center justify-end gap-2 text-right font-medium">
-                      {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                      {label}
                       <span className="bg-on-primary-container text-primary-container m3-label-sm rounded-full px-1.5 py-px font-semibold">
                         {t('kmb.scheduleNow')}
                       </span>
                     </span>
                   ) : (
                     <span className="m3-body-md text-on-surface-variant min-w-0 text-right">
-                      {tWithParams('kmb.scheduleEveryRow', { n: headwayMin })}
+                      {label}
                     </span>
                   )}
                 </li>

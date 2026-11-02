@@ -196,6 +196,23 @@ describe('TimetableTable', () => {
     expect(getByText('Every ~12 min')).not.toBeNull()
     expect(getByText('Special departures')).not.toBeNull()
   })
+
+  it('merges similar windows into one range row at the lowest detail', () => {
+    const { getByText, queryByText } = render(
+      <TimetableTable schedule={SCHEDULE} dayType="weekday" lang="en" detail={1} />
+    )
+    expect(getByText('05:35–09:00')).not.toBeNull()
+    expect(getByText('Every 6-9 min')).not.toBeNull()
+    expect(queryByText('Every ~9 min')).toBeNull()
+  })
+
+  it('keeps every window at full detail', () => {
+    const { getByText } = render(
+      <TimetableTable schedule={SCHEDULE} dayType="weekday" lang="en" detail={5} />
+    )
+    expect(getByText('Every ~9 min')).not.toBeNull()
+    expect(getByText('Every ~6 min')).not.toBeNull()
+  })
 })
 
 describe('SpecialDeparturesLine', () => {

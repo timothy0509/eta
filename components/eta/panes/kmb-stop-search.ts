@@ -1,4 +1,4 @@
-import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { parseKmbStopNameCached, titleCaseKmbEnName } from '@/lib/eta/kmb-stop-name'
 import { pickLang, pickSecondaryName } from '@/lib/eta/pick-lang'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -8,7 +8,11 @@ function formatStopName(stop: KmbStopSearchItem, lang: UiLanguage) {
 }
 
 function formatStopSecondary(stop: KmbStopSearchItem, lang: UiLanguage) {
-  return pickSecondaryName({ en: stop.nameEn, tc: stop.nameTc }, lang)
+  const raw = pickSecondaryName({ en: stop.nameEn, tc: stop.nameTc }, lang)
+  if (lang !== 'en' && isKmbStop(stop)) {
+    return titleCaseKmbEnName(raw)
+  }
+  return raw
 }
 
 /**

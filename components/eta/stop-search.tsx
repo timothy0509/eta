@@ -6,7 +6,7 @@ import * as React from 'react'
 import { CommandItem } from '@/components/ui/command'
 import { StationSearchCombobox } from '@/components/eta/station-search-combobox'
 import type { StopSearchIndex } from '@/components/eta/panes/kmb-stop-search'
-import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
+import { parseKmbStopNameCached, titleCaseKmbEnName } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLang, pickSecondaryName } from '@/lib/eta/pick-lang'
 import { isKmbStop } from '@/lib/eta/types'
@@ -55,7 +55,11 @@ function formatStopName(stop: KmbStopSearchItem, lang: UiLanguage) {
 }
 
 function formatStopSecondary(stop: KmbStopSearchItem, lang: UiLanguage) {
-  return pickSecondaryName({ en: stop.nameEn, tc: stop.nameTc }, lang)
+  const raw = pickSecondaryName({ en: stop.nameEn, tc: stop.nameTc }, lang)
+  if (lang !== 'en' && isKmbStop(stop)) {
+    return titleCaseKmbEnName(raw)
+  }
+  return raw
 }
 
 /**

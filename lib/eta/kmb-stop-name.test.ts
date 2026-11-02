@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import {
   clearKmbStopNameCache,
   formatKmbRouteEndpointName,
+  formatKmbStopSecondary,
   parseKmbStopName,
   parseKmbStopNameCached,
   titleCaseKmbEnName,
@@ -216,5 +217,34 @@ describe('formatKmbRouteEndpointName', () => {
     expect(formatKmbRouteEndpointName('Kwun Tong Ferry', { co: 'kmb', lang: 'en' })).toBe(
       'Kwun Tong Ferry'
     )
+  })
+})
+
+describe('formatKmbStopSecondary', () => {
+  const kmbStop = {
+    stopId: 'S1',
+    nameEn: 'KAI YIP ESTATE (KT121)',
+    nameTc: '啟業邨',
+    nameSc: '启业邨',
+    lat: 22,
+    lng: 114,
+    isKmb: true,
+  }
+  const nonKmbStop = { ...kmbStop, stopId: 'S2', isKmb: false }
+
+  it('title-cases the English secondary under Chinese UI for KMB stops', () => {
+    for (const lang of ['tc', 'sc'] as const) {
+      expect(formatKmbStopSecondary(kmbStop, lang)).toBe('Kai Yip Estate (KT121)')
+    }
+  })
+
+  it('shows the Chinese secondary unchanged under English UI', () => {
+    expect(formatKmbStopSecondary(kmbStop, 'en')).toBe('啟業邨')
+  })
+
+  it('leaves non-KMB English secondaries untouched', () => {
+    for (const lang of ['tc', 'sc'] as const) {
+      expect(formatKmbStopSecondary(nonKmbStop, lang)).toBe('KAI YIP ESTATE (KT121)')
+    }
   })
 })

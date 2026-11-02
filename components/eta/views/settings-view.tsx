@@ -416,6 +416,7 @@ export function SettingsView({ lang }: Props) {
                   onChange={(event) => setTimetableDetail(Number(event.target.value))}
                   className="text-primary ui-press w-full min-w-32"
                   aria-label={t('settings.timetableTitle')}
+                  aria-valuetext={tWithParams('settings.timetableLevel', { n: timetableDetail })}
                 />
                 <span className="text-on-surface-variant m3-label-md shrink-0">
                   {t('settings.timetableMost')}

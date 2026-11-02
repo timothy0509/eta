@@ -114,7 +114,10 @@ function windowMatches(mins: number, startMin: number, endMin: number): boolean 
 }
 
 /** Index of the window matching mins (half-open [start, end), overnight wrap), or null. */
-export function activeHeadwayIndex(windows: HeadwayWindow[], mins: number): number | null {
+export function activeHeadwayIndex(
+  windows: Array<readonly [startMin: number, endMin: number, headwayMin?: number]>,
+  mins: number
+): number | null {
   for (let i = 0; i < windows.length; i += 1) {
     const window = windows[i]
     if (!window) continue

@@ -124,7 +124,7 @@ export function TimetableTable({
   const activeIdx =
     isToday && hasExactTable
       ? activeHeadwayIndex(
-          merged.map((w) => [w.startMin, w.endMin, w.minHeadway]),
+          merged.map((w) => [w.startMin, w.endMin] as const),
           nowDate.getHours() * 60 + nowDate.getMinutes()
         )
       : null

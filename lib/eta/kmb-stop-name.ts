@@ -1,4 +1,6 @@
-import type { UiLanguage } from '@/lib/eta/types'
+import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
+import { isKmbStop } from '@/lib/eta/types'
+import { pickSecondaryName } from '@/lib/eta/pick-lang'
 
 export type ParsedKmbStopName = {
   name: string
@@ -123,6 +125,20 @@ export function formatKmbRouteEndpointName(
   )
     return name
   return titleCaseKmbEnName(name)
+}
+
+/**
+ * Secondary display name: the companion-language name shown under the
+ * primary name in search rows. English UI shows Traditional Chinese,
+ * Chinese UI shows English. The English secondary gets the same KMB
+ * title-casing as the primary English name; non-KMB stops pass through.
+ */
+export function formatKmbStopSecondary(stop: KmbStopSearchItem, lang: UiLanguage): string {
+  const raw = pickSecondaryName({ en: stop.nameEn, tc: stop.nameTc }, lang)
+  if (lang !== 'en' && isKmbStop(stop)) {
+    return titleCaseKmbEnName(raw)
+  }
+  return raw
 }
 
 export function parseKmbStopName(fullName: string, opts?: KmbParseOpts): ParsedKmbStopName {

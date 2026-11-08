@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest'
 
 import {
   fareForIndices,
-  hasSectionalFares,
   mapRouteStopsToFareIndices,
   resolveFareVariant,
+  resolveFareVariantForStop,
 } from '@/lib/eta/fares/lookup'
 import type { FareIndex, VariantFares } from '@/lib/eta/fares/types'
 
@@ -37,16 +37,6 @@ describe('fareForIndices', () => {
     expect(fareForIndices(fare, 3, 0)).toBeNull()
     expect(fareForIndices(fare, 2, 3)).toBeNull()
     expect(fareForIndices(fare, 0, 99)).toBeNull()
-  })
-})
-
-describe('hasSectionalFares', () => {
-  it('is true when a boarding stop has more than one fare stage', () => {
-    expect(hasSectionalFares(fare)).toBe(true)
-  })
-
-  it('is false for a flat fare table', () => {
-    expect(hasSectionalFares({ stops: ['A', 'B'], fares: [[[1, 6.7]], null] })).toBe(false)
   })
 })
 
@@ -84,5 +74,42 @@ describe('resolveFareVariant', () => {
     const index = indexWith(fare)
     expect(resolveFareVariant(index, 'gmb|36A|O|1|999')).toBeNull()
     expect(resolveFareVariant(index, 'gmb|36A|I|1|2010863')).toBeNull()
+  })
+})
+
+describe('resolveFareVariantForStop', () => {
+  const other: VariantFares = {
+    stops: ['X', 'Y'],
+    fares: [[[1, 5.2]], null],
+  }
+  const serviceThree: VariantFares = {
+    stops: ['A', 'B', 'C', 'D'],
+    fares: [[[3, 8.4]], [[3, 8.4]], null, null],
+  }
+  const index: FareIndex = {
+    updated: '2026-11-02',
+    variants: {
+      'kmb|1|O|1|1001': fare,
+      'kmb|1|O|2|2002': other,
+      'kmb|1|O|3|3003': serviceThree,
+    },
+  }
+
+  it('uses the exact key when it resolves', () => {
+    expect(resolveFareVariantForStop(index, 'kmb|1|O|1|1001', 'Z')).toBe(fare)
+  })
+
+  it('picks the region containing the stop when the key has no gtfsId', () => {
+    expect(resolveFareVariantForStop(index, 'kmb|1|O|1', 'Y')).toBe(other)
+    expect(resolveFareVariantForStop(index, 'kmb|1|O|1', 'C')).toBe(fare)
+  })
+
+  it('prefers the matching service type', () => {
+    expect(resolveFareVariantForStop(index, 'kmb|1|O|3', 'C')).toBe(serviceThree)
+  })
+
+  it('returns null when no region serves the stop', () => {
+    expect(resolveFareVariantForStop(index, 'kmb|1|O|1', 'missing')).toBeNull()
+    expect(resolveFareVariantForStop(index, 'kmb|2|O|1', 'C')).toBeNull()
   })
 })

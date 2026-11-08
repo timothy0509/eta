@@ -47,9 +47,8 @@ import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { findRouteEntryByFamily, routeVariantKey } from '@/lib/eta/eta-db-index'
 import {
   fareForIndices,
-  hasSectionalFares,
   mapRouteStopsToFareIndices,
-  resolveFareVariant,
+  resolveFareVariantForStop,
 } from '@/lib/eta/fares/lookup'
 import { useFareIndex } from '@/lib/eta/fares/use-fare-index'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
@@ -148,8 +147,6 @@ function KmbRouteStopCard({
   stopCode,
   seq,
   lang,
-  fareLabel,
-  fareDestinationName,
   expanded,
   onToggle,
   selectLabel,
@@ -162,10 +159,6 @@ function KmbRouteStopCard({
   stopCode: string | null
   seq: number
   lang: UiLanguage
-  /** Fare from this stop to the selected alighting stop, when known. */
-  fareLabel?: string | null
-  /** Alighting stop name for the fare's accessible label. */
-  fareDestinationName?: string | null
   expanded: boolean
   onToggle: () => void
   selectLabel?: string
@@ -299,19 +292,6 @@ function KmbRouteStopCard({
       seq={seq}
       name={name}
       subtitle={stopCode}
-      fare={
-        fareLabel ? (
-          <span
-            aria-label={
-              fareDestinationName
-                ? cardTWithParams('kmb.fareToStop', { stop: fareDestinationName })
-                : undefined
-            }
-          >
-            {fareLabel}
-          </span>
-        ) : null
-      }
       eta={<TickingSoonestPill etas={stopEtas} lang={lang} />}
       panel={panel}
       toggleLabel={name}
@@ -465,54 +445,66 @@ function KmbRouteStopList({
   // compiled table.
   const fareIndex = useFareIndex()
   const fareTable = React.useMemo(
-    () => resolveFareVariant(fareIndex, variantKey),
-    [fareIndex, variantKey]
+    () => resolveFareVariantForStop(fareIndex, variantKey, variantStops[0]?.stopId),
+    [fareIndex, variantKey, variantStops]
   )
   const fareStopIndices = React.useMemo(
     () => (fareTable ? mapRouteStopsToFareIndices(fareTable, variantStops) : null),
     [fareTable, variantStops]
   )
-  const sectionalFares = React.useMemo(
-    () => (fareTable ? hasSectionalFares(fareTable) : false),
-    [fareTable]
-  )
-  const [fareDestination, setFareDestination] = React.useState<{
+  const [fareView, setFareView] = React.useState<{
     listKey: string
-    index: number
+    mode: 'sections' | 'byStop'
   } | null>(null)
-  const selectedFareDestination =
-    fareDestination && fareDestination.listKey === listKey ? fareDestination.index : null
+  const fareViewMode = fareView?.listKey === listKey ? fareView.mode : 'sections'
+  const [fareFrom, setFareFrom] = React.useState<{ listKey: string; index: number } | null>(null)
+  const fareFromIndex =
+    fareFrom?.listKey === listKey
+      ? Math.min(fareFrom.index, Math.max(0, variantStops.length - 2))
+      : 0
   const terminusIndex = Math.max(0, variantStops.length - 1)
-  const destinationIndex =
-    selectedFareDestination !== null &&
-    selectedFareDestination > 0 &&
-    selectedFareDestination < variantStops.length
-      ? selectedFareDestination
-      : terminusIndex
-  const showFarePicker = Boolean(fareTable && sectionalFares && variantStops.length > 2)
+  const hasFareData = Boolean(
+    fareTable?.fares.some((ranges) => ranges !== null && ranges.length > 0)
+  )
+  const showFareToggle = Boolean(
+    fareTable && fareStopIndices && hasFareData && variantStops.length > 1
+  )
 
-  const fareToIndex = React.useCallback(
+  // Original section rail: boarding stop fare to the terminus. The GTFS
+  // matrix is authoritative here; hk-bus-eta stays as the fallback.
+  const fareToTerminus = React.useCallback(
     (index: number) => {
       if (fareTable && fareStopIndices) {
         const from = fareStopIndices[index] ?? -1
-        const to = fareStopIndices[destinationIndex] ?? -1
-        if (from >= 0 && to >= 0) {
+        const to = fareStopIndices[terminusIndex] ?? -1
+        if (from >= 0 && to > from) {
           const fare = fareForIndices(fareTable, from, to)
           if (fare !== null) return fare
         }
-        // Missing pairs borrow the boarding-stop fare only when the rider is
-        // going all the way to the terminus. A mid-route destination must not
-        // show that fare.
-        if (destinationIndex !== terminusIndex) return null
       }
       return faresBySeq[variantStops[index]?.seq] ?? null
     },
-    [fareTable, fareStopIndices, destinationIndex, terminusIndex, faresBySeq, variantStops]
+    [fareTable, fareStopIndices, terminusIndex, faresBySeq, variantStops]
+  )
+
+  // The toggle changes only the left rail: sections in the original mode,
+  // fares from the chosen boarding stop in by-stop mode. The stop cards stay.
+  const fareForRail = React.useCallback(
+    (index: number) => {
+      if (fareViewMode !== 'byStop' || !fareTable || !fareStopIndices) {
+        return fareToTerminus(index)
+      }
+      const from = fareStopIndices[fareFromIndex] ?? -1
+      const to = fareStopIndices[index] ?? -1
+      if (from < 0 || to <= from) return null
+      return fareForIndices(fareTable, from, to)
+    },
+    [fareViewMode, fareTable, fareStopIndices, fareFromIndex, fareToTerminus]
   )
 
   const sections = React.useMemo(
-    () => groupIntoFareSections(variantStops, (_rs, index) => fareToIndex(index)),
-    [variantStops, fareToIndex]
+    () => groupIntoFareSections(variantStops, (_rs, index) => fareForRail(index)),
+    [variantStops, fareForRail]
   )
 
   // Known fare sections consume palette indices in order; unknown
@@ -671,7 +663,7 @@ function KmbRouteStopList({
     }
   }
 
-  const renderStopCard = (rs: KmbRouteStopLite, index: number) => {
+  const renderStopCard = (rs: KmbRouteStopLite) => {
     const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
     const stopEtas = etas[rs.stopId] ?? []
     const formatted = formatStop(rs)
@@ -679,7 +671,6 @@ function KmbRouteStopList({
     // per card. A 100-stop route was doing ~10k name comparisons before.
     const group = stopGroups.get(rs.stopId)
     const cardKey = `${rs.stopId}:${rs.seq}`
-    const destinationStop = variantStops[destinationIndex]
     return (
       <KmbRouteStopCard
         stopEtas={stopEtas}
@@ -688,10 +679,6 @@ function KmbRouteStopList({
         stopCode={formatted.stopCode}
         seq={seq}
         lang={lang}
-        fareLabel={showFarePicker ? formatFareHkd(fareToIndex(index)) : null}
-        fareDestinationName={
-          showFarePicker && destinationStop ? formatStop(destinationStop).name : null
-        }
         expanded={expandedKey === cardKey}
         onToggle={() => onToggleStop(cardKey)}
         selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
@@ -711,24 +698,62 @@ function KmbRouteStopList({
 
   return (
     <div key={listKey} className="space-y-3">
-      {showFarePicker ? (
-        <label className="bg-surface-container flex min-h-[44px] items-center gap-2 rounded-full px-3 py-1.5">
-          <span className="text-on-surface-variant m3-label-md shrink-0">{t('kmb.fareTo')}</span>
-          <select
-            aria-label={t('kmb.fareDestination')}
-            value={destinationIndex}
-            onChange={(event) => setFareDestination({ listKey, index: Number(event.target.value) })}
-            className="text-on-surface m3-body-md min-w-0 flex-1 truncate bg-transparent focus-visible:outline-none"
+      {showFareToggle ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="bg-surface-container flex w-fit items-center gap-1 rounded-full p-1"
+            role="group"
+            aria-label={t('kmb.fareDisplay')}
           >
-            {variantStops.map((rs, index) =>
-              index === 0 ? null : (
-                <option key={`${rs.stopId}:${rs.seq}`} value={index}>
-                  {index + 1}. {formatStop(rs).name}
-                </option>
-              )
-            )}
-          </select>
-        </label>
+            <button
+              type="button"
+              aria-pressed={fareViewMode === 'sections'}
+              onClick={() => setFareView({ listKey, mode: 'sections' })}
+              className={cn(
+                'ui-press m3-label-lg inline-flex min-h-[36px] items-center rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                fareViewMode === 'sections'
+                  ? 'bg-primary-container text-on-primary-container'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              )}
+            >
+              {t('kmb.fareSections')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={fareViewMode === 'byStop'}
+              onClick={() => setFareView({ listKey, mode: 'byStop' })}
+              className={cn(
+                'ui-press m3-label-lg inline-flex min-h-[36px] items-center rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                fareViewMode === 'byStop'
+                  ? 'bg-primary-container text-on-primary-container'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              )}
+            >
+              {t('kmb.fareByStop')}
+            </button>
+          </div>
+          {fareViewMode === 'byStop' ? (
+            <label className="bg-surface-container flex min-h-[44px] min-w-[12rem] flex-1 items-center gap-2 rounded-full px-3 py-1.5">
+              <span className="text-on-surface-variant m3-label-md shrink-0">
+                {t('kmb.fareFrom')}
+              </span>
+              <select
+                aria-label={t('kmb.fareFromStop')}
+                value={fareFromIndex}
+                onChange={(event) => setFareFrom({ listKey, index: Number(event.target.value) })}
+                className="text-on-surface m3-body-md min-w-0 flex-1 truncate bg-transparent focus-visible:outline-none"
+              >
+                {variantStops.map((rs, index) =>
+                  index === variantStops.length - 1 ? null : (
+                    <option key={`${rs.stopId}:${rs.seq}`} value={index}>
+                      {index + 1}. {formatStop(rs).name}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+          ) : null}
+        </div>
       ) : null}
       {timeline ? (
         <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2">
@@ -758,7 +783,7 @@ function KmbRouteStopList({
               className={cn('ui-cv-row min-w-0 scroll-mt-4 py-1', staggerClassForIndex(index))}
               style={{ gridColumn: 3, gridRow: index + 1 }}
             >
-              {renderStopCard(rs, index)}
+              {renderStopCard(rs)}
             </div>
           ))}
         </div>
@@ -783,7 +808,7 @@ function KmbRouteStopList({
                       staggerClassForIndex((sectionStartRows[sectionIdx] ?? 0) + itemIdx)
                     )}
                   >
-                    {renderStopCard(rs, (sectionStartRows[sectionIdx] ?? 0) + itemIdx)}
+                    {renderStopCard(rs)}
                   </div>
                 ))}
               </div>

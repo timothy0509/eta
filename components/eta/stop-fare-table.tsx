@@ -2,7 +2,7 @@
 
 import * as React from 'react'
 
-import { mapRouteStopsToFareIndices, resolveFareVariant } from '@/lib/eta/fares/lookup'
+import { mapRouteStopsToFareIndices, resolveFareVariantForStop } from '@/lib/eta/fares/lookup'
 import { formatFareHkd } from '@/lib/eta/format'
 import { useFareIndex } from '@/lib/eta/fares/use-fare-index'
 import { parseVariantKey } from '@/lib/eta/eta-db-index'
@@ -33,9 +33,8 @@ function matchesVariant(stop: KmbRouteStopLite, variant: ReturnType<typeof parse
 
 /**
  * Fares from one boarding stop to each alighting stage, using the TD GTFS
- * origin/destination matrix. Renders nothing for flat-fare routes or when the
- * variant has no compiled table, so the existing single fare card stays the
- * only fare UI there.
+ * origin/destination matrix. Renders nothing only when the variant has no
+ * compiled table or the boarding stop has no fare rows.
  */
 export function StopFareTable({
   variantKey,
@@ -50,8 +49,8 @@ export function StopFareTable({
   const { t, tWithParams } = useTranslations(lang)
   const variant = React.useMemo(() => parseVariantKey(variantKey), [variantKey])
   const fare = React.useMemo(
-    () => resolveFareVariant(fareIndex, variantKey),
-    [fareIndex, variantKey]
+    () => resolveFareVariantForStop(fareIndex, variantKey, stopId),
+    [fareIndex, variantKey, stopId]
   )
   const inputKey = `${variantKey}|${stopId ?? ''}|${lang}`
   const [result, setResult] = React.useState<{ key: string; rows: FareRow[] } | null>(null)
@@ -66,9 +65,13 @@ export function StopFareTable({
         const variantStops = routeStops.filter((stop) => matchesVariant(stop, variant))
         const mapping = mapRouteStopsToFareIndices(fare, variantStops)
         const appIndex = variantStops.findIndex((stop) => stop.stopId === stopId)
-        const from = appIndex >= 0 ? (mapping[appIndex] ?? -1) : -1
+        // Fall back to the fare table's own stop list when the route-stop
+        // projection misses the variant or maps the stop to -1, so a valid
+        // ETA row still gets fares.
+        const mapped = appIndex >= 0 ? (mapping[appIndex] ?? -1) : -1
+        const from = mapped >= 0 ? mapped : fare.stops.indexOf(stopId)
         const ranges = from >= 0 ? (fare.fares[from] ?? []) : []
-        if (!ranges || ranges.length < 2) {
+        if (!ranges || ranges.length === 0) {
           setResult({ key: inputKey, rows: [] })
           return
         }
@@ -90,7 +93,7 @@ export function StopFareTable({
             hkd: price,
           })
         }
-        setResult({ key: inputKey, rows: next.length > 1 ? next : [] })
+        setResult({ key: inputKey, rows: next })
       })
       .catch(() => {
         if (!cancelled) setResult({ key: inputKey, rows: [] })
@@ -100,7 +103,7 @@ export function StopFareTable({
     }
   }, [fare, variant, stopId, inputKey, lang])
 
-  if (rows.length < 2) return null
+  if (rows.length === 0) return null
 
   return (
     <section aria-label={t('kmb.faresFromStop')} className="min-w-0">

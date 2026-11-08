@@ -557,6 +557,39 @@ function buildFareGroups(text, prices, routeInfo) {
  * stop maps to the nearest stop in the variant's own stop list. Destinations
  * are compressed into `[lastDestIndex, price]` runs parallel to `stops`.
  */
+const POSITIONAL_MATCH_RADIUS_M = 150
+
+/**
+ * Guard for positional mapping: sample fare rows and check that the app stop
+ * at both sequence positions really is near the TD origin/destination stop.
+ * Equal stop counts alone can also describe a reversed candidate whose score
+ * happened to land within the alignment threshold.
+ */
+function positionalFaresAlign({ stops, originRows, stopCoords, appStopMap }) {
+  let checked = 0
+  for (const [originStopId, rows] of originRows) {
+    for (const row of rows) {
+      const from = row.originSeq - 1
+      const to = row.destSeq - 1
+      if (from < 0 || to <= from || to >= stops.length) return false
+      const tdFrom = stopCoords.get(originStopId)
+      const tdTo = stopCoords.get(row.destStop)
+      const appFrom = appStopMap.get(stops[from])
+      const appTo = appStopMap.get(stops[to])
+      if (!tdFrom || !tdTo || !appFrom || !appTo) return false
+      if (
+        approxMeters(tdFrom[0], tdFrom[1], appFrom.lat, appFrom.lng) > POSITIONAL_MATCH_RADIUS_M ||
+        approxMeters(tdTo[0], tdTo[1], appTo.lat, appTo.lng) > POSITIONAL_MATCH_RADIUS_M
+      ) {
+        return false
+      }
+      checked += 1
+      if (checked >= 12) return true
+    }
+  }
+  return checked > 0
+}
+
 function buildVariantFareTable({
   stops,
   originRows,
@@ -566,6 +599,9 @@ function buildVariantFareTable({
   usePositional,
 }) {
   const positional = Boolean(usePositional && tdStops && tdStops.length === stops.length)
+  if (positional && !positionalFaresAlign({ stops, originRows, stopCoords, appStopMap })) {
+    return null
+  }
   const appIndexByTdStop = new Map()
   const appIndexFor = (tdStopId) => {
     const cached = appIndexByTdStop.get(tdStopId)
@@ -594,18 +630,23 @@ function buildVariantFareTable({
   const byDestination = new Map()
   let pairCount = 0
   for (const [originStopId, rows] of originRows) {
-    const from = positional ? rows[0].originSeq - 1 : appIndexFor(originStopId)
-    if (from < 0 || from >= stops.length) continue
-    const destinations = new Map()
     for (const row of rows) {
+      // Sequential routes can serve the same TD stop twice, so the boarding
+      // index belongs to the row's own originSeq, not the whole stop group.
+      const from = positional ? row.originSeq - 1 : appIndexFor(originStopId)
+      if (from < 0 || from >= stops.length) continue
       const to = positional ? row.destSeq - 1 : appIndexFor(row.destStop)
       if (to <= from || to >= stops.length) continue
+      let destinations = byDestination.get(from)
+      if (!destinations) {
+        destinations = new Map()
+        byDestination.set(from, destinations)
+      }
       // Two TD stops can land on the same app stop; keep the cheaper fare.
       const previous = destinations.get(to)
       if (previous === undefined || row.price < previous) destinations.set(to, row.price)
       pairCount += 1
     }
-    if (destinations.size > 0) byDestination.set(from, destinations)
   }
   if (pairCount === 0) return null
 
@@ -730,8 +771,8 @@ function buildFares({
     // Keep every candidate whose stop order aligns with this TD direction.
     // Joint routes flip the I/O convention per company (KMB outbound is CTB
     // inbound), so bound alone would drop one company's correct direction.
-    // The monotonic stop-index check in buildVariantFareTable filters a
-    // reversed pattern even when the score check lets it through.
+    // Positional candidates are also checked against real TD stop coordinates,
+    // so a reversed pattern that slipped inside the score threshold fails.
     const aligned =
       bestScore === Infinity
         ? candidates
@@ -1548,7 +1589,8 @@ async function main() {
     datasetDate &&
     manifest?.datasetDate === datasetDate &&
     existsSync(HEADWAY_PATH) &&
-    existsSync(FARES_PATH)
+    existsSync(FARES_PATH) &&
+    Number(manifest?.fares ?? 0) > 0
   ) {
     log(`snapshot already at revision ${datasetDate}, skipping`)
     return
@@ -1587,26 +1629,35 @@ async function main() {
     variants: snapshot.variants,
     holidays: snapshot.holidays,
   })
-  const faresJson = JSON.stringify({
-    updated,
-    variants: snapshot.fares ?? {},
-  })
+  const builtFareCount = Object.keys(snapshot.fares ?? {}).length
+  // A failed hk-bus-eta or fare-file fetch must not replace a good snapshot
+  // with an empty one for this dataset revision.
+  const keepExistingFares = builtFareCount === 0 && existsSync(FARES_PATH)
+  const fareCount = keepExistingFares ? Number(manifest?.fares ?? 0) : builtFareCount
+  const faresJson = keepExistingFares
+    ? null
+    : JSON.stringify({ updated, variants: snapshot.fares ?? {} })
   const manifestJson =
     JSON.stringify({
       datasetDate: updated,
       fetchedAt: new Date().toISOString(),
       routes: Object.keys(snapshot.variants).length,
       windows: snapshot.totalWindows,
-      fares: Object.keys(snapshot.fares ?? {}).length,
+      fares: fareCount,
       source,
     }) + '\n'
   await writeAtomic(HEADWAY_PATH, headwayJson)
-  await writeAtomic(FARES_PATH, faresJson)
+  if (faresJson) {
+    await writeAtomic(FARES_PATH, faresJson)
+  } else {
+    log('fare build produced no variants, keeping existing fares.json')
+  }
   await writeAtomic(MANIFEST_PATH, manifestJson)
   log(
-    `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes), ${FARES_PATH} ` +
-      `(${faresJson.length} bytes) and ${MANIFEST_PATH} ` +
-      `(${manifestJson.length} bytes) source=${source} updated=${updated}`
+    `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes), ` +
+      `${faresJson ? `${FARES_PATH} (${faresJson.length} bytes)` : 'existing fares.json'} ` +
+      `and ${MANIFEST_PATH} (${manifestJson.length} bytes) ` +
+      `source=${source} updated=${updated}`
   )
 }
 

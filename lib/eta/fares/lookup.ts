@@ -33,6 +33,41 @@ export function resolveFareVariant(
 }
 
 /**
+ * Resolve a fare table for a key that may lack a gtfsId, such as KMB official
+ * stop-eta rows. The stop id picks the right region when same-number routes
+ * share co/route/bound, and same service type wins when several match.
+ */
+export function resolveFareVariantForStop(
+  index: FareIndex | null,
+  variantKey: string | null | undefined,
+  stopId: string | null | undefined
+): VariantFares | null {
+  const direct = resolveFareVariant(index, variantKey)
+  if (direct) return direct
+  if (!index || !variantKey || !stopId) return null
+
+  const parts = variantKey.split('|')
+  if (parts.length < 4) return null
+  const [co, route, bound, serviceType] = parts
+  let fallback: VariantFares | null = null
+  for (const [key, value] of Object.entries(index.variants)) {
+    const candidate = key.split('|')
+    if (
+      candidate.length !== 5 ||
+      candidate[0] !== co ||
+      candidate[1] !== route ||
+      candidate[2] !== bound
+    ) {
+      continue
+    }
+    if (!value.stops.includes(stopId)) continue
+    if (candidate[3] === serviceType) return value
+    if (!fallback) fallback = value
+  }
+  return fallback
+}
+
+/**
  * Map each stop in the rendered route order to an index in the fare table.
  * Identical stop order short-circuits to an identity map. Otherwise stops are
  * matched by id in occurrence order, so circular routes keep their legs.
@@ -94,13 +129,4 @@ export function fareForIndices(
   if (low >= ranges.length) return null
   const price = ranges[low]?.[1]
   return typeof price === 'number' && Number.isFinite(price) && price >= 0 ? price : null
-}
-
-/**
- * True when at least one boarding stop has more than one fare stage, i.e.
- * the price depends on where the rider alights. Flat-fare routes need no
- * destination picker.
- */
-export function hasSectionalFares(fare: VariantFares): boolean {
-  return fare.fares.some((ranges) => ranges !== null && ranges.length > 1)
 }

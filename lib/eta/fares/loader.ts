@@ -70,7 +70,8 @@ export function loadFareIndex(): Promise<FareIndex | null> {
     }
   })()
   return inflight.then((index) => {
-    resolvedCache = index
+    // Do not cache a failed load: a later mount gets another attempt.
+    if (index) resolvedCache = index
     inflight = undefined
     return index
   })

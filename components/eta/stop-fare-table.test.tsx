@@ -68,7 +68,7 @@ describe('StopFareTable', () => {
     expect(screen.getByText('HK$ 9.0')).not.toBeNull()
   })
 
-  it('renders nothing for a flat fare table', async () => {
+  it('still shows a flat fare as one row', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -82,9 +82,25 @@ describe('StopFareTable', () => {
       }),
     } as Response)
 
-    const { container } = render(<StopFareTable variantKey={VARIANT_KEY} stopId="A" lang="en" />)
-    // Allow the async load to settle before asserting the empty render.
-    await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(container.textContent).toBe('')
+    render(<StopFareTable variantKey={VARIANT_KEY} stopId="A" lang="en" />)
+
+    expect(await screen.findByText('Up to Stop D')).not.toBeNull()
+    expect(screen.getByText('HK$ 6.7')).not.toBeNull()
+  })
+
+  it('resolves KMB-style keys without a gtfsId by the boarding stop', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        updated: '2026-11-02',
+        variants: {
+          [VARIANT_KEY]: fareJson.variants[VARIANT_KEY],
+        },
+      }),
+    } as Response)
+
+    render(<StopFareTable variantKey="gmb|36A|O|2" stopId="A" lang="en" />)
+
+    expect(await screen.findByText('Up to Stop B')).not.toBeNull()
   })
 })

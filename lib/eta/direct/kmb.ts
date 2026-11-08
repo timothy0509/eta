@@ -40,6 +40,14 @@ export type KmbEtaEntry = {
   /** Region discriminator for same-number routes (GMB HKI/Kowloon/NT). Empty for KMB official rows and legacy data. */
   gtfsId?: string
   region?: string
+  /** Jointly operated route metadata. Empty on single-operator rows. */
+  operators?: string[]
+  jointVariantKey?: string
+  jointGroupKey?: string
+  /** Operator used for grouping and primary-operator display. */
+  groupCo?: string
+  /** Stop id that produced this ETA when it came from a paired stop. */
+  sourceStopId?: string
   dest_en: string
   dest_tc: string
   dest_sc: string
@@ -66,6 +74,12 @@ function mapKmbEtaEntry(eta: KmbEta, stopId: string): KmbEtaEntry {
     seq: eta.seq,
     stop: stopId,
     gtfsId: eta.gtfsId ? String(eta.gtfsId) : undefined,
+    region: eta.region,
+    operators: eta.operators,
+    jointVariantKey: eta.jointVariantKey,
+    jointGroupKey: eta.jointGroupKey,
+    groupCo: eta.groupCo,
+    sourceStopId: eta.sourceStopId,
     dest_en: eta.dest_en ?? eta.dest?.en ?? '',
     dest_tc: eta.dest_tc ?? eta.dest?.zh ?? '',
     dest_sc: eta.dest_sc ?? eta.dest_tc ?? eta.dest?.zh ?? '',
@@ -122,6 +136,10 @@ export type KmbRouteStopEntry = {
   stop: string
   gtfsId: string
   region: string
+  operators?: string[]
+  jointVariantKey?: string
+  jointGroupKey?: string
+  siblingStopIds?: string[]
 }
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
@@ -140,6 +158,10 @@ export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
         stop: entry.stopId,
         gtfsId: entry.gtfsId,
         region: entry.region,
+        operators: entry.operators,
+        jointVariantKey: entry.jointVariantKey,
+        jointGroupKey: entry.jointGroupKey,
+        siblingStopIds: entry.siblingStopIds,
       }))
     },
   })
@@ -154,6 +176,8 @@ export type KmbRouteInfo = {
   service_type: number | string
   gtfsId: string
   region: string
+  operators?: string[]
+  jointVariantKey?: string
   orig_en: string
   orig_tc: string
   orig_sc: string
@@ -169,6 +193,8 @@ export type KmbRouteListEntry = {
   service_type: number | string
   gtfsId: string
   region: string
+  operators?: string[]
+  jointVariantKey?: string
   orig_en: string
   orig_tc: string
   orig_sc: string
@@ -192,6 +218,8 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
         service_type: entry.serviceType,
         gtfsId: entry.gtfsId,
         region: entry.region,
+        operators: entry.operators,
+        jointVariantKey: entry.jointVariantKey,
         orig_en: entry.origin.en,
         orig_tc: entry.origin.tc,
         orig_sc: entry.origin.sc,
@@ -241,6 +269,8 @@ export async function getKmbRouteInfo(params: {
     service_type: info.serviceType,
     gtfsId: info.gtfsId,
     region: info.region,
+    operators: info.operators,
+    jointVariantKey: info.jointVariantKey,
     orig_en: info.origin.en,
     orig_tc: info.origin.tc,
     orig_sc: info.origin.sc,
@@ -302,6 +332,10 @@ export async function fetchKmbStopEtas(
         stopId: entry.stopId,
         gtfsId: entry.gtfsId,
         region: entry.region,
+        operators: entry.operators,
+        jointVariantKey: entry.jointVariantKey,
+        jointGroupKey: entry.jointGroupKey,
+        siblingStopIds: entry.siblingStopIds,
       }))
       .filter((entry) => entry.route && entry.stopId)
     return lite
@@ -527,6 +561,10 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
           stopId: entry.stopId,
           gtfsId: entry.gtfsId,
           region: entry.region,
+          operators: entry.operators,
+          jointVariantKey: entry.jointVariantKey,
+          jointGroupKey: entry.jointGroupKey,
+          siblingStopIds: entry.siblingStopIds,
         }))
         .filter((entry) => entry.route && entry.stopId)
       return lite

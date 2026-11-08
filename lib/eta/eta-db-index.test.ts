@@ -93,6 +93,39 @@ describe('buildEtaDbIndexes isKmb derivation', () => {
   })
 })
 
+describe('buildEtaDbIndexes joint stop pairing', () => {
+  it('pairs each operator stop and shares one joint group key', async () => {
+    const db = dbWith(
+      [
+        routeEntry('102', ['kmb', 'ctb'], {
+          kmb: ['K1', 'K2'],
+          ctb: ['C1', 'C2'],
+        }),
+      ],
+      ['K1', 'K2', 'C1', 'C2']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    const kmb = indexes.kmbRouteStops.filter((row) => row.co === 'kmb')
+    const ctb = indexes.kmbRouteStops.filter((row) => row.co === 'ctb')
+    expect(kmb).toHaveLength(2)
+    expect(ctb).toHaveLength(2)
+    expect(kmb[0]?.operators).toEqual(['kmb', 'ctb'])
+    expect(kmb[0]?.siblingStopIds).toEqual(['C1'])
+    expect(ctb[0]?.siblingStopIds).toEqual(['K1'])
+    expect(kmb[0]?.jointGroupKey).toBe(ctb[0]?.jointGroupKey)
+    expect(kmb[0]?.jointVariantKey).toBe(ctb[1]?.jointVariantKey)
+    expect(kmb[0]?.region).toBe('joint|102|1')
+    expect(ctb[0]?.region).toBe('joint|102|1')
+  })
+
+  it('keeps single-operator variants out of the joint merge', async () => {
+    const db = dbWith([routeEntry('307', ['ctb'], { ctb: ['C1'] })], ['C1'])
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    expect(indexes.kmbRouteStops[0]?.jointVariantKey).toBe('')
+    expect(indexes.kmbRouteStops[0]?.siblingStopIds).toEqual([])
+  })
+})
+
 describe('groupRegionStops', () => {
   it('splits disjoint gtfsIds into separate regions', () => {
     const groups = groupRegionStops(

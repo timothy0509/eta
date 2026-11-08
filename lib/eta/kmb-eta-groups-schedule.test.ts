@@ -164,6 +164,37 @@ describe('groupEtasByVariant regions', () => {
     expect(groups[0]?.baseKey).toBe('gmb|1|O|1')
   })
 
+  it('merges joint KMB and CTB departures under the primary operator row', () => {
+    const groups = groupEtasByVariant(
+      [
+        etaEntry({
+          co: 'ctb',
+          route: '102',
+          dir: 'I',
+          groupCo: 'kmb',
+          operators: ['ctb', 'kmb'],
+          jointGroupKey: 'jointv:1:0',
+          eta: '2026-08-02T15:23:00+08:00',
+          eta_seq: 1,
+        }),
+        etaEntry({
+          co: 'kmb',
+          route: '102',
+          dir: 'I',
+          groupCo: 'kmb',
+          operators: ['ctb', 'kmb'],
+          jointGroupKey: 'jointv:1:0',
+          eta: '2026-08-02T15:21:00+08:00',
+          eta_seq: 1,
+        }),
+      ],
+      {}
+    )
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.key).toBe('kmb|102|I|1|_')
+    expect(groups[0]?.items.map((item) => item.co)).toEqual(['kmb', 'ctb'])
+  })
+
   it('matches fares by scoped baseKey per region', () => {
     const groups = groupEtasByVariant(
       [etaEntry({ gtfsId: '2006408' }), etaEntry({ gtfsId: '2002337' })],

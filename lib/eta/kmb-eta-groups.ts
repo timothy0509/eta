@@ -36,7 +36,9 @@ function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
 }
 
 export function buildDefaultKey(entry: KmbEtaEntryWithLeg): string {
-  const co = String(entry.co ?? 'kmb')
+  // Joint rows group under the primary operator so both operators' ETAs
+  // share one row. The actual operator stays on `entry.co` for the chip.
+  const co = String(entry.groupCo ?? entry.co ?? 'kmb')
   const route = (entry.route ?? '').toUpperCase()
   const dir = String(entry.dir ?? '')
   const serviceType = String(entry.service_type ?? '')
@@ -78,7 +80,13 @@ export function groupEtasByVariant(
   }
 
   const groups = Array.from(byVariant.entries()).map(([key, items]) => {
-    const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq)
+    // Joint rows mix two operators, whose own eta_seq values restart. Sort
+    // by actual arrival time so the displayed ordinals follow the merged list.
+    const timeOf = (entry: KmbEtaEntryWithLeg) => {
+      const parsed = Date.parse(entry.eta)
+      return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
+    }
+    const sorted = [...items].sort((a, b) => timeOf(a) - timeOf(b) || a.eta_seq - b.eta_seq)
     const hasEta = hasValidEta(sorted)
 
     const baseKey = baseKeyOfKey(key)

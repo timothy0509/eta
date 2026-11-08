@@ -6,3 +6,4 @@ dist
 *.lock
 bun.lock
 public/headway/*.json
+public/gtfs/*.json

@@ -59,6 +59,8 @@ export type FavoritesItem = FavoritesMeta &
         /** Region discriminator for same-number routes (GMB HKI/Kowloon/NT). */
         gtfsId?: string
         region?: string
+        /** Jointly operated route operators, e.g. ['kmb', 'ctb']. */
+        operators?: string[]
         origin?: { en: string; tc: string; sc: string }
         destination?: { en: string; tc: string; sc: string }
       }

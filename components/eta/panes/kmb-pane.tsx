@@ -46,6 +46,7 @@ import {
 import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
 import { setKmbPaneState, usePaneStore } from '@/lib/eta/pane-store'
 import {
+  jointVariantKeyMatchesFilter,
   normalizeGtfsId,
   parseVariantKey,
   routeVariantKey,
@@ -491,6 +492,7 @@ export function KmbPane({
             })
             for (const filterKey of variantFilterKeys) {
               if (variantKeyMatches(filterKey, etaKey)) return true
+              if (eta.jointVariantKey && jointVariantKeyMatchesFilter(filterKey, eta)) return true
             }
             return false
           })

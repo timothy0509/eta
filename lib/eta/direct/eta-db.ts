@@ -22,6 +22,8 @@ import {
   normalizeBound,
   normalizeGtfsId,
   normalizeStopId,
+  pickPrimaryOperator,
+  regionOrdinal,
   routeVariantKey,
   serializeEtaDbIndexes,
   deserializeEtaDbIndexes,
@@ -30,9 +32,11 @@ import {
   type KmbRouteStopLite,
   type KmbStopSearchItem,
   type SerializedEtaDbIndexes,
+  type StopRouteEntry,
 } from '@/lib/eta/eta-db-index'
 import { fetchJson, getAdaptiveConcurrency } from '@/lib/eta/http'
 import { getCachedValue } from '@/lib/eta/direct/shared'
+import { loadJointRoutes, resolveJointOperators } from '@/lib/eta/joint-routes'
 import { promisePool } from '@/lib/eta/promise-pool'
 import { lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -170,7 +174,11 @@ export async function getEtaDbMd5Cached(): Promise<string> {
 }
 
 export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
-  const [db, md5] = await Promise.all([getEtaDbCached(), getEtaDbMd5Cached()])
+  const [db, md5, jointRoutes] = await Promise.all([
+    getEtaDbCached(),
+    getEtaDbMd5Cached(),
+    loadJointRoutes(),
+  ])
 
   if (cachedIndexes && cachedIndexes.md5 === md5) {
     return cachedIndexes.value
@@ -191,7 +199,10 @@ export async function getEtaDbIndexes(): Promise<EtaDbIndexes> {
       }
 
       // Rebuild from scratch
-      const value = await buildEtaDbIndexes(db, { busCompanies: BUS_COMPANIES })
+      const value = await buildEtaDbIndexes(db, {
+        busCompanies: BUS_COMPANIES,
+        jointRoutes,
+      })
       cachedIndexes = { md5, value }
 
       // Persist to IDB (fire-and-forget)
@@ -214,6 +225,7 @@ export async function listKmbStops(): Promise<KmbStopSearchItem[]> {
 
 export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
   const { kmbRouteListEntries } = await getEtaDbIndexes()
+  const jointManifest = await loadJointRoutes()
   // Regions need the stop-sharing components, which only exist after rows
   // are built. Derive them from a light projection here.
   const regionsByFamily = computeRouteRegions(
@@ -228,26 +240,36 @@ export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
       )
     )
   )
-  return kmbRouteListEntries.flatMap((entry) =>
-    entry.co
-      .filter((co) => isBusCompany(co) && entry.stops[co]?.length)
-      .map((co) => {
-        const gtfsId = normalizeGtfsId(entry.gtfsId)
-        return {
-          co,
-          route: entry.route,
-          bound: normalizeBound(entry.bound[co]),
-          serviceType: entry.serviceType,
-          gtfsId,
-          region:
-            regionsByFamily.get(`${co}|${String(entry.route ?? '').toUpperCase()}`)?.get(gtfsId) ??
-            '',
-          origin: mapEtaLangToUi(entry.orig),
-          destination: mapEtaLangToUi(entry.dest),
-          routeEntry: entry,
-        }
-      })
-  )
+  return kmbRouteListEntries.flatMap((entry, entryIndex) => {
+    const cos = entry.co.filter((co) => isBusCompany(co) && entry.stops[co]?.length)
+    const jointOperators = resolveJointOperators(jointManifest, entry.route, cos)
+    const joint = jointOperators.length > 1
+    const route = String(entry.route ?? '').toUpperCase()
+    const gtfsId = normalizeGtfsId(entry.gtfsId)
+    const jointVariantKey = joint ? `jointv:${entryIndex}` : ''
+    let jointRegion = ''
+    let operators: string[] = []
+    if (joint) {
+      const primary = pickPrimaryOperator(jointOperators)
+      const primaryRegion = regionsByFamily.get(`${primary}|${route}`)?.get(gtfsId) ?? ''
+      jointRegion = `joint|${route}|${regionOrdinal(primaryRegion) || '1'}`
+      operators = [primary, ...jointOperators.filter((op) => op !== primary)]
+    }
+    return cos.map((co) => ({
+      co,
+      route: entry.route,
+      bound: normalizeBound(entry.bound[co]),
+      serviceType: entry.serviceType,
+      gtfsId,
+      region:
+        (joint ? jointRegion : '') || regionsByFamily.get(`${co}|${route}`)?.get(gtfsId) || '',
+      operators: joint ? operators : [co],
+      jointVariantKey,
+      origin: mapEtaLangToUi(entry.orig),
+      destination: mapEtaLangToUi(entry.dest),
+      routeEntry: entry,
+    }))
+  })
 }
 
 export async function listKmbRouteStops(): Promise<KmbRouteStopLite[]> {
@@ -268,7 +290,7 @@ export async function findKmbRouteInfo(params: {
   if (params.signal?.aborted) {
     throw new DOMException('The operation was aborted.', 'AbortError')
   }
-  const { routeVariantIndex, regionIndex } = await getEtaDbIndexes()
+  const { routeVariantIndex, regionIndex, kmbRouteListEntries } = await getEtaDbIndexes()
   if (params.signal?.aborted) {
     throw new DOMException('The operation was aborted.', 'AbortError')
   }
@@ -290,6 +312,12 @@ export async function findKmbRouteInfo(params: {
   if (!entry || !entry.co.includes(co)) return null
 
   const entryGtfsId = normalizeGtfsId(entry.gtfsId)
+  const entryIndex = kmbRouteListEntries.indexOf(entry)
+  const manifest = await loadJointRoutes()
+  const busCos = entry.co.filter((company) => isBusCompany(company) && entry.stops[company]?.length)
+  const jointOperators = resolveJointOperators(manifest, entry.route, busCos)
+  const joint = jointOperators.length > 1
+  const route = String(entry.route ?? '').toUpperCase()
 
   return {
     co,
@@ -297,7 +325,16 @@ export async function findKmbRouteInfo(params: {
     bound: normalizeBound(entry.bound[co]),
     serviceType: entry.serviceType,
     gtfsId: entryGtfsId,
-    region: lookupRegion({ regionIndex }, { co, route: entry.route, gtfsId: entryGtfsId }),
+    region: joint
+      ? `joint|${route}|${regionOrdinal(lookupRegion({ regionIndex }, { co, route, gtfsId: entryGtfsId })) || '1'}`
+      : lookupRegion({ regionIndex }, { co, route: entry.route, gtfsId: entryGtfsId }),
+    operators: joint
+      ? [
+          pickPrimaryOperator(jointOperators),
+          ...jointOperators.filter((op) => op !== pickPrimaryOperator(jointOperators)),
+        ]
+      : [co],
+    jointVariantKey: joint && entryIndex >= 0 ? `jointv:${entryIndex}` : '',
     origin: mapEtaLangToUi(entry.orig),
     destination: mapEtaLangToUi(entry.dest),
     routeEntry: entry,
@@ -315,6 +352,14 @@ export type KmbEta = Eta & {
   gtfsId?: string
   /** Region group `co|ROUTE|n` matching StopRouteEntry.region. Empty when unknown. */
   region?: string
+  /** Jointly operated route metadata. Empty on single-operator rows. */
+  operators?: string[]
+  jointVariantKey?: string
+  jointGroupKey?: string
+  /** Operator used for grouping and primary-operator display. */
+  groupCo?: string
+  /** Stop id that produced this ETA when it came from a paired stop. */
+  sourceStopId?: string
   data_timestamp?: string
   dest_tc?: string
   dest_sc?: string
@@ -341,16 +386,17 @@ function etaDedupeKey(eta: {
 
 function mapOfficialStopEtaRows(
   rows: OfficialKmbStopEta[],
-  filters: { routeFilter: string | null; serviceType: string | null }
+  filters: { routeFilter: string | null; serviceType: string | null; dir?: string | null }
 ): KmbEta[] {
   const deduped = new Map<string, KmbEta>()
   for (const entry of rows) {
     const route = String(entry.route ?? '')
     if (filters.routeFilter && route.toUpperCase() !== filters.routeFilter) continue
     if (filters.serviceType && String(entry.service_type) !== filters.serviceType) continue
+    const dir = normalizeBound(entry.dir)
+    if (filters.dir && dir !== filters.dir) continue
 
     const co = String(entry.co ?? 'kmb').toLowerCase() as Company
-    const dir = normalizeBound(entry.dir)
     const entryServiceType = String(entry.service_type ?? '')
     const etaSeq = Number(entry.eta_seq) || 0
     const eta = entry.eta ?? ''
@@ -426,7 +472,17 @@ export async function fetchKmbEtasForStop(
 
   if (routeEntries.length === 0) return [] as KmbEta[]
 
-  const candidateMap = new Map<string, { entry: RouteListEntry; co: Company; stopIndex: number }>()
+  type Candidate = {
+    entry: RouteListEntry
+    co: Company
+    stopIndex: number
+    operators: string[]
+    jointVariantKey: string
+    jointGroupKey: string
+    siblingStopIds: string[]
+  }
+
+  const candidateMap = new Map<string, Candidate>()
   // Resolved region per 5-part variant key, carried onto ETAs for grouping.
   const regionByVariantKey = new Map<string, string>()
   for (const re of routeEntries) {
@@ -458,7 +514,15 @@ export async function fetchKmbEtasForStop(
     })
     const existing = candidateMap.get(resolvedKey)
     if (!existing || re.seq < existing.stopIndex) {
-      candidateMap.set(resolvedKey, { entry, co: re.co, stopIndex: re.seq })
+      candidateMap.set(resolvedKey, {
+        entry,
+        co: re.co,
+        stopIndex: re.seq,
+        operators: re.operators?.length ? re.operators : [re.co],
+        jointVariantKey: re.jointVariantKey ?? '',
+        jointGroupKey: re.jointGroupKey ?? '',
+        siblingStopIds: re.siblingStopIds ?? [],
+      })
     }
     // Prefer the stop's own region (already component-resolved at index
     // build); resolve through the region index when the row predates it.
@@ -486,6 +550,63 @@ export async function fetchKmbEtasForStop(
   const regionForVariantKey = (variantKey: string): string =>
     regionByVariantKey.get(variantKey) ?? ''
 
+  const candidateByFamily = new Map<string, Candidate>()
+  for (const candidate of candidates) {
+    const familyKey = `${candidate.co}|${String(candidate.entry.route ?? '').toUpperCase()}|${normalizeBound(candidate.entry.bound[candidate.co])}|${candidate.entry.serviceType}`
+    if (!candidateByFamily.has(familyKey)) candidateByFamily.set(familyKey, candidate)
+  }
+
+  const tagJoint = (candidate: Candidate, etas: KmbEta[], sourceStopId?: string): KmbEta[] => {
+    if (!candidate.jointVariantKey) return etas
+    const primary = pickPrimaryOperator(candidate.operators)
+    // Both operators share a physical direction but can label their bound
+    // differently (KMB inbound is CTB outbound). Use the primary operator's
+    // bound so grouping, fares and schedule lookup all agree.
+    const canonicalDir = normalizeBound(
+      (candidate.entry.bound as Record<string, string | undefined>)[primary]
+    )
+    return etas.map((eta) => ({
+      ...eta,
+      dir: canonicalDir || eta.dir,
+      groupCo: primary,
+      operators: candidate.operators,
+      jointVariantKey: candidate.jointVariantKey,
+      jointGroupKey: candidate.jointGroupKey,
+      sourceStopId: sourceStopId ?? eta.sourceStopId,
+    }))
+  }
+
+  const officialByStop = new Map<string, Promise<OfficialStopEtaResponse>>()
+  const getOfficial = (id: string) => {
+    let promise = officialByStop.get(id)
+    if (!promise) {
+      promise = deps.fetchOfficialStopEta(id, signal)
+      officialByStop.set(id, promise)
+    }
+    return promise
+  }
+
+  const mapVariantEtas = (
+    entry: RouteListEntry,
+    co: Company,
+    stopIndex: number,
+    etas: Awaited<ReturnType<typeof deps.fetchVariantEtas>>,
+    region: string
+  ): KmbEta[] => {
+    const gtfsId = normalizeGtfsId(entry.gtfsId)
+    return etas.map((eta, idx) => ({
+      ...eta,
+      co: eta.co ?? co,
+      route: entry.route,
+      dir: normalizeBound(entry.bound[co]),
+      serviceType: entry.serviceType,
+      gtfsId,
+      region,
+      seq: stopIndex + 1,
+      etaSeq: idx + 1,
+    })) as KmbEta[]
+  }
+
   const fetchNonKmb = () =>
     promisePool(
       nonKmb,
@@ -494,14 +615,13 @@ export async function fetchKmbEtasForStop(
         NON_KMB_CONCURRENCY_MEDIUM,
         NON_KMB_CONCURRENCY_SLOW
       ),
-      async ({ entry, co, stopIndex }) => {
+      async ({ entry, co, stopIndex, ...candidate }) => {
         const etas = await deps.fetchVariantEtas({
           ...entry,
           co: [co],
           seq: stopIndex,
           language,
         })
-        const gtfsId = normalizeGtfsId(entry.gtfsId)
         const variantKey = routeVariantKey({
           co,
           route: entry.route,
@@ -509,36 +629,132 @@ export async function fetchKmbEtasForStop(
           serviceType: entry.serviceType,
           gtfsId: entry.gtfsId,
         })
-        const region = regionForVariantKey(variantKey)
-        return etas.map((eta, idx) => ({
-          ...eta,
-          co: eta.co ?? co,
-          route: entry.route,
-          dir: normalizeBound(entry.bound[co]),
-          serviceType: entry.serviceType,
-          gtfsId,
-          region,
-          seq: stopIndex + 1,
-          etaSeq: idx + 1,
-        })) as KmbEta[]
+        return tagJoint(
+          {
+            entry,
+            co,
+            stopIndex,
+            operators: candidate.operators ?? [co],
+            jointVariantKey: candidate.jointVariantKey ?? '',
+            jointGroupKey: candidate.jointGroupKey ?? '',
+            siblingStopIds: candidate.siblingStopIds ?? [],
+          },
+          mapVariantEtas(entry, co, stopIndex, etas, regionForVariantKey(variantKey))
+        )
       },
       { signal }
     )
 
+  const tagOfficialRows = (
+    rows: OfficialKmbStopEta[],
+    filters: { routeFilter: string | null; serviceType: string | null; dir?: string | null }
+  ): KmbEta[] => {
+    const mapped = mapOfficialStopEtaRows(rows, filters)
+    return mapped.flatMap((eta) => {
+      const familyKey = `${eta.co}|${String(eta.route ?? '').toUpperCase()}|${normalizeBound(eta.dir)}|${eta.serviceType}`
+      const candidate = candidateByFamily.get(familyKey)
+      // Leave single-operator KMB rows exactly as before: the official feed
+      // omits gtfsId and downstream fare/schedule keys rely on that shape.
+      if (!candidate || !candidate.jointVariantKey) return [eta]
+      return tagJoint(candidate, [
+        {
+          ...eta,
+          gtfsId: normalizeGtfsId(candidate.entry.gtfsId),
+          region: regionForVariantKey(
+            routeVariantKey({
+              co: candidate.co,
+              route: candidate.entry.route,
+              bound: normalizeBound(candidate.entry.bound[candidate.co]),
+              serviceType: candidate.entry.serviceType,
+              gtfsId: candidate.entry.gtfsId,
+            })
+          ),
+        },
+      ])
+    })
+  }
+
   if (hasKmb && nonKmb.length > 0) {
-    const [payload, pooled] = await Promise.all([
-      deps.fetchOfficialStopEta(stopId, signal),
-      fetchNonKmb(),
-    ])
+    const [payload, pooled] = await Promise.all([getOfficial(stopId), fetchNonKmb()])
     const rows = Array.isArray(payload.data) ? payload.data : []
-    results.push(...mapOfficialStopEtaRows(rows, { routeFilter, serviceType }))
+    results.push(...tagOfficialRows(rows, { routeFilter, serviceType }))
     for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
   } else if (hasKmb) {
-    const payload = await deps.fetchOfficialStopEta(stopId, signal)
+    const payload = await getOfficial(stopId)
     const rows = Array.isArray(payload.data) ? payload.data : []
-    results.push(...mapOfficialStopEtaRows(rows, { routeFilter, serviceType }))
+    results.push(...tagOfficialRows(rows, { routeFilter, serviceType }))
   } else if (nonKmb.length > 0) {
     const pooled = await fetchNonKmb()
+    for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
+  }
+
+  // Pair-stop enrichment: a joint route keeps its stop ids per operator.
+  // Fetch the sibling stop's ETAs for the same physical variant only, then
+  // merge them into the requested stop so both operators render in one row.
+  type SiblingRequest = { candidate: Candidate; row: StopRouteEntry }
+  const siblingRequests = new Map<string, SiblingRequest>()
+  for (const candidate of candidates) {
+    if (!candidate.jointVariantKey || candidate.siblingStopIds.length === 0) continue
+    for (const siblingStopId of candidate.siblingStopIds) {
+      if (siblingStopId === stopId) continue
+      for (const row of stopRoutesIndex.get(siblingStopId) ?? []) {
+        if (row.jointVariantKey !== candidate.jointVariantKey) continue
+        if (row.co === candidate.co) continue
+        const key = `${siblingStopId}|${routeVariantKey({ co: row.co, route: row.route, bound: row.bound, serviceType: row.serviceType, gtfsId: row.gtfsId })}|${candidate.jointVariantKey}`
+        if (!siblingRequests.has(key)) siblingRequests.set(key, { candidate, row })
+      }
+    }
+  }
+
+  if (siblingRequests.size > 0) {
+    const pooled = await promisePool(
+      Array.from(siblingRequests.values()),
+      Math.min(4, getAdaptiveConcurrency(5, 3, 2)),
+      async ({ candidate, row }) => {
+        const variantKey = routeVariantKey({
+          co: row.co,
+          route: row.route,
+          bound: row.bound,
+          serviceType: row.serviceType,
+          gtfsId: row.gtfsId,
+        })
+        const entry =
+          routeVariantIndex.get(variantKey) ??
+          findRouteEntryByFamily(routeVariantIndex, {
+            co: row.co,
+            route: row.route,
+            bound: row.bound,
+            serviceType: row.serviceType,
+          })
+        if (!entry) return [] as KmbEta[]
+
+        if (row.co === 'kmb') {
+          const payload = await getOfficial(row.stopId)
+          const rows = Array.isArray(payload.data) ? payload.data : []
+          const mapped = mapOfficialStopEtaRows(rows, {
+            routeFilter: row.route.toUpperCase(),
+            serviceType: String(row.serviceType),
+            dir: normalizeBound(row.bound),
+          }).map((eta) => ({
+            ...eta,
+            gtfsId: normalizeGtfsId(row.gtfsId),
+            region: row.region,
+            seq: candidate.stopIndex + 1,
+          }))
+          return tagJoint(candidate, mapped, row.stopId)
+        }
+
+        const etas = await deps.fetchVariantEtas({
+          ...entry,
+          co: [row.co],
+          seq: row.seq,
+          language,
+        })
+        const mapped = mapVariantEtas(entry, row.co, candidate.stopIndex, etas, row.region)
+        return tagJoint(candidate, mapped, row.stopId)
+      },
+      { signal }
+    )
     for (const r of pooled) if (r.status === 'fulfilled') results.push(...r.value)
   }
 

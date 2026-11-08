@@ -4,6 +4,7 @@
  * same-origin JSON snapshot the app serves from public/headway/:
  * - public/headway/headway.json  (per-variant headway windows + service spans)
  * - public/headway/manifest.json (datasetDate, fetchedAt, routes, windows)
+ * - public/gtfs/joint-routes.json (joint route numbers from routes.txt agencies)
  *
  * Runs as a prebuild/predev step:
  * - skips the rewrite when DATA_LAST_UPDATED_DATE.csv still matches the
@@ -104,6 +105,8 @@ const HKBUS_DB_URL = process.env.HKBUS_DB_URL || 'https://data.hkbus.app/routeFa
 const OUT_DIR = join(REPO_ROOT, 'public', 'headway')
 const HEADWAY_PATH = join(OUT_DIR, 'headway.json')
 const MANIFEST_PATH = join(OUT_DIR, 'manifest.json')
+const GTFS_OUT_DIR = join(REPO_ROOT, 'public', 'gtfs')
+const JOINT_PATH = join(GTFS_OUT_DIR, 'joint-routes.json')
 
 const GTFS_FILES = [
   'routes.txt',
@@ -129,6 +132,39 @@ const AGENCY_TO_CO = {
 }
 
 const DAY_TYPES = ['weekday', 'saturday', 'sunday', 'holiday']
+
+/**
+ * Collect jointly operated route numbers from routes.txt agency_ids like
+ * KMB+CTB and LWB+CTB. Output is keyed by route short name because the
+ * runtime matches app route rows by number plus operator set.
+ */
+function buildJointRoutes(routes) {
+  const out = {}
+  for (const r of routes) {
+    const agency = (r.agency_id || '').trim()
+    if (!agency.includes('+')) continue
+    const short = (r.route_short_name || '').trim().toUpperCase()
+    if (!short) continue
+    const cos = []
+    for (const token of agency.split('+')) {
+      const co = AGENCY_TO_CO[token.trim().toUpperCase()]
+      if (co && !cos.includes(co)) cos.push(co)
+    }
+    if (cos.length < 2) continue
+    const existing = out[short]
+    if (existing) {
+      existing.operators = [...new Set([...existing.operators, ...cos])].sort()
+      if (!existing.longName) existing.longName = (r.route_long_name || '').trim()
+    } else {
+      out[short] = {
+        operators: [...cos].sort(),
+        agency,
+        longName: (r.route_long_name || '').trim(),
+      }
+    }
+  }
+  return out
+}
 
 function log(msg) {
   console.log(`[fetch-headway] ${msg}`)
@@ -1085,7 +1121,7 @@ function buildSnapshot(files, appStops) {
       `tripsUnknownRoute=${tripsUnknownRoute} tripsUnknownService=${tripsUnknownService} ` +
       `tripsUnknownBound=${tripsUnknownBound} freqOrphans=${freqOrphans} freqBadTime=${freqBadTime}`
   )
-  return { variants: outVariants, holidays, totalWindows }
+  return { variants: outVariants, holidays, totalWindows, jointRoutes: buildJointRoutes(routes) }
 }
 
 /** Offline fallback: hand-written sample covering KMB route 1, both bounds. */
@@ -1187,7 +1223,7 @@ function buildSample() {
     (sum, v) => sum + Object.values(v.headway).reduce((n, list) => n + list.length, 0),
     0
   )
-  return { variants, holidays, totalWindows, sample: true }
+  return { variants, holidays, totalWindows, jointRoutes: {}, sample: true }
 }
 
 async function main() {
@@ -1204,7 +1240,8 @@ async function main() {
     !isForce() &&
     datasetDate &&
     manifest?.datasetDate === datasetDate &&
-    existsSync(HEADWAY_PATH)
+    existsSync(HEADWAY_PATH) &&
+    existsSync(JOINT_PATH)
   ) {
     log(`snapshot already at revision ${datasetDate}, skipping`)
     return
@@ -1251,11 +1288,19 @@ async function main() {
       windows: snapshot.totalWindows,
       source,
     }) + '\n'
+  const jointRoutes = snapshot.jointRoutes ?? {}
+  const jointJson =
+    JSON.stringify({
+      updated,
+      routes: jointRoutes,
+    }) + '\n'
   await writeAtomic(HEADWAY_PATH, headwayJson)
   await writeAtomic(MANIFEST_PATH, manifestJson)
+  await writeAtomic(JOINT_PATH, jointJson)
   log(
-    `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes) and ${MANIFEST_PATH} ` +
-      `(${manifestJson.length} bytes) source=${source} updated=${updated}`
+    `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes), ${MANIFEST_PATH} ` +
+      `(${manifestJson.length} bytes), and ${JOINT_PATH} (${jointJson.length} bytes) ` +
+      `source=${source} updated=${updated} jointRoutes=${Object.keys(jointRoutes).length}`
   )
 }
 

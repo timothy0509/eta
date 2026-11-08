@@ -177,6 +177,14 @@ export type KmbRouteStopLite = {
   gtfsId: string
   /** Region group `co|ROUTE|n` matching the index. Empty when unknown (legacy). */
   region: string
+  /** Operators serving this variant. More than one means jointly operated. */
+  operators?: string[]
+  /** Shared identity for one physical variant across its operators. */
+  jointVariantKey?: string
+  /** Shared identity for one paired physical stop across its operators. */
+  jointGroupKey?: string
+  /** Other operators' stop ids at the same physical stop. */
+  siblingStopIds?: string[]
 }
 
 export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
@@ -197,6 +205,10 @@ export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
           stopId: entry.stop,
           gtfsId: String(entry.gtfsId ?? '').trim(),
           region: String(entry.region ?? '').trim(),
+          operators: entry.operators ?? [entry.co ?? 'kmb'],
+          jointVariantKey: String(entry.jointVariantKey ?? '').trim(),
+          jointGroupKey: String(entry.jointGroupKey ?? '').trim(),
+          siblingStopIds: entry.siblingStopIds ?? [],
         }))
         .filter((entry) => entry.route && entry.stopId)
     },
@@ -213,6 +225,10 @@ export type KmbRouteInfoLite = {
   gtfsId: string
   /** Region group `co|ROUTE|n` matching the index. Empty when unknown (legacy). */
   region: string
+  /** Operators serving this variant. More than one means jointly operated. */
+  operators?: string[]
+  /** Shared identity for one physical variant across its operators. */
+  jointVariantKey?: string
   origin: {
     en: string
     tc: string
@@ -246,6 +262,8 @@ export async function fetchKmbRouteInfo(params: {
     serviceType: String(info.service_type),
     gtfsId: String(info.gtfsId ?? '').trim(),
     region: String(info.region ?? '').trim(),
+    operators: info.operators ?? [info.co ?? params.co ?? 'kmb'],
+    jointVariantKey: String(info.jointVariantKey ?? '').trim(),
     origin: {
       en: (info.orig_en ?? '').trim(),
       tc: (info.orig_tc ?? '').trim(),

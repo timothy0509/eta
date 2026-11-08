@@ -9,6 +9,7 @@ import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { Marquee } from '@/components/ui/marquee'
 import { formatKmbRouteEndpointName } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
+import { formatOperatorCode } from '@/lib/eta/operator-label'
 import { getOperatorColor } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getKeyStops } from '@/lib/eta/route-search'
@@ -91,13 +92,20 @@ export function RouteResultCard({
             </span>
           )}
         </span>
-        <span className="flex shrink-0 items-center gap-1.5">
-          <span
-            aria-hidden
-            className="h-2 w-2 shrink-0 rounded-full"
-            style={{ backgroundColor: getOperatorColor(entry.co) }}
-          />
-          <span className="text-on-surface-variant m3-label-md uppercase">{entry.co}</span>
+        <span className="flex shrink-0 items-center gap-1">
+          {(entry.operators.length > 0 ? entry.operators : [entry.co]).map((op) => (
+            <span
+              key={op}
+              className="text-on-surface-variant bg-secondary m3-label-sm inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold uppercase"
+            >
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: getOperatorColor(op) }}
+              />
+              {formatOperatorCode(op)}
+            </span>
+          ))}
         </span>
         <ChevronRight aria-hidden className="text-on-surface-variant h-4 w-4 shrink-0" />
       </span>

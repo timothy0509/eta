@@ -405,6 +405,7 @@ export default function HomeClient() {
         region: selectedItem.region,
         bound: selectedItem.bound,
         serviceType: selectedItem.serviceType,
+        operators: selectedItem.operators,
       }
     }
     return undefined

@@ -32,6 +32,7 @@ import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
+import { formatOperatorCode, formatOperatorLabel } from '@/lib/eta/operator-label'
 import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { isKmbStop } from '@/lib/eta/types'
@@ -40,24 +41,6 @@ import { cn } from '@/lib/utils'
 import { useTranslations } from '@/lib/eta/i18n'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
-
-const OPERATOR_LABELS: Record<string, { en: string; tc: string; sc: string }> = {
-  kmb: { en: 'KMB', tc: '九巴', sc: '九巴' },
-  ctb: { en: 'CTB', tc: '城巴', sc: '城巴' },
-  nwfb: { en: 'NWFB', tc: '新巴', sc: '新巴' },
-  nlb: { en: 'NLB', tc: '嶼巴', sc: '屿巴' },
-  gmb: { en: 'GMB', tc: '小巴', sc: '小巴' },
-  lrtfeeder: { en: 'LRTF', tc: '港鐵巴士', sc: '轻铁接驳' },
-  sunferry: { en: 'SF', tc: '新渡輪', sc: '新渡轮' },
-  hkkf: { en: 'HKKF', tc: '港九小輪', sc: '港九小轮' },
-  fortuneferry: { en: 'FF', tc: '富裕小輪', sc: '富裕小轮' },
-}
-
-function formatOperatorLabel(co: string | undefined, lang: UiLanguage) {
-  const key = normalizeOperator(co)
-  const label = OPERATOR_LABELS[key] ?? { en: key.toUpperCase(), tc: key, sc: key }
-  return pickLang(label, lang)
-}
 
 function formatRouteVariantLabel(
   info: KmbRouteInfoLite | undefined,
@@ -324,8 +307,24 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
         lang,
       })
     : null
-  const operatorColor = getOperatorColor(first?.co ?? co)
-  const operatorName = formatOperatorLabel(first?.co ?? co, lang)
+  const declaredOperators = Array.from(
+    new Set(items.flatMap((entry) => (entry.operators ?? []).map((op) => normalizeOperator(op))))
+  )
+  const actualOperators = Array.from(
+    new Set(items.map((entry) => normalizeOperator(String(entry.co ?? co))))
+  )
+  const operators = declaredOperators.length > 0 ? declaredOperators : actualOperators
+  const isJoint = operators.length > 1
+  const operatorColor = isJoint
+    ? `linear-gradient(180deg, ${operators
+        .map((op, index) => {
+          const start = Math.round((index / operators.length) * 10000) / 100
+          const end = Math.round(((index + 1) / operators.length) * 10000) / 100
+          return `${getOperatorColor(op)} ${start}% ${end}%`
+        })
+        .join(', ')})`
+    : getOperatorColor(first?.co ?? co)
+  const operatorName = operators.map((op) => formatOperatorLabel(op, lang)).join(' + ')
 
   const { t, tWithParams } = useTranslations(lang)
 
@@ -410,6 +409,20 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
           >
             {label || t('common.route')}
           </Marquee>
+          {isJoint ? (
+            <div className="text-on-surface-variant m3-label-sm flex items-center gap-1">
+              {operators.map((op) => (
+                <span key={op} className="inline-flex items-center gap-1">
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: getOperatorColor(op) }}
+                  />
+                  {formatOperatorCode(op)}
+                </span>
+              ))}
+            </div>
+          ) : null}
           {fareCodeNode ? (
             <div
               className={cn(
@@ -463,7 +476,20 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
                 key={`${variantKey}:${entry.eta_seq}:${entryIdx}`}
                 className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
               >
-                <div className="m3-label-md opacity-80">{formatEtaLabel(entry.eta_seq, lang)}</div>
+                <div className="m3-label-md flex items-center justify-center gap-1 opacity-80">
+                  {isJoint ? (
+                    <>
+                      <span
+                        aria-hidden
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: getOperatorColor(entry.co) }}
+                      />
+                      <span>{formatOperatorCode(entry.co)}</span>
+                      <span aria-hidden>·</span>
+                    </>
+                  ) : null}
+                  <span>{formatEtaLabel(entryIdx + 1, lang)}</span>
+                </div>
                 <div className="mt-0.5">
                   <TickingKmbMinutes
                     eta={entry.eta}
@@ -487,8 +513,19 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
               key={`${variantKey}:${entry.eta_seq}:${entryIdx}`}
               className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
             >
-              <div className="text-on-surface-variant m3-label-md">
-                {formatEtaLabel(entry.eta_seq, lang)}
+              <div className="text-on-surface-variant m3-label-md flex items-center justify-center gap-1">
+                {isJoint ? (
+                  <>
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: getOperatorColor(entry.co) }}
+                    />
+                    <span>{formatOperatorCode(entry.co)}</span>
+                    <span aria-hidden>·</span>
+                  </>
+                ) : null}
+                <span>{formatEtaLabel(entryIdx + 1, lang)}</span>
               </div>
               <div className="mt-0.5">
                 <TickingKmbMinutes
@@ -558,7 +595,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       >
         <span
           className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
-          style={{ backgroundColor: operatorColor }}
+          style={{ background: operatorColor }}
           aria-hidden
         />
         <div className="space-y-2.5 pl-4">
@@ -602,7 +639,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       >
         <span
           className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
-          style={{ backgroundColor: operatorColor }}
+          style={{ background: operatorColor }}
           aria-hidden
         />
         <div className="space-y-2.5 pl-4">

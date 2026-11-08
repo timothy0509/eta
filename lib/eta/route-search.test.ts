@@ -110,6 +110,67 @@ describe('buildRouteSearchIndex', () => {
     const index = buildRouteSearchIndex(routes, routeStops, stopsById)
     expect(index.map((e) => `${e.co}:${e.route}`).slice(0, 2)).toEqual(['ctb:1', 'kmb:1'])
   })
+
+  it('merges jointly operated rows into one entry with both operators', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '102', 'Mei Foo', 'Shau Kei Wan', 'I'),
+        region: 'joint|102|1',
+        operators: ['ctb', 'kmb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '102', 'Mei Foo', 'Shau Kei Wan', 'O'),
+        region: 'joint|102|1',
+        operators: ['ctb', 'kmb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('gmb', '102', 'Hang Hau', 'San Po Kong', 'O'),
+        region: 'gmb|102|1',
+      },
+    ]
+    const jointStops: KmbRouteStopLite[] = [
+      {
+        co: 'kmb',
+        route: '102',
+        bound: 'I',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'k1',
+        gtfsId: '',
+        region: 'joint|102|1',
+        operators: ['ctb', 'kmb'],
+        jointVariantKey: 'jointv:1',
+        jointGroupKey: 'jointv:1:0',
+        siblingStopIds: ['c1'],
+      },
+      {
+        co: 'ctb',
+        route: '102',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'c1',
+        gtfsId: '',
+        region: 'joint|102|1',
+        operators: ['ctb', 'kmb'],
+        jointVariantKey: 'jointv:1',
+        jointGroupKey: 'jointv:1:0',
+        siblingStopIds: ['k1'],
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, jointStops, stopsById)
+    const kmb = index.find((entry) => entry.route === '102' && entry.co === 'kmb')
+    const gmb = index.find((entry) => entry.route === '102' && entry.co === 'gmb')
+    expect(kmb?.operators).toEqual(['kmb', 'ctb'])
+    expect(kmb?.stopCount).toBe(1)
+    expect(kmb?.stopIds).toEqual(['k1'])
+    expect(gmb?.operators).toEqual(['gmb'])
+    expect(
+      searchRouteIndex(index, '102', { operator: 'ctb' }).some((hit) => hit.entry.key === kmb?.key)
+    ).toBe(true)
+  })
 })
 
 describe('searchRouteIndex', () => {

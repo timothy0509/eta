@@ -92,12 +92,9 @@ export function RouteResultCard({
             </span>
           )}
         </span>
-        <span className="flex shrink-0 items-center gap-1">
+        <span className="text-on-surface-variant m3-label-md flex shrink-0 items-center gap-1.5 font-semibold uppercase">
           {(entry.operators.length > 0 ? entry.operators : [entry.co]).map((op) => (
-            <span
-              key={op}
-              className="text-on-surface-variant bg-secondary m3-label-sm inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold uppercase"
-            >
+            <span key={op} className="inline-flex items-center gap-1">
               <span
                 aria-hidden
                 className="h-1.5 w-1.5 shrink-0 rounded-full"

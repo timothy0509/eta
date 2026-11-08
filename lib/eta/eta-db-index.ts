@@ -692,16 +692,10 @@ export async function buildEtaDbIndexes(
   for (const plan of plans) {
     if (!plan.joint) continue
     const route = String(plan.entry.route ?? '').toUpperCase()
-    const gtfsId = normalizeGtfsId(plan.entry.gtfsId)
-    let ordinal = ''
-    for (const co of plan.operators) {
-      const region = regionsByFamily.get(`${co}|${route}`)?.get(gtfsId) ?? ''
-      if (region) {
-        ordinal = regionOrdinal(region)
-        break
-      }
-    }
-    jointRegionByVariant.set(plan.jointVariantKey, `joint|${route}|${ordinal || '1'}`)
+    // Joint KMB+CTB routes have no cross-region number collisions like
+    // minibuses do, so one region keeps every direction and short working
+    // in a single search entry.
+    jointRegionByVariant.set(plan.jointVariantKey, `joint|${route}|1`)
   }
 
   for (const row of kmbRouteStops) {

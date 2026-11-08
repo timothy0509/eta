@@ -23,7 +23,6 @@ import {
   normalizeGtfsId,
   normalizeStopId,
   pickPrimaryOperator,
-  regionOrdinal,
   routeVariantKey,
   serializeEtaDbIndexes,
   deserializeEtaDbIndexes,
@@ -251,8 +250,7 @@ export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
     let operators: string[] = []
     if (joint) {
       const primary = pickPrimaryOperator(jointOperators)
-      const primaryRegion = regionsByFamily.get(`${primary}|${route}`)?.get(gtfsId) ?? ''
-      jointRegion = `joint|${route}|${regionOrdinal(primaryRegion) || '1'}`
+      jointRegion = `joint|${route}|1`
       operators = [primary, ...jointOperators.filter((op) => op !== primary)]
     }
     return cos.map((co) => ({
@@ -326,7 +324,7 @@ export async function findKmbRouteInfo(params: {
     serviceType: entry.serviceType,
     gtfsId: entryGtfsId,
     region: joint
-      ? `joint|${route}|${regionOrdinal(lookupRegion({ regionIndex }, { co, route, gtfsId: entryGtfsId })) || '1'}`
+      ? `joint|${route}|1`
       : lookupRegion({ regionIndex }, { co, route: entry.route, gtfsId: entryGtfsId }),
     operators: joint
       ? [

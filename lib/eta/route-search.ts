@@ -204,9 +204,27 @@ export function buildRouteSearchIndex(
   routeStops: KmbRouteStopLite[],
   stopsById: Map<string, KmbStopSearchItem>
 ): RouteSearchEntry[] {
+  // Stale cached rows may predate the `operators` field. A joint variant
+  // key still tells us the row is half of a KMB+CTB pair, which is the only
+  // joint operator pair in the current feed.
+  const operatorsOf = (entry: {
+    co?: unknown
+    operators?: string[]
+    jointVariantKey?: string
+  }): string[] => {
+    const list = (entry.operators?.length ? entry.operators : [String(entry.co ?? 'kmb')]).map(
+      (op) => normalizeOperator(op)
+    )
+    if (list.length === 1 && String(entry.jointVariantKey ?? '').trim()) {
+      const partner = list[0] === 'kmb' ? 'ctb' : list[0] === 'ctb' ? 'kmb' : ''
+      if (partner) list.push(partner)
+    }
+    return list
+  }
+
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {
-    const key = canonicalRouteSearchKey(r.co, r.route, r.region, r.operators ?? [r.co])
+    const key = canonicalRouteSearchKey(r.co, r.route, r.region, operatorsOf(r))
     const list = variantsByKey.get(key)
     if (list) list.push(r)
     else variantsByKey.set(key, [r])
@@ -214,9 +232,7 @@ export function buildRouteSearchIndex(
 
   const primaryByKey = new Map<string, string>()
   for (const [key, variants] of variantsByKey) {
-    const ops = variants.flatMap((v) =>
-      v.operators?.length ? v.operators : [String(v.co ?? 'kmb')]
-    )
+    const ops = variants.flatMap((v) => operatorsOf(v))
     primaryByKey.set(key, pickPrimaryOperator(ops))
   }
 
@@ -226,9 +242,14 @@ export function buildRouteSearchIndex(
   // direction stays separate, keeping seq order for the via line.
   const rowsByVariantKey = new Map<string, KmbRouteStopLite[]>()
   for (const rs of routeStops) {
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.region, rs.operators ?? [rs.co])
+    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.region, operatorsOf(rs))
     if (!variantsByKey.has(routeKey)) continue
-    const variantKey = `${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
+    // Joint rows share a `jointVariantKey` across operators. Use it for
+    // the direction group because KMB and CTB often label the same
+    // physical direction with opposite bounds.
+    const variantKey = rs.jointVariantKey
+      ? `${routeKey}|joint:${rs.jointVariantKey}|${String(rs.serviceType ?? '')}`
+      : `${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
     const list = rowsByVariantKey.get(variantKey)
     if (list) list.push(rs)
     else rowsByVariantKey.set(variantKey, [rs])
@@ -248,7 +269,7 @@ export function buildRouteSearchIndex(
   // per operator.
   for (const primaryPass of [true, false]) {
     for (const rs of routeStops) {
-      const key = canonicalRouteSearchKey(rs.co, rs.route, rs.region, rs.operators ?? [rs.co])
+      const key = canonicalRouteSearchKey(rs.co, rs.route, rs.region, operatorsOf(rs))
       if (!variantsByKey.has(key)) continue
       const primary = primaryByKey.get(key) ?? normalizeOperator(String(rs.co))
       const isPrimaryRow = normalizeOperator(String(rs.co)) === primary
@@ -300,9 +321,9 @@ export function buildRouteSearchIndex(
     // Via line follows the canonical variant's stop group so the via stops
     // match the header direction. Falls back to the longest direction group
     // when the canonical group has no rows, so O and I stops never mix.
-    const canonicalGroupKey = `${key}|${String(canonical.bound ?? '')}|${String(
-      canonical.serviceType ?? ''
-    )}`
+    const canonicalGroupKey = canonical.jointVariantKey
+      ? `${key}|joint:${canonical.jointVariantKey}|${String(canonical.serviceType ?? '')}`
+      : `${key}|${String(canonical.bound ?? '')}|${String(canonical.serviceType ?? '')}`
     const canonicalRows = rowsByVariantKey.get(canonicalGroupKey)
     let viaStopIds: string[] = []
     let viaStopCount = 0
@@ -337,13 +358,7 @@ export function buildRouteSearchIndex(
       }
     }
 
-    const operatorSet = new Set(
-      variants.flatMap((v) =>
-        v.operators?.length
-          ? v.operators.map((op) => normalizeOperator(op))
-          : [normalizeOperator(String(v.co))]
-      )
-    )
+    const operatorSet = new Set(variants.flatMap((v) => operatorsOf(v)))
     const remainingOperators = Array.from(operatorSet)
       .filter((op) => op !== primary)
       .sort()

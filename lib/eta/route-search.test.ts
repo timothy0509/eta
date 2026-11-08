@@ -111,6 +111,76 @@ describe('buildRouteSearchIndex', () => {
     expect(index.map((e) => `${e.co}:${e.route}`).slice(0, 2)).toEqual(['ctb:1', 'kmb:1'])
   })
 
+  it('keeps the via line on the same physical direction as the canonical variant', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '101', 'Kennedy Town', 'Kwun Tong', 'I'),
+        region: 'joint|101|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '101', 'Kennedy Town', 'Kwun Tong', 'O'),
+        region: 'joint|101|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('kmb', '101', 'Kwun Tong', 'Kennedy Town', 'O'),
+        region: 'joint|101|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:2',
+      },
+      {
+        ...makeRoute('ctb', '101', 'Kwun Tong', 'Kennedy Town', 'I'),
+        region: 'joint|101|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:2',
+      },
+    ]
+    const jointStops: KmbRouteStopLite[] = [
+      ['kmb', 'I', 'k1', 'jointv:1', 'jointv:1:0', 'c1'],
+      ['ctb', 'O', 'c1', 'jointv:1', 'jointv:1:0', 'k1'],
+      ['kmb', 'O', 'k2', 'jointv:2', 'jointv:2:0', 'c2'],
+      ['ctb', 'I', 'c2', 'jointv:2', 'jointv:2:0', 'k2'],
+    ].map(([co, bound, stopId, jointVariantKey, jointGroupKey, sibling]) => ({
+      co: co as 'kmb',
+      route: '101',
+      bound,
+      serviceType: '1',
+      seq: 1,
+      stopId,
+      gtfsId: '',
+      region: 'joint|101|1',
+      operators: ['kmb', 'ctb'],
+      jointVariantKey,
+      jointGroupKey,
+      siblingStopIds: [sibling],
+    }))
+    const index = buildRouteSearchIndex(jointRoutes, jointStops, stopsById)
+    const entry = index.find((item) => item.route === '101')
+    expect(entry?.origin.en).toBe('Kennedy Town')
+    expect(entry?.viaStopIds).toEqual(['k1'])
+  })
+
+  it('merges stale joint rows that lost their operators field', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '117', 'Happy Valley', 'Sham Shui Po', 'I'),
+        region: 'joint|117|1',
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '117', 'Happy Valley', 'Sham Shui Po', 'O'),
+        region: 'joint|117|1',
+        jointVariantKey: 'jointv:1',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById)
+    expect(index).toHaveLength(1)
+    expect(index[0]?.operators).toEqual(['kmb', 'ctb'])
+  })
+
   it('merges jointly operated rows into one entry with both operators', () => {
     const jointRoutes: KmbRouteInfoLite[] = [
       {

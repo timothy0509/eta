@@ -32,7 +32,7 @@ import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
-import { formatOperatorCode, formatOperatorLabel } from '@/lib/eta/operator-label'
+import { formatOperatorLabel } from '@/lib/eta/operator-label'
 import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { isKmbStop } from '@/lib/eta/types'
@@ -409,20 +409,6 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
           >
             {label || t('common.route')}
           </Marquee>
-          {isJoint ? (
-            <div className="text-on-surface-variant m3-label-sm flex items-center gap-1">
-              {operators.map((op) => (
-                <span key={op} className="inline-flex items-center gap-1">
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: getOperatorColor(op) }}
-                  />
-                  {formatOperatorCode(op)}
-                </span>
-              ))}
-            </div>
-          ) : null}
           {fareCodeNode ? (
             <div
               className={cn(
@@ -456,10 +442,11 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
     </div>
   )
 
+  const visibleItems = items.slice(0, 3)
   const etaPanel = (
     <div className="space-y-2">
       <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
-        {items.map((entry, entryIdx) => {
+        {visibleItems.map((entry, entryIdx) => {
           const remark = pickLang(
             {
               en: entry.rmk_en ?? '',
@@ -468,7 +455,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
             },
             lang
           )
-          const isFirst = entry.eta_seq === 1
+          const isFirst = entryIdx === 0
 
           if (isFirst) {
             return (
@@ -478,15 +465,11 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
               >
                 <div className="m3-label-md flex items-center justify-center gap-1 opacity-80">
                   {isJoint ? (
-                    <>
-                      <span
-                        aria-hidden
-                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ backgroundColor: getOperatorColor(entry.co) }}
-                      />
-                      <span>{formatOperatorCode(entry.co)}</span>
-                      <span aria-hidden>·</span>
-                    </>
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: getOperatorColor(entry.co) }}
+                    />
                   ) : null}
                   <span>{formatEtaLabel(entryIdx + 1, lang)}</span>
                 </div>
@@ -515,15 +498,11 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
             >
               <div className="text-on-surface-variant m3-label-md flex items-center justify-center gap-1">
                 {isJoint ? (
-                  <>
-                    <span
-                      aria-hidden
-                      className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: getOperatorColor(entry.co) }}
-                    />
-                    <span>{formatOperatorCode(entry.co)}</span>
-                    <span aria-hidden>·</span>
-                  </>
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: getOperatorColor(entry.co) }}
+                  />
                 ) : null}
                 <span>{formatEtaLabel(entryIdx + 1, lang)}</span>
               </div>

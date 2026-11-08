@@ -79,6 +79,7 @@ import {
   type RouteFuseInstance,
 } from '@/lib/eta/route-search'
 import { getRouteDisplayGeometry } from '@/lib/eta/routing'
+import { mapKmbRouteListEntry } from '@/lib/eta/route-list'
 import { usePaneStore } from '@/lib/eta/pane-store'
 import { useInfiniteScroll } from '@/lib/eta/use-infinite-scroll'
 import { useMediaQuery } from '@/lib/hooks/use-media-query'
@@ -145,7 +146,7 @@ function sameRegion(a: string | null | undefined, b: string | null | undefined):
 function JointOperatorPill({ operators }: { operators: string[] }) {
   if (operators.length < 2) return null
   return (
-    <span className="text-on-surface-variant bg-secondary m3-label-sm inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold uppercase">
+    <span className="text-on-surface-variant m3-label-md inline-flex shrink-0 items-center gap-1.5 font-semibold uppercase">
       {operators.map((op) => (
         <span key={op} className="inline-flex items-center gap-1">
           <span
@@ -160,19 +161,29 @@ function JointOperatorPill({ operators }: { operators: string[] }) {
   )
 }
 
+function routeOperators(entry: {
+  co?: unknown
+  operators?: string[]
+  jointVariantKey?: string
+}): string[] {
+  const list = (entry.operators?.length ? entry.operators : [String(entry.co ?? 'kmb')]).map(
+    normalizeOperator
+  )
+  if (list.length === 1 && String(entry.jointVariantKey ?? '').trim()) {
+    const partner = list[0] === 'kmb' ? 'ctb' : list[0] === 'ctb' ? 'kmb' : ''
+    if (partner) list.push(partner)
+  }
+  return Array.from(new Set(list)).sort()
+}
+
 function routeSelectionKey(entry: {
   co?: string
   route: string
   region?: string
   operators?: string[]
+  jointVariantKey?: string
 }): string {
-  const operators = Array.from(
-    new Set(
-      (entry.operators?.length ? entry.operators : [String(entry.co ?? 'kmb')]).map((op) =>
-        normalizeOperator(op)
-      )
-    )
-  ).sort()
+  const operators = routeOperators(entry)
   const scope = String(entry.region ?? '').trim()
   if (operators.length > 1) {
     return `joint:${operators.join('+')}|${entry.route}|${regionOrdinal(scope)}`
@@ -279,15 +290,11 @@ function KmbRouteStopCard({
             const label = formatEtaOrdinals(entryIdx + 1, lang)
             const isFirst = entryIdx === 0
             const operatorTag = hasMultipleOperators ? (
-              <span className="inline-flex items-center gap-1">
-                <span
-                  aria-hidden
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: getOperatorColor(entry.co) }}
-                />
-                {formatOperatorCode(entry.co)}
-                <span aria-hidden>·</span>
-              </span>
+              <span
+                aria-hidden
+                className="h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ backgroundColor: getOperatorColor(entry.co) }}
+              />
             ) : null
             if (isFirst) {
               return (
@@ -772,26 +779,7 @@ function useKmbRouteList() {
     fetchKmbRoutes()
       .then((data) => {
         if (cancelled) return
-        setRoutes(
-          data.map((entry) => ({
-            co: entry.co ?? 'kmb',
-            route: entry.route,
-            bound: entry.bound,
-            serviceType: String(entry.service_type),
-            gtfsId: String(entry.gtfsId ?? '').trim(),
-            region: String(entry.region ?? '').trim(),
-            origin: {
-              en: (entry.orig_en ?? '').trim(),
-              tc: (entry.orig_tc ?? '').trim(),
-              sc: (entry.orig_sc ?? '').trim(),
-            },
-            destination: {
-              en: (entry.dest_en ?? '').trim(),
-              tc: (entry.dest_tc ?? '').trim(),
-              sc: (entry.dest_sc ?? '').trim(),
-            },
-          }))
-        )
+        setRoutes(data.map(mapKmbRouteListEntry))
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load routes')
@@ -961,14 +949,16 @@ export function KmbRoutesView({
     // regions never merge, even before the search index builds. Joint
     // routes share one key across operators.
     for (const r of routes) {
-      const operators = Array.from(
-        new Set(
-          (r.operators?.length ? r.operators : [String(r.co ?? 'kmb')]).map(normalizeOperator)
-        )
-      ).sort()
+      const operators = routeOperators(r)
       const co = pickPrimaryOperator(operators)
       const region = String(r.region ?? '').trim()
-      const key = routeSelectionKey({ co, route: r.route, region, operators })
+      const key = routeSelectionKey({
+        co,
+        route: r.route,
+        region,
+        operators,
+        jointVariantKey: r.jointVariantKey,
+      })
       if (!map.has(key)) map.set(key, { co, route: r.route, region, operators })
     }
     return Array.from(map.values()).sort(
@@ -1031,13 +1021,7 @@ export function KmbRoutesView({
       matchingVariants[0]
     if (!target) return null
     const targetGtfsId = String(target.gtfsId ?? '').trim()
-    const operators = Array.from(
-      new Set(
-        (target.operators?.length ? target.operators : [String(target.co ?? 'kmb')]).map(
-          normalizeOperator
-        )
-      )
-    ).sort()
+    const operators = routeOperators(target)
     return {
       key: targetGtfsId
         ? `${target.co}|${target.route}|${target.bound}|${target.serviceType}|${targetGtfsId}`
@@ -1165,9 +1149,7 @@ export function KmbRoutesView({
     if (!selectedRouteKey) return []
     const grouped = new Map<string, { rows: KmbRouteInfoLite[]; operators: Set<string> }>()
     for (const r of routes) {
-      const operators = (r.operators?.length ? r.operators : [String(r.co ?? 'kmb')]).map(
-        normalizeOperator
-      )
+      const operators = routeOperators(r)
       const isSelectedOperator =
         normalizeOperator(String(r.co ?? 'kmb')) === selectedRouteKey.co ||
         operators.some((op) => selectedRouteKey.operators.includes(op))

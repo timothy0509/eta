@@ -85,11 +85,22 @@ export function normalizeGtfsId(gtfsId: unknown): string {
 export function reclassifyLwbRouteEntry(entry: RouteListEntry): RouteListEntry {
   if (!entry.co.includes('kmb') || !isLwbRoute(entry.route)) return entry
   const co = entry.co.map((company) => (company === 'kmb' ? 'lwb' : company)) as Company[]
-  const bound = { ...entry.bound } as RouteListEntry['bound']
-  const stops = { ...entry.stops } as RouteListEntry['stops']
-  if (entry.bound.kmb) (bound as Record<string, string>).lwb = entry.bound.kmb
-  if (entry.stops.kmb) (stops as Record<string, string[]>).lwb = entry.stops.kmb
-  return { ...entry, co, bound, stops }
+  const bound = { ...entry.bound } as Record<string, string>
+  const stops = { ...entry.stops } as Record<string, string[]>
+  if (bound.kmb) {
+    bound.lwb = bound.kmb
+    delete bound.kmb
+  }
+  if (stops.kmb) {
+    stops.lwb = stops.kmb
+    delete stops.kmb
+  }
+  return {
+    ...entry,
+    co,
+    bound: bound as RouteListEntry['bound'],
+    stops: stops as RouteListEntry['stops'],
+  }
 }
 
 /**

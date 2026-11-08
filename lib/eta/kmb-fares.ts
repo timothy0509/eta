@@ -1,7 +1,7 @@
 import type { Company, RouteListEntry } from 'hk-bus-eta'
 
 import type { KmbRouteStopLite } from '@/lib/eta/client'
-import { resolveAppCompany } from '@/lib/eta/companies'
+import { isKmbFamily, resolveAppCompany } from '@/lib/eta/companies'
 import { findRouteEntryByFamily, normalizeGtfsId, routeVariantKey } from '@/lib/eta/eta-db-index'
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from '@/lib/eta/kmb-cache'
 
@@ -290,10 +290,14 @@ export function getStopToTerminusFare(params: {
 
   // fares array is 0-indexed, so subtract 1 from the 1-indexed sequence
   const fareIndex = onSeq - 1
+  const fareTable =
+    entry.fares && typeof entry.fares === 'object' && !Array.isArray(entry.fares)
+      ? (entry.fares as Record<string, string[] | undefined>)
+      : null
   const fares = Array.isArray(entry.fares)
     ? entry.fares
-    : entry.fares && typeof entry.fares === 'object'
-      ? (entry.fares as Record<string, string[] | undefined>)[params.co]
+    : fareTable
+      ? (fareTable[params.co] ?? (isKmbFamily(params.co) ? fareTable.kmb : undefined))
       : undefined
 
   if (!fares || fareIndex < 0 || fareIndex >= fares.length) return null

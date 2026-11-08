@@ -1,6 +1,7 @@
 'use client'
 
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
+import { resolveAppCompany } from '@/lib/eta/companies'
 import { clampNearbyRadiusKm, NEARBY_RADIUS_DEFAULT_KM } from '@/lib/eta/nearby-radius'
 import { clampTimetableDetail, TIMETABLE_DETAIL_DEFAULT } from '@/lib/eta/timetable-detail'
 import { create } from 'zustand'
@@ -160,6 +161,29 @@ const withFavoriteMeta = (item: FavoritesItem): FavoritesItem => ({
   groupId: item.groupId ?? null,
 })
 
+/**
+ * Canonical favorite id for duplicate checks. Route favorites and stop
+ * filters saved before the LWB split embed "kmb" for LWB routes, while a
+ * re-save builds "lwb". Rewriting the embedded company keeps the old entry
+ * and the new one on the same identity so addFavorite does not append a
+ * near-duplicate. Display and navigation keep using the stored id.
+ */
+export function normalizeFavoriteId(id: string): string {
+  if (id.startsWith('kmb:route:')) {
+    const parts = id.split(':')
+    if (parts.length >= 6) {
+      const [prefix, kind, co, route = '', ...rest] = parts
+      return `${prefix}:${kind}:${resolveAppCompany(co, route)}:${route.toUpperCase()}:${rest.join(':')}`
+    }
+    return id
+  }
+  return id.replace(
+    /(^|[~:])(kmb)\|([^|~:]+)\|/g,
+    (_match, lead: string, _co: string, route: string) =>
+      `${lead}${resolveAppCompany('kmb', route)}|${route.toUpperCase()}|`
+  )
+}
+
 // Imported favorites come from a user file, so shape-check before trusting
 // them. Every variant needs its id, mode, title and locator fields, since
 // nothing regenerates them on the way in.
@@ -233,7 +257,10 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
 
   addFavorite: (item) =>
     set((state) => {
-      if (state.favorites.some((f) => f.id === item.id)) return state
+      const identity = normalizeFavoriteId(item.id)
+      if (state.favorites.some((f) => f.id === item.id || normalizeFavoriteId(f.id) === identity)) {
+        return state
+      }
       return { favorites: capFavorites([withFavoriteMeta(item), ...state.favorites]) }
     }),
 
@@ -328,11 +355,12 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
     set((state) => {
       const now = Date.now()
       const recent: RecentItem = { ...item, at: now }
+      const identity = normalizeFavoriteId(item.id)
 
-      const updated = [recent, ...state.recents.filter((r) => r.id !== item.id)].slice(
-        0,
-        RECENTS_LIMIT
-      )
+      const updated = [
+        recent,
+        ...state.recents.filter((r) => r.id !== item.id && normalizeFavoriteId(r.id) !== identity),
+      ].slice(0, RECENTS_LIMIT)
 
       return { recents: updated }
     }),

@@ -15,6 +15,10 @@ describe('getFaresBySeq', () => {
     expect(getFaresBySeq({ fares: { kmb: ['7.1'] } }, 'kmb')).toEqual({ 1: 7.1 })
   })
 
+  it('falls back to the kmb table for LWB object fares', () => {
+    expect(getFaresBySeq({ fares: { kmb: ['7.1'] } }, 'lwb')).toEqual({ 1: 7.1 })
+  })
+
   it('skips unusable entries', () => {
     expect(getFaresBySeq({ fares: ['9.0', '', 'abc', '-1'] }, 'kmb')).toEqual({ 1: 9 })
   })

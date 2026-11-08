@@ -1,7 +1,13 @@
 import { describe, expect, it, beforeEach } from 'vitest'
 import { create } from 'zustand'
 import type { FavoritesItem, FavoritesGroup } from './store'
-import { capFavorites, FAVORITES_LIMIT, migratePersistedState, useAppStore } from './store'
+import {
+  capFavorites,
+  FAVORITES_LIMIT,
+  migratePersistedState,
+  normalizeFavoriteId,
+  useAppStore,
+} from './store'
 
 // Create a test store without persist middleware
 type AppState = {
@@ -138,6 +144,22 @@ const createTestStore = () =>
 
     clearRecents: () => set({ recents: [] }),
   }))
+
+describe('normalizeFavoriteId', () => {
+  it('maps old kmb route favorite ids for LWB routes to lwb', () => {
+    expect(normalizeFavoriteId('kmb:route:kmb:A31:O:1:1473')).toBe('kmb:route:lwb:A31:O:1:1473')
+    expect(normalizeFavoriteId('kmb:route:kmb:1:O:1')).toBe('kmb:route:kmb:1:O:1')
+  })
+
+  it('normalizes embedded variant keys in stop filter ids', () => {
+    expect(normalizeFavoriteId('kmb:S1:adv:kmb|A31|O|1|1473:1')).toBe(
+      'kmb:S1:adv:lwb|A31|O|1|1473:1'
+    )
+    expect(normalizeFavoriteId('kmb:S1:adv:kmb|1|O|1|~kmb|A31|O|1|:1')).toBe(
+      'kmb:S1:adv:kmb|1|O|1|~lwb|A31|O|1|:1'
+    )
+  })
+})
 
 describe('store favorites', () => {
   let store: ReturnType<typeof createTestStore>

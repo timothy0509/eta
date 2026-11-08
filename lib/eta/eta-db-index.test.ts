@@ -95,6 +95,31 @@ describe('buildEtaDbIndexes isKmb derivation', () => {
     ])
   })
 
+  it('keeps joint operators together when moving an LWB route', async () => {
+    const db = dbWith(
+      [routeEntry('R8', ['kmb', 'ctb'], { kmb: ['S1'], ctb: ['S1', 'S2'] })],
+      ['S1', 'S2']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'lwb', 'ctb'] })
+    expect(indexes.kmbRouteStops).toMatchObject([
+      { route: 'R8', co: 'lwb', stopId: 'S1' },
+      { route: 'R8', co: 'ctb', stopId: 'S1' },
+      { route: 'R8', co: 'ctb', stopId: 'S2' },
+    ])
+    expect(indexes.routeVariantIndex.get('lwb|R8|O|1|')).toBeDefined()
+    expect(indexes.routeVariantIndex.get('ctb|R8|O|1|')).toBeDefined()
+    expect(indexes.routeVariantIndex.get('kmb|R8|O|1|')).toBeUndefined()
+  })
+
+  it('does not reclassify a GMB route that shares an LWB short name', async () => {
+    const db = dbWith([routeEntry('N31', ['gmb'], { gmb: ['G1'] })], ['G1'])
+    const indexes = await buildEtaDbIndexes(db, {
+      busCompanies: ['kmb', 'lwb', 'gmb', 'ctb'],
+    })
+    expect(indexes.routeVariantIndex.get('gmb|N31|O|1|')).toBeDefined()
+    expect(indexes.routeVariantIndex.get('lwb|N31|O|1|')).toBeUndefined()
+  })
+
   it('resolves legacy kmb|A31 keys to lwb', () => {
     expect(parseVariantKey('kmb|A31|O|1').co).toBe('lwb')
     expect(routeVariantKey(parseVariantKey('kmb|A31|O|1'))).toBe('lwb|A31|O|1|')

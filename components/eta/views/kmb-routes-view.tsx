@@ -45,6 +45,12 @@ import type { Company } from 'hk-bus-eta'
 
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { findRouteEntryByFamily, routeVariantKey } from '@/lib/eta/eta-db-index'
+import {
+  fareForIndices,
+  mapRouteStopsToFareIndices,
+  resolveFareVariantForStop,
+} from '@/lib/eta/fares/lookup'
+import { useFareIndex } from '@/lib/eta/fares/use-fare-index'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
 import {
   FARE_UNKNOWN_COLOR,
@@ -435,9 +441,71 @@ function KmbRouteStopList({
   // the existing stop-name parsing untouched.
   const isCtbRoute = normalizeOperator(currentVariant.co) === 'ctb'
 
+  // Origin/destination matrix from the TD GTFS fare tables. The boarding
+  // stop fare from hk-bus-eta stays as the fallback when this variant has no
+  // compiled table.
+  const fareIndex = useFareIndex()
+  const fareTable = React.useMemo(
+    () => resolveFareVariantForStop(fareIndex, variantKey, variantStops[0]?.stopId),
+    [fareIndex, variantKey, variantStops]
+  )
+  const fareStopIndices = React.useMemo(
+    () => (fareTable ? mapRouteStopsToFareIndices(fareTable, variantStops) : null),
+    [fareTable, variantStops]
+  )
+  const [fareView, setFareView] = React.useState<{
+    listKey: string
+    mode: 'sections' | 'byStop'
+  } | null>(null)
+  const fareViewMode = fareView?.listKey === listKey ? fareView.mode : 'sections'
+  const [fareFrom, setFareFrom] = React.useState<{ listKey: string; index: number } | null>(null)
+  const fareFromIndex =
+    fareFrom?.listKey === listKey
+      ? Math.min(fareFrom.index, Math.max(0, variantStops.length - 2))
+      : 0
+  const terminusIndex = Math.max(0, variantStops.length - 1)
+  const hasFareData = Boolean(
+    fareTable?.fares.some((ranges) => ranges !== null && ranges.length > 0)
+  )
+  const showFareToggle = Boolean(
+    fareTable && fareStopIndices && hasFareData && variantStops.length > 1
+  )
+
+  // Original section rail: boarding stop fare to the terminus. The GTFS
+  // matrix is authoritative here; hk-bus-eta stays as the fallback.
+  const fareToTerminus = React.useCallback(
+    (index: number) => {
+      if (fareTable && fareStopIndices) {
+        const from = fareStopIndices[index] ?? -1
+        const to = fareStopIndices[terminusIndex] ?? -1
+        if (from >= 0 && to > from) {
+          const fare = fareForIndices(fareTable, from, to)
+          if (fare !== null) return fare
+        }
+      }
+      return faresBySeq[variantStops[index]?.seq] ?? null
+    },
+    [fareTable, fareStopIndices, terminusIndex, faresBySeq, variantStops]
+  )
+
+  // The toggle changes only the left rail: sections in the original mode,
+  // fares from the chosen boarding stop in by-stop mode. The stop cards stay.
+  const fareForRail = React.useCallback(
+    (index: number) => {
+      if (fareViewMode !== 'byStop' || !fareTable || !fareStopIndices) {
+        return fareToTerminus(index)
+      }
+      const from = fareStopIndices[fareFromIndex] ?? -1
+      const to = fareStopIndices[index] ?? -1
+      if (from < 0 || to <= from) return null
+      return fareForIndices(fareTable, from, to)
+    },
+    [fareViewMode, fareTable, fareStopIndices, fareFromIndex, fareToTerminus]
+  )
+
   const sections = React.useMemo(
-    () => groupIntoFareSections(variantStops, (rs) => faresBySeq[rs.seq] ?? null),
-    [variantStops, faresBySeq]
+    () => groupIntoFareSections(variantStops, (_rs, index) => fareForRail(index)),
+    [variantStops, fareForRail]
   )
 
   // Known fare sections consume palette indices in order; unknown
@@ -578,10 +646,8 @@ function KmbRouteStopList({
     }
   }, [streetSections, sections, sectionColors])
 
-  const renderStopCard = (rs: KmbRouteStopLite) => {
-    const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
+  const formatStop = (rs: KmbRouteStopLite) => {
     const stop = stopsById.get(rs.stopId)
-    const stopEtas = etas[rs.stopId] ?? []
     const fullName = stop
       ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
       : rs.stopId
@@ -592,6 +658,16 @@ function KmbRouteStopList({
     // Split the street off the already-parsed name so joint KMB/CTB stops
     // keep the EN title-casing.
     const ctb = isCtbRoute ? parseCtbStopNameCached(parsed.name) : null
+    return {
+      name: pickCtbDisplayName(ctb?.name, parsed.name),
+      stopCode: parsed.platform ?? parsed.stopCode,
+    }
+  }
+
+  const renderStopCard = (rs: KmbRouteStopLite) => {
+    const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
+    const stopEtas = etas[rs.stopId] ?? []
+    const formatted = formatStop(rs)
     // Same-base grouping was precomputed once per list render (O(n)), not
     // per card. A 100-stop route was doing ~10k name comparisons before.
     const group = stopGroups.get(rs.stopId)
@@ -600,8 +676,8 @@ function KmbRouteStopList({
       <KmbRouteStopCard
         stopEtas={stopEtas}
         stopId={rs.stopId}
-        name={pickCtbDisplayName(ctb?.name, parsed.name)}
-        stopCode={parsed.platform ?? parsed.stopCode}
+        name={formatted.name}
+        stopCode={formatted.stopCode}
         seq={seq}
         lang={lang}
         expanded={expandedKey === cardKey}
@@ -623,6 +699,63 @@ function KmbRouteStopList({
 
   return (
     <div key={listKey} className="space-y-3">
+      {showFareToggle ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <div
+            className="bg-surface-container flex w-fit items-center gap-1 rounded-full p-1"
+            role="group"
+            aria-label={t('kmb.fareDisplay')}
+          >
+            <button
+              type="button"
+              aria-pressed={fareViewMode === 'sections'}
+              onClick={() => setFareView({ listKey, mode: 'sections' })}
+              className={cn(
+                'ui-press m3-label-lg inline-flex min-h-[36px] items-center rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                fareViewMode === 'sections'
+                  ? 'bg-primary-container text-on-primary-container'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              )}
+            >
+              {t('kmb.fareSections')}
+            </button>
+            <button
+              type="button"
+              aria-pressed={fareViewMode === 'byStop'}
+              onClick={() => setFareView({ listKey, mode: 'byStop' })}
+              className={cn(
+                'ui-press m3-label-lg inline-flex min-h-[36px] items-center rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none',
+                fareViewMode === 'byStop'
+                  ? 'bg-primary-container text-on-primary-container'
+                  : 'text-on-surface-variant hover:text-on-surface'
+              )}
+            >
+              {t('kmb.fareByStop')}
+            </button>
+          </div>
+          {fareViewMode === 'byStop' ? (
+            <label className="bg-surface-container flex min-h-[44px] min-w-[12rem] flex-1 items-center gap-2 rounded-full px-3 py-1.5">
+              <span className="text-on-surface-variant m3-label-md shrink-0">
+                {t('kmb.fareFrom')}
+              </span>
+              <select
+                aria-label={t('kmb.fareFromStop')}
+                value={fareFromIndex}
+                onChange={(event) => setFareFrom({ listKey, index: Number(event.target.value) })}
+                className="text-on-surface m3-body-md min-w-0 flex-1 truncate bg-transparent focus-visible:outline-none"
+              >
+                {variantStops.map((rs, index) =>
+                  index === variantStops.length - 1 ? null : (
+                    <option key={`${rs.stopId}:${rs.seq}`} value={index}>
+                      {index + 1}. {formatStop(rs).name}
+                    </option>
+                  )
+                )}
+              </select>
+            </label>
+          ) : null}
+        </div>
+      ) : null}
       {timeline ? (
         <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2">
           {timeline.fareRuns.map((run) => (

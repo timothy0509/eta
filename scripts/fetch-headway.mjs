@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
  * Downloads the Transport Department headway GTFS feed and compiles it into a
- * same-origin JSON snapshot the app serves from public/headway/:
+ * same-origin JSON snapshots the app serves from public/:
  * - public/headway/headway.json  (per-variant headway windows + service spans)
  * - public/headway/manifest.json (datasetDate, fetchedAt, routes, windows)
+ * - public/fares/fares.json      (per-variant origin/destination fare matrix)
  *
  * Runs as a prebuild/predev step:
  * - skips the rewrite when DATA_LAST_UPDATED_DATE.csv still matches the
@@ -58,6 +59,24 @@
  * stops.txt against the hk-bus-eta stop list (50 m radius); unmapped
  * stops fall back to the variant-level display.
  *
+ * Fare contract (public/fares/fares.json):
+ *   { "updated": "YYYY-MM-DD",
+ *     "variants": {
+ *       "<co>|<ROUTE>|<bound>|<serviceType>|<td_route_id>": {
+ *         "stops": ["<app stop id>", ...],
+ *         "fares": [
+ *           [ [<lastDestIndex>, <price>], ... ] | null,
+ *           ...
+ *         ]
+ *       } } }
+ * "stops" is the app route order and "fares" is parallel to it. Each range
+ * covers every alighting stop up to and including lastDestIndex, so the
+ * first range whose end reaches the rider's stop wins. Flat-fare routes
+ * carry one range per boarding stop. The fare_id trailing segments supply
+ * direction and destination order. TD stop ids map to the nearest stop in
+ * the variant's own app stop list (150 m), which keeps opposite-direction
+ * stops from stealing each other's fares.
+ *
  * Key rules:
  * - co is the lowercased app company (kmb/lwb/ctb/gmb/nlb/lrtfeeder). TD
  *   agency LWB rows map onto their own co "lwb"; joint agencies (KMB+CTB,
@@ -109,6 +128,8 @@ const OUT_DIR = join(REPO_ROOT, 'public', 'headway')
 const HEADWAY_PATH = join(OUT_DIR, 'headway.json')
 const MANIFEST_PATH = join(OUT_DIR, 'manifest.json')
 const OPERATORS_PATH = join(REPO_ROOT, 'lib', 'eta', 'gtfs', 'operators.json')
+const FARES_DIR = join(REPO_ROOT, 'public', 'fares')
+const FARES_PATH = join(FARES_DIR, 'fares.json')
 
 const GTFS_FILES = [
   'routes.txt',
@@ -118,7 +139,13 @@ const GTFS_FILES = [
   'calendar_dates.txt',
   'stop_times.txt',
   'stops.txt',
+  'fare_attributes.txt',
+  'fare_rules.txt',
 ]
+
+// Older mirrors may not carry the fare extension. Their absence skips fares
+// but must not block the headway snapshot.
+const OPTIONAL_GTFS_FILES = new Set(['fare_attributes.txt', 'fare_rules.txt'])
 
 // TD agencies the app has no company for (plus empty short names, handled at parse).
 const SKIP_AGENCIES = new Set(['FERRY', 'XB', 'DB', 'PI', 'TRAM', 'PTRAM'])
@@ -174,9 +201,12 @@ async function writeAtomic(path, bytes) {
   await rename(tempPath, path)
 }
 
-/** Minimal CSV parser: handles quoted fields, embedded commas and CRLF. */
-function parseCsv(text) {
-  const rows = []
+/**
+ * Minimal CSV row walker: handles quoted fields, embedded commas and CRLF.
+ * Calls `onRow` for every non-empty row so the large fare tables never need
+ * a second in-memory copy of the file.
+ */
+function forEachCsvRow(text, onRow) {
   let row = []
   let field = ''
   let inQuotes = false
@@ -201,14 +231,20 @@ function parseCsv(text) {
     } else if (ch === '\n') {
       row.push(field)
       field = ''
-      if (row.length > 1 || row[0] !== '') rows.push(row)
+      if (row.length > 1 || row[0] !== '') onRow(row)
       row = []
     } else if (ch !== '\r') {
       field += ch
     }
   }
   row.push(field)
-  if (row.length > 1 || row[0] !== '') rows.push(row)
+  if (row.length > 1 || row[0] !== '') onRow(row)
+}
+
+/** Minimal CSV parser: handles quoted fields, embedded commas and CRLF. */
+function parseCsv(text) {
+  const rows = []
+  forEachCsvRow(text, (row) => rows.push(row))
   return rows
 }
 
@@ -261,7 +297,7 @@ function hasUnzip() {
   }
 }
 
-/** Download the zip and extract the six GTFS files via `unzip -p` (no npm deps). */
+/** Download the zip and extract the GTFS files via `unzip -p` (no npm deps). */
 async function loadViaZip() {
   const zipBytes = await fetchWithRetry(GTFS_URL)
   const tmpPath = join(tmpdir(), `td-headway-${Date.now()}.zip`)
@@ -269,9 +305,17 @@ async function loadViaZip() {
   try {
     const out = {}
     for (const name of GTFS_FILES) {
-      const bytes = execFileSync('unzip', ['-p', tmpPath, name], { maxBuffer: 256 * 1024 * 1024 })
-      out[name] = bytes.toString('utf8')
-      log(`unzipped ${name} (${bytes.length} bytes)`)
+      try {
+        const bytes = execFileSync('unzip', ['-p', tmpPath, name], {
+          maxBuffer: 256 * 1024 * 1024,
+        })
+        out[name] = bytes.toString('utf8')
+        log(`unzipped ${name} (${bytes.length} bytes)`)
+      } catch (err) {
+        if (!OPTIONAL_GTFS_FILES.has(name)) throw err
+        log(`optional ${name} missing, skipping fares`)
+        out[name] = ''
+      }
     }
     return out
   } finally {
@@ -283,9 +327,15 @@ async function loadViaZip() {
 async function loadViaIndividualFiles() {
   const out = {}
   for (const name of GTFS_FILES) {
-    const text = await fetchTextWithRetry(`${GTFS_BASE}/${name}`)
-    out[name] = text
-    log(`fetched ${name} (${text.length} chars)`)
+    try {
+      const text = await fetchTextWithRetry(`${GTFS_BASE}/${name}`)
+      out[name] = text
+      log(`fetched ${name} (${text.length} chars)`)
+    } catch (err) {
+      if (!OPTIONAL_GTFS_FILES.has(name)) throw err
+      log(`optional ${name} missing, skipping fares`)
+      out[name] = ''
+    }
   }
   return out
 }
@@ -434,6 +484,321 @@ function appStopsNear(grid, lat, lng) {
   return out
 }
 
+/**
+ * fare_attributes.txt -> fare_id -> price. Streams the file instead of
+ * materialising 880k objects.
+ */
+function buildFarePriceMap(text) {
+  const prices = new Map()
+  if (!text) return prices
+  let cols = null
+  forEachCsvRow(text, (cells) => {
+    if (!cols) {
+      cols = cells.map((cell) => cell.trim())
+      return
+    }
+    const idIdx = cols.indexOf('fare_id')
+    const priceIdx = cols.indexOf('price')
+    if (idIdx < 0 || priceIdx < 0) return
+    const id = (cells[idIdx] ?? '').trim()
+    const price = Number((cells[priceIdx] ?? '').trim())
+    if (!id || !Number.isFinite(price) || price < 0) return
+    prices.set(id, price)
+  })
+  return prices
+}
+
+/**
+ * fare_rules.txt grouped by TD route_id + direction, then by origin stop id.
+ * The fare_id shape is `<route>-<dir>-<originSeq>-<destSeq>`; the trailing
+ * segments give the destination position used to order the fare ranges.
+ */
+function buildFareGroups(text, prices, routeInfo) {
+  const groups = new Map()
+  if (!text) return groups
+  let cols = null
+  forEachCsvRow(text, (cells) => {
+    if (!cols) {
+      cols = cells.map((cell) => cell.trim())
+      return
+    }
+    const routeId = (cells[cols.indexOf('route_id')] ?? '').trim()
+    if (!routeId || !routeInfo.has(routeId)) return
+    const fareId = (cells[cols.indexOf('fare_id')] ?? '').trim()
+    if (!fareId) return
+    const parts = fareId.split('-')
+    if (parts.length < 4) return
+    const dir = parts[parts.length - 3]
+    if (dir !== '1' && dir !== '2') return
+    const originSeq = Number(parts[parts.length - 2])
+    const destSeq = Number(parts[parts.length - 1])
+    if (!Number.isFinite(originSeq) || !Number.isFinite(destSeq)) return
+    const price = prices.get(fareId)
+    if (price === undefined) return
+    const origin = (cells[cols.indexOf('origin_id')] ?? '').trim()
+    const dest = (cells[cols.indexOf('destination_id')] ?? '').trim()
+    if (!origin || !dest) return
+    const groupKey = `${routeId}|${dir}`
+    let byOrigin = groups.get(groupKey)
+    if (!byOrigin) {
+      byOrigin = new Map()
+      groups.set(groupKey, byOrigin)
+    }
+    let list = byOrigin.get(origin)
+    if (!list) {
+      list = []
+      byOrigin.set(origin, list)
+    }
+    list.push({ originSeq, destStop: dest, destSeq, price })
+  })
+  return groups
+}
+
+/**
+ * Build one app variant's fare table. When the TD direction and the app stop
+ * list have the same length (the usual case, including circular routes that
+ * revisit stops), the fare_id sequence positions are used directly. That
+ * avoids matching a repeated stop to the wrong leg. Otherwise each boarding
+ * stop maps to the nearest stop in the variant's own stop list. Destinations
+ * are compressed into `[lastDestIndex, price]` runs parallel to `stops`.
+ */
+const POSITIONAL_MATCH_RADIUS_M = 150
+
+/**
+ * Guard for positional mapping: sample fare rows and check that the app stop
+ * at both sequence positions really is near the TD origin/destination stop.
+ * Equal stop counts alone can also describe a reversed candidate whose score
+ * happened to land within the alignment threshold.
+ */
+function positionalFaresAlign({ stops, originRows, stopCoords, appStopMap }) {
+  let checked = 0
+  for (const [originStopId, rows] of originRows) {
+    for (const row of rows) {
+      const from = row.originSeq - 1
+      const to = row.destSeq - 1
+      if (from < 0 || to <= from || to >= stops.length) return false
+      const tdFrom = stopCoords.get(originStopId)
+      const tdTo = stopCoords.get(row.destStop)
+      const appFrom = appStopMap.get(stops[from])
+      const appTo = appStopMap.get(stops[to])
+      if (!tdFrom || !tdTo || !appFrom || !appTo) return false
+      if (
+        approxMeters(tdFrom[0], tdFrom[1], appFrom.lat, appFrom.lng) > POSITIONAL_MATCH_RADIUS_M ||
+        approxMeters(tdTo[0], tdTo[1], appTo.lat, appTo.lng) > POSITIONAL_MATCH_RADIUS_M
+      ) {
+        return false
+      }
+      checked += 1
+      if (checked >= 12) return true
+    }
+  }
+  return checked > 0
+}
+
+function buildVariantFareTable({
+  stops,
+  originRows,
+  stopCoords,
+  appStopMap,
+  tdStops,
+  usePositional,
+}) {
+  const positional = Boolean(usePositional && tdStops && tdStops.length === stops.length)
+  if (positional && !positionalFaresAlign({ stops, originRows, stopCoords, appStopMap })) {
+    return null
+  }
+  const appIndexByTdStop = new Map()
+  const appIndexFor = (tdStopId) => {
+    const cached = appIndexByTdStop.get(tdStopId)
+    if (cached !== undefined) return cached
+    const coords = stopCoords.get(tdStopId)
+    if (!coords) {
+      appIndexByTdStop.set(tdStopId, -1)
+      return -1
+    }
+    let best = -1
+    let bestDistance = Infinity
+    for (let i = 0; i < stops.length; i += 1) {
+      const stop = appStopMap.get(stops[i])
+      if (!stop) continue
+      const distance = approxMeters(coords[0], coords[1], stop.lat, stop.lng)
+      if (distance < bestDistance) {
+        bestDistance = distance
+        best = i
+      }
+    }
+    const resolved = bestDistance <= 150 ? best : -1
+    appIndexByTdStop.set(tdStopId, resolved)
+    return resolved
+  }
+
+  const byDestination = new Map()
+  let pairCount = 0
+  for (const [originStopId, rows] of originRows) {
+    for (const row of rows) {
+      // Sequential routes can serve the same TD stop twice, so the boarding
+      // index belongs to the row's own originSeq, not the whole stop group.
+      const from = positional ? row.originSeq - 1 : appIndexFor(originStopId)
+      if (from < 0 || from >= stops.length) continue
+      const to = positional ? row.destSeq - 1 : appIndexFor(row.destStop)
+      if (to <= from || to >= stops.length) continue
+      let destinations = byDestination.get(from)
+      if (!destinations) {
+        destinations = new Map()
+        byDestination.set(from, destinations)
+      }
+      // Two TD stops can land on the same app stop; keep the cheaper fare.
+      const previous = destinations.get(to)
+      if (previous === undefined || row.price < previous) destinations.set(to, row.price)
+      pairCount += 1
+    }
+  }
+  if (pairCount === 0) return null
+
+  const fares = new Array(stops.length).fill(null)
+  for (const [from, destinations] of byDestination) {
+    const sorted = [...destinations.entries()].sort((a, b) => a[0] - b[0])
+    const ranges = []
+    for (const [to, price] of sorted) {
+      const last = ranges[ranges.length - 1]
+      if (last && last[1] === price) last[0] = to
+      else ranges.push([to, price])
+    }
+    fares[from] = ranges
+  }
+  return { table: { stops: [...stops], fares }, pairCount }
+}
+
+/**
+ * Proximity of an app route pattern to a TD direction pattern, sampled at
+ * proportional positions. Endpoints alone cannot tell joint-route directions
+ * apart when a company flips the I/O convention, and a midpoint sample makes
+ * a reversed stop list obviously worse than the aligned one.
+ */
+function directionScore(stops, tdStops, stopCoords, appStopMap) {
+  if (!tdStops || tdStops.length === 0 || stops.length === 0) return Infinity
+  let total = 0
+  let samples = 0
+  for (const fraction of [0, 0.25, 0.5, 0.75, 1]) {
+    const tdStopId = tdStops[Math.round(fraction * (tdStops.length - 1))]
+    const appStopId = stops[Math.round(fraction * (stops.length - 1))]
+    const td = tdStopId ? stopCoords.get(tdStopId) : null
+    const app = appStopId ? appStopMap.get(appStopId) : null
+    if (!td || !app) continue
+    total += approxMeters(td[0], td[1], app.lat, app.lng)
+    samples += 1
+  }
+  return samples === 0 ? Infinity : total / samples
+}
+
+/**
+ * Compile fare_attributes + fare_rules into per-app-variant fare matrices.
+ * The TD route_id is the app's gtfsId, so each TD direction maps to the app
+ * variants (co, route, bound, serviceType, gtfsId) that share it. Variants
+ * without a usable match are absent and the UI keeps the boarding-stop fare
+ * fallback.
+ */
+function buildFares({
+  fareAttributesText,
+  fareRulesText,
+  routeInfo,
+  appRoutes,
+  stopCoords,
+  appStopMap,
+  directionOrder,
+  lwbShortNames,
+}) {
+  if (!fareAttributesText || !fareRulesText || !appRoutes || !appStopMap) {
+    return { variants: {}, pairCount: 0 }
+  }
+  const prices = buildFarePriceMap(fareAttributesText)
+  const groups = buildFareGroups(fareRulesText, prices, routeInfo)
+
+  const appVariantsByGtfsId = new Map()
+  for (const entry of appRoutes) {
+    const gtfsId = String(entry?.gtfsId ?? '').trim()
+    if (!gtfsId || !entry?.stops || !entry?.bound || !Array.isArray(entry.co)) continue
+    let list = appVariantsByGtfsId.get(gtfsId)
+    if (!list) {
+      list = []
+      appVariantsByGtfsId.set(gtfsId, list)
+    }
+    list.push(entry)
+  }
+
+  const out = {}
+  let pairCount = 0
+  for (const [groupKey, originRows] of groups) {
+    const sep = groupKey.lastIndexOf('|')
+    const routeId = groupKey.slice(0, sep)
+    const dir = groupKey.slice(sep + 1)
+    const wantedBound = dir === '1' ? 'O' : 'I'
+    const order = directionOrder.get(groupKey)
+    const entries = appVariantsByGtfsId.get(routeId) ?? []
+
+    const candidates = []
+    for (const entry of entries) {
+      for (const co of entry.co) {
+        const stops = entry.stops[co]
+        if (!Array.isArray(stops) || stops.length < 2) continue
+        const bound = String(entry.bound?.[co] ?? '')
+        // The upstream db files LWB routes under "kmb"; mirror the app's
+        // operator split so fare keys match the split headway variants.
+        const keyCo =
+          co === 'kmb' && lwbShortNames?.has(String(entry.route ?? '').toUpperCase()) ? 'lwb' : co
+        candidates.push({
+          entry,
+          co,
+          keyCo,
+          bound: bound || wantedBound,
+          score: directionScore(stops, order?.stops, stopCoords, appStopMap),
+        })
+      }
+    }
+    if (candidates.length === 0) continue
+    candidates.sort((a, b) => a.score - b.score)
+    const bestScore = candidates[0]?.score ?? Infinity
+
+    const buildFor = (candidate, usePositional) => {
+      const stops = candidate.entry.stops[candidate.co]
+      const result = buildVariantFareTable({
+        stops,
+        originRows,
+        stopCoords,
+        appStopMap,
+        tdStops: order?.stops,
+        usePositional,
+      })
+      if (!result) return false
+      const serviceType = String(candidate.entry.serviceType ?? '')
+      const key = `${candidate.keyCo}|${String(candidate.entry.route ?? '').toUpperCase()}|${candidate.bound}|${serviceType}|${routeId}`
+      if (!out[key]) {
+        out[key] = result.table
+        pairCount += result.pairCount
+      }
+      return true
+    }
+
+    // Keep every candidate whose stop order aligns with this TD direction.
+    // Joint routes flip the I/O convention per company (KMB outbound is CTB
+    // inbound), so bound alone would drop one company's correct direction.
+    // Positional candidates are also checked against real TD stop coordinates,
+    // so a reversed pattern that slipped inside the score threshold fails.
+    const aligned =
+      bestScore === Infinity
+        ? candidates
+        : candidates.filter((candidate) => candidate.score <= bestScore + 300)
+    let built = 0
+    for (const candidate of aligned) {
+      if (buildFor(candidate, true)) built += 1
+    }
+    if (built === 0) {
+      for (const candidate of candidates) buildFor(candidate, false)
+    }
+  }
+  return { variants: out, pairCount }
+}
+
 function buildSnapshot(files, appStops) {
   const routes = rowsToObjects(parseCsv(files['routes.txt']))
   const trips = rowsToObjects(parseCsv(files['trips.txt']))
@@ -516,6 +881,9 @@ function buildSnapshot(files, appStops) {
   const firstStopId = new Map()
   // trip_id -> every TD stop_id it serves (for pattern + coverage analysis)
   const tripStops = new Map()
+  // First complete stop order per TD route_id + direction. Used only to know
+  // which app direction a fare table belongs to, so the first trip is enough.
+  const directionOrder = new Map()
   for (const st of stopTimes) {
     if (st.stop_id) {
       let set = tripStops.get(st.trip_id)
@@ -524,6 +892,17 @@ function buildSnapshot(files, appStops) {
         tripStops.set(st.trip_id, set)
       }
       set.add(st.stop_id)
+
+      const trip = tripInfo.get(st.trip_id)
+      if (trip) {
+        const dirKey = `${trip.routeId}|${st.trip_id.split('-')[1] ?? ''}`
+        let slot = directionOrder.get(dirKey)
+        if (!slot) {
+          slot = { tripId: st.trip_id, stops: [] }
+          directionOrder.set(dirKey, slot)
+        }
+        if (slot.tripId === st.trip_id) slot.stops.push(st.stop_id)
+      }
     }
     if (st.stop_sequence !== '1') continue
     const dep = toMinutes(st.departure_time)
@@ -1090,8 +1469,20 @@ function buildSnapshot(files, appStops) {
     fallbackSynth += 1
   }
 
+  const fares = buildFares({
+    fareAttributesText: files['fare_attributes.txt'],
+    fareRulesText: files['fare_rules.txt'],
+    routeInfo,
+    appRoutes: appStops?.routes ?? [],
+    stopCoords,
+    appStopMap,
+    directionOrder,
+    lwbShortNames,
+  })
+
   log(
-    `variants=${Object.keys(outVariants).length} span-only=${spanOnly} windows=${totalWindows} ` +
+    `fares=${Object.keys(fares.variants).length} farePairs=${fares.pairCount} ` +
+      `variants=${Object.keys(outVariants).length} span-only=${spanOnly} windows=${totalWindows} ` +
       `stopCovVariants=${stopCovVariants} stopCovEntries=${stopCovEntries} ` +
       `assignedTrips=${assignedTrips} ambiguousTrips=${ambiguousTrips} fallbackSynth=${fallbackSynth} ` +
       `holidays=${holidays.length} lwbRoutes=${lwbShortNames.size} ` +
@@ -1104,6 +1495,7 @@ function buildSnapshot(files, appStops) {
     holidays,
     totalWindows,
     lwbRoutes: [...lwbShortNames].sort(),
+    fares: fares.variants,
   }
 }
 
@@ -1206,7 +1598,7 @@ function buildSample() {
     (sum, v) => sum + Object.values(v.headway).reduce((n, list) => n + list.length, 0),
     0
   )
-  return { variants, holidays, totalWindows, lwbRoutes: [], sample: true }
+  return { variants, holidays, totalWindows, lwbRoutes: [], fares: {}, sample: true }
 }
 
 async function main() {
@@ -1224,7 +1616,9 @@ async function main() {
     datasetDate &&
     manifest?.datasetDate === datasetDate &&
     existsSync(HEADWAY_PATH) &&
-    existsSync(OPERATORS_PATH)
+    existsSync(OPERATORS_PATH) &&
+    existsSync(FARES_PATH) &&
+    Number(manifest?.fares ?? 0) > 0
   ) {
     log(`snapshot already at revision ${datasetDate}, skipping`)
     return
@@ -1263,22 +1657,37 @@ async function main() {
     variants: snapshot.variants,
     holidays: snapshot.holidays,
   })
+  const builtFareCount = Object.keys(snapshot.fares ?? {}).length
+  // A failed hk-bus-eta or fare-file fetch must not replace a good snapshot
+  // with an empty one for this dataset revision.
+  const keepExistingFares = builtFareCount === 0 && existsSync(FARES_PATH)
+  const fareCount = keepExistingFares ? Number(manifest?.fares ?? 0) : builtFareCount
+  const faresJson = keepExistingFares
+    ? null
+    : JSON.stringify({ updated, variants: snapshot.fares ?? {} })
   const manifestJson =
     JSON.stringify({
       datasetDate: updated,
       fetchedAt: new Date().toISOString(),
       routes: Object.keys(snapshot.variants).length,
       windows: snapshot.totalWindows,
+      fares: fareCount,
       source,
     }) + '\n'
   await writeAtomic(HEADWAY_PATH, headwayJson)
+  if (faresJson) {
+    await writeAtomic(FARES_PATH, faresJson)
+  } else {
+    log('fare build produced no variants, keeping existing fares.json')
+  }
   await writeAtomic(MANIFEST_PATH, manifestJson)
   const operatorsJson =
     JSON.stringify({ updated, lwbRoutes: snapshot.lwbRoutes ?? [] }, null, 2) + '\n'
   await writeAtomic(OPERATORS_PATH, operatorsJson)
   log(
-    `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes), ${MANIFEST_PATH} ` +
-      `(${manifestJson.length} bytes) and ${OPERATORS_PATH} ` +
+    `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes), ` +
+      `${faresJson ? `${FARES_PATH} (${faresJson.length} bytes)` : 'existing fares.json'}, ` +
+      `${MANIFEST_PATH} (${manifestJson.length} bytes) and ${OPERATORS_PATH} ` +
       `(${snapshot.lwbRoutes?.length ?? 0} LWB routes) source=${source} updated=${updated}`
   )
 }

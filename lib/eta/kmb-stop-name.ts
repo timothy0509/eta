@@ -1,3 +1,4 @@
+import { isKmbFamily } from '@/lib/eta/companies'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import { isKmbStop } from '@/lib/eta/types'
 import { pickSecondaryName } from '@/lib/eta/pick-lang'
@@ -118,12 +119,8 @@ export function formatKmbRouteEndpointName(
   opts: { co?: string; lang: UiLanguage }
 ): string {
   if (opts.lang !== 'en') return name
-  if (
-    String(opts.co ?? 'kmb')
-      .trim()
-      .toLowerCase() !== 'kmb'
-  )
-    return name
+  // LWB endpoints use the same shouting all-caps format as KMB.
+  if (!isKmbFamily(opts.co ?? 'kmb')) return name
   return titleCaseKmbEnName(name)
 }
 

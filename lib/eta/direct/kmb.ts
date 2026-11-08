@@ -1,4 +1,4 @@
-import type { Company } from 'hk-bus-eta'
+import type { AppCompany } from '@/lib/eta/companies'
 
 import { KMB_STOPS_CACHE_KEY, kmbStopEtaKey } from '@/lib/eta/cache/keys'
 import { isKmbStop } from '@/lib/eta/types'
@@ -114,7 +114,7 @@ export async function getKmbStopEta(stopId: string): Promise<KmbEtaEntry[]> {
 }
 
 export type KmbRouteStopEntry = {
-  co: Company
+  co: AppCompany
   route: string
   bound: 'I' | 'O' | string
   service_type: number | string
@@ -126,7 +126,7 @@ export type KmbRouteStopEntry = {
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:route-stops',
+    key: 'kmb:route-stops:v2',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -148,7 +148,7 @@ export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
 }
 
 export type KmbRouteInfo = {
-  co: Company
+  co: AppCompany
   route: string
   bound: 'I' | 'O' | string
   service_type: number | string
@@ -163,7 +163,7 @@ export type KmbRouteInfo = {
 }
 
 export type KmbRouteListEntry = {
-  co: Company
+  co: AppCompany
   route: string
   bound: 'I' | 'O' | string
   service_type: number | string
@@ -180,7 +180,7 @@ export type KmbRouteListEntry = {
 
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:routes',
+    key: 'kmb:routes:v2',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -206,7 +206,7 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
 }
 
 export async function getKmbRouteInfo(params: {
-  co?: Company
+  co?: AppCompany
   route: string
   direction: 'I' | 'O' | 'inbound' | 'outbound' | string
   serviceType: string
@@ -500,7 +500,7 @@ export async function fetchKmbStopEtas(
 }
 
 export type KmbFareVariant = {
-  co: Company
+  co: AppCompany
   route: string
   dir: string
   serviceType: string

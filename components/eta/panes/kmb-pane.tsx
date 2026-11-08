@@ -853,10 +853,12 @@ export function KmbPane({
     if (selectedItem.id === lastSelectedIdRef.current) return
 
     const restoredEntries = (selectedItem.entries ?? []).map((entry, idx) => {
-      const parts = entry.variantKey.split('|')
+      // Normalize old keys through the app company resolver: saved
+      // kmb|A31 entries become lwb|A31 after the LWB split, and legacy
+      // 3/4-part keys gain the empty gtfsId segment used by filter options.
       return {
         id: `restored-${idx}`,
-        variantKey: parts.length === 3 ? `kmb|${entry.variantKey}` : entry.variantKey,
+        variantKey: routeVariantKey(parseVariantKey(entry.variantKey)),
       }
     })
 

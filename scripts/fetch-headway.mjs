@@ -59,10 +59,10 @@
  * stops fall back to the variant-level display.
  *
  * Key rules:
- * - co is the lowercased app company (kmb/ctb/gmb/nlb/lrtfeeder). TD agency
- *   LWB rows map onto co "kmb" (the app has no lwb company); joint agencies
- *   (KMB+CTB, LWB+CTB) emit one variant per company. Agencies FERRY, XB, DB,
- *   PI, TRAM and PTRAM, and rows with empty route_short_name, are skipped.
+ * - co is the lowercased app company (kmb/lwb/ctb/gmb/nlb/lrtfeeder). TD
+ *   agency LWB rows map onto their own co "lwb"; joint agencies (KMB+CTB,
+ *   LWB+CTB) emit one variant per company. Agencies FERRY, XB, DB, PI, TRAM
+ *   and PTRAM, and rows with empty route_short_name, are skipped.
  * - ROUTE is the uppercased route_short_name. bound comes from the TD trip_id
  *   second segment (1 -> O, 2 -> I). serviceType is the app variant's own
  *   service type: trips whose first stop lands near exactly one app variant
@@ -88,6 +88,10 @@
  *   the UI can still show first/last departures.
  * - manifest "routes" is the variant count; "windows" is the total headway
  *   window count across all variants and day types.
+ * - the same run writes lib/eta/gtfs/operators.json, the route_short_name
+ *   list for LWB. The app reads it at index build time to split LWB routes
+ *   out of the hk-bus-eta "kmb" bucket (that upstream feed labels every
+ *   KMB-group route kmb, LWB included).
  */
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync } from 'node:fs'
@@ -104,6 +108,7 @@ const HKBUS_DB_URL = process.env.HKBUS_DB_URL || 'https://data.hkbus.app/routeFa
 const OUT_DIR = join(REPO_ROOT, 'public', 'headway')
 const HEADWAY_PATH = join(OUT_DIR, 'headway.json')
 const MANIFEST_PATH = join(OUT_DIR, 'manifest.json')
+const OPERATORS_PATH = join(REPO_ROOT, 'lib', 'eta', 'gtfs', 'operators.json')
 
 const GTFS_FILES = [
   'routes.txt',
@@ -118,10 +123,10 @@ const GTFS_FILES = [
 // TD agencies the app has no company for (plus empty short names, handled at parse).
 const SKIP_AGENCIES = new Set(['FERRY', 'XB', 'DB', 'PI', 'TRAM', 'PTRAM'])
 
-// TD agency token (already uppercased) -> app company. LWB folds into kmb.
+// TD agency token (already uppercased) -> app company.
 const AGENCY_TO_CO = {
   KMB: 'kmb',
-  LWB: 'kmb',
+  LWB: 'lwb',
   CTB: 'ctb',
   GMB: 'gmb',
   NLB: 'nlb',
@@ -445,6 +450,10 @@ function buildSnapshot(files, appStops) {
 
   // route_id -> { coList, short }
   const routeInfo = new Map()
+  // Every short name TD lists as LWB (alone or jointly operated). The
+  // hk-bus-eta feed labels these routes "kmb", so the app needs this set to
+  // split them back out at index build time.
+  const lwbShortNames = new Set()
   let skippedAgency = 0
   let skippedShort = 0
   for (const r of routes) {
@@ -459,6 +468,7 @@ function buildSnapshot(files, appStops) {
       skippedAgency += 1
       continue
     }
+    if (tokens.includes('LWB')) lwbShortNames.add(short)
     const coList = []
     for (const token of tokens) {
       const co = AGENCY_TO_CO[token]
@@ -603,7 +613,10 @@ function buildSnapshot(files, appStops) {
     if (!short || !entry.co || !entry.bound || !entry.stops) continue
     for (const rawCo of entry.co) {
       const up = String(rawCo ?? '').toUpperCase()
-      const co = AGENCY_TO_CO[up] ?? String(rawCo ?? '').toLowerCase()
+      let co = AGENCY_TO_CO[up] ?? String(rawCo ?? '').toLowerCase()
+      // The upstream db files LWB routes under "kmb"; mirror the app's
+      // operator split so serviceType matching still resolves them.
+      if (co === 'kmb' && lwbShortNames.has(short)) co = 'lwb'
       if (!co) continue
       const boundKey = entry.bound[rawCo] ?? entry.bound[co]
       if (boundKey !== 'I' && boundKey !== 'O') continue
@@ -1081,11 +1094,17 @@ function buildSnapshot(files, appStops) {
     `variants=${Object.keys(outVariants).length} span-only=${spanOnly} windows=${totalWindows} ` +
       `stopCovVariants=${stopCovVariants} stopCovEntries=${stopCovEntries} ` +
       `assignedTrips=${assignedTrips} ambiguousTrips=${ambiguousTrips} fallbackSynth=${fallbackSynth} ` +
-      `holidays=${holidays.length} skippedAgency=${skippedAgency} skippedShort=${skippedShort} ` +
+      `holidays=${holidays.length} lwbRoutes=${lwbShortNames.size} ` +
+      `skippedAgency=${skippedAgency} skippedShort=${skippedShort} ` +
       `tripsUnknownRoute=${tripsUnknownRoute} tripsUnknownService=${tripsUnknownService} ` +
       `tripsUnknownBound=${tripsUnknownBound} freqOrphans=${freqOrphans} freqBadTime=${freqBadTime}`
   )
-  return { variants: outVariants, holidays, totalWindows }
+  return {
+    variants: outVariants,
+    holidays,
+    totalWindows,
+    lwbRoutes: [...lwbShortNames].sort(),
+  }
 }
 
 /** Offline fallback: hand-written sample covering KMB route 1, both bounds. */
@@ -1187,7 +1206,7 @@ function buildSample() {
     (sum, v) => sum + Object.values(v.headway).reduce((n, list) => n + list.length, 0),
     0
   )
-  return { variants, holidays, totalWindows, sample: true }
+  return { variants, holidays, totalWindows, lwbRoutes: [], sample: true }
 }
 
 async function main() {
@@ -1204,7 +1223,8 @@ async function main() {
     !isForce() &&
     datasetDate &&
     manifest?.datasetDate === datasetDate &&
-    existsSync(HEADWAY_PATH)
+    existsSync(HEADWAY_PATH) &&
+    existsSync(OPERATORS_PATH)
   ) {
     log(`snapshot already at revision ${datasetDate}, skipping`)
     return
@@ -1222,7 +1242,7 @@ async function main() {
   }
 
   if (!snapshot) {
-    if (existsSync(HEADWAY_PATH) && existsSync(MANIFEST_PATH)) {
+    if (existsSync(HEADWAY_PATH) && existsSync(MANIFEST_PATH) && existsSync(OPERATORS_PATH)) {
       log('keeping existing snapshot after failed refresh')
       return
     }
@@ -1253,9 +1273,13 @@ async function main() {
     }) + '\n'
   await writeAtomic(HEADWAY_PATH, headwayJson)
   await writeAtomic(MANIFEST_PATH, manifestJson)
+  const operatorsJson =
+    JSON.stringify({ updated, lwbRoutes: snapshot.lwbRoutes ?? [] }, null, 2) + '\n'
+  await writeAtomic(OPERATORS_PATH, operatorsJson)
   log(
-    `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes) and ${MANIFEST_PATH} ` +
-      `(${manifestJson.length} bytes) source=${source} updated=${updated}`
+    `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes), ${MANIFEST_PATH} ` +
+      `(${manifestJson.length} bytes) and ${OPERATORS_PATH} ` +
+      `(${snapshot.lwbRoutes?.length ?? 0} LWB routes) source=${source} updated=${updated}`
   )
 }
 

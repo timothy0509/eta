@@ -5,6 +5,8 @@
 
 const OPERATOR_COLORS: Record<string, string> = {
   kmb: '#d13b31',
+  // Long Win Bus: KMB group, orange brand.
+  lwb: '#f58220',
   ctb: '#f0dd4d',
   nwfb: '#f0dd4d',
   lrtfeeder: '#1a2b4e',

@@ -20,6 +20,7 @@ describe('normalizeOperator', () => {
 describe('getOperatorColor', () => {
   it('maps known operators to brand colors', () => {
     expect(getOperatorColor('kmb')).toBe('#d13b31')
+    expect(getOperatorColor('lwb')).toBe('#f58220')
     expect(getOperatorColor('ctb')).toBe('#f0dd4d')
     expect(getOperatorColor('nwfb')).toBe('#f0dd4d')
     expect(getOperatorColor('lrtfeeder')).toBe('#1a2b4e')

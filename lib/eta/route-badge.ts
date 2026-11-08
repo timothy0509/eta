@@ -157,7 +157,8 @@ function getNlbRouteBadgeStyle(route: string): RouteBadgeStyle {
 export function getRouteBadgeStyle(route: string, company?: string): RouteBadgeStyle {
   const co = String(company ?? 'kmb').toLowerCase()
 
-  if (co === 'kmb') {
+  // LWB shares the KMB route-family colour scheme (A/E/N/S/R prefixes).
+  if (co === 'kmb' || co === 'lwb') {
     return getKmbRouteBadgeStyle(route)
   }
 

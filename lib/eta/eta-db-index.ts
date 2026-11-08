@@ -1,11 +1,13 @@
 import type { Company, EtaDb, RouteListEntry } from 'hk-bus-eta'
 
+import type { AppCompany } from '@/lib/eta/companies'
+import { isKmbFamily, isLwbRoute, resolveAppCompany } from '@/lib/eta/companies'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 
 export type { KmbStopSearchItem }
 
 export type KmbRouteStopLite = {
-  co: Company
+  co: AppCompany
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
@@ -22,7 +24,7 @@ export type KmbRouteStopLite = {
 }
 
 export type KmbRouteInfoLite = {
-  co: Company
+  co: AppCompany
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
@@ -44,12 +46,12 @@ export type KmbRouteInfoLite = {
 
 type BusRouteCandidate = {
   entry: RouteListEntry
-  co: Company
+  co: AppCompany
 }
 
 export type StopRouteEntry = {
   stopId: string
-  co: Company
+  co: AppCompany
   route: string
   bound: string
   serviceType: string
@@ -59,7 +61,7 @@ export type StopRouteEntry = {
 }
 
 export type RouteVariantKey = {
-  co: Company
+  co: AppCompany
   route: string
   bound: string
   serviceType: string
@@ -71,6 +73,23 @@ export type RouteVariantKey = {
 
 export function normalizeGtfsId(gtfsId: unknown): string {
   return String(gtfsId ?? '').trim()
+}
+
+/**
+ * Put an LWB route under its own company. hk-bus-eta files every KMB-group
+ * route under co "kmb" (including Long Win). The TD GTFS list is the source
+ * of truth for which short names are LWB, so this maps kmb -> lwb for those
+ * routes and moves the per-company stops and bound across with it.
+ * Non-LWB entries come back untouched.
+ */
+export function reclassifyLwbRouteEntry(entry: RouteListEntry): RouteListEntry {
+  if (!entry.co.includes('kmb') || !isLwbRoute(entry.route)) return entry
+  const co = entry.co.map((company) => (company === 'kmb' ? 'lwb' : company)) as Company[]
+  const bound = { ...entry.bound } as RouteListEntry['bound']
+  const stops = { ...entry.stops } as RouteListEntry['stops']
+  if (entry.bound.kmb) (bound as Record<string, string>).lwb = entry.bound.kmb
+  if (entry.stops.kmb) (stops as Record<string, string[]>).lwb = entry.stops.kmb
+  return { ...entry, co, bound, stops }
 }
 
 /**
@@ -166,7 +185,7 @@ export function groupRegionStops(
  */
 export function assignRouteRegions(
   stopsByGtfsId: Map<string, Set<string>> | Record<string, Set<string> | string[]>,
-  prefix: { co: Company; route: string }
+  prefix: { co: AppCompany; route: string }
 ): Map<string, string> {
   const groups = groupRegionStops(stopsByGtfsId)
   const co = String(prefix.co ?? '')
@@ -185,10 +204,10 @@ export function assignRouteRegions(
  * an empty stop id are skipped, so stop-less variants resolve to ''.
  */
 export function computeRouteRegions(
-  routeStops: Array<{ co: Company; route: string; stopId: string; gtfsId: string }>
+  routeStops: Array<{ co: AppCompany; route: string; stopId: string; gtfsId: string }>
 ): Map<string, Map<string, string>> {
   const stopsByFamily = new Map<string, Map<string, Set<string>>>()
-  const coRouteByFamily = new Map<string, { co: Company; route: string }>()
+  const coRouteByFamily = new Map<string, { co: AppCompany; route: string }>()
   for (const row of routeStops) {
     const co = row.co
     const route = String(row.route ?? '').toUpperCase()
@@ -226,11 +245,12 @@ export function computeRouteRegions(
  * routes get distinct keys instead of colliding.
  */
 export function routeVariantKey(k: RouteVariantKey): string {
-  return `${k.co}|${k.route.toUpperCase()}|${k.bound}|${k.serviceType}|${normalizeGtfsId(k.gtfsId)}`
+  const co = resolveAppCompany(k.co, k.route)
+  return `${co}|${k.route.toUpperCase()}|${k.bound}|${k.serviceType}|${normalizeGtfsId(k.gtfsId)}`
 }
 
 export type ParsedVariantKey = {
-  co: string
+  co: AppCompany
   route: string
   bound: string
   serviceType: string
@@ -247,14 +267,32 @@ export function parseVariantKey(key: string): ParsedVariantKey {
   const parts = String(key ?? '').split('|')
   if (parts.length === 3) {
     const [route = '', bound = '', serviceType = ''] = parts
-    return { co: 'kmb', route, bound, serviceType, gtfsId: '' }
+    return {
+      co: resolveAppCompany('kmb', route),
+      route,
+      bound,
+      serviceType,
+      gtfsId: '',
+    }
   }
   if (parts.length === 6) {
     const [co = 'kmb', route = '', bound = '', serviceType = '', gtfsId = ''] = parts
-    return { co, route, bound, serviceType, gtfsId: gtfsId ?? '' }
+    return {
+      co: resolveAppCompany(co, route),
+      route,
+      bound,
+      serviceType,
+      gtfsId: gtfsId ?? '',
+    }
   }
   const [co = 'kmb', route = '', bound = '', serviceType = '', gtfsId = ''] = parts
-  return { co, route, bound, serviceType, gtfsId: gtfsId ?? '' }
+  return {
+    co: resolveAppCompany(co, route),
+    route,
+    bound,
+    serviceType,
+    gtfsId: gtfsId ?? '',
+  }
 }
 
 /** Family key without gtfsId: `co|ROUTE|bound|serviceType`. Matches every region. */
@@ -277,7 +315,10 @@ export function variantKeyMatches(filterKey: string, entryKey: string): boolean 
   let pipes = 0
   for (let i = 0; i < filter.length; i += 1) if (filter.charCodeAt(i) === 124) pipes += 1
   if (pipes === 3) {
-    return entryKey === filter || entryKey.startsWith(`${filter}|`)
+    if (entryKey === filter || entryKey.startsWith(`${filter}|`)) return true
+    // Old links saved kmb|A31 before the LWB split; parse through the
+    // app company resolver so the family still matches lwb|A31.
+    return variantFamilyKey(filter) === variantFamilyKey(entryKey)
   }
   const parsedFilter = parseVariantKey(filter)
   const parsedEntry = parseVariantKey(entryKey)
@@ -304,13 +345,15 @@ export function variantKeyMatches(filterKey: string, entryKey: string): boolean 
  */
 export function findRouteEntryByFamily(
   routeVariantIndex: Map<string, RouteListEntry>,
-  family: { co: Company; route: string; bound: string; serviceType: string }
+  family: { co: AppCompany; route: string; bound: string; serviceType: string }
 ): RouteListEntry | undefined {
-  const prefix = `${family.co}|${family.route.toUpperCase()}|${family.bound}|${family.serviceType}|`
+  // Old saved links carry kmb|A31 after the LWB split; resolve it to lwb.
+  const co = resolveAppCompany(family.co, family.route)
+  const prefix = `${co}|${family.route.toUpperCase()}|${family.bound}|${family.serviceType}|`
   let best: { key: string; entry: RouteListEntry } | null = null
   for (const [key, entry] of routeVariantIndex) {
     if (key !== prefix.slice(0, -1) && !key.startsWith(prefix)) continue
-    if (!entry.co.includes(family.co)) continue
+    if (!(entry.co as string[]).includes(co)) continue
     if (!best || key < best.key) best = { key, entry }
   }
   return best?.entry
@@ -336,7 +379,7 @@ export type EtaDbIndexes = {
 }
 
 export type BuildEtaDbIndexesOptions = {
-  busCompanies: Company[]
+  busCompanies: AppCompany[]
 }
 
 export function normalizeBound(bound?: string | null): 'I' | 'O' | string {
@@ -349,7 +392,7 @@ export function normalizeStopId(stopId: string): string {
 }
 
 export function routeStopSeqKey(params: {
-  co: Company
+  co: AppCompany
   route: string
   bound: string
   serviceType: string
@@ -376,9 +419,11 @@ export async function buildEtaDbIndexes(
 ): Promise<EtaDbIndexes> {
   const { busCompanies } = options
 
-  const kmbRouteListEntries = Object.values(db.routeList).filter((entry) =>
-    entry.co.some((co) => busCompanies.includes(co) && entry.stops[co]?.length)
-  )
+  const kmbRouteListEntries = Object.values(db.routeList)
+    .map((entry) => reclassifyLwbRouteEntry(entry))
+    .filter((entry) =>
+      entry.co.some((co) => busCompanies.includes(co as AppCompany) && entry.stops[co]?.length)
+    )
 
   const routeStopSeqIndex = new Map<string, number>()
   const kmbRouteStops: KmbRouteStopLite[] = kmbRouteListEntries.flatMap((entry) =>
@@ -505,7 +550,8 @@ export async function buildEtaDbIndexes(
   }
 
   for (const stop of kmbStops) {
-    stop.isKmb = (stopRoutesIndex.get(stop.stopId) ?? []).some((e) => e.co === 'kmb')
+    // LWB shares KMB's stop-name format, so both count as KMB-family here.
+    stop.isKmb = (stopRoutesIndex.get(stop.stopId) ?? []).some((e) => isKmbFamily(e.co))
   }
 
   return {

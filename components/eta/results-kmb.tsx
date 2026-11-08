@@ -43,6 +43,7 @@ import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
 
 const OPERATOR_LABELS: Record<string, { en: string; tc: string; sc: string }> = {
   kmb: { en: 'KMB', tc: '九巴', sc: '九巴' },
+  lwb: { en: 'LWB', tc: '龍運巴士', sc: '龙运巴士' },
   ctb: { en: 'CTB', tc: '城巴', sc: '城巴' },
   nwfb: { en: 'NWFB', tc: '新巴', sc: '新巴' },
   nlb: { en: 'NLB', tc: '嶼巴', sc: '屿巴' },

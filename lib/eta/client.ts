@@ -1,4 +1,6 @@
-import type { Company, Eta, RouteListEntry } from 'hk-bus-eta'
+import type { Eta, RouteListEntry } from 'hk-bus-eta'
+
+import type { AppCompany } from '@/lib/eta/companies'
 
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
 import type { MtrScheduleResponse } from '@/lib/eta/mtr'
@@ -167,7 +169,7 @@ export async function fetchKmbRoutes(): Promise<KmbRouteListEntry[]> {
 }
 
 export type KmbRouteStopLite = {
-  co: Company
+  co: AppCompany
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
@@ -205,7 +207,7 @@ export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
 }
 
 export type KmbRouteInfoLite = {
-  co: Company
+  co: AppCompany
   route: string
   bound: 'I' | 'O' | string
   serviceType: string
@@ -226,7 +228,7 @@ export type KmbRouteInfoLite = {
 }
 
 export async function fetchKmbRouteInfo(params: {
-  co?: Company
+  co?: AppCompany
   route: string
   direction: 'I' | 'O' | 'inbound' | 'outbound' | string
   serviceType: string
@@ -307,7 +309,7 @@ export async function fetchKmbStopEtas(
  * Fetch fares for a list of route variants (deferred from stop-etas).
  */
 export type KmbFareVariant = {
-  co: Company
+  co: AppCompany
   route: string
   dir: string
   serviceType: string

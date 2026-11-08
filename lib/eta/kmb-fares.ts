@@ -1,6 +1,7 @@
 import type { Company, RouteListEntry } from 'hk-bus-eta'
 
 import type { KmbRouteStopLite } from '@/lib/eta/client'
+import { resolveAppCompany } from '@/lib/eta/companies'
 import { findRouteEntryByFamily, normalizeGtfsId, routeVariantKey } from '@/lib/eta/eta-db-index'
 import { kmbDailyCacheControlHeader, secondsUntilNextKmbDailyUpdate } from '@/lib/eta/kmb-cache'
 
@@ -45,7 +46,8 @@ function variantKey(
   serviceType: string,
   gtfsId?: string
 ): VariantKey {
-  return `${String(co ?? 'kmb')}|${normalizeRouteName(route)}|${String(bound ?? '')}|${String(
+  const company = resolveAppCompany(co, route)
+  return `${company}|${normalizeRouteName(route)}|${String(bound ?? '')}|${String(
     serviceType ?? ''
   )}|${normalizeGtfsId(gtfsId)}`
 }
@@ -65,7 +67,7 @@ export function computeKmbRouteVariantStops(routeStops: KmbRouteStopLite[]): Kmb
   const byFamily = new Map<string, VariantStops[]>()
 
   const familyKey = (co: string, route: string, bound: string, serviceType: string) =>
-    `${String(co ?? 'kmb')}|${normalizeRouteName(route)}|${String(bound ?? '')}|${String(
+    `${resolveAppCompany(co, route)}|${normalizeRouteName(route)}|${String(bound ?? '')}|${String(
       serviceType ?? ''
     )}`
 
@@ -154,9 +156,9 @@ function familyLookup(
   family: { co: string; route: string; bound: string; serviceType: string }
 ): VariantStops[] | undefined {
   if (index instanceof Map) return undefined
-  const key = `${String(family.co ?? 'kmb')}|${normalizeRouteName(family.route)}|${String(
-    family.bound ?? ''
-  )}|${String(family.serviceType ?? '')}`
+  const key = `${resolveAppCompany(family.co, family.route)}|${normalizeRouteName(
+    family.route
+  )}|${String(family.bound ?? '')}|${String(family.serviceType ?? '')}`
   return index.byFamily.get(key)
 }
 
@@ -173,9 +175,9 @@ function familyVariants(
   byVariantStops: Map<VariantKey, VariantStops>,
   family: { co: string; route: string; bound: string; serviceType: string }
 ): Array<{ key: VariantKey; variant: VariantStops }> {
-  const prefix = `${String(family.co ?? 'kmb')}|${normalizeRouteName(family.route)}|${String(
-    family.bound ?? ''
-  )}|${String(family.serviceType ?? '')}|`
+  const prefix = `${resolveAppCompany(family.co, family.route)}|${normalizeRouteName(
+    family.route
+  )}|${String(family.bound ?? '')}|${String(family.serviceType ?? '')}|`
   const out: Array<{ key: VariantKey; variant: VariantStops }> = []
   for (const [key, variant] of byVariantStops) {
     if (key !== prefix.slice(0, -1) && !key.startsWith(prefix)) continue

@@ -53,6 +53,7 @@ import {
 } from '@/lib/eta/fare-colors'
 import { formatFareHkd } from '@/lib/eta/format'
 import type { GeoPoint } from '@/lib/eta/geo'
+import { resolveAppCompany } from '@/lib/eta/companies'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import {
   buildStreetRuns,
@@ -900,14 +901,14 @@ export function KmbRoutesView({
   const initialKey = React.useMemo(
     () =>
       initialSelection
-        ? `${normalizeOperator(initialSelection.co)}|${initialSelection.route}|${initialSelection.region ?? ''}|${initialSelection.bound ?? ''}|${initialSelection.serviceType ?? ''}`
+        ? `${resolveAppCompany(initialSelection.co, initialSelection.route)}|${initialSelection.route}|${initialSelection.region ?? ''}|${initialSelection.bound ?? ''}|${initialSelection.serviceType ?? ''}`
         : '',
     [initialSelection]
   )
 
   const autoRouteKey = React.useMemo(() => {
     if (!initialSelection || routes.length === 0) return null
-    const co = normalizeOperator(initialSelection.co)
+    const co = resolveAppCompany(initialSelection.co, initialSelection.route)
     const route = initialSelection.route
     const region = initialSelection.region
     const inRegion = routeEntries.filter((e) => normalizeOperator(e.co) === co && e.route === route)
@@ -919,7 +920,7 @@ export function KmbRoutesView({
 
   const autoVariant = React.useMemo(() => {
     if (!initialSelection || !autoRouteKey || routes.length === 0) return null
-    const co = normalizeOperator(initialSelection.co)
+    const co = resolveAppCompany(initialSelection.co, initialSelection.route)
     const route = initialSelection.route
     const matchingVariants = routes.filter(
       (r) =>

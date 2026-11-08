@@ -8,6 +8,7 @@ import {
   computeRouteRegions,
   deserializeEtaDbIndexes,
   groupRegionStops,
+  parseVariantKey,
   routeVariantKey,
   serializeEtaDbIndexes,
   variantKeyMatches,
@@ -73,6 +74,31 @@ describe('buildEtaDbIndexes isKmb derivation', () => {
     )
     const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
     expect(indexes.kmbStops).toMatchObject([{ stopId: 'S3', isKmb: true }])
+  })
+
+  it('splits LWB routes out of the kmb bucket', async () => {
+    const db = dbWith(
+      [routeEntry('A31', ['kmb'], { kmb: ['S1'] }), routeEntry('1', ['kmb'], { kmb: ['S2'] })],
+      ['S1', 'S2']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'lwb', 'ctb'] })
+    expect(indexes.kmbRouteStops).toMatchObject([
+      { route: 'A31', co: 'lwb', stopId: 'S1' },
+      { route: '1', co: 'kmb', stopId: 'S2' },
+    ])
+    expect(indexes.routeVariantIndex.get('lwb|A31|O|1|')).toBeDefined()
+    expect(indexes.routeVariantIndex.get('kmb|A31|O|1|')).toBeUndefined()
+    // LWB shares KMB's stop-name format, so its stops stay KMB-family.
+    expect(indexes.kmbStops).toMatchObject([
+      { stopId: 'S1', isKmb: true },
+      { stopId: 'S2', isKmb: true },
+    ])
+  })
+
+  it('resolves legacy kmb|A31 keys to lwb', () => {
+    expect(parseVariantKey('kmb|A31|O|1').co).toBe('lwb')
+    expect(routeVariantKey(parseVariantKey('kmb|A31|O|1'))).toBe('lwb|A31|O|1|')
+    expect(variantKeyMatches('kmb|A31|O|1', 'lwb|A31|O|1|')).toBe(true)
   })
 
   it('preserves isKmb through a serialize and deserialize round-trip', async () => {

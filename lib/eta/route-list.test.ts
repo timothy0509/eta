@@ -24,9 +24,14 @@ function row(overrides: Partial<KmbRouteListEntry> = {}): KmbRouteListEntry {
 describe('mapKmbRouteListEntry', () => {
   it('keeps joint operators and the joint variant key', () => {
     const mapped = mapKmbRouteListEntry(
-      row({ operators: ['kmb', 'ctb'], jointVariantKey: 'jointv:3' })
+      row({
+        operators: ['kmb', 'ctb'],
+        routeGroupKey: 'joint|102',
+        jointVariantKey: 'jointv:3',
+      })
     )
     expect(mapped.operators).toEqual(['kmb', 'ctb'])
+    expect(mapped.routeGroupKey).toBe('joint|102')
     expect(mapped.jointVariantKey).toBe('jointv:3')
     expect(mapped.region).toBe('joint|102|1')
   })

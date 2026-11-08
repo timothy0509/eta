@@ -27,7 +27,7 @@ import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 import type { Company } from 'hk-bus-eta'
 import { useVisibleItems } from '@/lib/eta/use-infinite-scroll'
-import type { FavoritesItem } from '@/lib/store'
+import { useAppStore, type FavoritesItem } from '@/lib/store'
 import { precomputeRenderGroups, type PrecomputedGroups } from '@/lib/eta/kmb-eta-groups'
 import { initialEtaState, etaReducer } from '@/components/eta/panes/kmb-reducer'
 import {
@@ -161,6 +161,7 @@ export function KmbPane({
   onStopsChange,
 }: Props) {
   const { t, tWithParams } = useTranslations(lang)
+  const jointRouteInfoOperator = useAppStore((s) => s.jointRouteInfoOperator)
   const [kmbStops, setKmbStops] = React.useState<KmbStopSearchItem[]>([])
   const [loadingStops, setLoadingStops] = React.useState(false)
   const [stopsError, setStopsError] = React.useState<string | null>(null)
@@ -459,6 +460,7 @@ export function KmbPane({
         routeFilter: options.routeFilterString,
         signal: options.signal,
         includeFares: false,
+        preferredJointOperator: jointRouteInfoOperator,
       })
 
       if (options.signal?.aborted) return
@@ -606,7 +608,7 @@ export function KmbPane({
 
       return { filteredByStopId, result }
     },
-    []
+    [jointRouteInfoOperator]
   )
 
   // Main refresh function - handles both initial load and refresh of loaded stops
@@ -839,6 +841,18 @@ export function KmbPane({
       refreshKmbEtaRef.current(kmbQueryRef.current, { toastOnError: false, isAutoRefresh: true }),
     []
   )
+
+  // Switching the joint route-info preference changes operator labels and
+  // grouping keys, so refetch the visible stops instead of waiting for the
+  // next poll.
+  const previousJointPreference = React.useRef(jointRouteInfoOperator)
+  React.useEffect(() => {
+    if (previousJointPreference.current === jointRouteInfoOperator) return
+    previousJointPreference.current = jointRouteInfoOperator
+    if (kmbQueryRef.current) {
+      void refreshKmbEtaRef.current(kmbQueryRef.current, { toastOnError: false })
+    }
+  }, [jointRouteInfoOperator])
 
   React.useEffect(() => {
     if (!onRegisterRefresh) return

@@ -1,13 +1,17 @@
 export const ETA_DB_CACHE_KEY = 'hk-bus-eta:db'
 export const ETA_DB_MD5_KEY = 'hk-bus-eta:md5'
-export const ETA_DB_INDEX_KEY = 'hk-bus-eta:db-index:v4'
+export const ETA_DB_INDEX_KEY = 'hk-bus-eta:db-index:v5'
 export const KMB_STOPS_CACHE_KEY = 'kmb:stops:v2'
 export const KMB_STOPS_MAPPED_CACHE_KEY = 'kmb:stops:mapped:v1'
-export const KMB_ROUTE_STOPS_MAPPED_CACHE_KEY = 'kmb:route-stops:mapped:v3'
-export const KMB_ROUTES_MAPPED_CACHE_KEY = 'kmb:routes:mapped:v3'
+export const KMB_ROUTE_STOPS_MAPPED_CACHE_KEY = 'kmb:route-stops:mapped:v4'
+export const KMB_ROUTES_MAPPED_CACHE_KEY = 'kmb:routes:mapped:v4'
 
-export function kmbStopEtaKey(stopId: string): string {
-  return `stop-eta:${String(stopId ?? '').trim()}`
+export function kmbStopEtaKey(stopId: string, preferredOperator?: string | null): string {
+  const stop = String(stopId ?? '').trim()
+  const preferred = String(preferredOperator ?? '')
+    .trim()
+    .toLowerCase()
+  return preferred ? `stop-eta:${stop}:${preferred}` : `stop-eta:${stop}`
 }
 
 export function mtrScheduleKey(params: { line: string; sta: string; lang: string }): string {

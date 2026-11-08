@@ -35,7 +35,12 @@ import {
 } from '@/lib/eta/eta-db-index'
 import { fetchJson, getAdaptiveConcurrency } from '@/lib/eta/http'
 import { getCachedValue } from '@/lib/eta/direct/shared'
-import { loadJointRoutes, resolveJointOperators } from '@/lib/eta/joint-routes'
+import {
+  inferJointRouteNumbers,
+  jointRouteGroupKey,
+  loadJointRoutes,
+  resolveJointOperators,
+} from '@/lib/eta/joint-routes'
 import { promisePool } from '@/lib/eta/promise-pool'
 import { lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -239,11 +244,27 @@ export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
       )
     )
   )
+  const inferredJointRoutes = inferJointRouteNumbers(
+    kmbRouteListEntries.map((entry) => ({
+      co: entry.co,
+      route: entry.route,
+      orig: entry.orig,
+      dest: entry.dest,
+      serviceType: entry.serviceType,
+    }))
+  )
   return kmbRouteListEntries.flatMap((entry, entryIndex) => {
     const cos = entry.co.filter((co) => isBusCompany(co) && entry.stops[co]?.length)
     const jointOperators = resolveJointOperators(jointManifest, entry.route, cos)
     const joint = jointOperators.length > 1
     const route = String(entry.route ?? '').toUpperCase()
+    const inferredGroup =
+      inferredJointRoutes.has(route) &&
+      cos.length > 0 &&
+      cos.every((op) => op === 'kmb' || op === 'ctb')
+        ? `joint|${route}`
+        : ''
+    const routeGroupKey = jointRouteGroupKey(jointManifest, entry.route, cos) || inferredGroup
     const gtfsId = normalizeGtfsId(entry.gtfsId)
     const jointVariantKey = joint ? `jointv:${entryIndex}` : ''
     let jointRegion = ''
@@ -262,6 +283,7 @@ export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
       region:
         (joint ? jointRegion : '') || regionsByFamily.get(`${co}|${route}`)?.get(gtfsId) || '',
       operators: joint ? operators : [co],
+      routeGroupKey,
       jointVariantKey,
       origin: mapEtaLangToUi(entry.orig),
       destination: mapEtaLangToUi(entry.dest),
@@ -316,6 +338,7 @@ export async function findKmbRouteInfo(params: {
   const jointOperators = resolveJointOperators(manifest, entry.route, busCos)
   const joint = jointOperators.length > 1
   const route = String(entry.route ?? '').toUpperCase()
+  const primary = pickPrimaryOperator(jointOperators)
 
   return {
     co,
@@ -326,12 +349,8 @@ export async function findKmbRouteInfo(params: {
     region: joint
       ? `joint|${route}|1`
       : lookupRegion({ regionIndex }, { co, route: entry.route, gtfsId: entryGtfsId }),
-    operators: joint
-      ? [
-          pickPrimaryOperator(jointOperators),
-          ...jointOperators.filter((op) => op !== pickPrimaryOperator(jointOperators)),
-        ]
-      : [co],
+    operators: joint ? [primary, ...jointOperators.filter((op) => op !== primary)] : [co],
+    routeGroupKey: jointRouteGroupKey(manifest, entry.route, busCos),
     jointVariantKey: joint && entryIndex >= 0 ? `jointv:${entryIndex}` : '',
     origin: mapEtaLangToUi(entry.orig),
     destination: mapEtaLangToUi(entry.dest),
@@ -447,6 +466,8 @@ export async function fetchKmbEtasForStop(
     route?: string
     serviceType?: string
     language: UiLanguage
+    /** Operator whose route details and grouping key to prefer for joint routes. */
+    preferredOperator?: string | null
     signal?: AbortSignal
   },
   deps: FetchKmbEtasForStopDeps = defaultFetchKmbEtasForStopDeps
@@ -556,7 +577,7 @@ export async function fetchKmbEtasForStop(
 
   const tagJoint = (candidate: Candidate, etas: KmbEta[], sourceStopId?: string): KmbEta[] => {
     if (!candidate.jointVariantKey) return etas
-    const primary = pickPrimaryOperator(candidate.operators)
+    const primary = pickPrimaryOperator(candidate.operators, params.preferredOperator)
     // Both operators share a physical direction but can label their bound
     // differently (KMB inbound is CTB outbound). Use the primary operator's
     // bound so grouping, fares and schedule lookup all agree.
@@ -567,7 +588,7 @@ export async function fetchKmbEtasForStop(
       ...eta,
       dir: canonicalDir || eta.dir,
       groupCo: primary,
-      operators: candidate.operators,
+      operators: [primary, ...candidate.operators.filter((op) => op !== primary)],
       jointVariantKey: candidate.jointVariantKey,
       jointGroupKey: candidate.jointGroupKey,
       sourceStopId: sourceStopId ?? eta.sourceStopId,

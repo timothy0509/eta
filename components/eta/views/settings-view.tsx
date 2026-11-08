@@ -2,6 +2,7 @@
 
 import {
   Bookmark,
+  Bus,
   CalendarDays,
   Database,
   Download,
@@ -23,6 +24,7 @@ import * as React from 'react'
 import { FadeIn } from '@/components/m3/motion'
 import { LANG_LABELS, useTranslations } from '@/lib/eta/i18n'
 import { idbClear } from '@/lib/eta/cache/idb'
+import { getOperatorColor } from '@/lib/eta/operator-colors'
 import {
   NEARBY_RADIUS_MAX_KM,
   NEARBY_RADIUS_MIN_KM,
@@ -141,6 +143,8 @@ export function SettingsView({ lang }: Props) {
   const setNearbyRadiusKm = useAppStore((s) => s.setNearbyRadiusKm)
   const timetableDetail = useAppStore((s) => s.timetableDetail)
   const setTimetableDetail = useAppStore((s) => s.setTimetableDetail)
+  const jointRouteInfoOperator = useAppStore((s) => s.jointRouteInfoOperator)
+  const setJointRouteInfoOperator = useAppStore((s) => s.setJointRouteInfoOperator)
   const resetPrefs = useAppStore((s) => s.resetPrefs)
   const favorites = useAppStore((s) => s.favorites)
   const recents = useAppStore((s) => s.recents)
@@ -212,6 +216,7 @@ export function SettingsView({ lang }: Props) {
     { id: 'settings-appearance', icon: Palette, label: t('common.appearance') },
     { id: 'settings-language', icon: Globe, label: t('common.language') },
     { id: 'settings-refresh', icon: Timer, label: t('common.autoRefresh') },
+    { id: 'settings-route-info', icon: Bus, label: t('settings.routeInfoTitle') },
     { id: 'settings-nearby', icon: MapPin, label: t('common.nearby') },
     { id: 'settings-timetable', icon: CalendarDays, label: t('settings.timetableTitle') },
     { id: 'settings-saved', icon: Bookmark, label: t('settings.savedData') },
@@ -367,6 +372,40 @@ export function SettingsView({ lang }: Props) {
                     {s === 0 ? t('common.off') : `${s}s`}
                   </button>
                 ))}
+              </div>
+            </Section>
+          )}
+          {activeId === 'settings-route-info' && (
+            <Section
+              icon={Bus}
+              title={t('settings.routeInfoTitle')}
+              desc={t('settings.routeInfoDesc')}
+            >
+              <div className="flex flex-wrap gap-2">
+                {(['kmb', 'ctb'] as const).map((operator) => {
+                  const active = jointRouteInfoOperator === operator
+                  return (
+                    <button
+                      key={operator}
+                      type="button"
+                      onClick={() => setJointRouteInfoOperator(operator)}
+                      aria-pressed={active}
+                      className={cn(
+                        'm3-label-lg flex min-h-[44px] items-center gap-2 rounded-full px-5 py-2 shadow-sm transition-colors',
+                        active
+                          ? 'bg-primary-container text-on-primary-container'
+                          : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                      )}
+                    >
+                      <span
+                        aria-hidden
+                        className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
+                        style={{ backgroundColor: getOperatorColor(operator) }}
+                      />
+                      {operator === 'kmb' ? t('settings.routeInfoKmb') : t('settings.routeInfoCtb')}
+                    </button>
+                  )
+                })}
               </div>
             </Section>
           )}

@@ -669,6 +669,7 @@ describe('settings prefs', () => {
       autoRefreshSeconds: 15,
       nearbyRadiusKm: 2,
       timetableDetail: 5,
+      jointRouteInfoOperator: 'kmb',
       favorites: [],
       favoritesGroups: [],
       recents: [],
@@ -692,8 +693,17 @@ describe('settings prefs', () => {
       version: number
       state: { nearbyRadiusKm: number }
     }
-    expect(parsed.version).toBe(8)
+    expect(parsed.version).toBe(9)
     expect(parsed.state.nearbyRadiusKm).toBe(3)
+  })
+
+  it('persists the joint route-info operator preference', () => {
+    useAppStore.getState().setJointRouteInfoOperator('ctb')
+    const raw = localStorage.getItem('hk-eta')
+    const parsed = JSON.parse(raw as string) as {
+      state: { jointRouteInfoOperator: string }
+    }
+    expect(parsed.state.jointRouteInfoOperator).toBe('ctb')
   })
 
   it('clamps the timetable detail into the 1-5 slider band', () => {
@@ -709,6 +719,7 @@ describe('settings prefs', () => {
       autoRefreshSeconds: 60,
       nearbyRadiusKm: 4,
       timetableDetail: 1,
+      jointRouteInfoOperator: 'ctb',
       favorites: [mtrFavorite('fav-1')],
     })
     useAppStore.getState().resetPrefs()
@@ -717,6 +728,7 @@ describe('settings prefs', () => {
     expect(state.autoRefreshSeconds).toBe(15)
     expect(state.nearbyRadiusKm).toBe(2)
     expect(state.timetableDetail).toBe(5)
+    expect(state.jointRouteInfoOperator).toBe('kmb')
     expect(state.favorites).toHaveLength(1)
   })
 
@@ -787,8 +799,18 @@ describe('migratePersistedState', () => {
     })
     expect(migrated.nearbyRadiusKm).toBe(2)
     expect(migrated.timetableDetail).toBe(5)
+    expect(migrated.jointRouteInfoOperator).toBe('kmb')
     expect(migrated.lang).toBe('en')
     expect(migrated).not.toHaveProperty('routeFilterMode')
+  })
+
+  it('keeps a stored Citybus route-info preference', () => {
+    expect(migratePersistedState({ jointRouteInfoOperator: 'ctb' }).jointRouteInfoOperator).toBe(
+      'ctb'
+    )
+    expect(migratePersistedState({ jointRouteInfoOperator: 'nlb' }).jointRouteInfoOperator).toBe(
+      'kmb'
+    )
   })
 
   it('clamps out-of-range radii and rejects non-numbers', () => {

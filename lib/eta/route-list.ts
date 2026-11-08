@@ -17,6 +17,7 @@ export function mapKmbRouteListEntry(entry: KmbRouteListEntry): KmbRouteInfoLite
     gtfsId: String(entry.gtfsId ?? '').trim(),
     region: String(entry.region ?? '').trim(),
     operators: entry.operators ?? [co],
+    routeGroupKey: String(entry.routeGroupKey ?? '').trim(),
     jointVariantKey: String(entry.jointVariantKey ?? '').trim(),
     origin: {
       en: (entry.orig_en ?? '').trim(),

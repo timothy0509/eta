@@ -181,6 +181,51 @@ describe('buildRouteSearchIndex', () => {
     expect(index[0]?.operators).toEqual(['kmb', 'ctb'])
   })
 
+  it('merges one-operator variants that belong to a joint route number', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '101R', 'HAPPY VALLEY RACECOURSE', 'KWUN TONG', 'O'),
+        region: 'kmb|101R|1',
+        operators: ['kmb'],
+        routeGroupKey: 'joint|101R',
+      },
+      {
+        ...makeRoute('ctb', '101R', 'Happy Valley Racecourse', 'Kwun Tong', 'O'),
+        region: 'ctb|101R|1',
+        operators: ['ctb'],
+        routeGroupKey: 'joint|101R',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById)
+    expect(index).toHaveLength(1)
+    expect(index[0]?.operators).toEqual(['kmb', 'ctb'])
+    expect(index[0]?.routeGroupKey).toBe('joint|101R')
+  })
+
+  it('uses the preferred operator for joint route information', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '102', 'MEI FOO', 'SHAU KEI WAN', 'I'),
+        region: 'joint|102|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '102', 'Mei Foo', 'Shau Kei Wan', 'O'),
+        region: 'joint|102|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById, {
+      preferredJointOperator: 'ctb',
+    })
+    expect(index).toHaveLength(1)
+    expect(index[0]?.co).toBe('ctb')
+    expect(index[0]?.operators).toEqual(['ctb', 'kmb'])
+    expect(index[0]?.origin.en).toBe('Mei Foo')
+  })
+
   it('merges jointly operated rows into one entry with both operators', () => {
     const jointRoutes: KmbRouteInfoLite[] = [
       {

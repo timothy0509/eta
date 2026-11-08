@@ -406,6 +406,7 @@ export default function HomeClient() {
         bound: selectedItem.bound,
         serviceType: selectedItem.serviceType,
         operators: selectedItem.operators,
+        routeGroupKey: selectedItem.routeGroupKey,
       }
     }
     return undefined

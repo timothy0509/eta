@@ -179,6 +179,8 @@ export type KmbRouteStopLite = {
   region: string
   /** Operators serving this variant. More than one means jointly operated. */
   operators?: string[]
+  /** Route-level key for a jointly operated route number, including specials. */
+  routeGroupKey?: string
   /** Shared identity for one physical variant across its operators. */
   jointVariantKey?: string
   /** Shared identity for one paired physical stop across its operators. */
@@ -206,6 +208,7 @@ export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
           gtfsId: String(entry.gtfsId ?? '').trim(),
           region: String(entry.region ?? '').trim(),
           operators: entry.operators ?? [entry.co ?? 'kmb'],
+          routeGroupKey: String(entry.routeGroupKey ?? '').trim(),
           jointVariantKey: String(entry.jointVariantKey ?? '').trim(),
           jointGroupKey: String(entry.jointGroupKey ?? '').trim(),
           siblingStopIds: entry.siblingStopIds ?? [],
@@ -227,6 +230,8 @@ export type KmbRouteInfoLite = {
   region: string
   /** Operators serving this variant. More than one means jointly operated. */
   operators?: string[]
+  /** Route-level key for a jointly operated route number, including specials. */
+  routeGroupKey?: string
   /** Shared identity for one physical variant across its operators. */
   jointVariantKey?: string
   origin: {
@@ -263,6 +268,7 @@ export async function fetchKmbRouteInfo(params: {
     gtfsId: String(info.gtfsId ?? '').trim(),
     region: String(info.region ?? '').trim(),
     operators: info.operators ?? [info.co ?? params.co ?? 'kmb'],
+    routeGroupKey: String(info.routeGroupKey ?? '').trim(),
     jointVariantKey: String(info.jointVariantKey ?? '').trim(),
     origin: {
       en: (info.orig_en ?? '').trim(),
@@ -299,12 +305,18 @@ export type KmbStopEtasResponse = {
 
 export async function fetchKmbStopEtas(
   stopIds: string[],
-  options?: { routeFilter?: string; signal?: AbortSignal; includeFares?: boolean }
+  options?: {
+    routeFilter?: string
+    signal?: AbortSignal
+    includeFares?: boolean
+    preferredJointOperator?: string | null
+  }
 ): Promise<KmbStopEtasResponse> {
   const keyPayload = {
     stopIds: normalizeStopIdsKey(stopIds),
     routeFilter: normalizeRouteFilterKey(options?.routeFilter),
     includeFares: options?.includeFares ?? false,
+    preferredJointOperator: options?.preferredJointOperator ?? null,
   }
 
   const key = `kmb:stop-etas:${JSON.stringify(keyPayload)}`
@@ -315,6 +327,7 @@ export async function fetchKmbStopEtas(
       fetchKmbStopEtasDirect(stopIds, {
         routeFilter: options?.routeFilter,
         includeFares: options?.includeFares ?? false,
+        preferredJointOperator: options?.preferredJointOperator,
         signal: options?.signal,
       }),
     { signal: options?.signal }

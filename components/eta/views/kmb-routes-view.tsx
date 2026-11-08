@@ -106,6 +106,7 @@ type RouteVariant = {
   gtfsId: string
   region: string
   operators: string[]
+  routeGroupKey: string
   jointVariantKey: string
   origin: { en: string; tc: string; sc: string }
   destination: { en: string; tc: string; sc: string }
@@ -118,6 +119,7 @@ type RouteSelection = {
   route: string
   region: string
   operators: string[]
+  routeGroupKey?: string
 }
 
 function variantBaseKey(entry: {
@@ -181,8 +183,11 @@ function routeSelectionKey(entry: {
   route: string
   region?: string
   operators?: string[]
+  routeGroupKey?: string
   jointVariantKey?: string
 }): string {
+  const routeGroupKey = String(entry.routeGroupKey ?? '').trim()
+  if (routeGroupKey) return `jointroute:${routeGroupKey}`
   const operators = routeOperators(entry)
   const scope = String(entry.region ?? '').trim()
   if (operators.length > 1) {
@@ -229,7 +234,7 @@ function KmbRouteStopCard({
         .sort((a, b) => new Date(a.eta).getTime() - new Date(b.eta).getTime()),
     [stopEtas]
   )
-  const visible = sorted.slice(0, 3)
+  const visible = sorted
   const hasMultipleOperators = React.useMemo(
     () => new Set(stopEtas.map((entry) => normalizeOperator(String(entry.co)))).size > 1,
     [stopEtas]
@@ -280,7 +285,7 @@ function KmbRouteStopCard({
       </div>
     ) : (
       <div className="space-y-2">
-        <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
+        <div className="flex flex-wrap justify-center gap-1.5 pb-0.5 sm:gap-2">
           {visible.map((entry, entryIdx) => {
             const remark =
               pickLang(
@@ -300,7 +305,7 @@ function KmbRouteStopCard({
               return (
                 <div
                   key={`${entry.co}:${entryIdx}`}
-                  className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+                  className="bg-primary-container text-on-primary-container min-w-0 shrink-0 basis-[calc((100%_-_0.75rem)/3)] rounded-xl px-2 py-1.5 text-center sm:basis-[calc((100%_-_1rem)/3)] sm:px-3 sm:py-2"
                 >
                   <div className="m3-label-md flex items-center justify-center gap-1 opacity-80">
                     {operatorTag}
@@ -325,7 +330,7 @@ function KmbRouteStopCard({
             return (
               <div
                 key={`${entry.co}:${entryIdx}`}
-                className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
+                className="bg-surface-container-high min-w-0 shrink-0 basis-[calc((100%_-_0.75rem)/3)] rounded-lg px-2 py-1.5 text-center sm:basis-[calc((100%_-_1rem)/3)] sm:px-2.5"
               >
                 <div className="text-on-surface-variant m3-label-md flex items-center justify-center gap-1">
                   {operatorTag}
@@ -909,6 +914,7 @@ export function KmbRoutesView({
     bound?: string
     serviceType?: string
     operators?: string[]
+    routeGroupKey?: string
   }
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
 }) {
@@ -942,6 +948,7 @@ export function KmbRoutesView({
   } | null>(null)
 
   const addFavorite = useAppStore((s) => s.addFavorite)
+  const jointRouteInfoOperator = useAppStore((s) => s.jointRouteInfoOperator)
 
   const routeEntries = React.useMemo(() => {
     const map = new Map<string, RouteSelection>()
@@ -950,23 +957,33 @@ export function KmbRoutesView({
     // routes share one key across operators.
     for (const r of routes) {
       const operators = routeOperators(r)
-      const co = pickPrimaryOperator(operators)
+      const co = pickPrimaryOperator(operators, jointRouteInfoOperator)
+      const orderedOperators = [co, ...operators.filter((op) => op !== co)]
       const region = String(r.region ?? '').trim()
       const key = routeSelectionKey({
         co,
         route: r.route,
         region,
         operators,
+        routeGroupKey: r.routeGroupKey,
         jointVariantKey: r.jointVariantKey,
       })
-      if (!map.has(key)) map.set(key, { co, route: r.route, region, operators })
+      if (!map.has(key)) {
+        map.set(key, {
+          co,
+          route: r.route,
+          region,
+          operators: orderedOperators,
+          routeGroupKey: String(r.routeGroupKey ?? '').trim(),
+        })
+      }
     }
     return Array.from(map.values()).sort(
       (a, b) =>
         a.route.localeCompare(b.route, undefined, { numeric: true }) ||
         a.region.localeCompare(b.region)
     )
-  }, [routes])
+  }, [routes, jointRouteInfoOperator])
 
   const initialKey = React.useMemo(
     () =>
@@ -981,11 +998,13 @@ export function KmbRoutesView({
     const co = normalizeOperator(initialSelection.co)
     const route = initialSelection.route
     const region = initialSelection.region
+    const jointSelection =
+      Boolean(initialSelection.routeGroupKey) || (initialSelection.operators?.length ?? 0) > 1
     const inRegion = routeEntries.filter(
       (e) =>
         e.route === route &&
-        (e.co === co || e.operators.includes(co)) &&
-        (region === undefined || region === '' || sameRegion(e.region, region))
+        (jointSelection || e.co === co || e.operators.includes(co)) &&
+        (jointSelection || region === undefined || region === '' || sameRegion(e.region, region))
     )
     return inRegion[0] ?? null
   }, [initialSelection, routes, routeEntries])
@@ -994,11 +1013,15 @@ export function KmbRoutesView({
     if (!initialSelection || !autoRouteKey || routes.length === 0) return null
     const co = normalizeOperator(initialSelection.co)
     const route = initialSelection.route
+    const jointSelection =
+      Boolean(initialSelection.routeGroupKey) || (initialSelection.operators?.length ?? 0) > 1
     const matchingVariants = routes.filter(
       (r) =>
         r.route === route &&
-        (normalizeOperator(String(r.co ?? 'kmb')) === co || (r.operators ?? []).includes(co)) &&
-        sameRegion(String(r.region ?? '').trim(), autoRouteKey.region)
+        (jointSelection ||
+          normalizeOperator(String(r.co ?? 'kmb')) === co ||
+          (r.operators ?? []).includes(co)) &&
+        (jointSelection || sameRegion(String(r.region ?? '').trim(), autoRouteKey.region))
     )
     if (!matchingVariants.length) return null
     const matchedVariant =
@@ -1033,6 +1056,7 @@ export function KmbRoutesView({
       gtfsId: targetGtfsId,
       region: String(target.region ?? '').trim(),
       operators,
+      routeGroupKey: String(target.routeGroupKey ?? ''),
       jointVariantKey: String(target.jointVariantKey ?? ''),
       origin: target.origin,
       destination: target.destination,
@@ -1081,8 +1105,11 @@ export function KmbRoutesView({
   }, [setRouteStopsAll])
 
   const searchIndex = React.useMemo(
-    () => buildRouteSearchIndex(routes, routeStopsAll, stopsById),
-    [routes, routeStopsAll, stopsById]
+    () =>
+      buildRouteSearchIndex(routes, routeStopsAll, stopsById, {
+        preferredJointOperator: jointRouteInfoOperator,
+      }),
+    [routes, routeStopsAll, stopsById, jointRouteInfoOperator]
   )
 
   // Fuse loads lazily so the fuzzy index stays out of the first paint. The build
@@ -1148,13 +1175,21 @@ export function KmbRoutesView({
   const variantsForRoute = React.useMemo(() => {
     if (!selectedRouteKey) return []
     const grouped = new Map<string, { rows: KmbRouteInfoLite[]; operators: Set<string> }>()
+    const jointSelection =
+      Boolean(selectedRouteKey.routeGroupKey) || selectedRouteKey.operators.length > 1
     for (const r of routes) {
       const operators = routeOperators(r)
       const isSelectedOperator =
         normalizeOperator(String(r.co ?? 'kmb')) === selectedRouteKey.co ||
         operators.some((op) => selectedRouteKey.operators.includes(op))
-      if (
-        r.route !== selectedRouteKey.route ||
+      if (r.route !== selectedRouteKey.route) continue
+      const inJointGroup =
+        Boolean(r.routeGroupKey) &&
+        String(r.routeGroupKey) === String(selectedRouteKey.routeGroupKey ?? '')
+      const sharesOperator = operators.some((op) => selectedRouteKey.operators.includes(op))
+      if (jointSelection) {
+        if (!inJointGroup && !sharesOperator) continue
+      } else if (
         !isSelectedOperator ||
         !sameRegion(String(r.region ?? '').trim(), selectedRouteKey.region)
       ) {
@@ -1162,11 +1197,20 @@ export function KmbRoutesView({
       }
       const gtfsId = String(r.gtfsId ?? '').trim()
       const jointVariantKey = String(r.jointVariantKey ?? '').trim()
+      const routeGroupKey = String(r.routeGroupKey ?? '').trim()
+      const groupKey = [
+        String(r.origin.en ?? '').toUpperCase(),
+        String(r.destination.en ?? '').toUpperCase(),
+      ]
+        .sort()
+        .join('|')
       const key = jointVariantKey
         ? `joint:${jointVariantKey}`
-        : gtfsId
-          ? `${r.co}|${r.route}|${r.bound}|${r.serviceType}|${gtfsId}`
-          : `${r.co}|${r.route}|${r.bound}|${r.serviceType}`
+        : routeGroupKey
+          ? `group:${routeGroupKey}|${String(r.serviceType)}|${groupKey}`
+          : gtfsId
+            ? `${r.co}|${r.route}|${r.bound}|${r.serviceType}|${gtfsId}`
+            : `${r.co}|${r.route}|${r.bound}|${r.serviceType}`
       let group = grouped.get(key)
       if (!group) {
         group = { rows: [], operators: new Set() }
@@ -1179,7 +1223,8 @@ export function KmbRoutesView({
     const out: RouteVariant[] = []
     for (const [key, group] of grouped) {
       const operators = Array.from(group.operators).sort()
-      const primary = pickPrimaryOperator(operators)
+      const primary = pickPrimaryOperator(operators, jointRouteInfoOperator)
+      const orderedOperators = [primary, ...operators.filter((op) => op !== primary)]
       const display =
         group.rows.find((row) => normalizeOperator(String(row.co)) === primary) ?? group.rows[0]
       if (!display) continue
@@ -1191,7 +1236,8 @@ export function KmbRoutesView({
         serviceType: display.serviceType,
         gtfsId: String(display.gtfsId ?? '').trim(),
         region: String(display.region ?? '').trim(),
-        operators,
+        operators: orderedOperators,
+        routeGroupKey: String(display.routeGroupKey ?? '').trim(),
         jointVariantKey: String(display.jointVariantKey ?? '').trim(),
         origin: display.origin,
         destination: display.destination,
@@ -1200,7 +1246,7 @@ export function KmbRoutesView({
     // Outbound (O, 去程) before inbound (I, 回程); normal timetable
     // (service type 1) before specials.
     return out.sort(compareRouteVariants)
-  }, [routes, selectedRouteKey])
+  }, [routes, selectedRouteKey, jointRouteInfoOperator])
 
   const showOperatorInVariants = false
 
@@ -1245,6 +1291,7 @@ export function KmbRoutesView({
       const res = await fetchKmbStopEtas(stopIds, {
         routeFilter: currentVariant.route,
         includeFares: false,
+        preferredJointOperator: jointRouteInfoOperator,
       })
       if (cancelled) return
       const currentJointKey = currentVariant.jointVariantKey
@@ -1266,7 +1313,7 @@ export function KmbRoutesView({
     return () => {
       cancelled = true
     }
-  }, [currentVariant, routeStopsAll])
+  }, [currentVariant, routeStopsAll, jointRouteInfoOperator])
 
   const routePath = React.useMemo(() => {
     return variantStops
@@ -1409,6 +1456,7 @@ export function KmbRoutesView({
       gtfsId: gtfsId || undefined,
       region: region || undefined,
       operators: currentVariant.operators,
+      routeGroupKey: currentVariant.routeGroupKey || undefined,
       origin: currentVariant.origin,
       destination: currentVariant.destination,
     }
@@ -1519,6 +1567,7 @@ export function KmbRoutesView({
                               route: hit.entry.route,
                               region: hit.entry.region,
                               operators: hit.entry.operators,
+                              routeGroupKey: hit.entry.routeGroupKey,
                             })
                           }
                         />
@@ -1560,7 +1609,7 @@ export function KmbRoutesView({
                 </button>
                 <RouteBadge
                   route={selectedRouteKey.route}
-                  company={selectedRouteKey.co}
+                  company={currentVariant?.co ?? selectedRouteKey.co}
                   size="lg"
                 />
                 <JointOperatorPill
@@ -1872,6 +1921,7 @@ export function KmbRoutesView({
                                   route: hit.entry.route,
                                   region: hit.entry.region,
                                   operators: hit.entry.operators,
+                                  routeGroupKey: hit.entry.routeGroupKey,
                                 })
                               }
                             />
@@ -1905,7 +1955,7 @@ export function KmbRoutesView({
                     <span className="flex min-w-0 items-center gap-2">
                       <RouteBadge
                         route={selectedRouteKey.route}
-                        company={selectedRouteKey.co}
+                        company={currentVariant?.co ?? selectedRouteKey.co}
                         size="lg"
                       />
                       <JointOperatorPill

@@ -442,10 +442,12 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
     </div>
   )
 
-  const visibleItems = items.slice(0, 3)
+  // Show every real departure, but keep placeholder rows (empty ETA with a
+  // service-period remark) out of the grid.
+  const visibleItems = items.filter((entry) => !Number.isNaN(Date.parse(entry.eta)))
   const etaPanel = (
     <div className="space-y-2">
-      <div className="flex justify-center gap-1.5 pb-0.5 sm:gap-2">
+      <div className="flex flex-wrap justify-center gap-1.5 pb-0.5 sm:gap-2">
         {visibleItems.map((entry, entryIdx) => {
           const remark = pickLang(
             {
@@ -461,7 +463,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
             return (
               <div
                 key={`${variantKey}:${entry.eta_seq}:${entryIdx}`}
-                className="bg-primary-container text-on-primary-container w-1/3 min-w-0 rounded-xl px-2 py-1.5 text-center sm:px-3 sm:py-2"
+                className="bg-primary-container text-on-primary-container min-w-0 shrink-0 basis-[calc((100%_-_0.75rem)/3)] rounded-xl px-2 py-1.5 text-center sm:basis-[calc((100%_-_1rem)/3)] sm:px-3 sm:py-2"
               >
                 <div className="m3-label-md flex items-center justify-center gap-1 opacity-80">
                   {isJoint ? (
@@ -494,7 +496,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
           return (
             <div
               key={`${variantKey}:${entry.eta_seq}:${entryIdx}`}
-              className="bg-surface-container-high w-1/3 min-w-0 rounded-lg px-2 py-1.5 text-center sm:px-2.5"
+              className="bg-surface-container-high min-w-0 shrink-0 basis-[calc((100%_-_0.75rem)/3)] rounded-lg px-2 py-1.5 text-center sm:basis-[calc((100%_-_1rem)/3)] sm:px-2.5"
             >
               <div className="text-on-surface-variant m3-label-md flex items-center justify-center gap-1">
                 {isJoint ? (

@@ -1,6 +1,11 @@
 import type { Company, EtaDb, RouteListEntry } from 'hk-bus-eta'
 
-import { resolveJointOperators, type JointRouteManifest } from '@/lib/eta/joint-routes'
+import {
+  inferJointRouteNumbers,
+  jointRouteGroupKey,
+  resolveJointOperators,
+  type JointRouteManifest,
+} from '@/lib/eta/joint-routes'
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 
 export type { KmbStopSearchItem }
@@ -8,8 +13,14 @@ export type { KmbStopSearchItem }
 /** Operators that appear in the app route list, in display preference order. */
 const OPERATOR_PRIORITY = ['kmb', 'ctb', 'nlb', 'gmb', 'lrtfeeder'] as const
 
-/** Primary operator for a joint route row: KMB first, then the rest. */
-export function pickPrimaryOperator(operators: Iterable<string>): string {
+/**
+ * Primary operator for a joint route row. An explicit preference wins when
+ * that operator serves the route; otherwise KMB comes first, then the rest.
+ */
+export function pickPrimaryOperator(
+  operators: Iterable<string>,
+  preferred?: string | null
+): string {
   const set = new Set<string>()
   for (const op of operators) {
     const lower = String(op ?? '')
@@ -17,8 +28,12 @@ export function pickPrimaryOperator(operators: Iterable<string>): string {
       .toLowerCase()
     if (lower) set.add(lower)
   }
-  for (const preferred of OPERATOR_PRIORITY) {
-    if (set.has(preferred)) return preferred
+  const preferredLower = String(preferred ?? '')
+    .trim()
+    .toLowerCase()
+  if (preferredLower && set.has(preferredLower)) return preferredLower
+  for (const fallback of OPERATOR_PRIORITY) {
+    if (set.has(fallback)) return fallback
   }
   return Array.from(set).sort()[0] ?? 'kmb'
 }
@@ -59,6 +74,8 @@ export type KmbRouteStopLite = {
   region: string
   /** Operators serving this variant. More than one means jointly operated. */
   operators?: string[]
+  /** Route-level key for a jointly operated route number, including specials. */
+  routeGroupKey?: string
   /** Shared identity for one physical variant across its operators. */
   jointVariantKey?: string
   /** Shared identity for one paired physical stop across its operators. */
@@ -77,6 +94,8 @@ export type KmbRouteInfoLite = {
   region: string
   /** Operators serving this variant. More than one means jointly operated. */
   operators?: string[]
+  /** Route-level key for a jointly operated route number, including specials. */
+  routeGroupKey?: string
   /** Shared identity for one physical variant across its operators. */
   jointVariantKey?: string
   origin: {
@@ -108,6 +127,8 @@ export type StopRouteEntry = {
   region: string
   /** Operators serving this variant. More than one means jointly operated. */
   operators?: string[]
+  /** Route-level key for a jointly operated route number, including specials. */
+  routeGroupKey?: string
   /** Shared identity for one physical variant across its operators. */
   jointVariantKey?: string
   /** Shared identity for one paired physical stop across its operators. */
@@ -609,6 +630,15 @@ export async function buildEtaDbIndexes(
   const kmbRouteListEntries = Object.values(db.routeList).filter((entry) =>
     entry.co.some((co) => busCompanies.includes(co) && entry.stops[co]?.length)
   )
+  const inferredJointRoutes = inferJointRouteNumbers(
+    kmbRouteListEntries.map((entry) => ({
+      co: entry.co,
+      route: entry.route,
+      orig: entry.orig,
+      dest: entry.dest,
+      serviceType: entry.serviceType,
+    }))
+  )
 
   const plans = kmbRouteListEntries.map((entry, entryIndex) => {
     const cos = entry.co.filter(
@@ -616,6 +646,16 @@ export async function buildEtaDbIndexes(
     )
     const matchedOperators = resolveJointOperators(jointRoutes, entry.route, cos)
     const joint = matchedOperators.length > 1
+    const routeUpper = String(entry.route ?? '')
+      .trim()
+      .toUpperCase()
+    const inferredGroup =
+      inferredJointRoutes.has(routeUpper) &&
+      cos.length > 0 &&
+      cos.every((co) => co === 'kmb' || co === 'ctb')
+        ? `joint|${routeUpper}`
+        : ''
+    const routeGroupKey = jointRouteGroupKey(jointRoutes, entry.route, cos) || inferredGroup
     const jointVariantKey = joint ? `jointv:${entryIndex}` : ''
     const jointMetaByCo = joint
       ? buildJointStopMetas(entry, jointVariantKey, matchedOperators, stopCoords)
@@ -633,11 +673,78 @@ export async function buildEtaDbIndexes(
       entryIndex,
       cos,
       operators: joint ? matchedOperators : cos,
+      routeGroupKey,
       joint,
       jointVariantKey,
       jointMetaByCo,
     }
   })
+
+  // Some joint route numbers (101R) arrive as two separate one-operator
+  // entries instead of one entry with two stop arrays. Pair those entries
+  // by route group, service type and normalized termini so their stops still
+  // fan out to both operators.
+  const crossPairCandidates = new Map<string, typeof plans>()
+  for (const plan of plans) {
+    if (!plan.routeGroupKey || plan.joint || plan.cos.length !== 1) continue
+    const co = plan.cos[0]
+    if (co !== 'kmb' && co !== 'ctb') continue
+    const signature = [
+      String(plan.entry.orig?.en ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ''),
+      String(plan.entry.dest?.en ?? '')
+        .trim()
+        .toLowerCase()
+        .replace(/[^\p{L}\p{N}]+/gu, ''),
+    ]
+      .sort()
+      .join('|')
+    const key = `${plan.routeGroupKey}|${String(plan.entry.serviceType)}|${signature}`
+    const list = crossPairCandidates.get(key) ?? []
+    list.push(plan)
+    crossPairCandidates.set(key, list)
+  }
+
+  let crossPairIndex = 0
+  for (const list of crossPairCandidates.values()) {
+    const kmbPlan = list.find((plan) => plan.cos[0] === 'kmb')
+    const ctbPlan = list.find((plan) => plan.cos[0] === 'ctb')
+    if (!kmbPlan || !ctbPlan) continue
+    const kmbStops = (kmbPlan.entry.stops.kmb ?? []).map((id) => normalizeStopId(id))
+    const ctbStops = (ctbPlan.entry.stops.ctb ?? []).map((id) => normalizeStopId(id))
+    const length = Math.min(kmbStops.length, ctbStops.length)
+    if (length === 0) continue
+    const jointVariantKey = `jointc:${crossPairIndex}`
+    crossPairIndex += 1
+    for (const plan of [kmbPlan, ctbPlan]) {
+      plan.joint = true
+      plan.operators = ['kmb', 'ctb']
+      plan.jointVariantKey = jointVariantKey
+    }
+    for (let index = 0; index < length; index += 1) {
+      const kmbStop = kmbStops[index]
+      const ctbStop = ctbStops[index]
+      if (!kmbStop || !ctbStop) continue
+      const jointGroupKey = `${jointVariantKey}:${index}`
+      const kmbMeta = kmbPlan.jointMetaByCo.get('kmb')
+      const ctbMeta = ctbPlan.jointMetaByCo.get('ctb')
+      if (!kmbMeta || !ctbMeta) continue
+      kmbMeta[index] = {
+        operators: ['kmb', 'ctb'],
+        jointVariantKey,
+        jointGroupKey,
+        siblingStopIds: [ctbStop],
+      }
+      ctbMeta[index] = {
+        operators: ['kmb', 'ctb'],
+        jointVariantKey,
+        jointGroupKey,
+        siblingStopIds: [kmbStop],
+      }
+    }
+  }
 
   const routeStopSeqIndex = new Map<string, number>()
   const kmbRouteStops: KmbRouteStopLite[] = []
@@ -672,6 +779,7 @@ export async function buildEtaDbIndexes(
           gtfsId,
           region: '',
           operators: meta.operators,
+          routeGroupKey: plan.routeGroupKey,
           jointVariantKey: meta.jointVariantKey,
           jointGroupKey: meta.jointGroupKey,
           siblingStopIds: meta.siblingStopIds,
@@ -784,6 +892,7 @@ export async function buildEtaDbIndexes(
           gtfsId,
           region: familyRegion,
           operators: meta.operators,
+          routeGroupKey: plan.routeGroupKey,
           jointVariantKey: meta.jointVariantKey,
           jointGroupKey: meta.jointGroupKey,
           siblingStopIds: meta.siblingStopIds,

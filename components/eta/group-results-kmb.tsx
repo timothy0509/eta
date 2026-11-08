@@ -94,6 +94,7 @@ function GroupMemberSection({
   isFirst?: boolean
 }) {
   const { t } = useTranslations(lang)
+  const jointRouteInfoOperator = useAppStore((s) => s.jointRouteInfoOperator)
   // Primitive effect keys: `stopIds` (array) and `variantKeys` (Set) get fresh
   // identities whenever the parent recomputes `member`, which would refire
   // the fetch effect on every parent render and abort each in-flight request.
@@ -131,6 +132,7 @@ function GroupMemberSection({
           routeFilter: filterString,
           signal: controller.signal,
           includeFares: true,
+          preferredJointOperator: jointRouteInfoOperator,
         })
         if (cancelled || controller.signal.aborted) return
         let etas = stopIds.flatMap((id) => result.byStopId[id] ?? [])
@@ -212,7 +214,7 @@ function GroupMemberSection({
       cancelled = true
       controller.abort()
     }
-  }, [stopIdsKey, filterString, variantKeysKey, refreshSeq, retrySeq])
+  }, [stopIdsKey, filterString, variantKeysKey, refreshSeq, retrySeq, jointRouteInfoOperator])
 
   const groups = React.useMemo(() => groupEtasByVariant(eta, fares), [eta, fares])
 

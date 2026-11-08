@@ -1,6 +1,6 @@
 'use client'
 
-import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
+import type { JointRouteInfoOperator, SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { clampNearbyRadiusKm, NEARBY_RADIUS_DEFAULT_KM } from '@/lib/eta/nearby-radius'
 import { clampTimetableDetail, TIMETABLE_DETAIL_DEFAULT } from '@/lib/eta/timetable-detail'
 import { create } from 'zustand'
@@ -61,6 +61,8 @@ export type FavoritesItem = FavoritesMeta &
         region?: string
         /** Jointly operated route operators, e.g. ['kmb', 'ctb']. */
         operators?: string[]
+        /** Joint route-number group covering main and special variants. */
+        routeGroupKey?: string
         origin?: { en: string; tc: string; sc: string }
         destination?: { en: string; tc: string; sc: string }
       }
@@ -110,6 +112,8 @@ type PrefsSlice = {
   autoRefreshSeconds: number
   nearbyRadiusKm: number
   timetableDetail: number
+  /** Route details shown for jointly operated KMB+CTB routes. */
+  jointRouteInfoOperator: JointRouteInfoOperator
 
   favorites: FavoritesItem[]
   favoritesGroups: FavoritesGroup[]
@@ -119,6 +123,7 @@ type PrefsSlice = {
   setAutoRefreshSeconds: (seconds: number) => void
   setNearbyRadiusKm: (km: number) => void
   setTimetableDetail: (detail: number) => void
+  setJointRouteInfoOperator: (operator: JointRouteInfoOperator) => void
   /** Restore display and update prefs to defaults. Saved data is untouched. */
   resetPrefs: () => void
   addFavorite: (item: FavoritesItem) => void
@@ -216,6 +221,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   autoRefreshSeconds: 15,
   nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
   timetableDetail: TIMETABLE_DETAIL_DEFAULT,
+  jointRouteInfoOperator: 'kmb',
 
   favorites: [],
   favoritesGroups: [],
@@ -225,12 +231,14 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
   setNearbyRadiusKm: (km) => set({ nearbyRadiusKm: clampNearbyRadiusKm(km) }),
   setTimetableDetail: (detail) => set({ timetableDetail: clampTimetableDetail(detail) }),
+  setJointRouteInfoOperator: (operator) => set({ jointRouteInfoOperator: operator }),
   resetPrefs: () =>
     set({
       lang: 'tc',
       autoRefreshSeconds: 15,
       nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
       timetableDetail: TIMETABLE_DETAIL_DEFAULT,
+      jointRouteInfoOperator: 'kmb',
     }),
 
   addFavorite: (item) =>
@@ -375,6 +383,7 @@ export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
 // simple/advanced split is gone, one filter covers both. Stored mode values
 // are ignored, saved route text and direction selections keep working.
 // v8 adds the timetable detail level; older entries fall back to full detail.
+// v9 adds the joint route-info operator preference, defaulting to KMB.
 export function migratePersistedState(persistedState: unknown) {
   const state = persistedState as Partial<AppState> | undefined
   const favorites = capFavorites(
@@ -394,6 +403,7 @@ export function migratePersistedState(persistedState: unknown) {
       typeof state?.timetableDetail === 'number'
         ? clampTimetableDetail(state.timetableDetail)
         : TIMETABLE_DETAIL_DEFAULT,
+    jointRouteInfoOperator: state?.jointRouteInfoOperator === 'ctb' ? 'ctb' : 'kmb',
     favorites,
     favoritesGroups: state?.favoritesGroups ?? [],
     recents: state?.recents ?? [],
@@ -408,7 +418,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 8,
+      version: 9,
       // Direct persist write. The previous 300 ms debounced localStorage
       // wrapper plus beforeunload flush could lose the last write on
       // mobile, where beforeunload often never fires. Zustand now writes
@@ -421,6 +431,7 @@ export const useAppStore = create<AppState>()(
         autoRefreshSeconds: state.autoRefreshSeconds,
         nearbyRadiusKm: state.nearbyRadiusKm,
         timetableDetail: state.timetableDetail,
+        jointRouteInfoOperator: state.jointRouteInfoOperator,
         favorites: state.favorites,
         favoritesGroups: state.favoritesGroups,
         recents: state.recents,

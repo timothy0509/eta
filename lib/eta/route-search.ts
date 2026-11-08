@@ -20,6 +20,8 @@ export type RouteSearchEntry = {
   /** Region group `co|ROUTE|n`. Empty for legacy rows without a region. */
   region: string
   operators: string[]
+  /** Joint route number group, present for routes in the TD joint manifest. */
+  routeGroupKey?: string
   origin: { en: string; tc: string; sc: string }
   destination: { en: string; tc: string; sc: string }
   /** Ordered stop ids along the route, deduped and capped. */
@@ -177,17 +179,22 @@ function canonicalRouteSearchKey(
   co: unknown,
   route: unknown,
   region?: unknown,
-  operators?: unknown
+  operators?: unknown,
+  routeGroupKey?: unknown
 ): string {
   const routeUpper = String(route ?? '').toUpperCase()
+  const groupKey = String(routeGroupKey ?? '').trim()
+  if (groupKey) {
+    // One search entry for the joint route number, including one-operator
+    // special variants such as 101R and 101 short workings.
+    return `jointroute:${groupKey}`
+  }
   const list = Array.isArray(operators)
     ? operators.map((op) => normalizeOperator(String(op))).filter(Boolean)
     : []
   const unique = Array.from(new Set(list)).sort()
   const scope = String(region ?? '').trim()
   if (unique.length > 1) {
-    // Joint rows share a `joint|ROUTE|n` region. The ordinal alone is
-    // enough to keep separate short workings apart.
     return `joint:${unique.join('+')}|${routeUpper}|${regionOrdinal(scope)}`
   }
   const base = `${unique[0] ?? normalizeOperator(String(co ?? ''))}|${routeUpper}`
@@ -202,7 +209,8 @@ function canonicalRouteSearchKey(
 export function buildRouteSearchIndex(
   routes: KmbRouteInfoLite[],
   routeStops: KmbRouteStopLite[],
-  stopsById: Map<string, KmbStopSearchItem>
+  stopsById: Map<string, KmbStopSearchItem>,
+  options: { preferredJointOperator?: string | null } = {}
 ): RouteSearchEntry[] {
   // Stale cached rows may predate the `operators` field. A joint variant
   // key still tells us the row is half of a KMB+CTB pair, which is the only
@@ -224,7 +232,7 @@ export function buildRouteSearchIndex(
 
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {
-    const key = canonicalRouteSearchKey(r.co, r.route, r.region, operatorsOf(r))
+    const key = canonicalRouteSearchKey(r.co, r.route, r.region, operatorsOf(r), r.routeGroupKey)
     const list = variantsByKey.get(key)
     if (list) list.push(r)
     else variantsByKey.set(key, [r])
@@ -233,7 +241,7 @@ export function buildRouteSearchIndex(
   const primaryByKey = new Map<string, string>()
   for (const [key, variants] of variantsByKey) {
     const ops = variants.flatMap((v) => operatorsOf(v))
-    primaryByKey.set(key, pickPrimaryOperator(ops))
+    primaryByKey.set(key, pickPrimaryOperator(ops, options.preferredJointOperator))
   }
 
   const stopIdsByKey = new Map<string, { ids: string[]; seen: Set<string>; total: number }>()
@@ -242,7 +250,13 @@ export function buildRouteSearchIndex(
   // direction stays separate, keeping seq order for the via line.
   const rowsByVariantKey = new Map<string, KmbRouteStopLite[]>()
   for (const rs of routeStops) {
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.region, operatorsOf(rs))
+    const routeKey = canonicalRouteSearchKey(
+      rs.co,
+      rs.route,
+      rs.region,
+      operatorsOf(rs),
+      rs.routeGroupKey
+    )
     if (!variantsByKey.has(routeKey)) continue
     // Joint rows share a `jointVariantKey` across operators. Use it for
     // the direction group because KMB and CTB often label the same
@@ -269,7 +283,13 @@ export function buildRouteSearchIndex(
   // per operator.
   for (const primaryPass of [true, false]) {
     for (const rs of routeStops) {
-      const key = canonicalRouteSearchKey(rs.co, rs.route, rs.region, operatorsOf(rs))
+      const key = canonicalRouteSearchKey(
+        rs.co,
+        rs.route,
+        rs.region,
+        operatorsOf(rs),
+        rs.routeGroupKey
+      )
       if (!variantsByKey.has(key)) continue
       const primary = primaryByKey.get(key) ?? normalizeOperator(String(rs.co))
       const isPrimaryRow = normalizeOperator(String(rs.co)) === primary
@@ -316,7 +336,25 @@ export function buildRouteSearchIndex(
     // db dump, so taking variants[0] shows inbound first for some routes
     // (e.g. 2B, 14) and outbound first for others (e.g. 2A, 2D), which reads
     // as randomly flipped origins.
-    const canonical = pickCanonicalVariant(variants) ?? first
+    const preferredOperator = String(options.preferredJointOperator ?? '')
+      .trim()
+      .toLowerCase()
+    const actualJoint = variants.filter((v) => operatorsOf(v).length > 1)
+    const preferredJoint = preferredOperator
+      ? actualJoint.filter((v) => operatorsOf(v).includes(preferredOperator))
+      : []
+    const preferredVariants = preferredOperator
+      ? variants.filter((v) => operatorsOf(v).includes(preferredOperator))
+      : []
+    const canonicalPool =
+      preferredJoint.length > 0
+        ? preferredJoint
+        : actualJoint.length > 0
+          ? actualJoint
+          : preferredVariants.length > 0
+            ? preferredVariants
+            : variants
+    const canonical = pickCanonicalVariant(canonicalPool) ?? first
 
     // Via line follows the canonical variant's stop group so the via stops
     // match the header direction. Falls back to the longest direction group
@@ -403,6 +441,7 @@ export function buildRouteSearchIndex(
       route: first.route,
       region: String(first.region ?? '').trim(),
       operators,
+      routeGroupKey: String(first.routeGroupKey ?? '').trim(),
       origin: canonical.origin,
       destination: canonical.destination,
       stopIds,
@@ -653,7 +692,8 @@ export function countRoutesByStopName(
       rs.co,
       rs.route,
       rs.region,
-      (rs as { operators?: string[] }).operators ?? [rs.co]
+      (rs as { operators?: string[] }).operators ?? [rs.co],
+      (rs as { routeGroupKey?: string }).routeGroupKey
     )
     let set = byName.get(key)
     if (!set) {

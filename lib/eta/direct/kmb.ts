@@ -137,6 +137,7 @@ export type KmbRouteStopEntry = {
   gtfsId: string
   region: string
   operators?: string[]
+  routeGroupKey?: string
   jointVariantKey?: string
   jointGroupKey?: string
   siblingStopIds?: string[]
@@ -144,7 +145,7 @@ export type KmbRouteStopEntry = {
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:route-stops:v2',
+    key: 'kmb:route-stops:v3',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -159,6 +160,7 @@ export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
         gtfsId: entry.gtfsId,
         region: entry.region,
         operators: entry.operators,
+        routeGroupKey: entry.routeGroupKey,
         jointVariantKey: entry.jointVariantKey,
         jointGroupKey: entry.jointGroupKey,
         siblingStopIds: entry.siblingStopIds,
@@ -177,6 +179,7 @@ export type KmbRouteInfo = {
   gtfsId: string
   region: string
   operators?: string[]
+  routeGroupKey?: string
   jointVariantKey?: string
   orig_en: string
   orig_tc: string
@@ -194,6 +197,7 @@ export type KmbRouteListEntry = {
   gtfsId: string
   region: string
   operators?: string[]
+  routeGroupKey?: string
   jointVariantKey?: string
   orig_en: string
   orig_tc: string
@@ -206,7 +210,7 @@ export type KmbRouteListEntry = {
 
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:routes:v2',
+    key: 'kmb:routes:v3',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -219,6 +223,7 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
         gtfsId: entry.gtfsId,
         region: entry.region,
         operators: entry.operators,
+        routeGroupKey: entry.routeGroupKey,
         jointVariantKey: entry.jointVariantKey,
         orig_en: entry.origin.en,
         orig_tc: entry.origin.tc,
@@ -270,6 +275,7 @@ export async function getKmbRouteInfo(params: {
     gtfsId: info.gtfsId,
     region: info.region,
     operators: info.operators,
+    routeGroupKey: info.routeGroupKey,
     jointVariantKey: info.jointVariantKey,
     orig_en: info.origin.en,
     orig_tc: info.origin.tc,
@@ -303,7 +309,12 @@ export type KmbStopEtasResponse = {
 
 export async function fetchKmbStopEtas(
   stopIds: string[],
-  options?: { routeFilter?: string; includeFares?: boolean; signal?: AbortSignal }
+  options?: {
+    routeFilter?: string
+    includeFares?: boolean
+    preferredJointOperator?: string | null
+    signal?: AbortSignal
+  }
 ): Promise<KmbStopEtasResponse> {
   if (options?.signal?.aborted) {
     throw new DOMException('The operation was aborted.', 'AbortError')
@@ -333,6 +344,7 @@ export async function fetchKmbStopEtas(
         gtfsId: entry.gtfsId,
         region: entry.region,
         operators: entry.operators,
+        routeGroupKey: entry.routeGroupKey,
         jointVariantKey: entry.jointVariantKey,
         jointGroupKey: entry.jointGroupKey,
         siblingStopIds: entry.siblingStopIds,
@@ -357,7 +369,7 @@ export async function fetchKmbStopEtas(
     uniqueStopIds,
     concurrency,
     async (stopId) => {
-      const cacheKey = kmbStopEtaKey(stopId)
+      const cacheKey = kmbStopEtaKey(stopId, options?.preferredJointOperator)
 
       const cachedValue = await getCachedValue<KmbEtaEntryWithLeg[]>({
         key: cacheKey,
@@ -367,7 +379,12 @@ export async function fetchKmbStopEtas(
         staleMaxMs: CACHE_POLICIES.kmbStopEta.maxStaleMs,
         signal,
         fetcher: async () => {
-          const results = await fetchKmbEtasForStop({ stopId, language: 'tc', signal })
+          const results = await fetchKmbEtasForStop({
+            stopId,
+            language: 'tc',
+            preferredOperator: options?.preferredJointOperator,
+            signal,
+          })
           return results.map((entry, idx) => ({
             ...mapKmbEtaEntry(entry, stopId),
             eta_seq: entry.etaSeq ?? idx + 1,
@@ -562,6 +579,7 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
           gtfsId: entry.gtfsId,
           region: entry.region,
           operators: entry.operators,
+          routeGroupKey: entry.routeGroupKey,
           jointVariantKey: entry.jointVariantKey,
           jointGroupKey: entry.jointGroupKey,
           siblingStopIds: entry.siblingStopIds,

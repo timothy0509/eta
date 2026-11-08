@@ -117,6 +117,14 @@ let resolvedCache: HeadwayIndex | null | undefined
 let inflight: Promise<HeadwayIndex | null> | undefined
 
 /**
+ * Snapshot URL version. Bump when the variant key shape changes so clients
+ * that cached the old file with force-cache fetch the new one instead of
+ * serving mismatched keys for a day. Key shape v3 is the LWB split.
+ */
+const HEADWAY_SNAPSHOT_VERSION = 3
+const HEADWAY_SNAPSHOT_URL = `/headway/headway.json?v=${HEADWAY_SNAPSHOT_VERSION}`
+
+/**
  * Load the prebuilt headway index from same-origin static JSON.
  * Module-singleton in-flight + resolved cache. Never throws: on any
  * error (network, parse, shape) returns null.
@@ -126,7 +134,7 @@ export function loadHeadwayIndex(): Promise<HeadwayIndex | null> {
   if (inflight) return inflight
   inflight = (async () => {
     try {
-      const res = await fetch('/headway/headway.json', { cache: 'force-cache' })
+      const res = await fetch(HEADWAY_SNAPSHOT_URL, { cache: 'force-cache' })
       if (!res.ok) return null
       const json: unknown = await res.json()
       return isHeadwayIndex(json) ? json : null

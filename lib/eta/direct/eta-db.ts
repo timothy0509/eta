@@ -36,6 +36,7 @@ import { getCachedValue } from '@/lib/eta/direct/shared'
 import { promisePool } from '@/lib/eta/promise-pool'
 import { lrtStopIdsEqual, stationIdToLrtStopId } from '@/lib/eta/lrt-stop-id'
 import type { UiLanguage } from '@/lib/eta/types'
+import { isKmbFamily, resolveAppCompany, type AppCompany } from '@/lib/eta/companies'
 
 const KMB_STOP_ETA_URL = 'https://data.etabus.gov.hk/v1/transport/kmb/stop-eta'
 
@@ -77,8 +78,9 @@ const etaDbMd5Cache = new MicroCache<string>({
 let cachedIndexes: { md5: string; value: EtaDbIndexes } | null = null
 let inFlightIndexes: Promise<EtaDbIndexes> | null = null
 
-const BUS_COMPANIES = [
+const BUS_COMPANIES: AppCompany[] = [
   'kmb',
+  'lwb',
   'ctb',
   'nlb',
   'nwfb',
@@ -86,9 +88,9 @@ const BUS_COMPANIES = [
   'lrtfeeder',
   'lightRail',
   'mtr',
-] as Company[]
+]
 
-function isBusCompany(company: Company): boolean {
+function isBusCompany(company: AppCompany): boolean {
   return BUS_COMPANIES.includes(company)
 }
 
@@ -256,7 +258,7 @@ export async function listKmbRouteStops(): Promise<KmbRouteStopLite[]> {
 }
 
 export async function findKmbRouteInfo(params: {
-  co?: Company
+  co?: AppCompany
   route: string
   bound: string
   serviceType: string
@@ -275,7 +277,7 @@ export async function findKmbRouteInfo(params: {
   const routeName = params.route.toUpperCase()
   const bound = normalizeBound(params.bound)
   const serviceType = String(params.serviceType ?? '')
-  const co = (params.co ?? 'kmb') as Company
+  const co = resolveAppCompany(params.co, routeName)
   const gtfsId = normalizeGtfsId(params.gtfsId)
 
   const entry =
@@ -287,14 +289,14 @@ export async function findKmbRouteInfo(params: {
       serviceType,
     })
 
-  if (!entry || !entry.co.includes(co)) return null
+  if (!entry || !(entry.co as string[]).includes(co)) return null
 
   const entryGtfsId = normalizeGtfsId(entry.gtfsId)
 
   return {
     co,
     route: entry.route,
-    bound: normalizeBound(entry.bound[co]),
+    bound: normalizeBound((entry.bound as Record<string, string>)[co]),
     serviceType: entry.serviceType,
     gtfsId: entryGtfsId,
     region: lookupRegion({ regionIndex }, { co, route: entry.route, gtfsId: entryGtfsId }),
@@ -304,8 +306,8 @@ export async function findKmbRouteInfo(params: {
   }
 }
 
-export type KmbEta = Eta & {
-  co: Company
+export type KmbEta = Omit<Eta, 'co'> & {
+  co: AppCompany
   route: string
   dir: string
   serviceType: string
@@ -329,7 +331,7 @@ const NON_KMB_CONCURRENCY_MEDIUM = 3
 const NON_KMB_CONCURRENCY_SLOW = 2
 
 function etaDedupeKey(eta: {
-  co: Company | string
+  co: string
   route: string
   dir: string
   serviceType: string
@@ -349,7 +351,9 @@ function mapOfficialStopEtaRows(
     if (filters.routeFilter && route.toUpperCase() !== filters.routeFilter) continue
     if (filters.serviceType && String(entry.service_type) !== filters.serviceType) continue
 
-    const co = String(entry.co ?? 'kmb').toLowerCase() as Company
+    // The KMB open-data endpoint reports co "KMB" for LWB departures too.
+    // Resolve through the TD GTFS list so LWB rows keep their own company.
+    const co = resolveAppCompany(entry.co, route)
     const dir = normalizeBound(entry.dir)
     const entryServiceType = String(entry.service_type ?? '')
     const etaSeq = Number(entry.eta_seq) || 0
@@ -426,7 +430,10 @@ export async function fetchKmbEtasForStop(
 
   if (routeEntries.length === 0) return [] as KmbEta[]
 
-  const candidateMap = new Map<string, { entry: RouteListEntry; co: Company; stopIndex: number }>()
+  const candidateMap = new Map<
+    string,
+    { entry: RouteListEntry; co: AppCompany; stopIndex: number }
+  >()
   // Resolved region per 5-part variant key, carried onto ETAs for grouping.
   const regionByVariantKey = new Map<string, string>()
   for (const re of routeEntries) {
@@ -452,7 +459,7 @@ export async function fetchKmbEtasForStop(
     const resolvedKey = routeVariantKey({
       co: re.co,
       route: entry.route,
-      bound: normalizeBound(entry.bound[re.co]),
+      bound: normalizeBound((entry.bound as Record<string, string>)[re.co]),
       serviceType: entry.serviceType,
       gtfsId: entry.gtfsId,
     })
@@ -474,8 +481,9 @@ export async function fetchKmbEtasForStop(
   }
 
   const candidates = Array.from(candidateMap.values())
-  const hasKmb = candidates.some((c) => c.co === 'kmb')
-  const nonKmb = candidates.filter((c) => c.co !== 'kmb')
+  // KMB and LWB both come from the KMB open-data stop-eta endpoint.
+  const hasKmb = candidates.some((c) => isKmbFamily(c.co))
+  const nonKmb = candidates.filter((c) => !isKmbFamily(c.co))
 
   const results: KmbEta[] = []
   const signal = params.signal
@@ -497,15 +505,16 @@ export async function fetchKmbEtasForStop(
       async ({ entry, co, stopIndex }) => {
         const etas = await deps.fetchVariantEtas({
           ...entry,
-          co: [co],
+          co: [co as Company],
           seq: stopIndex,
           language,
         })
         const gtfsId = normalizeGtfsId(entry.gtfsId)
+        const bound = normalizeBound((entry.bound as Record<string, string>)[co])
         const variantKey = routeVariantKey({
           co,
           route: entry.route,
-          bound: normalizeBound(entry.bound[co]),
+          bound,
           serviceType: entry.serviceType,
           gtfsId: entry.gtfsId,
         })
@@ -514,7 +523,7 @@ export async function fetchKmbEtasForStop(
           ...eta,
           co: eta.co ?? co,
           route: entry.route,
-          dir: normalizeBound(entry.bound[co]),
+          dir: bound,
           serviceType: entry.serviceType,
           gtfsId,
           region,

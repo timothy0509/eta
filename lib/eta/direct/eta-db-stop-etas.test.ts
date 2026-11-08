@@ -5,15 +5,16 @@ import { fetchKmbEtasForStop, fetchLrtEtasForStop, type FetchKmbEtasForStopDeps 
 import type { EtaDbIndexes } from '@/lib/eta/eta-db-index'
 
 function makeRouteEntry(
-  overrides: Omit<Partial<RouteListEntry>, 'bound' | 'stops'> & {
+  overrides: Omit<Partial<RouteListEntry>, 'bound' | 'stops' | 'co'> & {
     route: string
-    co: Company[]
-    bound: Partial<Record<Company, string>>
-    stops?: Partial<Record<Company, string[]>>
+    co: string[]
+    bound: Record<string, string>
+    stops?: Record<string, string[]>
   }
 ): RouteListEntry {
-  const companies: Company[] = [
+  const companies = [
     'kmb',
+    'lwb',
     'nlb',
     'ctb',
     'lrtfeeder',
@@ -24,26 +25,18 @@ function makeRouteEntry(
     'hkkf',
     'fortuneferry',
   ]
-  const bound = Object.fromEntries(
-    companies.map((co) => [co, 'O'])
-  ) as unknown as RouteListEntry['bound']
-  for (const [co, value] of Object.entries(overrides.bound)) {
-    bound[co as Company] = value as RouteListEntry['bound'][Company]
-  }
-  const stops = Object.fromEntries(
-    companies.map((co) => [co, []])
-  ) as unknown as RouteListEntry['stops']
-  for (const [co, value] of Object.entries(overrides.stops ?? {})) {
-    stops[co as Company] = value as string[]
-  }
+  const bound: Record<string, string> = Object.fromEntries(companies.map((co) => [co, 'O']))
+  Object.assign(bound, overrides.bound)
+  const stops: Record<string, string[]> = Object.fromEntries(companies.map((co) => [co, []]))
+  Object.assign(stops, overrides.stops ?? {})
   return {
     route: overrides.route,
-    co: overrides.co,
-    bound,
+    co: overrides.co as Company[],
+    bound: bound as unknown as RouteListEntry['bound'],
     serviceType: overrides.serviceType ?? '1',
     orig: overrides.orig ?? { en: 'A', zh: 'A' },
     dest: overrides.dest ?? { en: 'B', zh: 'B' },
-    stops,
+    stops: stops as unknown as RouteListEntry['stops'],
     fares: overrides.fares ?? null,
     faresHoliday: overrides.faresHoliday ?? null,
     freq: overrides.freq ?? null,
@@ -130,6 +123,66 @@ describe('fetchKmbEtasForStop hybrid', () => {
     expect(result[0]?.co).toBe('kmb')
     expect(result[0]?.route).toBe('1A')
     expect(result[0]?.dest_en).toBe('Tsim Sha Tsui')
+  })
+
+  it('LWB-only stop uses official stop-eta and maps rows to lwb', async () => {
+    const lwbEntry = makeRouteEntry({
+      route: 'A31',
+      co: ['lwb'],
+      bound: { lwb: 'O' },
+      stops: { lwb: ['LWB1'] },
+    })
+    const indexes = emptyIndexes()
+    indexes.stopRoutesIndex.set('LWB1', [
+      {
+        stopId: 'LWB1',
+        co: 'lwb',
+        route: 'A31',
+        bound: 'O',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '',
+        region: '',
+      },
+    ])
+    indexes.routeVariantIndex.set('lwb|A31|O|1|', lwbEntry)
+
+    const fetchOfficialStopEta = vi.fn().mockResolvedValue({
+      data: [
+        {
+          // The KMB endpoint reports LWB rows as KMB.
+          co: 'KMB',
+          route: 'A31',
+          dir: 'O',
+          service_type: 1,
+          seq: 1,
+          dest_tc: '機場',
+          dest_sc: '机场',
+          dest_en: 'Airport',
+          eta_seq: 1,
+          eta: '2026-08-02T15:20:00+08:00',
+          rmk_tc: '',
+          rmk_sc: '',
+          rmk_en: '',
+          data_timestamp: '2026-08-02T15:10:00+08:00',
+        },
+      ],
+    })
+    const fetchVariantEtas = vi.fn()
+
+    const result = await fetchKmbEtasForStop(
+      { stopId: 'LWB1', language: 'tc' },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta,
+        fetchVariantEtas,
+      }
+    )
+
+    expect(fetchOfficialStopEta).toHaveBeenCalledTimes(1)
+    expect(fetchVariantEtas).not.toHaveBeenCalled()
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ co: 'lwb', route: 'A31', dir: 'O' })
   })
 
   it('mixed stop uses stop-eta for KMB and fetchEtas for other operators', async () => {

@@ -1,3 +1,5 @@
+import { isKmbFamily } from '@/lib/eta/companies'
+
 /**
  * Fare table for one route variant, keyed by 1-indexed stop sequence.
  * hk-bus-eta stores fares as "fare from this stop to the terminus", so the
@@ -5,10 +7,14 @@
  * simply absent from the map.
  */
 export function getFaresBySeq(entry: { fares: unknown }, co: string): Record<number, number> {
+  const fareTable =
+    entry.fares && typeof entry.fares === 'object' && !Array.isArray(entry.fares)
+      ? (entry.fares as Record<string, string[] | undefined>)
+      : null
   const raw: unknown = Array.isArray(entry.fares)
     ? entry.fares
-    : entry.fares && typeof entry.fares === 'object'
-      ? (entry.fares as Record<string, string[] | undefined>)[co]
+    : fareTable
+      ? (fareTable[co] ?? (isKmbFamily(co) ? fareTable.kmb : undefined))
       : undefined
   if (!Array.isArray(raw)) return {}
 

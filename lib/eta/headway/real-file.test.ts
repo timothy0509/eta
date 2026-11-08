@@ -15,5 +15,8 @@ describe('real headway.json passes loader validation', () => {
     vi.unstubAllGlobals()
     expect(index).not.toBeNull()
     expect(Object.keys(index!.variants).length).toBeGreaterThan(2000)
+    // TD GTFS splits LWB from KMB, so the snapshot ships lwb| variants.
+    expect(index!.variants['lwb|A31|O|1']).toBeDefined()
+    expect(index!.variants['kmb|A31|O|1']).toBeUndefined()
   })
 })

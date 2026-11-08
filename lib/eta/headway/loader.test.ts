@@ -33,6 +33,15 @@ describe('loadHeadwayIndex validation', () => {
     expect(index?.variants['kmb|1|O|1']).toBeDefined()
   })
 
+  it('fetches the versioned snapshot URL so old key shapes cannot stick', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => indexWith(validVariant),
+    } as Response)
+    await loadHeadwayIndex()
+    expect(fetchSpy).toHaveBeenCalledWith('/headway/headway.json?v=3', { cache: 'force-cache' })
+  })
+
   it('rejects an unknown day-type key in departures', async () => {
     mockIndex(indexWith({ ...validVariant, departures: { someday: [405] } }))
     expect(await loadHeadwayIndex()).toBeNull()

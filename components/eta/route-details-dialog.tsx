@@ -4,6 +4,7 @@ import { CalendarDays, Clock, MapPin, Ticket } from 'lucide-react'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
+import { StopFareTable } from '@/components/eta/stop-fare-table'
 import { Marquee } from '@/components/ui/marquee'
 import {
   Dialog,
@@ -513,6 +514,8 @@ export function RouteDetailsDialog({
               </div>
             </div>
           </div>
+
+          {stopId ? <StopFareTable variantKey={baseKey} stopId={stopId} lang={lang} /> : null}
 
           <section aria-label={t('kmb.scheduleFullTitle')} className="min-w-0">
             <div className="text-on-surface-variant m3-label-md mb-2 flex items-center gap-1.5">

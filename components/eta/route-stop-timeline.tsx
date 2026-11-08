@@ -84,6 +84,7 @@ export function RouteStopCard({
   seq,
   name,
   subtitle,
+  fare,
   eta,
   panel,
   toggleLabel,
@@ -96,6 +97,8 @@ export function RouteStopCard({
   seq?: React.ReactNode
   name: React.ReactNode
   subtitle?: React.ReactNode
+  /** Fare from this stop to the selected alighting stop. */
+  fare?: React.ReactNode
   eta?: React.ReactNode
   panel: React.ReactNode
   toggleLabel?: string
@@ -122,6 +125,11 @@ export function RouteStopCard({
         ) : null}
       </div>
       <div className="flex shrink-0 items-center gap-1">
+        {fare ? (
+          <span className="bg-surface-container-high text-on-surface-variant font-tabular m3-label-md rounded-full px-2 py-0.5 whitespace-nowrap">
+            {fare}
+          </span>
+        ) : null}
         {!isExpanded ? eta : null}
         <ChevronDown
           className={cn('text-on-surface-variant ui-chevron h-4 w-4', isExpanded && 'rotate-180')}

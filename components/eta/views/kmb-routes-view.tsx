@@ -45,6 +45,13 @@ import type { Company } from 'hk-bus-eta'
 
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import { findRouteEntryByFamily, routeVariantKey } from '@/lib/eta/eta-db-index'
+import {
+  fareForIndices,
+  hasSectionalFares,
+  mapRouteStopsToFareIndices,
+  resolveFareVariant,
+} from '@/lib/eta/fares/lookup'
+import { useFareIndex } from '@/lib/eta/fares/use-fare-index'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
 import {
   FARE_UNKNOWN_COLOR,
@@ -141,6 +148,8 @@ function KmbRouteStopCard({
   stopCode,
   seq,
   lang,
+  fareLabel,
+  fareDestinationName,
   expanded,
   onToggle,
   selectLabel,
@@ -153,6 +162,10 @@ function KmbRouteStopCard({
   stopCode: string | null
   seq: number
   lang: UiLanguage
+  /** Fare from this stop to the selected alighting stop, when known. */
+  fareLabel?: string | null
+  /** Alighting stop name for the fare's accessible label. */
+  fareDestinationName?: string | null
   expanded: boolean
   onToggle: () => void
   selectLabel?: string
@@ -286,6 +299,19 @@ function KmbRouteStopCard({
       seq={seq}
       name={name}
       subtitle={stopCode}
+      fare={
+        fareLabel ? (
+          <span
+            aria-label={
+              fareDestinationName
+                ? cardTWithParams('kmb.fareToStop', { stop: fareDestinationName })
+                : undefined
+            }
+          >
+            {fareLabel}
+          </span>
+        ) : null
+      }
       eta={<TickingSoonestPill etas={stopEtas} lang={lang} />}
       panel={panel}
       toggleLabel={name}
@@ -434,9 +460,59 @@ function KmbRouteStopList({
   // the existing stop-name parsing untouched.
   const isCtbRoute = normalizeOperator(currentVariant.co) === 'ctb'
 
+  // Origin/destination matrix from the TD GTFS fare tables. The boarding
+  // stop fare from hk-bus-eta stays as the fallback when this variant has no
+  // compiled table.
+  const fareIndex = useFareIndex()
+  const fareTable = React.useMemo(
+    () => resolveFareVariant(fareIndex, variantKey),
+    [fareIndex, variantKey]
+  )
+  const fareStopIndices = React.useMemo(
+    () => (fareTable ? mapRouteStopsToFareIndices(fareTable, variantStops) : null),
+    [fareTable, variantStops]
+  )
+  const sectionalFares = React.useMemo(
+    () => (fareTable ? hasSectionalFares(fareTable) : false),
+    [fareTable]
+  )
+  const [fareDestination, setFareDestination] = React.useState<{
+    listKey: string
+    index: number
+  } | null>(null)
+  const selectedFareDestination =
+    fareDestination && fareDestination.listKey === listKey ? fareDestination.index : null
+  const terminusIndex = Math.max(0, variantStops.length - 1)
+  const destinationIndex =
+    selectedFareDestination !== null &&
+    selectedFareDestination > 0 &&
+    selectedFareDestination < variantStops.length
+      ? selectedFareDestination
+      : terminusIndex
+  const showFarePicker = Boolean(fareTable && sectionalFares && variantStops.length > 2)
+
+  const fareToIndex = React.useCallback(
+    (index: number) => {
+      if (fareTable && fareStopIndices) {
+        const from = fareStopIndices[index] ?? -1
+        const to = fareStopIndices[destinationIndex] ?? -1
+        if (from >= 0 && to >= 0) {
+          const fare = fareForIndices(fareTable, from, to)
+          if (fare !== null) return fare
+        }
+        // Missing pairs borrow the boarding-stop fare only when the rider is
+        // going all the way to the terminus. A mid-route destination must not
+        // show that fare.
+        if (destinationIndex !== terminusIndex) return null
+      }
+      return faresBySeq[variantStops[index]?.seq] ?? null
+    },
+    [fareTable, fareStopIndices, destinationIndex, terminusIndex, faresBySeq, variantStops]
+  )
+
   const sections = React.useMemo(
-    () => groupIntoFareSections(variantStops, (rs) => faresBySeq[rs.seq] ?? null),
-    [variantStops, faresBySeq]
+    () => groupIntoFareSections(variantStops, (_rs, index) => fareToIndex(index)),
+    [variantStops, fareToIndex]
   )
 
   // Known fare sections consume palette indices in order; unknown
@@ -577,10 +653,8 @@ function KmbRouteStopList({
     }
   }, [streetSections, sections, sectionColors])
 
-  const renderStopCard = (rs: KmbRouteStopLite) => {
-    const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
+  const formatStop = (rs: KmbRouteStopLite) => {
     const stop = stopsById.get(rs.stopId)
-    const stopEtas = etas[rs.stopId] ?? []
     const fullName = stop
       ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
       : rs.stopId
@@ -591,18 +665,33 @@ function KmbRouteStopList({
     // Split the street off the already-parsed name so joint KMB/CTB stops
     // keep the EN title-casing.
     const ctb = isCtbRoute ? parseCtbStopNameCached(parsed.name) : null
+    return {
+      name: pickCtbDisplayName(ctb?.name, parsed.name),
+      stopCode: parsed.platform ?? parsed.stopCode,
+    }
+  }
+
+  const renderStopCard = (rs: KmbRouteStopLite, index: number) => {
+    const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
+    const stopEtas = etas[rs.stopId] ?? []
+    const formatted = formatStop(rs)
     // Same-base grouping was precomputed once per list render (O(n)), not
     // per card. A 100-stop route was doing ~10k name comparisons before.
     const group = stopGroups.get(rs.stopId)
     const cardKey = `${rs.stopId}:${rs.seq}`
+    const destinationStop = variantStops[destinationIndex]
     return (
       <KmbRouteStopCard
         stopEtas={stopEtas}
         stopId={rs.stopId}
-        name={pickCtbDisplayName(ctb?.name, parsed.name)}
-        stopCode={parsed.platform ?? parsed.stopCode}
+        name={formatted.name}
+        stopCode={formatted.stopCode}
         seq={seq}
         lang={lang}
+        fareLabel={showFarePicker ? formatFareHkd(fareToIndex(index)) : null}
+        fareDestinationName={
+          showFarePicker && destinationStop ? formatStop(destinationStop).name : null
+        }
         expanded={expandedKey === cardKey}
         onToggle={() => onToggleStop(cardKey)}
         selectLabel={group && onSelectStopGroup ? t('common.viewEtas') : undefined}
@@ -622,6 +711,25 @@ function KmbRouteStopList({
 
   return (
     <div key={listKey} className="space-y-3">
+      {showFarePicker ? (
+        <label className="bg-surface-container flex min-h-[44px] items-center gap-2 rounded-full px-3 py-1.5">
+          <span className="text-on-surface-variant m3-label-md shrink-0">{t('kmb.fareTo')}</span>
+          <select
+            aria-label={t('kmb.fareDestination')}
+            value={destinationIndex}
+            onChange={(event) => setFareDestination({ listKey, index: Number(event.target.value) })}
+            className="text-on-surface m3-body-md min-w-0 flex-1 truncate bg-transparent focus-visible:outline-none"
+          >
+            {variantStops.map((rs, index) =>
+              index === 0 ? null : (
+                <option key={`${rs.stopId}:${rs.seq}`} value={index}>
+                  {index + 1}. {formatStop(rs).name}
+                </option>
+              )
+            )}
+          </select>
+        </label>
+      ) : null}
       {timeline ? (
         <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2">
           {timeline.fareRuns.map((run) => (
@@ -650,7 +758,7 @@ function KmbRouteStopList({
               className={cn('ui-cv-row min-w-0 scroll-mt-4 py-1', staggerClassForIndex(index))}
               style={{ gridColumn: 3, gridRow: index + 1 }}
             >
-              {renderStopCard(rs)}
+              {renderStopCard(rs, index)}
             </div>
           ))}
         </div>
@@ -675,7 +783,7 @@ function KmbRouteStopList({
                       staggerClassForIndex((sectionStartRows[sectionIdx] ?? 0) + itemIdx)
                     )}
                   >
-                    {renderStopCard(rs)}
+                    {renderStopCard(rs, (sectionStartRows[sectionIdx] ?? 0) + itemIdx)}
                   </div>
                 ))}
               </div>

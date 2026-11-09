@@ -1,3 +1,5 @@
+import { fetchJson } from '@/lib/eta/http'
+
 /**
  * Jointly operated route manifest built from the TD headway GTFS feed
  * (routes.txt agency_id values such as KMB+CTB). The app keeps its runtime
@@ -45,23 +47,27 @@ let inflight: Promise<JointRouteManifest | null> | undefined
  * Load the prebuilt joint route manifest from same-origin static JSON.
  * Module-singleton in-flight + resolved cache. Never throws: network,
  * parse, or shape failures return null and callers fall back to the
- * upstream `co` arrays.
+ * upstream `co` arrays. Failures are not cached, so an offline first load
+ * retries on the next call instead of disabling joints until reload.
  */
 export function loadJointRoutes(): Promise<JointRouteManifest | null> {
   if (resolvedCache !== undefined) return Promise.resolve(resolvedCache)
   if (inflight) return inflight
   inflight = (async () => {
     try {
-      const res = await fetch('/gtfs/joint-routes.json', { cache: 'force-cache' })
-      if (!res.ok) return null
-      const json: unknown = await res.json()
+      const json = await fetchJson<unknown>('/gtfs/joint-routes.json', {
+        cache: 'force-cache',
+        timeoutMs: 12_000,
+        retries: 0,
+      })
       return isManifest(json) ? json : null
     } catch {
       return null
     }
   })()
   return inflight.then((manifest) => {
-    resolvedCache = manifest
+    // Only cache success: a null (offline/invalid) load stays retryable.
+    resolvedCache = manifest ?? undefined
     inflight = undefined
     return manifest
   })
@@ -85,6 +91,48 @@ function normalizeOperators(operators: Iterable<string>): string[] {
 }
 
 /**
+ * KMB-family mapping for joint matching: the TD manifest may file KMB-group
+ * joints (S1/R8 agency LWB+CTB) as either `kmb+ctb` (stale) or `lwb+ctb`
+ * (fresh regen), while the app keeps the LWB half under `lwb`. Compare in
+ * family space so both manifest shapes match either operator input.
+ */
+function toJointFamily(op: string): string {
+  const lower = String(op ?? '')
+    .trim()
+    .toLowerCase()
+  return lower === 'lwb' ? 'kmb' : lower
+}
+
+export type StaleJointRowLike = {
+  co?: unknown
+  operators?: string[]
+  jointVariantKey?: string
+}
+
+/**
+ * Partner fallback for stale cached rows that predate the `operators`
+ * field. A joint variant key still tells us the row is half of a joint
+ * pair. The fallback covers the KMB family (kmb/lwb) plus ctb: an `lwb`
+ * row gains `ctb` (keeping its own company, not `kmb`). Any future
+ * non-KMB/CTB joint pair keeps its single operator rather than being
+ * mis-attributed.
+ */
+export function staleJointOperators(entry: StaleJointRowLike): string[] {
+  const raw = entry.operators?.length ? entry.operators : [String(entry.co ?? 'kmb')]
+  const list = raw.map((op) =>
+    String(op ?? '')
+      .trim()
+      .toLowerCase()
+  )
+  if (list.length === 1 && String(entry.jointVariantKey ?? '').trim()) {
+    const family = toJointFamily(list[0] ?? '')
+    const partner = family === 'kmb' ? 'ctb' : family === 'ctb' ? 'kmb' : ''
+    if (partner && !list.includes(partner)) list.push(partner)
+  }
+  return list
+}
+
+/**
  * Return the operators that jointly run this route, or [] when it is not
  * joint. A route missing from the manifest falls back to the upstream
  * operator list, so a stale manifest does not hide a newly joint route.
@@ -104,15 +152,11 @@ export function resolveJointOperators(
         .toUpperCase()
     ]
   if (!definition) return unique
-  const allowed = new Set(
-    definition.operators.map((op) =>
-      String(op ?? '')
-        .trim()
-        .toLowerCase()
-    )
-  )
-  const matched = unique.filter((op) => allowed.has(op))
-  return matched.length >= 2 ? matched : []
+  const allowed = new Set(definition.operators.map(toJointFamily))
+  const matched = unique.filter((op) => allowed.has(toJointFamily(op)))
+  if (matched.length < 2) return []
+  // kmb+lwb share one family: joint needs two distinct families.
+  return new Set(matched.map(toJointFamily)).size >= 2 ? matched : []
 }
 
 /**
@@ -132,16 +176,10 @@ export function jointRouteGroupKey(
     .toUpperCase()
   const definition = manifest.routes[routeUpper]
   if (!definition) return ''
-  const allowed = new Set(
-    definition.operators.map((op) =>
-      String(op ?? '')
-        .trim()
-        .toLowerCase()
-    )
-  )
+  const allowed = new Set(definition.operators.map(toJointFamily))
   const unique = normalizeOperators(operators)
   if (unique.length === 0) return ''
-  if (!unique.every((op) => allowed.has(op))) return ''
+  if (!unique.every((op) => allowed.has(toJointFamily(op)))) return ''
   return `joint|${routeUpper}`
 }
 
@@ -195,11 +233,12 @@ export function inferJointRouteNumbers(entries: Iterable<JointInferenceEntry>): 
       byRoute.set(route, byOperator)
     }
     for (const co of operators) {
-      if (co !== 'kmb' && co !== 'ctb') continue
-      let signatures = byOperator.get(co)
+      const family = toJointFamily(co)
+      if (family !== 'kmb' && family !== 'ctb') continue
+      let signatures = byOperator.get(family)
       if (!signatures) {
         signatures = new Set()
-        byOperator.set(co, signatures)
+        byOperator.set(family, signatures)
       }
       signatures.add(signature)
     }

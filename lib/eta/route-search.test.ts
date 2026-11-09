@@ -24,7 +24,7 @@ function makeRoute(
   serviceType = '1'
 ): KmbRouteInfoLite {
   return {
-    co: co as 'kmb',
+    co: co as KmbRouteInfoLite['co'],
     route,
     bound,
     serviceType,
@@ -200,6 +200,19 @@ describe('buildRouteSearchIndex', () => {
     const index = buildRouteSearchIndex(jointRoutes, [], stopsById)
     expect(index).toHaveLength(1)
     expect(index[0]?.operators).toEqual(['kmb', 'ctb'])
+  })
+
+  it('gives a stale lwb joint row the ctb partner, not kmb', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('lwb', 'S1', 'Tung Chung', 'Airport', 'O'),
+        region: 'joint|S1|1',
+        jointVariantKey: 'jointv:1',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById)
+    expect(index).toHaveLength(1)
+    expect(index[0]?.operators).toEqual(['lwb', 'ctb'])
   })
 
   it('merges one-operator variants that belong to a joint route number', () => {

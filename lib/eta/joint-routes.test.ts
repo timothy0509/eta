@@ -1,12 +1,22 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { fetchJson } from '@/lib/eta/http'
 import {
+  __resetJointRoutesCacheForTests,
   inferJointRouteNumbers,
   isJointRoute,
   jointRouteGroupKey,
+  loadJointRoutes,
   resolveJointOperators,
+  staleJointOperators,
   type JointRouteManifest,
 } from './joint-routes'
+
+vi.mock('@/lib/eta/http', () => ({
+  fetchJson: vi.fn(),
+}))
+
+const mockFetchJson = vi.mocked(fetchJson)
 
 const manifest: JointRouteManifest = {
   updated: '2026-11-02',
@@ -119,5 +129,77 @@ describe('inferJointRouteNumbers', () => {
       },
     ])
     expect(inferred.has('102')).toBe(false)
+  })
+
+  it('infers an lwb plus ctb pair sharing termini as joint', () => {
+    const inferred = inferJointRouteNumbers([
+      {
+        co: ['lwb'],
+        route: 'S1',
+        orig: { en: 'TUNG CHUNG STATION' },
+        dest: { en: 'AIRPORT (CIRCULAR)' },
+        serviceType: '1',
+      },
+      {
+        co: ['ctb'],
+        route: 'S1',
+        orig: { en: 'Tung Chung Station' },
+        dest: { en: 'Airport (Circular)' },
+        serviceType: 1,
+      },
+    ])
+    expect(inferred.has('S1')).toBe(true)
+  })
+})
+
+describe('staleJointOperators', () => {
+  it('gives a stale lwb row the ctb partner, not kmb', () => {
+    expect(staleJointOperators({ co: 'lwb', jointVariantKey: 'jointv:1' })).toEqual(['lwb', 'ctb'])
+  })
+
+  it('keeps the kmb and ctb fallbacks', () => {
+    expect(staleJointOperators({ co: 'kmb', jointVariantKey: 'jointv:1' })).toEqual(['kmb', 'ctb'])
+    expect(staleJointOperators({ co: 'ctb', jointVariantKey: 'jointv:1' })).toEqual(['ctb', 'kmb'])
+  })
+
+  it('leaves non-KMB/CTB rows and fresh rows alone', () => {
+    expect(staleJointOperators({ co: 'gmb', jointVariantKey: 'jointv:1' })).toEqual(['gmb'])
+    expect(staleJointOperators({ co: 'kmb' })).toEqual(['kmb'])
+    expect(staleJointOperators({ operators: ['kmb', 'ctb'], jointVariantKey: 'jointv:1' })).toEqual(
+      ['kmb', 'ctb']
+    )
+  })
+})
+
+describe('loadJointRoutes', () => {
+  const successManifest = {
+    updated: '2026-11-02',
+    routes: {
+      '102': { operators: ['ctb', 'kmb'], agency: 'KMB+CTB', longName: 'SHAU KEI WAN - MEI FOO' },
+    },
+  }
+
+  beforeEach(() => {
+    __resetJointRoutesCacheForTests()
+    mockFetchJson.mockReset()
+  })
+
+  it('returns null on failure and retries on the next call', async () => {
+    mockFetchJson.mockRejectedValueOnce(new Error('offline'))
+    await expect(loadJointRoutes()).resolves.toBeNull()
+    mockFetchJson.mockResolvedValueOnce(successManifest)
+    await expect(loadJointRoutes()).resolves.toEqual(successManifest)
+    expect(mockFetchJson).toHaveBeenCalledTimes(2)
+  })
+
+  it('fetches with a timeout and caches success without refetching', async () => {
+    mockFetchJson.mockResolvedValueOnce(successManifest)
+    await expect(loadJointRoutes()).resolves.toEqual(successManifest)
+    await expect(loadJointRoutes()).resolves.toEqual(successManifest)
+    expect(mockFetchJson).toHaveBeenCalledTimes(1)
+    expect(mockFetchJson).toHaveBeenCalledWith(
+      '/gtfs/joint-routes.json',
+      expect.objectContaining({ timeoutMs: 12_000 })
+    )
   })
 })

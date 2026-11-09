@@ -1,5 +1,6 @@
 import type { KmbRouteInfoLite, KmbRouteStopLite } from '@/lib/eta/client'
 import { pickPrimaryOperator, regionOrdinal } from '@/lib/eta/eta-db-index'
+import { staleJointOperators } from '@/lib/eta/joint-routes'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
@@ -212,26 +213,13 @@ export function buildRouteSearchIndex(
   stopsById: Map<string, KmbStopSearchItem>,
   options: { preferredJointOperator?: string | null } = {}
 ): RouteSearchEntry[] {
-  // Stale cached rows may predate the `operators` field. A joint variant
-  // key still tells us the row is half of a joint pair. The partner fallback
-  // covers the KMB family (kmb/lwb) plus ctb; any future non-KMB/CTB joint
-  // pair keeps its single operator rather than being mis-attributed. An
-  // `lwb` row gains `ctb` (not `kmb`), keeping its own company.
+  // Stale cached rows may predate the `operators` field; the shared
+  // helper restores the joint partner from the variant key.
   const operatorsOf = (entry: {
     co?: unknown
     operators?: string[]
     jointVariantKey?: string
-  }): string[] => {
-    const list = (entry.operators?.length ? entry.operators : [String(entry.co ?? 'kmb')]).map(
-      (op) => normalizeOperator(op)
-    )
-    if (list.length === 1 && String(entry.jointVariantKey ?? '').trim()) {
-      const family = list[0] === 'lwb' ? 'kmb' : list[0]
-      const partner = family === 'kmb' ? 'ctb' : family === 'ctb' ? 'kmb' : ''
-      if (partner && !list.includes(partner)) list.push(partner)
-    }
-    return list
-  }
+  }): string[] => staleJointOperators(entry)
 
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {

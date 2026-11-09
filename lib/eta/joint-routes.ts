@@ -103,6 +103,35 @@ function toJointFamily(op: string): string {
   return lower === 'lwb' ? 'kmb' : lower
 }
 
+export type StaleJointRowLike = {
+  co?: unknown
+  operators?: string[]
+  jointVariantKey?: string
+}
+
+/**
+ * Partner fallback for stale cached rows that predate the `operators`
+ * field. A joint variant key still tells us the row is half of a joint
+ * pair. The fallback covers the KMB family (kmb/lwb) plus ctb: an `lwb`
+ * row gains `ctb` (keeping its own company, not `kmb`). Any future
+ * non-KMB/CTB joint pair keeps its single operator rather than being
+ * mis-attributed.
+ */
+export function staleJointOperators(entry: StaleJointRowLike): string[] {
+  const raw = entry.operators?.length ? entry.operators : [String(entry.co ?? 'kmb')]
+  const list = raw.map((op) =>
+    String(op ?? '')
+      .trim()
+      .toLowerCase()
+  )
+  if (list.length === 1 && String(entry.jointVariantKey ?? '').trim()) {
+    const family = toJointFamily(list[0] ?? '')
+    const partner = family === 'kmb' ? 'ctb' : family === 'ctb' ? 'kmb' : ''
+    if (partner && !list.includes(partner)) list.push(partner)
+  }
+  return list
+}
+
 /**
  * Return the operators that jointly run this route, or [] when it is not
  * joint. A route missing from the manifest falls back to the upstream

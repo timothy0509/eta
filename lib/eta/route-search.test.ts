@@ -103,7 +103,28 @@ describe('buildRouteSearchIndex', () => {
     expect(keys.filter((k) => k === 'kmb|1A')).toHaveLength(1)
     const entry = index.find((e) => e.key === 'kmb|1A')
     expect(entry?.variantCount).toBe(2)
-    expect(entry?.directions).toEqual(expect.arrayContaining(['O', 'I']))
+    // Ordered OD pairs: the two travel directions stay distinct.
+    expect(entry?.directions).toHaveLength(2)
+  })
+
+  it('counts one direction for opposite-bound joint rows on the same OD', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '102', 'Kennedy Town', 'Kwun Tong', 'I'),
+        region: 'joint|102|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '102', 'Kennedy Town', 'Kwun Tong', 'O'),
+        region: 'joint|102|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById)
+    expect(index).toHaveLength(1)
+    expect(index[0]?.directions).toHaveLength(1)
   })
 
   it('sorts empty results numerically', () => {
@@ -595,6 +616,43 @@ describe('via line direction', () => {
 })
 
 describe('getKeyStops', () => {
+  it('keeps an interior stop sharing a short-working terminus name', () => {
+    const names = [
+      'Origin A',
+      'Stop Two',
+      'Short Terminus',
+      'Stop Four',
+      'Mid Stop',
+      'Stop Six',
+      'Stop Seven',
+      'Dest B',
+    ]
+    const localStops = new Map<string, KmbStopSearchItem>(
+      names.map((n, i) => [`s${i + 1}`, makeStop(`s${i + 1}`, n)])
+    )
+    const variants = [
+      makeRoute('kmb', 'X7', 'Origin A', 'Dest B', 'O', '1'),
+      // Short working ending at an interior stop of the full journey.
+      makeRoute('kmb', 'X7', 'Origin A', 'Short Terminus', 'O', '2'),
+    ]
+    const localRouteStops: KmbRouteStopLite[] = names.map((_, i) => ({
+      co: 'kmb',
+      route: 'X7',
+      bound: 'O',
+      serviceType: '1',
+      seq: i + 1,
+      stopId: `s${i + 1}`,
+      gtfsId: '',
+      region: '',
+    }))
+    const index = buildRouteSearchIndex(variants, localRouteStops, localStops)
+    const entry = index.find((e) => e.key === 'kmb|X7')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    expect(entry.altNames).toContain('short terminus')
+    expect(getKeyStops(entry, localStops, 'en')).toContain('Short Terminus')
+  })
+
   it('skips termini names', () => {
     const localStops = new Map<string, KmbStopSearchItem>([
       ['s1', makeStop('s1', 'Mong Kok', '旺角')],

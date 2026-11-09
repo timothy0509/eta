@@ -66,6 +66,7 @@ export function ExpandableEtaRow({
           expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
         )}
         aria-hidden={!expanded}
+        inert={!expanded}
       >
         <div className="min-h-0 overflow-hidden">
           <div

@@ -220,6 +220,19 @@ export function inferJointRouteNumbers(entries: Iterable<JointInferenceEntry>): 
   return out
 }
 
+/**
+ * Stable joint variant keys. Built in three sites (route list, route info,
+ * index build) plus a separate cross-pair prefix for 101R-style two-entry
+ * pairs. Centralize construction so the sites cannot drift.
+ */
+export function jointVariantKeyForEntry(entryIndex: number): string {
+  return `jointv:${entryIndex}`
+}
+
+export function jointCrossPairKey(crossPairIndex: number): string {
+  return `jointc:${crossPairIndex}`
+}
+
 /** True when this route number is jointly operated. */
 export function isJointRoute(
   manifest: JointRouteManifest | null | undefined,

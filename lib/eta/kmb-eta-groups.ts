@@ -45,11 +45,15 @@ export function buildDefaultKey(entry: KmbEtaEntryWithLeg): string {
   // Region-aware: same number in different regions (GMB HKI/Kowloon/NT)
   // must not merge. The gtfsId scope segment is present only when upstream
   // provides one, so KMB rows keep their exact legacy 5-part shape while
-  // GMB rows gain a discriminator. baseKey is everything but the leg.
+  // GMB rows gain a discriminator. Joint cross-pairs (101R-style two
+  // entries) may carry different gtfsIds, so prefer the joint variant key
+  // as the scope when present. baseKey is everything but the leg.
+  const jointVariantKey = String(entry.jointVariantKey ?? '').trim()
   const gtfsId = String(entry.gtfsId ?? '').trim()
+  const scope = jointVariantKey || gtfsId
   const legSuffix = entry.leg ?? '_'
-  return gtfsId
-    ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${legSuffix}`
+  return scope
+    ? `${co}|${route}|${dir}|${serviceType}|${scope}|${legSuffix}`
     : `${co}|${route}|${dir}|${serviceType}|${legSuffix}`
 }
 

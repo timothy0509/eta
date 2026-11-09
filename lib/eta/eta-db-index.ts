@@ -2,10 +2,28 @@ import type { Company, EtaDb, RouteListEntry } from 'hk-bus-eta'
 
 import {
   inferJointRouteNumbers,
+  jointCrossPairKey,
   jointRouteGroupKey,
+  jointVariantKeyForEntry,
   resolveJointOperators,
   type JointRouteManifest,
 } from '@/lib/eta/joint-routes'
+
+function normalizeBusCo(co: string): Company {
+  return (
+    String(co ?? '')
+      .trim()
+      .toLowerCase() === 'lwb'
+      ? 'kmb'
+      : String(co ?? '')
+  ) as Company
+}
+
+function stopsForCo(entry: RouteListEntry, co: string): string[] | undefined {
+  const stops = entry.stops as Record<string, string[] | undefined>
+  if (co === 'kmb') return stops.kmb ?? stops.lwb
+  return stops[co]
+}
 import type { KmbStopSearchItem } from '@/lib/eta/types'
 
 export type { KmbStopSearchItem }
@@ -510,7 +528,8 @@ function buildJointStopMetas(
   const stopsByCo = new Map<string, string[]>()
   const entryStops = entry.stops as Record<string, string[] | undefined>
   for (const co of operators) {
-    const stops = (entryStops[co] ?? []).map((id) => normalizeStopId(id))
+    const raw = entryStops[co] ?? (co === 'kmb' ? entryStops.lwb : undefined) ?? []
+    const stops = raw.map((id) => normalizeStopId(id))
     stopsByCo.set(co, stops)
     byCo.set(
       co,
@@ -627,8 +646,13 @@ export async function buildEtaDbIndexes(
     if (id && Number.isFinite(lat) && Number.isFinite(lng)) stopCoords.set(id, { lat, lng })
   }
 
+  const busCompanySet = new Set(busCompanies.map((co) => normalizeBusCo(String(co))))
   const kmbRouteListEntries = Object.values(db.routeList).filter((entry) =>
-    entry.co.some((co) => busCompanies.includes(co) && entry.stops[co]?.length)
+    entry.co.some(
+      (co) =>
+        busCompanySet.has(normalizeBusCo(String(co))) &&
+        (stopsForCo(entry, normalizeBusCo(String(co)))?.length ?? 0) > 0
+    )
   )
   const inferredJointRoutes = inferJointRouteNumbers(
     kmbRouteListEntries.map((entry) => ({
@@ -641,8 +665,8 @@ export async function buildEtaDbIndexes(
   )
 
   const plans = kmbRouteListEntries.map((entry, entryIndex) => {
-    const cos = entry.co.filter(
-      (co) => busCompanies.includes(co) && (entry.stops[co]?.length ?? 0) > 0
+    const cos = Array.from(new Set(entry.co.map((co) => normalizeBusCo(String(co))))).filter(
+      (co) => busCompanySet.has(co) && (stopsForCo(entry, co)?.length ?? 0) > 0
     )
     const matchedOperators = resolveJointOperators(jointRoutes, entry.route, cos)
     const joint = matchedOperators.length > 1
@@ -656,13 +680,13 @@ export async function buildEtaDbIndexes(
         ? `joint|${routeUpper}`
         : ''
     const routeGroupKey = jointRouteGroupKey(jointRoutes, entry.route, cos) || inferredGroup
-    const jointVariantKey = joint ? `jointv:${entryIndex}` : ''
+    const jointVariantKey = joint ? jointVariantKeyForEntry(entryIndex) : ''
     const jointMetaByCo = joint
       ? buildJointStopMetas(entry, jointVariantKey, matchedOperators, stopCoords)
       : new Map(
           cos.map((co) => [
             co,
-            (entry.stops[co] ?? []).map((_, _index) => ({
+            (stopsForCo(entry, co) ?? []).map((_, _index) => ({
               ...EMPTY_JOINT_META,
               operators: [co],
             })),
@@ -712,22 +736,61 @@ export async function buildEtaDbIndexes(
     const kmbPlan = list.find((plan) => plan.cos[0] === 'kmb')
     const ctbPlan = list.find((plan) => plan.cos[0] === 'ctb')
     if (!kmbPlan || !ctbPlan) continue
-    const kmbStops = (kmbPlan.entry.stops.kmb ?? []).map((id) => normalizeStopId(id))
-    const ctbStops = (ctbPlan.entry.stops.ctb ?? []).map((id) => normalizeStopId(id))
-    const length = Math.min(kmbStops.length, ctbStops.length)
-    if (length === 0) continue
-    const jointVariantKey = `jointc:${crossPairIndex}`
+    const kmbEntryStops = kmbPlan.entry.stops as Record<string, string[] | undefined>
+    const ctbEntryStops = ctbPlan.entry.stops as Record<string, string[] | undefined>
+    const kmbStops = (kmbEntryStops.kmb ?? kmbEntryStops.lwb ?? []).map((id) => normalizeStopId(id))
+    const ctbStops = (ctbEntryStops.ctb ?? []).map((id) => normalizeStopId(id))
+    if (kmbStops.length === 0 || ctbStops.length === 0) continue
+    const jointVariantKey = jointCrossPairKey(crossPairIndex)
     crossPairIndex += 1
     for (const plan of [kmbPlan, ctbPlan]) {
       plan.joint = true
       plan.operators = ['kmb', 'ctb']
       plan.jointVariantKey = jointVariantKey
     }
-    for (let index = 0; index < length; index += 1) {
+    // Pair stops with the same coordinate guard as same-entry joints:
+    // same index only when co-located, else nearest unused stop within
+    // the match radius. Pure index pairing attributes the sibling's ETAs
+    // to the wrong physical stop on unequal or reordered arrays.
+    const usedCtb = new Set<number>()
+    let paired = 0
+    for (let index = 0; index < kmbStops.length; index += 1) {
       const kmbStop = kmbStops[index]
-      const ctbStop = ctbStops[index]
-      if (!kmbStop || !ctbStop) continue
-      const jointGroupKey = `${jointVariantKey}:${index}`
+      if (!kmbStop) continue
+      const kmbPoint = stopCoords.get(kmbStop)
+      let matchIndex = -1
+      const sameStop = ctbStops[index]
+      if (sameStop && !usedCtb.has(index)) {
+        const samePoint = stopCoords.get(sameStop)
+        if (
+          !kmbPoint ||
+          !samePoint ||
+          approxMeters(kmbPoint, samePoint) <= JOINT_STOP_MATCH_RADIUS_M
+        ) {
+          matchIndex = index
+        }
+      }
+      if (matchIndex < 0 && kmbPoint) {
+        let bestDistance = Number.POSITIVE_INFINITY
+        for (let candidate = 0; candidate < ctbStops.length; candidate += 1) {
+          if (usedCtb.has(candidate)) continue
+          const stopId = ctbStops[candidate]
+          if (!stopId) continue
+          const point = stopCoords.get(stopId)
+          if (!point) continue
+          const distance = approxMeters(kmbPoint, point)
+          if (distance <= JOINT_STOP_MATCH_RADIUS_M && distance < bestDistance) {
+            bestDistance = distance
+            matchIndex = candidate
+          }
+        }
+      }
+      if (matchIndex < 0) continue
+      const ctbStop = ctbStops[matchIndex]
+      if (!ctbStop) continue
+      usedCtb.add(matchIndex)
+      const jointGroupKey = `${jointVariantKey}:${paired}`
+      paired += 1
       const kmbMeta = kmbPlan.jointMetaByCo.get('kmb')
       const ctbMeta = ctbPlan.jointMetaByCo.get('ctb')
       if (!kmbMeta || !ctbMeta) continue
@@ -737,7 +800,7 @@ export async function buildEtaDbIndexes(
         jointGroupKey,
         siblingStopIds: [ctbStop],
       }
-      ctbMeta[index] = {
+      ctbMeta[matchIndex] = {
         operators: ['kmb', 'ctb'],
         jointVariantKey,
         jointGroupKey,
@@ -751,8 +814,8 @@ export async function buildEtaDbIndexes(
   for (const plan of plans) {
     const { entry, cos, jointMetaByCo } = plan
     for (const co of cos) {
-      const stops = entry.stops[co] ?? []
-      const bound = normalizeBound(entry.bound[co])
+      const stops = stopsForCo(entry, co) ?? []
+      const bound = normalizeBound((entry.bound as Record<string, string | undefined>)[co])
       const gtfsId = normalizeGtfsId(entry.gtfsId)
       const metas = jointMetaByCo.get(co) ?? []
       for (let idx = 0; idx < stops.length; idx += 1) {
@@ -846,8 +909,8 @@ export async function buildEtaDbIndexes(
     const { entry, cos, jointMetaByCo } = plan
     const route = String(entry.route ?? '').toUpperCase()
     for (const co of cos) {
-      const stops = entry.stops[co] ?? []
-      const bound = normalizeBound(entry.bound[co])
+      const stops = stopsForCo(entry, co) ?? []
+      const bound = normalizeBound((entry.bound as Record<string, string | undefined>)[co])
       const gtfsId = normalizeGtfsId(entry.gtfsId)
       const familyRegion =
         (plan.joint ? jointRegionByVariant.get(plan.jointVariantKey) : null) ??

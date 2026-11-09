@@ -3,7 +3,8 @@ import type { Company } from 'hk-bus-eta'
 
 import { getKmbRouteInfo } from './kmb'
 import * as etaDb from './eta-db'
-import type { EtaDbIndexes, KmbRouteInfoLite } from '@/lib/eta/eta-db-index'
+import * as jointRoutes from '@/lib/eta/joint-routes'
+import { routeVariantKey, type EtaDbIndexes, type KmbRouteInfoLite } from '@/lib/eta/eta-db-index'
 import type { RouteListEntry } from 'hk-bus-eta'
 
 function makeRouteListEntry(): RouteListEntry {
@@ -128,5 +129,60 @@ describe('findKmbRouteInfo abort signal', () => {
 
     expect(info).toMatchObject({ route: '1A', bound: 'O' })
     indexesSpy.mockRestore()
+  })
+
+  it('shares one joint route group for inferred 101R-style pairs', async () => {
+    const makeEntry = (co: Company): RouteListEntry => {
+      const companies: Company[] = ['kmb', 'ctb']
+      const bound = Object.fromEntries(
+        companies.map((c) => [c, 'O'])
+      ) as unknown as RouteListEntry['bound']
+      const stops = { kmb: [], ctb: [] } as unknown as RouteListEntry['stops']
+      stops[co] = ['S1']
+      return {
+        route: '101R',
+        co: [co],
+        bound,
+        serviceType: '1',
+        orig: { en: 'Happy Valley Racecourse', zh: '跑馬地' },
+        dest: { en: 'Central', zh: '中環' },
+        stops,
+        fares: null,
+        faresHoliday: null,
+        freq: null,
+        jt: null,
+        seq: 1,
+        nlbId: '',
+        gtfsId: '',
+      }
+    }
+    const kmbEntry = makeEntry('kmb')
+    const ctbEntry = makeEntry('ctb')
+    const indexes: EtaDbIndexes = {
+      ...emptyIndexes(),
+      kmbRouteListEntries: [kmbEntry, ctbEntry],
+      routeVariantIndex: new Map([
+        [
+          routeVariantKey({ co: 'kmb', route: '101R', bound: 'O', serviceType: '1', gtfsId: '' }),
+          kmbEntry,
+        ],
+        [
+          routeVariantKey({ co: 'ctb', route: '101R', bound: 'O', serviceType: '1', gtfsId: '' }),
+          ctbEntry,
+        ],
+      ]),
+    }
+    const indexesSpy = vi.spyOn(etaDb, 'getEtaDbIndexes').mockResolvedValue(indexes)
+    const manifestSpy = vi.spyOn(jointRoutes, 'loadJointRoutes').mockResolvedValue(null)
+
+    const [kmbInfo, ctbInfo] = await Promise.all([
+      etaDb.findKmbRouteInfo({ co: 'kmb', route: '101R', bound: 'O', serviceType: '1' }),
+      etaDb.findKmbRouteInfo({ co: 'ctb', route: '101R', bound: 'O', serviceType: '1' }),
+    ])
+
+    expect(kmbInfo?.routeGroupKey).toBe('joint|101R')
+    expect(ctbInfo?.routeGroupKey).toBe('joint|101R')
+    indexesSpy.mockRestore()
+    manifestSpy.mockRestore()
   })
 })

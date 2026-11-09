@@ -18,7 +18,12 @@ import {
   type KmbEtaEntryWithLeg,
   type KmbRouteInfoLite,
 } from '@/lib/eta/client'
-import { routeVariantKey, parseVariantKey, variantKeyMatches } from '@/lib/eta/eta-db-index'
+import {
+  jointVariantKeyMatchesFilter,
+  parseVariantKey,
+  routeVariantKey,
+  variantKeyMatches,
+} from '@/lib/eta/eta-db-index'
 import { type KmbGroupMember } from '@/lib/eta/group-view'
 import { useTranslations } from '@/lib/eta/i18n'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
@@ -147,6 +152,18 @@ function GroupMemberSection({
             })
             for (const filterKey of variantKeys) {
               if (variantKeyMatches(filterKey, entryKey)) return true
+              // Joint rows are canonicalized under the primary operator, so
+              // a saved single-operator key must also match the paired
+              // operator's rows (e.g. saved kmb|102 keeps ctb|102).
+              if (
+                String(entry.jointVariantKey ?? '').trim() &&
+                jointVariantKeyMatchesFilter(filterKey, {
+                  route: entry.route,
+                  serviceType: entry.service_type,
+                  gtfsId: entry.gtfsId,
+                })
+              )
+                return true
             }
             return false
           })

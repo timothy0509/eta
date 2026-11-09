@@ -563,7 +563,10 @@ export function KmbPane({
       const fareVariants: KmbFareVariant[] = []
 
       for (const { stopId, eta } of allEtas) {
-        const co = String(eta.co ?? 'kmb') as Company
+        // Joint rows are canonicalized under the primary operator: fare
+        // tables resolve under the grouping operator, so key partner rows
+        // by groupCo instead of issuing a lookup that never matches.
+        const co = String(eta.groupCo ?? eta.co ?? 'kmb') as Company
         const route = (eta.route ?? '').toUpperCase()
         const dir = String(eta.dir ?? '')
         const serviceType = String(eta.service_type ?? '')

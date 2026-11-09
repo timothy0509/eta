@@ -433,9 +433,15 @@ export async function fetchKmbStopEtas(
       const serviceType = String(entry.service_type ?? '')
       const co = String(entry.co ?? 'kmb')
       const gtfsId = String(entry.gtfsId ?? '').trim()
+      const jointVariantKey = String(entry.jointVariantKey ?? '').trim()
+      // Joint rows share a canonical direction under the primary operator,
+      // so bucket by the grouping operator. Otherwise KMB and CTB halves
+      // land in separate buckets and each is truncated to 3.
+      const groupCo = String(entry.groupCo ?? co)
+      const bucketCo = jointVariantKey ? groupCo : co
 
       const etaSeq = entry.seq
-      const leg = computeEtaLeg({
+      let leg = computeEtaLeg({
         co,
         route,
         dir,
@@ -445,14 +451,32 @@ export async function fetchKmbStopEtas(
         etaSeq,
         byVariantStops,
       })
+      // Circular joint routes canonicalize `dir` to the primary operator's
+      // bound, which may not exist for the actual operator (KMB inbound is
+      // CTB outbound). Retry under the grouping operator before giving up,
+      // so the merged row does not split on a null leg suffix.
+      if (!leg && jointVariantKey && groupCo !== co) {
+        leg = computeEtaLeg({
+          co: groupCo,
+          route,
+          dir,
+          serviceType,
+          gtfsId,
+          stopId,
+          etaSeq,
+          byVariantStops,
+        })
+      }
 
       const legSuffix = leg ?? '_'
-      const key = gtfsId
-        ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${legSuffix}`
-        : `${co}|${route}|${dir}|${serviceType}|${legSuffix}`
+      const scope = jointVariantKey || gtfsId
+      const key = scope
+        ? `${bucketCo}|${route}|${dir}|${serviceType}|${scope}|${legSuffix}`
+        : `${bucketCo}|${route}|${dir}|${serviceType}|${legSuffix}`
 
       const existing = byVariant.get(key) ?? []
-      if (existing.length < MAX_ETAS_PER_VARIANT) {
+      const cap = jointVariantKey ? MAX_ETAS_PER_VARIANT * 2 : MAX_ETAS_PER_VARIANT
+      if (existing.length < cap) {
         existing.push({
           ...entry,
           eta_seq: entry.eta_seq ?? entry.seq,

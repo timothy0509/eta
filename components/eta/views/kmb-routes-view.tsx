@@ -295,11 +295,14 @@ function KmbRouteStopCard({
             const label = formatEtaOrdinals(entryIdx + 1, lang)
             const isFirst = entryIdx === 0
             const operatorTag = hasMultipleOperators ? (
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: getOperatorColor(entry.co) }}
-              />
+              <>
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: getOperatorColor(entry.co) }}
+                />
+                <span className="sr-only">{formatOperatorCode(entry.co)}</span>
+              </>
             ) : null
             if (isFirst) {
               return (
@@ -516,9 +519,12 @@ function KmbRouteStopList({
 
   const { t } = useTranslations(lang)
 
-  // Only CTB route stops split "{name}, {street}". Other operators keep
-  // the existing stop-name parsing untouched.
-  const isCtbRoute = normalizeOperator(currentVariant.co) === 'ctb'
+  // Only CTB stops split "{name}, {street}". Other operators keep the
+  // existing stop-name parsing untouched. Joint routes serve stops from
+  // both operators, so the rail must not depend on the primary operator.
+  const isCtbRoute = (currentVariant.operators ?? [currentVariant.co]).some(
+    (op) => normalizeOperator(op) === 'ctb'
+  )
 
   const sections = React.useMemo(
     () => groupIntoFareSections(variantStops, (rs) => faresBySeq[rs.seq] ?? null),
@@ -675,8 +681,9 @@ function KmbRouteStopList({
       lang,
     })
     // Split the street off the already-parsed name so joint KMB/CTB stops
-    // keep the EN title-casing.
-    const ctb = isCtbRoute ? parseCtbStopNameCached(parsed.name) : null
+    // keep the EN title-casing. Per stop row: a KMB-primary joint route
+    // still serves CTB stops with the "{name}, {street}" shape.
+    const ctb = normalizeOperator(rs.co) === 'ctb' ? parseCtbStopNameCached(parsed.name) : null
     // Same-base grouping was precomputed once per list render (O(n)), not
     // per card. A 100-stop route was doing ~10k name comparisons before.
     const group = stopGroups.get(rs.stopId)
@@ -1198,9 +1205,19 @@ export function KmbRoutesView({
       const gtfsId = String(r.gtfsId ?? '').trim()
       const jointVariantKey = String(r.jointVariantKey ?? '').trim()
       const routeGroupKey = String(r.routeGroupKey ?? '').trim()
+      // Normalize termini the same way as joint inference and index
+      // cross-pairing (case/space/punctuation-insensitive), so KMB
+      // `HAPPY VALLEY RACE COURSE` and CTB `Happy Valley Racecourse`
+      // land in one merged variant group instead of splitting.
       const groupKey = [
-        String(r.origin.en ?? '').toUpperCase(),
-        String(r.destination.en ?? '').toUpperCase(),
+        String(r.origin.en ?? '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, ''),
+        String(r.destination.en ?? '')
+          .trim()
+          .toLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, ''),
       ]
         .sort()
         .join('|')
@@ -1248,7 +1265,38 @@ export function KmbRoutesView({
     return out.sort(compareRouteVariants)
   }, [routes, selectedRouteKey, jointRouteInfoOperator])
 
-  const showOperatorInVariants = false
+  // One arrow rule for both layouts: two-way only when the selected
+  // route serves more than one ordered OD pair. Matches the search
+  // `directions` rule so the card and the drilldown agree.
+  const routeDirectionArrow = React.useMemo(() => {
+    const pairs = new Set(
+      variantsForRoute.map(
+        (v) =>
+          `${String(v.origin.en ?? '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, '')}|${String(v.destination.en ?? '')
+            .trim()
+            .toLowerCase()
+            .replace(/[^\p{L}\p{N}]+/gu, '')}`
+      )
+    )
+    return pairs.size > 1 ? '↔' : '→'
+  }, [variantsForRoute])
+
+  // Merged joint variants need no operator tag, but rows missing their
+  // `jointVariantKey` (stale cache) would render identical variant buttons
+  // with no way to tell them apart. Show the operator when two variants
+  // share the same visible label.
+  const showOperatorInVariants = (() => {
+    const seen = new Set<string>()
+    for (const v of variantsForRoute) {
+      const label = `${v.bound}|${v.destination.en}|${v.serviceType}`
+      if (seen.has(label)) return true
+      seen.add(label)
+    }
+    return false
+  })()
 
   const currentVariant = React.useMemo(() => {
     if (!selectedRouteKey) return null
@@ -1273,16 +1321,50 @@ export function KmbRoutesView({
       const currentGtfsId = String(currentVariant.gtfsId ?? '').trim()
       const allRouteStops = routeStopsAll.length > 0 ? routeStopsAll : await fetchKmbRouteStops()
       if (cancelled) return
-      const filtered = allRouteStops
-        .filter(
+      const currentJointKey = String(currentVariant.jointVariantKey ?? '').trim()
+      const variantOperators = new Set(
+        (currentVariant.operators ?? [currentVariant.co]).map((op) => normalizeOperator(op))
+      )
+      const primaryFiltered = allRouteStops.filter(
+        (rs) =>
+          rs.route === currentVariant.route &&
+          normalizeOperator(rs.co) === co &&
+          rs.bound === currentVariant.bound &&
+          rs.serviceType === currentVariant.serviceType &&
+          (currentGtfsId ? String(rs.gtfsId ?? '').trim() === currentGtfsId : true)
+      )
+      // Joint detail keeps the primary stop order, then appends partner-only
+      // physical stops (unpaired locations) so they stay reachable. Paired
+      // stops share a jointGroupKey with a primary row and are not repeated.
+      let filtered = primaryFiltered
+      if (currentJointKey) {
+        const primaryGroups = new Set(
+          primaryFiltered.map((rs) => String(rs.jointGroupKey ?? '').trim()).filter(Boolean)
+        )
+        const extras = allRouteStops.filter(
           (rs) =>
             rs.route === currentVariant.route &&
-            normalizeOperator(rs.co) === co &&
-            rs.bound === currentVariant.bound &&
-            rs.serviceType === currentVariant.serviceType &&
-            (currentGtfsId ? String(rs.gtfsId ?? '').trim() === currentGtfsId : true)
+            String(rs.jointVariantKey ?? '').trim() === currentJointKey &&
+            variantOperators.has(normalizeOperator(rs.co)) &&
+            normalizeOperator(rs.co) !== co &&
+            !String(rs.jointGroupKey ?? '').trim() &&
+            !primaryGroups.has(String(rs.jointGroupKey ?? '').trim())
         )
-        .sort((a, b) => a.seq - b.seq)
+        // Rows with an empty jointGroupKey are unpaired by construction;
+        // rows sharing a primary group are the same physical stop.
+        const pairedExtras = allRouteStops.filter(
+          (rs) =>
+            rs.route === currentVariant.route &&
+            String(rs.jointVariantKey ?? '').trim() === currentJointKey &&
+            variantOperators.has(normalizeOperator(rs.co)) &&
+            normalizeOperator(rs.co) !== co &&
+            String(rs.jointGroupKey ?? '').trim() &&
+            !primaryGroups.has(String(rs.jointGroupKey ?? '').trim())
+        )
+        filtered = [...primaryFiltered, ...extras, ...pairedExtras].sort((a, b) => a.seq - b.seq)
+      } else {
+        filtered = primaryFiltered.sort((a, b) => a.seq - b.seq)
+      }
       setVariantStops(filtered)
       setStopsVariantKey(currentVariant.key)
 
@@ -1294,7 +1376,6 @@ export function KmbRoutesView({
         preferredJointOperator: jointRouteInfoOperator,
       })
       if (cancelled) return
-      const currentJointKey = currentVariant.jointVariantKey
       const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
       for (const [stopId, entries] of Object.entries(res.byStopId)) {
         filteredEtas[stopId] = (entries ?? []).filter((eta) => {
@@ -1343,7 +1424,6 @@ export function KmbRoutesView({
   }, [routePath])
 
   const mapMarkers = React.useMemo(() => {
-    const isCtbRoute = currentVariant ? normalizeOperator(currentVariant.co) === 'ctb' : false
     const activeCardKey =
       expandedStop && expandedStop.variantKey === currentVariant?.key ? expandedStop.cardKey : null
     return variantStops
@@ -1356,7 +1436,7 @@ export function KmbRoutesView({
           isKmb: isKmbStop(stop),
           lang,
         })
-        const ctb = isCtbRoute ? parseCtbStopNameCached(parsed.name) : null
+        const ctb = normalizeOperator(rs.co) === 'ctb' ? parseCtbStopNameCached(parsed.name) : null
         return {
           id: cardKey,
           lat: stop.lat,
@@ -1617,14 +1697,14 @@ export function KmbRoutesView({
                 />
                 {currentVariant && (
                   <Marquee
-                    title={`${pickLang(currentVariant.origin, lang)} ↔ ${pickLang(currentVariant.destination, lang)}`}
+                    title={`${pickLang(currentVariant.origin, lang)} ${routeDirectionArrow} ${pickLang(currentVariant.destination, lang)}`}
                     className="text-on-surface m3-title-md min-w-0 flex-1 font-medium"
                   >
                     {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
                       co: currentVariant.co,
                       lang,
                     })}{' '}
-                    ↔{' '}
+                    {routeDirectionArrow}{' '}
                     {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
                       co: currentVariant.co,
                       lang,
@@ -1963,23 +2043,20 @@ export function KmbRoutesView({
                       />
                       {currentVariant && (
                         <Marquee
-                          title={`${pickLang(currentVariant.origin, lang)} → ${pickLang(currentVariant.destination, lang)}`}
+                          title={`${pickLang(currentVariant.origin, lang)} ${routeDirectionArrow} ${pickLang(currentVariant.destination, lang)}`}
                           className="text-on-surface m3-title-md min-w-0 flex-1 font-medium"
                         >
                           {formatKmbRouteEndpointName(pickLang(currentVariant.origin, lang), {
                             co: currentVariant.co,
                             lang,
                           })}{' '}
-                          →{' '}
+                          {routeDirectionArrow}{' '}
                           {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
                             co: currentVariant.co,
                             lang,
                           })}
                         </Marquee>
                       )}
-                      <span className="text-on-surface-variant m3-label-md shrink-0 uppercase">
-                        {selectedRouteKey.co}
-                      </span>
                     </span>
                   }
                 >

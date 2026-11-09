@@ -67,6 +67,9 @@ export function RouteResultCard({
       )}
     >
       <span className="flex w-full items-center gap-2">
+        {/* Joint badge follows the primary operator preference, so the same
+        joint route can recolor when the preference flips. The joint pill
+        next to it always names both operators. */}
         <RouteBadge route={entry.route} company={entry.co} size="lg" />
         <span className="block min-w-0 flex-1 overflow-hidden">
           <Marquee

@@ -38,6 +38,7 @@ import { getCachedValue } from '@/lib/eta/direct/shared'
 import {
   inferJointRouteNumbers,
   jointRouteGroupKey,
+  jointVariantKeyForEntry,
   loadJointRoutes,
   resolveJointOperators,
 } from '@/lib/eta/joint-routes'
@@ -98,6 +99,28 @@ const BUS_COMPANIES = [
 
 function isBusCompany(company: Company): boolean {
   return BUS_COMPANIES.includes(company)
+}
+
+/**
+ * The app has no `lwb` company: Long Win Bus rows fold into `kmb`
+ * (matching scripts/fetch-headway.mjs LWB → kmb). Upstream hk-bus-eta may
+ * still emit `co: 'lwb'` with stops under `stops.lwb`, so normalize before
+ * filtering or the KMB half of S1/R8-style joints is dropped.
+ */
+function normalizeBusCo(co: string): Company {
+  return (
+    String(co ?? '')
+      .trim()
+      .toLowerCase() === 'lwb'
+      ? 'kmb'
+      : String(co ?? '')
+  ) as Company
+}
+
+function stopsForCo(entry: RouteListEntry, co: string): string[] | undefined {
+  const stops = entry.stops as Record<string, string[] | undefined>
+  if (co === 'kmb') return stops.kmb ?? stops.lwb
+  return stops[co]
 }
 
 export function toHkBusEtaLanguage(lang: UiLanguage): 'en' | 'zh' {
@@ -234,8 +257,8 @@ export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
   // are built. Derive them from a light projection here.
   const regionsByFamily = computeRouteRegions(
     kmbRouteListEntries.flatMap((entry) =>
-      entry.co.flatMap((co) =>
-        (entry.stops[co] ?? []).map((stopId) => ({
+      Array.from(new Set(entry.co.map((co) => normalizeBusCo(String(co))))).flatMap((co) =>
+        (stopsForCo(entry, co) ?? []).map((stopId) => ({
           co,
           route: entry.route,
           stopId,
@@ -254,7 +277,9 @@ export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
     }))
   )
   return kmbRouteListEntries.flatMap((entry, entryIndex) => {
-    const cos = entry.co.filter((co) => isBusCompany(co) && entry.stops[co]?.length)
+    const cos = Array.from(new Set(entry.co.map((co) => normalizeBusCo(String(co))))).filter(
+      (co) => isBusCompany(co as Company) && stopsForCo(entry, co)?.length
+    )
     const jointOperators = resolveJointOperators(jointManifest, entry.route, cos)
     const joint = jointOperators.length > 1
     const route = String(entry.route ?? '').toUpperCase()
@@ -266,7 +291,7 @@ export async function listKmbRoutes(): Promise<KmbRouteInfoLite[]> {
         : ''
     const routeGroupKey = jointRouteGroupKey(jointManifest, entry.route, cos) || inferredGroup
     const gtfsId = normalizeGtfsId(entry.gtfsId)
-    const jointVariantKey = joint ? `jointv:${entryIndex}` : ''
+    const jointVariantKey = joint ? jointVariantKeyForEntry(entryIndex) : ''
     let jointRegion = ''
     let operators: string[] = []
     if (joint) {
@@ -329,29 +354,50 @@ export async function findKmbRouteInfo(params: {
       serviceType,
     })
 
-  if (!entry || !entry.co.includes(co)) return null
+  if (!entry) return null
+  const entryCos = entry.co.map((company) => normalizeBusCo(String(company)))
+  if (!entryCos.includes(normalizeBusCo(String(co)))) return null
 
   const entryGtfsId = normalizeGtfsId(entry.gtfsId)
   const entryIndex = kmbRouteListEntries.indexOf(entry)
   const manifest = await loadJointRoutes()
-  const busCos = entry.co.filter((company) => isBusCompany(company) && entry.stops[company]?.length)
+  const busCos = Array.from(
+    new Set(entry.co.map((company) => normalizeBusCo(String(company))))
+  ).filter((company) => isBusCompany(company as Company) && stopsForCo(entry, company)?.length)
   const jointOperators = resolveJointOperators(manifest, entry.route, busCos)
   const joint = jointOperators.length > 1
   const route = String(entry.route ?? '').toUpperCase()
   const primary = pickPrimaryOperator(jointOperators)
+  // Match listKmbRoutes: 101R-style inferred joints (absent from the
+  // manifest) still share one `joint|ROUTE` search group.
+  const inferredJointRoutes = inferJointRouteNumbers(
+    kmbRouteListEntries.map((candidate) => ({
+      co: candidate.co,
+      route: candidate.route,
+      orig: candidate.orig,
+      dest: candidate.dest,
+      serviceType: candidate.serviceType,
+    }))
+  )
+  const inferredGroup =
+    inferredJointRoutes.has(route) &&
+    busCos.length > 0 &&
+    busCos.every((op) => op === 'kmb' || op === 'ctb')
+      ? `joint|${route}`
+      : ''
 
   return {
     co,
     route: entry.route,
-    bound: normalizeBound(entry.bound[co]),
+    bound: normalizeBound(entry.bound[co] ?? entry.bound[normalizeBusCo(String(co))]),
     serviceType: entry.serviceType,
     gtfsId: entryGtfsId,
     region: joint
       ? `joint|${route}|1`
       : lookupRegion({ regionIndex }, { co, route: entry.route, gtfsId: entryGtfsId }),
     operators: joint ? [primary, ...jointOperators.filter((op) => op !== primary)] : [co],
-    routeGroupKey: jointRouteGroupKey(manifest, entry.route, busCos),
-    jointVariantKey: joint && entryIndex >= 0 ? `jointv:${entryIndex}` : '',
+    routeGroupKey: jointRouteGroupKey(manifest, entry.route, busCos) || inferredGroup,
+    jointVariantKey: joint && entryIndex >= 0 ? jointVariantKeyForEntry(entryIndex) : '',
     origin: mapEtaLangToUi(entry.orig),
     destination: mapEtaLangToUi(entry.dest),
     routeEntry: entry,
@@ -576,7 +622,11 @@ export async function fetchKmbEtasForStop(
   }
 
   const tagJoint = (candidate: Candidate, etas: KmbEta[], sourceStopId?: string): KmbEta[] => {
-    if (!candidate.jointVariantKey) return etas
+    // A joint variant key alone does not prove pairing: unpaired short-working
+    // stops keep the variant key with a single operator. Require a paired
+    // operator list or the row would overclaim KMB+CTB with one operator's
+    // departures.
+    if (!candidate.jointVariantKey || candidate.operators.length < 2) return etas
     const primary = pickPrimaryOperator(candidate.operators, params.preferredOperator)
     // Both operators share a physical direction but can label their bound
     // differently (KMB inbound is CTB outbound). Use the primary operator's

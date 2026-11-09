@@ -213,8 +213,10 @@ export function buildRouteSearchIndex(
   options: { preferredJointOperator?: string | null } = {}
 ): RouteSearchEntry[] {
   // Stale cached rows may predate the `operators` field. A joint variant
-  // key still tells us the row is half of a KMB+CTB pair, which is the only
-  // joint operator pair in the current feed.
+  // key still tells us the row is half of a joint pair. The partner fallback
+  // only applies to kmb/ctb (the sole joint pair in the current feed);
+  // any future non-KMB/CTB joint pair keeps its single operator rather
+  // than being mis-attributed.
   const operatorsOf = (entry: {
     co?: unknown
     operators?: string[]
@@ -402,21 +404,19 @@ export function buildRouteSearchIndex(
       .sort()
     const operators = [primary, ...remainingOperators]
     const serviceTypes = Array.from(new Set(variants.map((v) => String(v.serviceType))))
-    const directions =
-      operators.length > 1
-        ? Array.from(
-            new Set(
-              variants.map((v) =>
-                [
-                  String(v.origin.en ?? '').toUpperCase(),
-                  String(v.destination.en ?? '').toUpperCase(),
-                ]
-                  .sort()
-                  .join('|')
-              )
-            )
-          )
-        : Array.from(new Set(variants.map((v) => String(v.bound))))
+    // One rule for joint and single-operator routes: count distinct ordered
+    // OD pairs (origin → destination). Counting raw bounds would show
+    // two-way for a joint route whose operators label the same physical
+    // direction with opposite bounds; sorting the pair would collapse the
+    // two travel directions into one. Ordered pairs handle both.
+    const directions = Array.from(
+      new Set(
+        variants.map(
+          (v) =>
+            `${String(v.origin.en ?? '').toUpperCase()}|${String(v.destination.en ?? '').toUpperCase()}`
+        )
+      )
+    )
 
     const altNameSeen = new Set<string>()
     const altNames: string[] = []
@@ -750,6 +750,9 @@ export function getKeyStops(
   if (k <= 0) return []
 
   const skip = new Set<string>()
+  // Skip only the canonical termini. Short-working termini stay in
+  // `altNames` for search, but they are valid interior via stops for the
+  // full-length variant and must not vanish from the via line.
   for (const field of ['origin', 'destination'] as const) {
     for (const name of Object.values(entry[field])) {
       const lowered = String(name ?? '')
@@ -758,7 +761,6 @@ export function getKeyStops(
       if (lowered) skip.add(lowered)
     }
   }
-  for (const name of entry.altNames) skip.add(name)
 
   // Interior window with an end margin so picks stay clear of the
   // termini. Indices are positions in the single-direction via list.

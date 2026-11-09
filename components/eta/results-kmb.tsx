@@ -32,7 +32,7 @@ import type { KmbEtaEntryWithLeg, KmbRouteInfoLite } from '@/lib/eta/client'
 import { formatFareHkd } from '@/lib/eta/format'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
-import { formatOperatorLabel } from '@/lib/eta/operator-label'
+import { formatOperatorCode, formatOperatorLabel } from '@/lib/eta/operator-label'
 import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { isKmbStop } from '@/lib/eta/types'
@@ -402,7 +402,11 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
       <div className="flex min-w-0 flex-1 items-center gap-2">
         <RouteBadge route={route} company={co} size="lg" />
         <div className="min-w-0 flex-1 overflow-hidden">
-          <span className="sr-only">{operatorName}</span>
+          <span className="sr-only">
+            {isJoint && first?.co
+              ? `${operatorName}, ${formatOperatorLabel(first.co, lang)} ${formatEtaOrdinals(1, lang)}`
+              : operatorName}
+          </span>
           <Marquee
             title={typeof label === 'string' ? label : undefined}
             className="text-on-surface m3-body-md min-w-0 flex-1 font-medium"
@@ -467,11 +471,14 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
               >
                 <div className="m3-label-md flex items-center justify-center gap-1 opacity-80">
                   {isJoint ? (
-                    <span
-                      aria-hidden
-                      className="h-1.5 w-1.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: getOperatorColor(entry.co) }}
-                    />
+                    <>
+                      <span
+                        aria-hidden
+                        className="h-1.5 w-1.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: getOperatorColor(entry.co) }}
+                      />
+                      <span className="sr-only">{formatOperatorCode(entry.co)}</span>
+                    </>
                   ) : null}
                   <span>{formatEtaLabel(entryIdx + 1, lang)}</span>
                 </div>
@@ -500,13 +507,23 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
             >
               <div className="text-on-surface-variant m3-label-md flex items-center justify-center gap-1">
                 {isJoint ? (
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ backgroundColor: getOperatorColor(entry.co) }}
-                  />
+                  <>
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 shrink-0 rounded-full"
+                      style={{ backgroundColor: getOperatorColor(entry.co) }}
+                    />
+                    <span className="sr-only">{formatOperatorCode(entry.co)}</span>
+                  </>
                 ) : null}
-                <span>{formatEtaLabel(entryIdx + 1, lang)}</span>
+                <span>
+                  {formatEtaLabel(entryIdx + 1, lang)}{' '}
+                  {isJoint ? (
+                    <span aria-hidden className="opacity-70">
+                      · {formatOperatorCode(entry.co)}
+                    </span>
+                  ) : null}
+                </span>
               </div>
               <div className="mt-0.5">
                 <TickingKmbMinutes

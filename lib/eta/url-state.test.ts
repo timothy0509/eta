@@ -306,4 +306,21 @@ describe('decodeUrlState', () => {
     const legacy4 = decodeUrlState('km=stop&ks=1&ke=kmb%7C1A%7CO%7C1')
     expect(legacy4.selectedItem).toHaveProperty('entries', [{ variantKey: 'kmb|1A|O|1' }])
   })
+
+  it('round-trips a pre-overhaul single-operator key for a now-joint route', () => {
+    // Saved before the joint overhaul as kmb-only; the merged row still
+    // matches it via the joint filter fallback, so the link must survive.
+    const input: UrlEncodeInput = {
+      ...BASE_INPUT,
+      kmb: {
+        query: { mode: 'stop', stopId: '1234' },
+        routeFilter: {
+          entries: [{ variantKey: 'kmb|102|I|1' }],
+        },
+      },
+    }
+    const encoded = encodeUrlState(input)
+    const decoded = decodeUrlState(encoded)
+    expect(decoded.selectedItem).toHaveProperty('entries', [{ variantKey: 'kmb|102|I|1' }])
+  })
 })

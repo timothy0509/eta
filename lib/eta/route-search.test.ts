@@ -103,12 +103,209 @@ describe('buildRouteSearchIndex', () => {
     expect(keys.filter((k) => k === 'kmb|1A')).toHaveLength(1)
     const entry = index.find((e) => e.key === 'kmb|1A')
     expect(entry?.variantCount).toBe(2)
-    expect(entry?.directions).toEqual(expect.arrayContaining(['O', 'I']))
+    // Ordered OD pairs: the two travel directions stay distinct.
+    expect(entry?.directions).toHaveLength(2)
+  })
+
+  it('counts one direction for opposite-bound joint rows on the same OD', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '102', 'Kennedy Town', 'Kwun Tong', 'I'),
+        region: 'joint|102|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '102', 'Kennedy Town', 'Kwun Tong', 'O'),
+        region: 'joint|102|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById)
+    expect(index).toHaveLength(1)
+    expect(index[0]?.directions).toHaveLength(1)
   })
 
   it('sorts empty results numerically', () => {
     const index = buildRouteSearchIndex(routes, routeStops, stopsById)
     expect(index.map((e) => `${e.co}:${e.route}`).slice(0, 2)).toEqual(['ctb:1', 'kmb:1'])
+  })
+
+  it('keeps the via line on the same physical direction as the canonical variant', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '101', 'Kennedy Town', 'Kwun Tong', 'I'),
+        region: 'joint|101|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '101', 'Kennedy Town', 'Kwun Tong', 'O'),
+        region: 'joint|101|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('kmb', '101', 'Kwun Tong', 'Kennedy Town', 'O'),
+        region: 'joint|101|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:2',
+      },
+      {
+        ...makeRoute('ctb', '101', 'Kwun Tong', 'Kennedy Town', 'I'),
+        region: 'joint|101|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:2',
+      },
+    ]
+    const jointStops: KmbRouteStopLite[] = [
+      ['kmb', 'I', 'k1', 'jointv:1', 'jointv:1:0', 'c1'],
+      ['ctb', 'O', 'c1', 'jointv:1', 'jointv:1:0', 'k1'],
+      ['kmb', 'O', 'k2', 'jointv:2', 'jointv:2:0', 'c2'],
+      ['ctb', 'I', 'c2', 'jointv:2', 'jointv:2:0', 'k2'],
+    ].map(([co, bound, stopId, jointVariantKey, jointGroupKey, sibling]) => ({
+      co: co as 'kmb',
+      route: '101',
+      bound,
+      serviceType: '1',
+      seq: 1,
+      stopId,
+      gtfsId: '',
+      region: 'joint|101|1',
+      operators: ['kmb', 'ctb'],
+      jointVariantKey,
+      jointGroupKey,
+      siblingStopIds: [sibling],
+    }))
+    const index = buildRouteSearchIndex(jointRoutes, jointStops, stopsById)
+    const entry = index.find((item) => item.route === '101')
+    expect(entry?.origin.en).toBe('Kennedy Town')
+    expect(entry?.viaStopIds).toEqual(['k1'])
+  })
+
+  it('merges stale joint rows that lost their operators field', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '117', 'Happy Valley', 'Sham Shui Po', 'I'),
+        region: 'joint|117|1',
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '117', 'Happy Valley', 'Sham Shui Po', 'O'),
+        region: 'joint|117|1',
+        jointVariantKey: 'jointv:1',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById)
+    expect(index).toHaveLength(1)
+    expect(index[0]?.operators).toEqual(['kmb', 'ctb'])
+  })
+
+  it('merges one-operator variants that belong to a joint route number', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '101R', 'HAPPY VALLEY RACECOURSE', 'KWUN TONG', 'O'),
+        region: 'kmb|101R|1',
+        operators: ['kmb'],
+        routeGroupKey: 'joint|101R',
+      },
+      {
+        ...makeRoute('ctb', '101R', 'Happy Valley Racecourse', 'Kwun Tong', 'O'),
+        region: 'ctb|101R|1',
+        operators: ['ctb'],
+        routeGroupKey: 'joint|101R',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById)
+    expect(index).toHaveLength(1)
+    expect(index[0]?.operators).toEqual(['kmb', 'ctb'])
+    expect(index[0]?.routeGroupKey).toBe('joint|101R')
+  })
+
+  it('uses the preferred operator for joint route information', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '102', 'MEI FOO', 'SHAU KEI WAN', 'I'),
+        region: 'joint|102|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '102', 'Mei Foo', 'Shau Kei Wan', 'O'),
+        region: 'joint|102|1',
+        operators: ['kmb', 'ctb'],
+        jointVariantKey: 'jointv:1',
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, [], stopsById, {
+      preferredJointOperator: 'ctb',
+    })
+    expect(index).toHaveLength(1)
+    expect(index[0]?.co).toBe('ctb')
+    expect(index[0]?.operators).toEqual(['ctb', 'kmb'])
+    expect(index[0]?.origin.en).toBe('Mei Foo')
+  })
+
+  it('merges jointly operated rows into one entry with both operators', () => {
+    const jointRoutes: KmbRouteInfoLite[] = [
+      {
+        ...makeRoute('kmb', '102', 'Mei Foo', 'Shau Kei Wan', 'I'),
+        region: 'joint|102|1',
+        operators: ['ctb', 'kmb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('ctb', '102', 'Mei Foo', 'Shau Kei Wan', 'O'),
+        region: 'joint|102|1',
+        operators: ['ctb', 'kmb'],
+        jointVariantKey: 'jointv:1',
+      },
+      {
+        ...makeRoute('gmb', '102', 'Hang Hau', 'San Po Kong', 'O'),
+        region: 'gmb|102|1',
+      },
+    ]
+    const jointStops: KmbRouteStopLite[] = [
+      {
+        co: 'kmb',
+        route: '102',
+        bound: 'I',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'k1',
+        gtfsId: '',
+        region: 'joint|102|1',
+        operators: ['ctb', 'kmb'],
+        jointVariantKey: 'jointv:1',
+        jointGroupKey: 'jointv:1:0',
+        siblingStopIds: ['c1'],
+      },
+      {
+        co: 'ctb',
+        route: '102',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        stopId: 'c1',
+        gtfsId: '',
+        region: 'joint|102|1',
+        operators: ['ctb', 'kmb'],
+        jointVariantKey: 'jointv:1',
+        jointGroupKey: 'jointv:1:0',
+        siblingStopIds: ['k1'],
+      },
+    ]
+    const index = buildRouteSearchIndex(jointRoutes, jointStops, stopsById)
+    const kmb = index.find((entry) => entry.route === '102' && entry.co === 'kmb')
+    const gmb = index.find((entry) => entry.route === '102' && entry.co === 'gmb')
+    expect(kmb?.operators).toEqual(['kmb', 'ctb'])
+    expect(kmb?.stopCount).toBe(1)
+    expect(kmb?.stopIds).toEqual(['k1'])
+    expect(gmb?.operators).toEqual(['gmb'])
+    expect(
+      searchRouteIndex(index, '102', { operator: 'ctb' }).some((hit) => hit.entry.key === kmb?.key)
+    ).toBe(true)
   })
 })
 
@@ -419,6 +616,43 @@ describe('via line direction', () => {
 })
 
 describe('getKeyStops', () => {
+  it('keeps an interior stop sharing a short-working terminus name', () => {
+    const names = [
+      'Origin A',
+      'Stop Two',
+      'Short Terminus',
+      'Stop Four',
+      'Mid Stop',
+      'Stop Six',
+      'Stop Seven',
+      'Dest B',
+    ]
+    const localStops = new Map<string, KmbStopSearchItem>(
+      names.map((n, i) => [`s${i + 1}`, makeStop(`s${i + 1}`, n)])
+    )
+    const variants = [
+      makeRoute('kmb', 'X7', 'Origin A', 'Dest B', 'O', '1'),
+      // Short working ending at an interior stop of the full journey.
+      makeRoute('kmb', 'X7', 'Origin A', 'Short Terminus', 'O', '2'),
+    ]
+    const localRouteStops: KmbRouteStopLite[] = names.map((_, i) => ({
+      co: 'kmb',
+      route: 'X7',
+      bound: 'O',
+      serviceType: '1',
+      seq: i + 1,
+      stopId: `s${i + 1}`,
+      gtfsId: '',
+      region: '',
+    }))
+    const index = buildRouteSearchIndex(variants, localRouteStops, localStops)
+    const entry = index.find((e) => e.key === 'kmb|X7')
+    expect(entry).toBeDefined()
+    if (!entry) return
+    expect(entry.altNames).toContain('short terminus')
+    expect(getKeyStops(entry, localStops, 'en')).toContain('Short Terminus')
+  })
+
   it('skips termini names', () => {
     const localStops = new Map<string, KmbStopSearchItem>([
       ['s1', makeStop('s1', 'Mong Kok', '旺角')],

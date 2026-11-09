@@ -63,6 +63,116 @@ function emptyIndexes(): EtaDbIndexes {
   }
 }
 
+describe('fetchKmbEtasForStop joint routes', () => {
+  it('merges the paired stop ETAs from the other operator into one row', async () => {
+    const jointEntry = makeRouteEntry({
+      route: '102',
+      co: ['kmb', 'ctb'],
+      bound: { kmb: 'I', ctb: 'O' },
+      stops: { kmb: ['K1'], ctb: ['C1'] },
+      gtfsId: '1484',
+    })
+    const indexes = emptyIndexes()
+    const jointMeta = {
+      operators: ['ctb', 'kmb'],
+      jointVariantKey: 'jointv:1',
+      jointGroupKey: 'jointv:1:0',
+      siblingStopIds: ['C1'],
+    }
+    const siblingMeta = {
+      operators: ['ctb', 'kmb'],
+      jointVariantKey: 'jointv:1',
+      jointGroupKey: 'jointv:1:0',
+      siblingStopIds: ['K1'],
+    }
+    indexes.stopRoutesIndex.set('K1', [
+      {
+        stopId: 'K1',
+        co: 'kmb',
+        route: '102',
+        bound: 'I',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '1484',
+        region: 'joint|102|1',
+        ...jointMeta,
+      },
+    ])
+    indexes.stopRoutesIndex.set('C1', [
+      {
+        stopId: 'C1',
+        co: 'ctb',
+        route: '102',
+        bound: 'O',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '1484',
+        region: 'joint|102|1',
+        ...siblingMeta,
+      },
+    ])
+    indexes.routeVariantIndex.set('kmb|102|I|1|1484', jointEntry)
+    indexes.routeVariantIndex.set('ctb|102|O|1|1484', jointEntry)
+
+    const fetchOfficialStopEta = vi.fn().mockResolvedValue({
+      data: [
+        {
+          co: 'KMB',
+          route: '102',
+          dir: 'I',
+          service_type: 1,
+          seq: 1,
+          dest_tc: '美孚',
+          dest_sc: '美孚',
+          dest_en: 'Mei Foo',
+          eta_seq: 1,
+          eta: '2026-08-02T15:20:00+08:00',
+          rmk_tc: '',
+          rmk_sc: '',
+          rmk_en: '',
+          data_timestamp: '2026-08-02T15:10:00+08:00',
+        },
+      ],
+    })
+    const fetchVariantEtas = vi.fn().mockResolvedValue([
+      {
+        co: 'ctb',
+        eta: '2026-08-02T15:23:00+08:00',
+        dest: { en: 'Mei Foo', zh: '美孚' },
+        remark: { en: '', zh: '' },
+      },
+    ])
+
+    const deps: FetchKmbEtasForStopDeps = {
+      getIndexes: async () => indexes,
+      fetchOfficialStopEta,
+      fetchVariantEtas,
+    }
+
+    const result = await fetchKmbEtasForStop({ stopId: 'K1', language: 'tc' }, deps)
+    const kmb = result.find((eta) => eta.co === 'kmb')
+    const ctb = result.find((eta) => eta.co === 'ctb')
+    expect(kmb).toMatchObject({
+      route: '102',
+      dir: 'I',
+      groupCo: 'kmb',
+      jointVariantKey: 'jointv:1',
+      jointGroupKey: 'jointv:1:0',
+    })
+    expect(ctb).toMatchObject({
+      route: '102',
+      dir: 'I',
+      groupCo: 'kmb',
+      jointVariantKey: 'jointv:1',
+      jointGroupKey: 'jointv:1:0',
+      sourceStopId: 'C1',
+    })
+    expect(fetchVariantEtas).toHaveBeenCalledWith(
+      expect.objectContaining({ route: '102', co: ['ctb'], seq: 0 })
+    )
+  })
+})
+
 describe('fetchKmbEtasForStop hybrid', () => {
   it('KMB-only stop uses official stop-eta and skips fetchEtas', async () => {
     const kmbEntry = makeRouteEntry({

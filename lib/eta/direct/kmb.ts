@@ -40,6 +40,14 @@ export type KmbEtaEntry = {
   /** Region discriminator for same-number routes (GMB HKI/Kowloon/NT). Empty for KMB official rows and legacy data. */
   gtfsId?: string
   region?: string
+  /** Jointly operated route metadata. Empty on single-operator rows. */
+  operators?: string[]
+  jointVariantKey?: string
+  jointGroupKey?: string
+  /** Operator used for grouping and primary-operator display. */
+  groupCo?: string
+  /** Stop id that produced this ETA when it came from a paired stop. */
+  sourceStopId?: string
   dest_en: string
   dest_tc: string
   dest_sc: string
@@ -66,6 +74,12 @@ function mapKmbEtaEntry(eta: KmbEta, stopId: string): KmbEtaEntry {
     seq: eta.seq,
     stop: stopId,
     gtfsId: eta.gtfsId ? String(eta.gtfsId) : undefined,
+    region: eta.region,
+    operators: eta.operators,
+    jointVariantKey: eta.jointVariantKey,
+    jointGroupKey: eta.jointGroupKey,
+    groupCo: eta.groupCo,
+    sourceStopId: eta.sourceStopId,
     dest_en: eta.dest_en ?? eta.dest?.en ?? '',
     dest_tc: eta.dest_tc ?? eta.dest?.zh ?? '',
     dest_sc: eta.dest_sc ?? eta.dest_tc ?? eta.dest?.zh ?? '',
@@ -122,11 +136,16 @@ export type KmbRouteStopEntry = {
   stop: string
   gtfsId: string
   region: string
+  operators?: string[]
+  routeGroupKey?: string
+  jointVariantKey?: string
+  jointGroupKey?: string
+  siblingStopIds?: string[]
 }
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:route-stops:v2',
+    key: 'kmb:route-stops:v4',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -140,6 +159,11 @@ export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
         stop: entry.stopId,
         gtfsId: entry.gtfsId,
         region: entry.region,
+        operators: entry.operators,
+        routeGroupKey: entry.routeGroupKey,
+        jointVariantKey: entry.jointVariantKey,
+        jointGroupKey: entry.jointGroupKey,
+        siblingStopIds: entry.siblingStopIds,
       }))
     },
   })
@@ -154,6 +178,9 @@ export type KmbRouteInfo = {
   service_type: number | string
   gtfsId: string
   region: string
+  operators?: string[]
+  routeGroupKey?: string
+  jointVariantKey?: string
   orig_en: string
   orig_tc: string
   orig_sc: string
@@ -169,6 +196,9 @@ export type KmbRouteListEntry = {
   service_type: number | string
   gtfsId: string
   region: string
+  operators?: string[]
+  routeGroupKey?: string
+  jointVariantKey?: string
   orig_en: string
   orig_tc: string
   orig_sc: string
@@ -180,7 +210,7 @@ export type KmbRouteListEntry = {
 
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:routes:v2',
+    key: 'kmb:routes:v4',
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -192,6 +222,9 @@ export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
         service_type: entry.serviceType,
         gtfsId: entry.gtfsId,
         region: entry.region,
+        operators: entry.operators,
+        routeGroupKey: entry.routeGroupKey,
+        jointVariantKey: entry.jointVariantKey,
         orig_en: entry.origin.en,
         orig_tc: entry.origin.tc,
         orig_sc: entry.origin.sc,
@@ -241,6 +274,9 @@ export async function getKmbRouteInfo(params: {
     service_type: info.serviceType,
     gtfsId: info.gtfsId,
     region: info.region,
+    operators: info.operators,
+    routeGroupKey: info.routeGroupKey,
+    jointVariantKey: info.jointVariantKey,
     orig_en: info.origin.en,
     orig_tc: info.origin.tc,
     orig_sc: info.origin.sc,
@@ -273,7 +309,12 @@ export type KmbStopEtasResponse = {
 
 export async function fetchKmbStopEtas(
   stopIds: string[],
-  options?: { routeFilter?: string; includeFares?: boolean; signal?: AbortSignal }
+  options?: {
+    routeFilter?: string
+    includeFares?: boolean
+    preferredJointOperator?: string | null
+    signal?: AbortSignal
+  }
 ): Promise<KmbStopEtasResponse> {
   if (options?.signal?.aborted) {
     throw new DOMException('The operation was aborted.', 'AbortError')
@@ -302,6 +343,11 @@ export async function fetchKmbStopEtas(
         stopId: entry.stopId,
         gtfsId: entry.gtfsId,
         region: entry.region,
+        operators: entry.operators,
+        routeGroupKey: entry.routeGroupKey,
+        jointVariantKey: entry.jointVariantKey,
+        jointGroupKey: entry.jointGroupKey,
+        siblingStopIds: entry.siblingStopIds,
       }))
       .filter((entry) => entry.route && entry.stopId)
     return lite
@@ -323,7 +369,7 @@ export async function fetchKmbStopEtas(
     uniqueStopIds,
     concurrency,
     async (stopId) => {
-      const cacheKey = kmbStopEtaKey(stopId)
+      const cacheKey = kmbStopEtaKey(stopId, options?.preferredJointOperator)
 
       const cachedValue = await getCachedValue<KmbEtaEntryWithLeg[]>({
         key: cacheKey,
@@ -333,7 +379,12 @@ export async function fetchKmbStopEtas(
         staleMaxMs: CACHE_POLICIES.kmbStopEta.maxStaleMs,
         signal,
         fetcher: async () => {
-          const results = await fetchKmbEtasForStop({ stopId, language: 'tc', signal })
+          const results = await fetchKmbEtasForStop({
+            stopId,
+            language: 'tc',
+            preferredOperator: options?.preferredJointOperator,
+            signal,
+          })
           return results.map((entry, idx) => ({
             ...mapKmbEtaEntry(entry, stopId),
             eta_seq: entry.etaSeq ?? idx + 1,
@@ -382,9 +433,15 @@ export async function fetchKmbStopEtas(
       const serviceType = String(entry.service_type ?? '')
       const co = String(entry.co ?? 'kmb')
       const gtfsId = String(entry.gtfsId ?? '').trim()
+      const jointVariantKey = String(entry.jointVariantKey ?? '').trim()
+      // Joint rows share a canonical direction under the primary operator,
+      // so bucket by the grouping operator. Otherwise KMB and CTB halves
+      // land in separate buckets and each is truncated to 3.
+      const groupCo = String(entry.groupCo ?? co)
+      const bucketCo = jointVariantKey ? groupCo : co
 
       const etaSeq = entry.seq
-      const leg = computeEtaLeg({
+      let leg = computeEtaLeg({
         co,
         route,
         dir,
@@ -394,14 +451,32 @@ export async function fetchKmbStopEtas(
         etaSeq,
         byVariantStops,
       })
+      // Circular joint routes canonicalize `dir` to the primary operator's
+      // bound, which may not exist for the actual operator (KMB inbound is
+      // CTB outbound). Retry under the grouping operator before giving up,
+      // so the merged row does not split on a null leg suffix.
+      if (!leg && jointVariantKey && groupCo !== co) {
+        leg = computeEtaLeg({
+          co: groupCo,
+          route,
+          dir,
+          serviceType,
+          gtfsId,
+          stopId,
+          etaSeq,
+          byVariantStops,
+        })
+      }
 
       const legSuffix = leg ?? '_'
-      const key = gtfsId
-        ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${legSuffix}`
-        : `${co}|${route}|${dir}|${serviceType}|${legSuffix}`
+      const scope = jointVariantKey || gtfsId
+      const key = scope
+        ? `${bucketCo}|${route}|${dir}|${serviceType}|${scope}|${legSuffix}`
+        : `${bucketCo}|${route}|${dir}|${serviceType}|${legSuffix}`
 
       const existing = byVariant.get(key) ?? []
-      if (existing.length < MAX_ETAS_PER_VARIANT) {
+      const cap = jointVariantKey ? MAX_ETAS_PER_VARIANT * 2 : MAX_ETAS_PER_VARIANT
+      if (existing.length < cap) {
         existing.push({
           ...entry,
           eta_seq: entry.eta_seq ?? entry.seq,
@@ -527,6 +602,11 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
           stopId: entry.stopId,
           gtfsId: entry.gtfsId,
           region: entry.region,
+          operators: entry.operators,
+          routeGroupKey: entry.routeGroupKey,
+          jointVariantKey: entry.jointVariantKey,
+          jointGroupKey: entry.jointGroupKey,
+          siblingStopIds: entry.siblingStopIds,
         }))
         .filter((entry) => entry.route && entry.stopId)
       return lite

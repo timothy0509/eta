@@ -6,8 +6,9 @@ type Props = {
   expanded: boolean
   onToggle: () => void
   /**
-   * Left-edge strip color. For KMB entries this is the operator color from
-   * `getOperatorColor`, not the route badge color.
+   * Left-edge strip color or gradient. For KMB entries this is the operator
+   * color from `getOperatorColor`, not the route badge color. Joint routes
+   * pass a two-operator gradient.
    */
   color?: string
   className?: string
@@ -40,7 +41,7 @@ export function ExpandableEtaRow({
       {color ? (
         <span
           className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
-          style={{ backgroundColor: color }}
+          style={{ background: color }}
           aria-hidden
         />
       ) : null}
@@ -65,6 +66,7 @@ export function ExpandableEtaRow({
           expanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
         )}
         aria-hidden={!expanded}
+        inert={!expanded}
       >
         <div className="min-h-0 overflow-hidden">
           <div

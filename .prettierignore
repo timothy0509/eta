@@ -8,3 +8,4 @@ bun.lock
 public/headway/*.json
 public/fares/*.json
 lib/eta/gtfs/*.json
+public/gtfs/*.json

@@ -496,25 +496,45 @@ function KmbRouteStopList({
     serviceType: currentVariant.serviceType,
     gtfsId: currentVariant.gtfsId,
   })
-  const [faresBySeq, setFaresBySeq] = React.useState<Record<number, number>>({})
+  const [faresBySeqByCo, setFaresBySeqByCo] = React.useState<
+    Record<string, Record<number, number>>
+  >({})
 
   React.useEffect(() => {
     let cancelled = false
     getEtaDbIndexes()
       .then(({ routeVariantIndex }) => {
         if (cancelled) return
-        const entry =
-          routeVariantIndex.get(variantKey) ??
-          findRouteEntryByFamily(routeVariantIndex, {
-            co: currentVariant.co as Company,
+        // Joint detail mixes operators (primary order plus partner-only
+        // stops). Each stop's fare must come from its own operator's table:
+        // a CTB seq looked up in the KMB fare array returns the wrong fare.
+        const byCo: Record<string, Record<number, number>> = {}
+        const seenCo = new Set<string>()
+        for (const rs of variantStops) {
+          const co = normalizeOperator(rs.co)
+          if (seenCo.has(co)) continue
+          seenCo.add(co)
+          const key = routeVariantKey({
+            co: co as Company,
             route: currentVariant.route,
-            bound: currentVariant.bound,
-            serviceType: currentVariant.serviceType,
+            bound: rs.bound,
+            serviceType: rs.serviceType,
+            gtfsId: rs.gtfsId,
           })
-        setFaresBySeq(entry ? getFaresBySeq(entry, currentVariant.co) : {})
+          const entry =
+            routeVariantIndex.get(key) ??
+            findRouteEntryByFamily(routeVariantIndex, {
+              co: co as Company,
+              route: currentVariant.route,
+              bound: rs.bound,
+              serviceType: rs.serviceType,
+            })
+          byCo[co] = entry ? getFaresBySeq(entry, co) : {}
+        }
+        setFaresBySeqByCo(byCo)
       })
       .catch(() => {
-        if (!cancelled) setFaresBySeq({})
+        if (!cancelled) setFaresBySeqByCo({})
       })
     return () => {
       cancelled = true
@@ -564,7 +584,9 @@ function KmbRouteStopList({
   )
 
   // Original section rail: boarding stop fare to the terminus. The GTFS
-  // matrix is authoritative here; hk-bus-eta stays as the fallback.
+  // matrix is authoritative here; hk-bus-eta stays as the fallback. The
+  // fallback reads the stop's own operator table so Citybus stops on a
+  // KMB-primary joint route do not inherit a KMB seq fare.
   const fareToTerminus = React.useCallback(
     (index: number) => {
       if (fareTable && fareStopIndices) {
@@ -575,9 +597,11 @@ function KmbRouteStopList({
           if (fare !== null) return fare
         }
       }
-      return faresBySeq[variantStops[index]?.seq] ?? null
+      const rs = variantStops[index]
+      if (!rs) return null
+      return faresBySeqByCo[normalizeOperator(rs.co)]?.[rs.seq] ?? null
     },
-    [fareTable, fareStopIndices, terminusIndex, faresBySeq, variantStops]
+    [fareTable, fareStopIndices, terminusIndex, faresBySeqByCo, variantStops]
   )
 
   // The toggle changes only the left rail: sections in the original mode,
@@ -614,9 +638,13 @@ function KmbRouteStopList({
   )
 
   const seqByStopSeq = React.useMemo(() => {
-    const map = new Map<number, number>()
+    // Key by stop identity: KMB and CTB halves of a joint route reuse the
+    // same seq numbers, so a bare seq key would hand partner stops the
+    // primary half's position number.
+    const map = new Map<string, number>()
     variantStops.forEach((rs, index) => {
-      if (!map.has(rs.seq)) map.set(rs.seq, index + 1)
+      const key = `${normalizeOperator(rs.co)}|${rs.stopId}|${rs.seq}`
+      if (!map.has(key)) map.set(key, index + 1)
     })
     return map
   }, [variantStops])
@@ -667,14 +695,16 @@ function KmbRouteStopList({
     return counts.map((_, idx) => counts.slice(0, idx).reduce((a, b) => a + b, 0))
   }, [sections])
 
-  // Street per stop sequence for the CTB street rail. Null when the stop
-  // name has no "{name}, {street}" shape. Splits off the already-parsed
-  // name so joint KMB/CTB stops keep the EN title-casing.
+  // Street per stop for the CTB street rail. Null when the stop name has
+  // no "{name}, {street}" shape. Keyed by stop identity: joint halves reuse
+  // seq numbers, and only CTB rows carry the street shape.
   const streetBySeq = React.useMemo(() => {
-    const map = new Map<number, string | null>()
+    const map = new Map<string, string | null>()
     if (!isCtbRoute) return map
     for (const rs of variantStops) {
-      if (map.has(rs.seq)) continue
+      if (normalizeOperator(rs.co) !== 'ctb') continue
+      const key = `${rs.stopId}|${rs.seq}`
+      if (map.has(key)) continue
       const stop = stopsById.get(rs.stopId)
       const fullName = stop
         ? pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
@@ -683,7 +713,7 @@ function KmbRouteStopList({
         isKmb: isKmbStop(stop),
         lang,
       })
-      map.set(rs.seq, parseCtbStopNameCached(parsed.name).street)
+      map.set(key, parseCtbStopNameCached(parsed.name).street)
     }
     return map
   }, [variantStops, stopsById, lang, isCtbRoute])
@@ -698,7 +728,7 @@ function KmbRouteStopList({
   // sections without fare data skip the label.
   const streetSections = React.useMemo(() => {
     if (!showStreetRail) return null
-    return buildStreetRuns(variantStops, (rs) => streetBySeq.get(rs.seq) ?? null)
+    return buildStreetRuns(variantStops, (rs) => streetBySeq.get(`${rs.stopId}|${rs.seq}`) ?? null)
   }, [variantStops, streetBySeq, showStreetRail])
 
   // Row timeline for grid mode: one row per stop, fare runs in column 1 and
@@ -758,7 +788,7 @@ function KmbRouteStopList({
   }
 
   const renderStopCard = (rs: KmbRouteStopLite) => {
-    const seq = seqByStopSeq.get(rs.seq) ?? rs.seq
+    const seq = seqByStopSeq.get(`${normalizeOperator(rs.co)}|${rs.stopId}|${rs.seq}`) ?? rs.seq
     const stopEtas = etas[rs.stopId] ?? []
     const formatted = formatStop(rs)
     // Same-base grouping was precomputed once per list render (O(n)), not

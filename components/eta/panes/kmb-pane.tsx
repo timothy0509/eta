@@ -565,14 +565,17 @@ export function KmbPane({
       for (const { stopId, eta } of allEtas) {
         // Joint rows are canonicalized under the primary operator: fare
         // tables resolve under the grouping operator, so key partner rows
-        // by groupCo instead of issuing a lookup that never matches.
+        // by groupCo instead of issuing a lookup that never matches. The
+        // scope matches the grouped display base key (joint scope first).
         const co = String(eta.groupCo ?? eta.co ?? 'kmb') as Company
         const route = (eta.route ?? '').toUpperCase()
         const dir = String(eta.dir ?? '')
         const serviceType = String(eta.service_type ?? '')
         const gtfsId = normalizeGtfsId(eta.gtfsId)
-        const vKey = gtfsId
-          ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}`
+        const jointVariantKey = String(eta.jointVariantKey ?? '').trim()
+        const scope = jointVariantKey || gtfsId
+        const vKey = scope
+          ? `${co}|${route}|${dir}|${serviceType}|${scope}`
           : `${co}|${route}|${dir}|${serviceType}`
 
         // Skip if we already have this fare or already queued it (use ref for latest state)
@@ -586,6 +589,7 @@ export function KmbPane({
           dir,
           serviceType,
           gtfsId,
+          jointVariantKey,
           stopId,
           destCandidates: [eta.dest_en, eta.dest_tc, eta.dest_sc].filter(Boolean) as string[],
         })

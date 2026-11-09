@@ -113,6 +113,63 @@ describe('getStopToTerminusFare region handling', () => {
     expect(fare).toEqual({ hkd: 6.0, source: 'hk-bus-eta' })
   })
 
+  it('resolves joint Citybus stops under the primary KMB operator', () => {
+    // Regression: joint rows are canonicalized under the primary operator
+    // (kmb), but a Citybus physical stop id only appears in the CTB
+    // variant. The fare lookup must fall across operators instead of
+    // returning null for Citybus stops.
+    const stops = [
+      routeStop('kmb', '101', 'O', '1', 'G1', 'K1', 1),
+      routeStop('kmb', '101', 'O', '1', 'G1', 'K2', 2),
+      routeStop('ctb', '101', 'O', '1', 'G1', 'C1', 1),
+      routeStop('ctb', '101', 'O', '1', 'G1', 'C2', 2),
+    ]
+    const byVariantStops = computeKmbRouteVariantStops(stops)
+    const companies: Company[] = ['kmb', 'ctb', 'nlb', 'lrtfeeder', 'gmb', 'lightRail', 'mtr']
+    const boundMap = Object.fromEntries(companies.map((c) => [c, 'O'])) as RouteListEntry['bound']
+    const stopMap = {
+      kmb: ['K1', 'K2'],
+      ctb: ['C1', 'C2'],
+    } as unknown as RouteListEntry['stops']
+    const entry = {
+      route: '101',
+      co: ['kmb', 'ctb'],
+      orig: { en: 'O', zh: 'O' },
+      dest: { en: 'D', zh: 'D' },
+      stops: stopMap,
+      bound: boundMap,
+      serviceType: '1',
+      fares: { kmb: ['10.0', '5.0'], ctb: ['10.0', '5.0'] },
+      faresHoliday: null,
+      freq: null,
+      jt: null,
+      seq: 1,
+      nlbId: '',
+      gtfsId: 'G1',
+    } as unknown as RouteListEntry
+    const routeVariantIndex = new Map([
+      [
+        routeVariantKey({ co: 'kmb', route: '101', bound: 'O', serviceType: '1', gtfsId: 'G1' }),
+        entry,
+      ],
+      [
+        routeVariantKey({ co: 'ctb', route: '101', bound: 'O', serviceType: '1', gtfsId: 'G1' }),
+        entry,
+      ],
+    ])
+    const fare = getStopToTerminusFare({
+      co: 'kmb',
+      route: '101',
+      dir: 'O',
+      serviceType: '1',
+      gtfsId: 'G1',
+      stopId: 'C1',
+      byVariantStops,
+      routeVariantIndex,
+    })
+    expect(fare).toEqual({ hkd: 10, source: 'hk-bus-eta' })
+  })
+
   it('returns null for a stop in no family variant', () => {
     const stops = [routeStop('kmb', '1A', 'O', '1', '1053', 'S1', 1)]
     const byVariantStops = computeKmbRouteVariantStops(stops)

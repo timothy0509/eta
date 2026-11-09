@@ -242,11 +242,14 @@ export function getStopToTerminusFare(params: {
   routeVariantIndex: Map<string, RouteListEntry>
 }): KmbFareInfo | null {
   const routeName = normalizeRouteName(params.route)
+  const stop = String(params.stopId ?? '').trim()
   const key = variantKey(params.co, routeName, params.dir, params.serviceType, params.gtfsId)
   let variant = params.byVariantStops.byVariantKey.get(key)
   // Resolve the fare table against the variant actually used: without a
   // gtfsId the caller may land on any region of the family, and each
   // region has its own fare array indexed by its own sequences.
+  let resolvedCo = String(params.co ?? 'kmb')
+  let resolvedBound = String(params.dir ?? '')
   let resolvedGtfsId = normalizeGtfsId(params.gtfsId)
   if (!variant) {
     const picked = findVariantByFamilyStop(
@@ -257,14 +260,79 @@ export function getStopToTerminusFare(params: {
         bound: params.dir,
         serviceType: params.serviceType,
       },
-      params.stopId
+      stop
     )
     variant = picked?.variant
     if (picked) resolvedGtfsId = variantKeyGtfsId(picked.key)
   }
+  let seqs = variant?.stopSeqsByStopId.get(stop)
+  if (!seqs) {
+    // Joint routes canonicalize under the primary operator, but a Citybus
+    // physical stop id only appears in the partner variant (which may also
+    // label the bound differently, e.g. KMB inbound is CTB outbound).
+    // Search every variant of this route/service type holding the stop so
+    // the partner's own sequences and fare table resolve the fare.
+    let best:
+      | { key: VariantKey; variant: VariantStops; co: string; bound: string; count: number }
+      | undefined
+    for (const [candidateKey, candidate] of params.byVariantStops.byVariantKey) {
+      const parts = candidateKey.split('|')
+      if (parts.length !== 5) continue
+      const [candidateCo = '', candidateRoute = '', candidateBound = '', candidateService = ''] =
+        parts
+      if (normalizeRouteName(candidateRoute) !== routeName) continue
+      if (String(candidateService ?? '') !== String(params.serviceType ?? '')) continue
+      const candidateSeqs = candidate.stopSeqsByStopId.get(stop)
+      if (!candidateSeqs?.length) continue
+      const count = candidateSeqs.length
+      if (!best) {
+        best = {
+          key: candidateKey,
+          variant: candidate,
+          co: candidateCo,
+          bound: candidateBound,
+          count,
+        }
+        continue
+      }
+      const sameCo = (co: string) =>
+        String(co ?? '').toLowerCase() === String(params.co ?? '').toLowerCase() ? 0 : 1
+      const sameBound = (bound: string) =>
+        String(bound ?? '') === String(params.dir ?? '') ? 0 : 1
+      const rank = (entry: { co: string; bound: string; count: number; key: VariantKey }) =>
+        [sameCo(entry.co), sameBound(entry.bound), -entry.count, entry.key] as const
+      const next = { co: candidateCo, bound: candidateBound, count, key: candidateKey }
+      const current = { co: best.co, bound: best.bound, count: best.count, key: best.key }
+      const rankNext = rank(next)
+      const rankCurrent = rank(current)
+      let better = false
+      for (let i = 0; i < rankNext.length; i += 1) {
+        if (rankNext[i]! < rankCurrent[i]!) {
+          better = true
+          break
+        }
+        if (rankNext[i]! > rankCurrent[i]!) break
+      }
+      if (better) {
+        best = {
+          key: candidateKey,
+          variant: candidate,
+          co: candidateCo,
+          bound: candidateBound,
+          count,
+        }
+      }
+    }
+    if (best) {
+      variant = best.variant
+      resolvedCo = best.co
+      resolvedBound = best.bound
+      resolvedGtfsId = variantKeyGtfsId(best.key)
+      seqs = variant.stopSeqsByStopId.get(stop)
+    }
+  }
   if (!variant) return null
 
-  const seqs = variant.stopSeqsByStopId.get(String(params.stopId ?? '').trim())
   // Use the first (smallest) sequence for fare calculation - this is the "departing" occurrence
   const onSeq = seqs?.[0]
   if (!onSeq) return null
@@ -272,17 +340,17 @@ export function getStopToTerminusFare(params: {
   const entry =
     params.routeVariantIndex.get(
       routeVariantKey({
-        co: params.co as Company,
+        co: resolvedCo as Company,
         route: routeName,
-        bound: params.dir,
+        bound: resolvedBound,
         serviceType: params.serviceType,
         gtfsId: resolvedGtfsId,
       })
     ) ??
     findRouteEntryByFamily(params.routeVariantIndex, {
-      co: params.co as Company,
+      co: resolvedCo as Company,
       route: routeName,
-      bound: params.dir,
+      bound: resolvedBound,
       serviceType: params.serviceType,
     })
 
@@ -297,7 +365,9 @@ export function getStopToTerminusFare(params: {
   const fares = Array.isArray(entry.fares)
     ? entry.fares
     : fareTable
-      ? (fareTable[params.co] ?? (isKmbFamily(params.co) ? fareTable.kmb : undefined))
+      ? (fareTable[resolvedCo] ??
+        fareTable[resolvedCo.toLowerCase()] ??
+        (isKmbFamily(resolvedCo) ? fareTable.kmb : undefined))
       : undefined
 
   if (!fares || fareIndex < 0 || fareIndex >= fares.length) return null

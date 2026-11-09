@@ -179,8 +179,10 @@ function routeOperators(entry: {
     normalizeOperator
   )
   if (list.length === 1 && String(entry.jointVariantKey ?? '').trim()) {
-    const partner = list[0] === 'kmb' ? 'ctb' : list[0] === 'ctb' ? 'kmb' : ''
-    if (partner) list.push(partner)
+    // KMB-family (kmb/lwb) pairs with ctb; an `lwb` row gains `ctb`.
+    const family = list[0] === 'lwb' ? 'kmb' : list[0]
+    const partner = family === 'kmb' ? 'ctb' : family === 'ctb' ? 'kmb' : ''
+    if (partner && !list.includes(partner)) list.push(partner)
   }
   return Array.from(new Set(list)).sort()
 }
@@ -314,7 +316,7 @@ function KmbRouteStopCard({
             if (isFirst) {
               return (
                 <div
-                  key={`${entry.co}:${entryIdx}`}
+                  key={`${entry.co}:${entry.eta}:${entryIdx}`}
                   className="bg-primary-container text-on-primary-container min-w-0 shrink-0 basis-[calc((100%_-_0.75rem)/3)] rounded-xl px-2 py-1.5 text-center sm:basis-[calc((100%_-_1rem)/3)] sm:px-3 sm:py-2"
                 >
                   <div className="m3-label-md flex items-center justify-center gap-1 opacity-80">
@@ -339,7 +341,7 @@ function KmbRouteStopCard({
             }
             return (
               <div
-                key={`${entry.co}:${entryIdx}`}
+                key={`${entry.co}:${entry.eta}:${entryIdx}`}
                 className="bg-surface-container-high min-w-0 shrink-0 basis-[calc((100%_-_0.75rem)/3)] rounded-lg px-2 py-1.5 text-center sm:basis-[calc((100%_-_1rem)/3)] sm:px-2.5"
               >
                 <div className="text-on-surface-variant m3-label-md flex items-center justify-center gap-1">

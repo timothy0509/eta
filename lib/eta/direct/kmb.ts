@@ -1,6 +1,11 @@
 import type { AppCompany } from '@/lib/eta/companies'
 
-import { KMB_STOPS_CACHE_KEY, kmbStopEtaKey } from '@/lib/eta/cache/keys'
+import {
+  KMB_ROUTES_CACHE_KEY,
+  KMB_ROUTE_STOPS_CACHE_KEY,
+  KMB_STOPS_CACHE_KEY,
+  kmbStopEtaKey,
+} from '@/lib/eta/cache/keys'
 import { isKmbStop } from '@/lib/eta/types'
 import { CACHE_POLICIES } from '@/lib/eta/cache/policy'
 import type { KmbRouteStopLite } from '@/lib/eta/client'
@@ -145,7 +150,7 @@ export type KmbRouteStopEntry = {
 
 export async function getKmbRouteStops(): Promise<KmbRouteStopEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:route-stops:v4',
+    key: KMB_ROUTE_STOPS_CACHE_KEY,
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {
@@ -210,7 +215,7 @@ export type KmbRouteListEntry = {
 
 export async function getKmbRouteList(): Promise<KmbRouteListEntry[]> {
   const { value } = await getCachedValue({
-    key: 'kmb:routes:v4',
+    key: KMB_ROUTES_CACHE_KEY,
     policyKey: 'etaDb',
     policy: CACHE_POLICIES.etaDb,
     fetcher: async () => {

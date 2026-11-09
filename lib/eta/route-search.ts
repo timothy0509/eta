@@ -214,9 +214,9 @@ export function buildRouteSearchIndex(
 ): RouteSearchEntry[] {
   // Stale cached rows may predate the `operators` field. A joint variant
   // key still tells us the row is half of a joint pair. The partner fallback
-  // only applies to kmb/ctb (the sole joint pair in the current feed);
-  // any future non-KMB/CTB joint pair keeps its single operator rather
-  // than being mis-attributed.
+  // covers the KMB family (kmb/lwb) plus ctb; any future non-KMB/CTB joint
+  // pair keeps its single operator rather than being mis-attributed. An
+  // `lwb` row gains `ctb` (not `kmb`), keeping its own company.
   const operatorsOf = (entry: {
     co?: unknown
     operators?: string[]
@@ -226,8 +226,9 @@ export function buildRouteSearchIndex(
       (op) => normalizeOperator(op)
     )
     if (list.length === 1 && String(entry.jointVariantKey ?? '').trim()) {
-      const partner = list[0] === 'kmb' ? 'ctb' : list[0] === 'ctb' ? 'kmb' : ''
-      if (partner) list.push(partner)
+      const family = list[0] === 'lwb' ? 'kmb' : list[0]
+      const partner = family === 'kmb' ? 'ctb' : family === 'ctb' ? 'kmb' : ''
+      if (partner && !list.includes(partner)) list.push(partner)
     }
     return list
   }

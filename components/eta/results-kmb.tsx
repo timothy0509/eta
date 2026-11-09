@@ -33,7 +33,11 @@ import { formatFareHkd } from '@/lib/eta/format'
 import { formatKmbRouteEndpointName, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { formatOperatorCode, formatOperatorLabel } from '@/lib/eta/operator-label'
-import { getOperatorColor, normalizeOperator } from '@/lib/eta/operator-colors'
+import {
+  getOperatorColor,
+  getOperatorStripBackground,
+  normalizeOperator,
+} from '@/lib/eta/operator-colors'
 import { ResultsHeader } from '@/components/eta/results-header'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
@@ -315,15 +319,7 @@ export const RouteDepartureRow = React.memo(function RouteDepartureRow({
   )
   const operators = declaredOperators.length > 0 ? declaredOperators : actualOperators
   const isJoint = operators.length > 1
-  const operatorColor = isJoint
-    ? `linear-gradient(180deg, ${operators
-        .map((op, index) => {
-          const start = Math.round((index / operators.length) * 10000) / 100
-          const end = Math.round(((index + 1) / operators.length) * 10000) / 100
-          return `${getOperatorColor(op)} ${start}% ${end}%`
-        })
-        .join(', ')})`
-    : getOperatorColor(first?.co ?? co)
+  const operatorColor = getOperatorStripBackground(operators, first?.co ?? co)
   const operatorName = operators.map((op) => formatOperatorLabel(op, lang)).join(' + ')
 
   const { t, tWithParams } = useTranslations(lang)

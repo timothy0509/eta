@@ -9,8 +9,8 @@ import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { Marquee } from '@/components/ui/marquee'
 import { formatKmbRouteEndpointName } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
-import { formatOperatorCode } from '@/lib/eta/operator-label'
-import { getOperatorColor } from '@/lib/eta/operator-colors'
+import { formatOperatorLabel } from '@/lib/eta/operator-label'
+import { getOperatorStripBackground } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
 import { getKeyStops } from '@/lib/eta/route-search'
 import type { RouteMatchReason, RouteSearchEntry } from '@/lib/eta/route-search'
@@ -57,26 +57,38 @@ export function RouteResultCard({
     matchReason.kind !== 'number' &&
     !visibleText.includes(matchReason.text.toLowerCase())
 
+  const operators = entry.operators.length > 0 ? entry.operators : [entry.co]
+  const operatorColor = getOperatorStripBackground(operators, entry.co)
+  const operatorName = operators.map((op) => formatOperatorLabel(op, lang)).join(' + ')
+  const directionArrow = entry.directions.length > 1 ? '↔' : '→'
+  const routeTitle = `${origin} ${directionArrow} ${destination}`
+
   return (
     <button
       type="button"
       onClick={onSelect}
+      title={`${routeTitle} · ${operatorName}`}
       className={cn(
-        'ui-press bg-surface-container hover:bg-surface-container-high flex min-h-[64px] w-full rounded-2xl p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
+        'ui-press bg-surface-container hover:bg-surface-container-high relative flex min-h-[64px] w-full overflow-hidden rounded-2xl py-4 pr-4 pl-5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
         staggerClassForIndex(index)
       )}
     >
+      <span
+        className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
+        style={{ background: operatorColor }}
+        aria-hidden
+      />
       <span className="flex w-full items-center gap-2">
         {/* Joint badge follows the primary operator preference, so the same
-        joint route can recolor when the preference flips. The joint pill
-        next to it always names both operators. */}
+        joint route can recolor when the preference flips. The left-edge
+        strip shows the operator color instead of a text pill; the sr-only
+        span and button title keep the localized operator name for
+        assistive tech and hover. */}
         <RouteBadge route={entry.route} company={entry.co} size="lg" />
+        <span className="sr-only">{operatorName}</span>
         <span className="block min-w-0 flex-1 overflow-hidden">
-          <Marquee
-            title={`${origin} ${entry.directions.length > 1 ? '↔' : '→'} ${destination}`}
-            className="text-on-surface m3-title-md w-full"
-          >
-            {origin} {entry.directions.length > 1 ? '↔' : '→'} {destination}
+          <Marquee title={routeTitle} className="text-on-surface m3-title-md w-full">
+            {origin} {directionArrow} {destination}
           </Marquee>
           {keyStops.length > 0 && (
             <span className="text-on-surface-variant m3-body-md flex w-full items-center gap-1 overflow-hidden">
@@ -94,18 +106,6 @@ export function RouteResultCard({
               • {matchReason.text}
             </span>
           )}
-        </span>
-        <span className="text-on-surface-variant m3-label-md flex shrink-0 items-center gap-1.5 font-semibold uppercase">
-          {(entry.operators.length > 0 ? entry.operators : [entry.co]).map((op) => (
-            <span key={op} className="inline-flex items-center gap-1">
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: getOperatorColor(op) }}
-              />
-              {formatOperatorCode(op)}
-            </span>
-          ))}
         </span>
         <ChevronRight aria-hidden className="text-on-surface-variant h-4 w-4 shrink-0" />
       </span>

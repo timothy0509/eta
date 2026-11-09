@@ -27,3 +27,24 @@ export function normalizeOperator(co: string | undefined): string {
 export function getOperatorColor(co: string | undefined): string {
   return OPERATOR_COLORS[normalizeOperator(co)] ?? OPERATOR_COLOR_FALLBACK
 }
+
+/**
+ * Background for the left-edge operator strip on route and ETA cards.
+ * Single operators get a solid brand color; joint routes get an even
+ * vertical split across each operator, matching the ETA card look.
+ */
+export function getOperatorStripBackground(
+  operators: string[],
+  fallbackCo?: string | undefined
+): string {
+  if (operators.length > 1) {
+    return `linear-gradient(180deg, ${operators
+      .map((op, index) => {
+        const start = Math.round((index / operators.length) * 10000) / 100
+        const end = Math.round(((index + 1) / operators.length) * 10000) / 100
+        return `${getOperatorColor(op)} ${start}% ${end}%`
+      })
+      .join(', ')})`
+  }
+  return getOperatorColor(operators[0] ?? fallbackCo)
+}

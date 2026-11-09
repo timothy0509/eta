@@ -63,6 +63,11 @@ const common: Record<string, TranslationEntry> = {
   stop: { en: 'Stop', tc: '車站', sc: '车站' },
   operator: { en: 'Operator', tc: '營辦商', sc: '营办商' },
   operatorAll: { en: 'All', tc: '全部', sc: '全部' },
+  operatorFilterActive: {
+    en: 'Operator: {count} selected',
+    tc: '營辦商：已選 {count} 個',
+    sc: '营办商：已选 {count} 个',
+  },
   route: { en: 'Route', tc: '路線', sc: '路线' },
   fare: { en: 'Fare', tc: '車費', sc: '车费' },
   unknown: { en: 'Unknown', tc: '未知', sc: '未知' },

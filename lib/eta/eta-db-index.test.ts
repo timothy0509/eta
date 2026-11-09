@@ -8,6 +8,7 @@ import {
   computeRouteRegions,
   deserializeEtaDbIndexes,
   groupRegionStops,
+  jointVariantKeyMatchesFilter,
   parseVariantKey,
   routeVariantKey,
   serializeEtaDbIndexes,
@@ -141,6 +142,39 @@ describe('buildEtaDbIndexes isKmb derivation', () => {
         ?.map((e) => e.co)
         .sort()
     ).toEqual(['ctb', 'kmb'])
+  })
+})
+
+describe('buildEtaDbIndexes joint stop pairing', () => {
+  it('pairs each operator stop and shares one joint group key', async () => {
+    const db = dbWith(
+      [
+        routeEntry('102', ['kmb', 'ctb'], {
+          kmb: ['K1', 'K2'],
+          ctb: ['C1', 'C2'],
+        }),
+      ],
+      ['K1', 'K2', 'C1', 'C2']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    const kmb = indexes.kmbRouteStops.filter((row) => row.co === 'kmb')
+    const ctb = indexes.kmbRouteStops.filter((row) => row.co === 'ctb')
+    expect(kmb).toHaveLength(2)
+    expect(ctb).toHaveLength(2)
+    expect(kmb[0]?.operators).toEqual(['kmb', 'ctb'])
+    expect(kmb[0]?.siblingStopIds).toEqual(['C1'])
+    expect(ctb[0]?.siblingStopIds).toEqual(['K1'])
+    expect(kmb[0]?.jointGroupKey).toBe(ctb[0]?.jointGroupKey)
+    expect(kmb[0]?.jointVariantKey).toBe(ctb[1]?.jointVariantKey)
+    expect(kmb[0]?.region).toBe('joint|102|1')
+    expect(ctb[0]?.region).toBe('joint|102|1')
+  })
+
+  it('keeps single-operator variants out of the joint merge', async () => {
+    const db = dbWith([routeEntry('307', ['ctb'], { ctb: ['C1'] })], ['C1'])
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    expect(indexes.kmbRouteStops[0]?.jointVariantKey).toBe('')
+    expect(indexes.kmbRouteStops[0]?.siblingStopIds).toEqual([])
   })
 })
 
@@ -321,5 +355,108 @@ describe('variantKeyMatches', () => {
 
   it('rejects different bounds within the same family', () => {
     expect(variantKeyMatches('kmb|1A|O|1|1053', 'kmb|1A|I|1|')).toBe(false)
+  })
+})
+
+describe('jointVariantKeyMatchesFilter', () => {
+  it('matches the paired operator route regardless of direction', () => {
+    expect(jointVariantKeyMatchesFilter('kmb|102|I|1|', { route: '102', serviceType: '1' })).toBe(
+      true
+    )
+  })
+
+  it('rejects a different route or service type', () => {
+    expect(jointVariantKeyMatchesFilter('kmb|102|I|1|', { route: '101', serviceType: '1' })).toBe(
+      false
+    )
+    expect(jointVariantKeyMatchesFilter('kmb|102|I|1|', { route: '102', serviceType: '2' })).toBe(
+      false
+    )
+  })
+
+  it('rejects mismatched gtfsId regions when both are present', () => {
+    expect(
+      jointVariantKeyMatchesFilter('gmb|1|O|1|2006408', {
+        route: '1',
+        serviceType: '1',
+        gtfsId: '2002337',
+      })
+    ).toBe(false)
+  })
+})
+
+describe('buildEtaDbIndexes inferred joint cross-pairs', () => {
+  function dbWithCoords(
+    entries: Array<ReturnType<typeof routeEntry>>,
+    coords: Record<string, { lat: number; lng: number }>
+  ): EtaDb {
+    const routeList: EtaDb['routeList'] = {}
+    for (const [index, entry] of entries.entries()) {
+      routeList[`${entry.route}-${entry.co.join('+')}-${entry.gtfsId}-${index}`] =
+        entry as unknown as EtaDb['routeList'][string]
+    }
+    const stopList: EtaDb['stopList'] = {}
+    for (const [stopId, location] of Object.entries(coords)) {
+      stopList[stopId] = {
+        location,
+        name: { en: `Stop ${stopId}`, zh: `站 ${stopId}` },
+      }
+    }
+    return { holidays: [], routeList, stopList, stopMap: {}, serviceDayMap: {} } as unknown as EtaDb
+  }
+
+  it('pairs 101R-style two-entry joints into one jointc variant', async () => {
+    const db = dbWith(
+      [
+        routeEntry('101R', ['kmb'], { kmb: ['K1', 'K2'] }),
+        routeEntry('101R', ['ctb'], { ctb: ['C1', 'C2'] }),
+      ],
+      ['K1', 'K2', 'C1', 'C2']
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    const rows = indexes.kmbRouteStops.filter((row) => row.route === '101R')
+    expect(rows).toHaveLength(4)
+    const keys = new Set(rows.map((row) => row.jointVariantKey))
+    expect(keys.size).toBe(1)
+    expect([...keys][0]).toMatch(/^jointc:/)
+    for (const row of rows) {
+      expect(row.operators).toEqual(['kmb', 'ctb'])
+      expect(row.siblingStopIds).toHaveLength(1)
+    }
+  })
+
+  it('pairs reordered cross-pair stops by proximity, not array index', async () => {
+    const db = dbWithCoords(
+      [
+        routeEntry('101R', ['kmb'], { kmb: ['K1', 'K2'] }),
+        routeEntry('101R', ['ctb'], { ctb: ['C1', 'C2'] }),
+      ],
+      {
+        K1: { lat: 22.3, lng: 114.2 },
+        K2: { lat: 22.5, lng: 114.4 },
+        // C1 sits near K2 and C2 near K1: index pairing would cross wires.
+        C1: { lat: 22.5005, lng: 114.4005 },
+        C2: { lat: 22.3005, lng: 114.2005 },
+      }
+    )
+    const indexes = await buildEtaDbIndexes(db, { busCompanies: ['kmb', 'ctb'] })
+    const byStop = new Map(indexes.kmbRouteStops.map((row) => [row.stopId, row]))
+    expect(byStop.get('K1')?.siblingStopIds).toEqual(['C2'])
+    expect(byStop.get('K2')?.siblingStopIds).toEqual(['C1'])
+    expect(byStop.get('K1')?.jointGroupKey).toBe(byStop.get('C2')?.jointGroupKey)
+  })
+
+  it('keeps upstream lwb stops on the lwb half of a joint', async () => {
+    const lwbEntry = routeEntry('S1', ['lwb' as Company], { lwb: ['L1'] } as never)
+    const db = dbWith([lwbEntry, routeEntry('S1', ['ctb'], { ctb: ['C1'] })], ['L1', 'C1'])
+    const indexes = await buildEtaDbIndexes(db, {
+      busCompanies: ['kmb', 'lwb', 'ctb'],
+      jointRoutes: {
+        updated: 'test',
+        routes: { S1: { operators: ['ctb', 'kmb'], agency: 'LWB+CTB', longName: 'TEST' } },
+      },
+    })
+    const rows = indexes.kmbRouteStops.filter((row) => row.route === 'S1')
+    expect(rows.map((row) => row.co).sort()).toEqual(['ctb', 'lwb'])
   })
 })

@@ -29,16 +29,25 @@ export function useKmbFares(
         route: string
         dir: string
         serviceType: string
+        gtfsId?: string
+        jointVariantKey?: string
         stopId: string
         destCandidates: string[]
       }[] = []
 
       for (const { eta } of allEtas) {
-        const co = String(eta.co ?? 'kmb') as Company
+        // Match the grouped display base key: joint rows canonicalize under
+        // groupCo with the joint scope.
+        const co = String(eta.groupCo ?? eta.co ?? 'kmb') as Company
         const route = (eta.route ?? '').toUpperCase()
         const dir = String(eta.dir ?? '')
         const serviceType = String(eta.service_type ?? '')
-        const vKey = `${co}|${route}|${dir}|${serviceType}`
+        const gtfsId = String(eta.gtfsId ?? '').trim()
+        const jointVariantKey = String(eta.jointVariantKey ?? '').trim()
+        const scope = jointVariantKey || gtfsId
+        const vKey = scope
+          ? `${co}|${route}|${dir}|${serviceType}|${scope}`
+          : `${co}|${route}|${dir}|${serviceType}`
 
         if (faresByVariantKeyRef.current[vKey] || seenVariants.has(vKey)) continue
         seenVariants.add(vKey)
@@ -48,6 +57,8 @@ export function useKmbFares(
           route,
           dir,
           serviceType,
+          gtfsId,
+          jointVariantKey,
           stopId: String(eta.stop ?? ''),
           destCandidates: [eta.dest_en, eta.dest_tc, eta.dest_sc].filter(Boolean) as string[],
         })

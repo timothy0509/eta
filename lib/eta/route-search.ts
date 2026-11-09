@@ -1,4 +1,6 @@
 import type { KmbRouteInfoLite, KmbRouteStopLite } from '@/lib/eta/client'
+import { pickPrimaryOperator, regionOrdinal } from '@/lib/eta/eta-db-index'
+import { staleJointOperators } from '@/lib/eta/joint-routes'
 import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { normalizeOperator } from '@/lib/eta/operator-colors'
 import { pickLang } from '@/lib/eta/pick-lang'
@@ -19,6 +21,8 @@ export type RouteSearchEntry = {
   /** Region group `co|ROUTE|n`. Empty for legacy rows without a region. */
   region: string
   operators: string[]
+  /** Joint route number group, present for routes in the TD joint manifest. */
+  routeGroupKey?: string
   origin: { en: string; tc: string; sc: string }
   destination: { en: string; tc: string; sc: string }
   /** Ordered stop ids along the route, deduped and capped. */
@@ -172,9 +176,29 @@ function entryDisplayText(
   return pickLang(entry[field], lang)
 }
 
-function canonicalRouteSearchKey(co: unknown, route: unknown, region?: unknown): string {
-  const base = `${normalizeOperator(String(co ?? ''))}|${String(route ?? '').toUpperCase()}`
+function canonicalRouteSearchKey(
+  co: unknown,
+  route: unknown,
+  region?: unknown,
+  operators?: unknown,
+  routeGroupKey?: unknown
+): string {
+  const routeUpper = String(route ?? '').toUpperCase()
+  const groupKey = String(routeGroupKey ?? '').trim()
+  if (groupKey) {
+    // One search entry for the joint route number, including one-operator
+    // special variants such as 101R and 101 short workings.
+    return `jointroute:${groupKey}`
+  }
+  const list = Array.isArray(operators)
+    ? operators.map((op) => normalizeOperator(String(op))).filter(Boolean)
+    : []
+  const unique = Array.from(new Set(list)).sort()
   const scope = String(region ?? '').trim()
+  if (unique.length > 1) {
+    return `joint:${unique.join('+')}|${routeUpper}|${regionOrdinal(scope)}`
+  }
+  const base = `${unique[0] ?? normalizeOperator(String(co ?? ''))}|${routeUpper}`
   return scope ? `${base}|${scope}` : base
 }
 
@@ -186,89 +210,159 @@ function canonicalRouteSearchKey(co: unknown, route: unknown, region?: unknown):
 export function buildRouteSearchIndex(
   routes: KmbRouteInfoLite[],
   routeStops: KmbRouteStopLite[],
-  stopsById: Map<string, KmbStopSearchItem>
+  stopsById: Map<string, KmbStopSearchItem>,
+  options: { preferredJointOperator?: string | null } = {}
 ): RouteSearchEntry[] {
+  // Stale cached rows may predate the `operators` field; the shared
+  // helper restores the joint partner from the variant key.
+  const operatorsOf = (entry: {
+    co?: unknown
+    operators?: string[]
+    jointVariantKey?: string
+  }): string[] => staleJointOperators(entry)
+
   const variantsByKey = new Map<string, KmbRouteInfoLite[]>()
   for (const r of routes) {
-    const key = canonicalRouteSearchKey(r.co, r.route, r.region)
+    const key = canonicalRouteSearchKey(r.co, r.route, r.region, operatorsOf(r), r.routeGroupKey)
     const list = variantsByKey.get(key)
     if (list) list.push(r)
     else variantsByKey.set(key, [r])
   }
 
+  const primaryByKey = new Map<string, string>()
+  for (const [key, variants] of variantsByKey) {
+    const ops = variants.flatMap((v) => operatorsOf(v))
+    primaryByKey.set(key, pickPrimaryOperator(ops, options.preferredJointOperator))
+  }
+
   const stopIdsByKey = new Map<string, { ids: string[]; seen: Set<string>; total: number }>()
+  const allStopIdsByKey = new Map<string, Set<string>>()
   // Group raw rows by region plus bound plus service type so each
   // direction stays separate, keeping seq order for the via line.
   const rowsByVariantKey = new Map<string, KmbRouteStopLite[]>()
   for (const rs of routeStops) {
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.region)
+    const routeKey = canonicalRouteSearchKey(
+      rs.co,
+      rs.route,
+      rs.region,
+      operatorsOf(rs),
+      rs.routeGroupKey
+    )
     if (!variantsByKey.has(routeKey)) continue
-    const variantKey = `${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
+    // Joint rows share a `jointVariantKey` across operators. Use it for
+    // the direction group because KMB and CTB often label the same
+    // physical direction with opposite bounds.
+    const variantKey = rs.jointVariantKey
+      ? `${routeKey}|joint:${rs.jointVariantKey}|${String(rs.serviceType ?? '')}`
+      : `${routeKey}|${String(rs.bound ?? '')}|${String(rs.serviceType ?? '')}`
     const list = rowsByVariantKey.get(variantKey)
     if (list) list.push(rs)
     else rowsByVariantKey.set(variantKey, [rs])
+    let names = allStopIdsByKey.get(routeKey)
+    if (!names) {
+      names = new Set()
+      allStopIdsByKey.set(routeKey, names)
+    }
+    if (names.size < MAX_STOP_NAMES_PER_ROUTE) names.add(rs.stopId)
   }
   for (const rows of rowsByVariantKey.values()) {
     rows.sort((a, b) => (Number(a.seq) || 0) - (Number(b.seq) || 0))
   }
-  for (const rs of routeStops) {
-    const key = canonicalRouteSearchKey(rs.co, rs.route, rs.region)
-    if (!variantsByKey.has(key)) continue
-    let bucket = stopIdsByKey.get(key)
-    if (!bucket) {
-      bucket = { ids: [], seen: new Set(), total: 0 }
-      stopIdsByKey.set(key, bucket)
+
+  // Two passes so a joint route displays the primary operator's stop ids
+  // and counts each physical stop once, even though it has one stop id
+  // per operator.
+  for (const primaryPass of [true, false]) {
+    for (const rs of routeStops) {
+      const key = canonicalRouteSearchKey(
+        rs.co,
+        rs.route,
+        rs.region,
+        operatorsOf(rs),
+        rs.routeGroupKey
+      )
+      if (!variantsByKey.has(key)) continue
+      const primary = primaryByKey.get(key) ?? normalizeOperator(String(rs.co))
+      const isPrimaryRow = normalizeOperator(String(rs.co)) === primary
+      if (primaryPass !== isPrimaryRow) continue
+      let bucket = stopIdsByKey.get(key)
+      if (!bucket) {
+        bucket = { ids: [], seen: new Set(), total: 0 }
+        stopIdsByKey.set(key, bucket)
+      }
+      const groupKey = rs.jointGroupKey || rs.stopId
+      if (bucket.seen.has(groupKey)) continue
+      bucket.seen.add(groupKey)
+      bucket.total += 1
+      if (bucket.ids.length < MAX_STOP_IDS_PER_ROUTE) bucket.ids.push(rs.stopId)
     }
-    if (bucket.seen.has(rs.stopId)) continue
-    bucket.seen.add(rs.stopId)
-    bucket.total += 1
-    if (bucket.ids.length < MAX_STOP_IDS_PER_ROUTE) bucket.ids.push(rs.stopId)
+  }
+
+  const collectStopIds = (rows: KmbRouteStopLite[], primary: string): string[] => {
+    const preferred = rows.filter((row) => normalizeOperator(String(row.co)) === primary)
+    const source = preferred.length > 0 ? preferred : rows
+    const seen = new Set<string>()
+    const out: string[] = []
+    for (const row of source) {
+      const stopId = String(row.stopId ?? '').trim()
+      const groupKey = row.jointGroupKey || stopId
+      if (!stopId || seen.has(groupKey)) continue
+      seen.add(groupKey)
+      out.push(stopId)
+    }
+    return out
   }
 
   const entries: RouteSearchEntry[] = []
   for (const [key, variants] of variantsByKey) {
     const first = variants[0]
     if (!first) continue
-    const co = normalizeOperator(String(first.co))
+    const co = primaryByKey.get(key) ?? normalizeOperator(String(first.co))
     const bucket = stopIdsByKey.get(key)
     const stopIds = bucket?.ids ?? []
+    const primary = co
 
     // Canonical termini come from the normal outbound variant (O + service
     // type 1) when it exists. The raw route list order follows the upstream
     // db dump, so taking variants[0] shows inbound first for some routes
     // (e.g. 2B, 14) and outbound first for others (e.g. 2A, 2D), which reads
     // as randomly flipped origins.
-    const canonical = pickCanonicalVariant(variants) ?? first
+    const preferredOperator = String(options.preferredJointOperator ?? '')
+      .trim()
+      .toLowerCase()
+    const actualJoint = variants.filter((v) => operatorsOf(v).length > 1)
+    const preferredJoint = preferredOperator
+      ? actualJoint.filter((v) => operatorsOf(v).includes(preferredOperator))
+      : []
+    const preferredVariants = preferredOperator
+      ? variants.filter((v) => operatorsOf(v).includes(preferredOperator))
+      : []
+    const canonicalPool =
+      preferredJoint.length > 0
+        ? preferredJoint
+        : actualJoint.length > 0
+          ? actualJoint
+          : preferredVariants.length > 0
+            ? preferredVariants
+            : variants
+    const canonical = pickCanonicalVariant(canonicalPool) ?? first
 
     // Via line follows the canonical variant's stop group so the via stops
     // match the header direction. Falls back to the longest direction group
     // when the canonical group has no rows, so O and I stops never mix.
-    const canonicalGroupKey = `${key}|${String(canonical.bound ?? '')}|${String(
-      canonical.serviceType ?? ''
-    )}`
+    const canonicalGroupKey = canonical.jointVariantKey
+      ? `${key}|joint:${canonical.jointVariantKey}|${String(canonical.serviceType ?? '')}`
+      : `${key}|${String(canonical.bound ?? '')}|${String(canonical.serviceType ?? '')}`
     const canonicalRows = rowsByVariantKey.get(canonicalGroupKey)
     let viaStopIds: string[] = []
     let viaStopCount = 0
     if (canonicalRows?.length) {
-      const seen = new Set<string>()
-      for (const row of canonicalRows) {
-        const stopId = String(row.stopId ?? '').trim()
-        if (!stopId || seen.has(stopId)) continue
-        seen.add(stopId)
-        viaStopIds.push(stopId)
-      }
+      viaStopIds = collectStopIds(canonicalRows, primary)
       viaStopCount = viaStopIds.length
     } else {
       for (const [variantKey, rows] of rowsByVariantKey) {
         if (!variantKey.startsWith(`${key}|`)) continue
-        const ids: string[] = []
-        const seen = new Set<string>()
-        for (const row of rows) {
-          const stopId = String(row.stopId ?? '').trim()
-          if (!stopId || seen.has(stopId)) continue
-          seen.add(stopId)
-          ids.push(stopId)
-        }
+        const ids = collectStopIds(rows, primary)
         if (ids.length > viaStopIds.length) {
           viaStopIds = ids
           viaStopCount = ids.length
@@ -279,7 +373,8 @@ export function buildRouteSearchIndex(
 
     const stopNames: string[] = []
     const stopNameSeen = new Set<string>()
-    for (const stopId of stopIds) {
+    const nameStopIds = allStopIdsByKey.get(key) ?? new Set(stopIds)
+    for (const stopId of nameStopIds) {
       const stop = stopsById.get(stopId)
       if (!stop) continue
       for (const name of [stop.nameEn, stop.nameTc, stop.nameSc]) {
@@ -292,9 +387,25 @@ export function buildRouteSearchIndex(
       }
     }
 
-    const operators = Array.from(new Set(variants.map((v) => normalizeOperator(String(v.co)))))
+    const operatorSet = new Set(variants.flatMap((v) => operatorsOf(v)))
+    const remainingOperators = Array.from(operatorSet)
+      .filter((op) => op !== primary)
+      .sort()
+    const operators = [primary, ...remainingOperators]
     const serviceTypes = Array.from(new Set(variants.map((v) => String(v.serviceType))))
-    const directions = Array.from(new Set(variants.map((v) => String(v.bound))))
+    // One rule for joint and single-operator routes: count distinct ordered
+    // OD pairs (origin → destination). Counting raw bounds would show
+    // two-way for a joint route whose operators label the same physical
+    // direction with opposite bounds; sorting the pair would collapse the
+    // two travel directions into one. Ordered pairs handle both.
+    const directions = Array.from(
+      new Set(
+        variants.map(
+          (v) =>
+            `${String(v.origin.en ?? '').toUpperCase()}|${String(v.destination.en ?? '').toUpperCase()}`
+        )
+      )
+    )
 
     const altNameSeen = new Set<string>()
     const altNames: string[] = []
@@ -319,6 +430,7 @@ export function buildRouteSearchIndex(
       route: first.route,
       region: String(first.region ?? '').trim(),
       operators,
+      routeGroupKey: String(first.routeGroupKey ?? '').trim(),
       origin: canonical.origin,
       destination: canonical.destination,
       stopIds,
@@ -565,7 +677,13 @@ export function countRoutesByStopName(
     if (!stopId) continue
     const key = nameByStopId.get(stopId)
     if (!key) continue
-    const routeKey = canonicalRouteSearchKey(rs.co, rs.route, rs.region)
+    const routeKey = canonicalRouteSearchKey(
+      rs.co,
+      rs.route,
+      rs.region,
+      (rs as { operators?: string[] }).operators ?? [rs.co],
+      (rs as { routeGroupKey?: string }).routeGroupKey
+    )
     let set = byName.get(key)
     if (!set) {
       set = new Set()
@@ -621,6 +739,9 @@ export function getKeyStops(
   if (k <= 0) return []
 
   const skip = new Set<string>()
+  // Skip only the canonical termini. Short-working termini stay in
+  // `altNames` for search, but they are valid interior via stops for the
+  // full-length variant and must not vanish from the via line.
   for (const field of ['origin', 'destination'] as const) {
     for (const name of Object.values(entry[field])) {
       const lowered = String(name ?? '')
@@ -629,7 +750,6 @@ export function getKeyStops(
       if (lowered) skip.add(lowered)
     }
   }
-  for (const name of entry.altNames) skip.add(name)
 
   // Interior window with an end margin so picks stay clear of the
   // termini. Indices are positions in the single-direction via list.

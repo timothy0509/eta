@@ -5,6 +5,7 @@
  * - public/headway/headway.json  (per-variant headway windows + service spans)
  * - public/headway/manifest.json (datasetDate, fetchedAt, routes, windows)
  * - public/fares/fares.json      (per-variant origin/destination fare matrix)
+ * - public/gtfs/joint-routes.json (joint route numbers from routes.txt agencies)
  *
  * Runs as a prebuild/predev step:
  * - skips the rewrite when DATA_LAST_UPDATED_DATE.csv still matches the
@@ -130,6 +131,8 @@ const MANIFEST_PATH = join(OUT_DIR, 'manifest.json')
 const OPERATORS_PATH = join(REPO_ROOT, 'lib', 'eta', 'gtfs', 'operators.json')
 const FARES_DIR = join(REPO_ROOT, 'public', 'fares')
 const FARES_PATH = join(FARES_DIR, 'fares.json')
+const GTFS_OUT_DIR = join(REPO_ROOT, 'public', 'gtfs')
+const JOINT_PATH = join(GTFS_OUT_DIR, 'joint-routes.json')
 
 const GTFS_FILES = [
   'routes.txt',
@@ -161,6 +164,39 @@ const AGENCY_TO_CO = {
 }
 
 const DAY_TYPES = ['weekday', 'saturday', 'sunday', 'holiday']
+
+/**
+ * Collect jointly operated route numbers from routes.txt agency_ids like
+ * KMB+CTB and LWB+CTB. Output is keyed by route short name because the
+ * runtime matches app route rows by number plus operator set.
+ */
+function buildJointRoutes(routes) {
+  const out = {}
+  for (const r of routes) {
+    const agency = (r.agency_id || '').trim()
+    if (!agency.includes('+')) continue
+    const short = (r.route_short_name || '').trim().toUpperCase()
+    if (!short) continue
+    const cos = []
+    for (const token of agency.split('+')) {
+      const co = AGENCY_TO_CO[token.trim().toUpperCase()]
+      if (co && !cos.includes(co)) cos.push(co)
+    }
+    if (cos.length < 2) continue
+    const existing = out[short]
+    if (existing) {
+      existing.operators = [...new Set([...existing.operators, ...cos])].sort()
+      if (!existing.longName) existing.longName = (r.route_long_name || '').trim()
+    } else {
+      out[short] = {
+        operators: [...cos].sort(),
+        agency,
+        longName: (r.route_long_name || '').trim(),
+      }
+    }
+  }
+  return out
+}
 
 function log(msg) {
   console.log(`[fetch-headway] ${msg}`)
@@ -1496,6 +1532,7 @@ function buildSnapshot(files, appStops) {
     totalWindows,
     lwbRoutes: [...lwbShortNames].sort(),
     fares: fares.variants,
+    jointRoutes: buildJointRoutes(routes),
   }
 }
 
@@ -1598,7 +1635,15 @@ function buildSample() {
     (sum, v) => sum + Object.values(v.headway).reduce((n, list) => n + list.length, 0),
     0
   )
-  return { variants, holidays, totalWindows, lwbRoutes: [], fares: {}, sample: true }
+  return {
+    variants,
+    holidays,
+    totalWindows,
+    lwbRoutes: [],
+    fares: {},
+    jointRoutes: {},
+    sample: true,
+  }
 }
 
 async function main() {
@@ -1618,7 +1663,8 @@ async function main() {
     existsSync(HEADWAY_PATH) &&
     existsSync(OPERATORS_PATH) &&
     existsSync(FARES_PATH) &&
-    Number(manifest?.fares ?? 0) > 0
+    Number(manifest?.fares ?? 0) > 0 &&
+    existsSync(JOINT_PATH)
   ) {
     log(`snapshot already at revision ${datasetDate}, skipping`)
     return
@@ -1674,6 +1720,12 @@ async function main() {
       fares: fareCount,
       source,
     }) + '\n'
+  const jointRoutes = snapshot.jointRoutes ?? {}
+  const jointJson =
+    JSON.stringify({
+      updated,
+      routes: jointRoutes,
+    }) + '\n'
   await writeAtomic(HEADWAY_PATH, headwayJson)
   if (faresJson) {
     await writeAtomic(FARES_PATH, faresJson)
@@ -1684,11 +1736,13 @@ async function main() {
   const operatorsJson =
     JSON.stringify({ updated, lwbRoutes: snapshot.lwbRoutes ?? [] }, null, 2) + '\n'
   await writeAtomic(OPERATORS_PATH, operatorsJson)
+  await writeAtomic(JOINT_PATH, jointJson)
   log(
     `wrote ${HEADWAY_PATH} (${headwayJson.length} bytes), ` +
       `${faresJson ? `${FARES_PATH} (${faresJson.length} bytes)` : 'existing fares.json'}, ` +
-      `${MANIFEST_PATH} (${manifestJson.length} bytes) and ${OPERATORS_PATH} ` +
-      `(${snapshot.lwbRoutes?.length ?? 0} LWB routes) source=${source} updated=${updated}`
+      `${MANIFEST_PATH} (${manifestJson.length} bytes), ${OPERATORS_PATH} ` +
+      `(${snapshot.lwbRoutes?.length ?? 0} LWB routes) and ${JOINT_PATH} (${jointJson.length} bytes) ` +
+      `source=${source} updated=${updated} jointRoutes=${Object.keys(jointRoutes).length}`
   )
 }
 

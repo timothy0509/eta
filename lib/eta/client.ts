@@ -58,13 +58,14 @@ function normalizeFareVariantKey(variant: KmbFareVariant) {
   const dir = String(variant.dir ?? '')
   const serviceType = String(variant.serviceType ?? '')
   const gtfsId = String(variant.gtfsId ?? '').trim()
+  const jointVariantKey = String(variant.jointVariantKey ?? '').trim()
   const stopId = String(variant.stopId ?? '').trim()
   const destCandidates = (variant.destCandidates ?? [])
     .map((dest) => String(dest ?? '').trim())
     .filter(Boolean)
     .sort()
     .join('~')
-  return `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${stopId}|${destCandidates}`
+  return `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${jointVariantKey}|${stopId}|${destCandidates}`
 }
 
 function isAbortError(error: unknown): boolean {
@@ -179,6 +180,16 @@ export type KmbRouteStopLite = {
   gtfsId: string
   /** Region group `co|ROUTE|n` matching the index. Empty when unknown (legacy). */
   region: string
+  /** Operators serving this variant. More than one means jointly operated. */
+  operators?: string[]
+  /** Route-level key for a jointly operated route number, including specials. */
+  routeGroupKey?: string
+  /** Shared identity for one physical variant across its operators. */
+  jointVariantKey?: string
+  /** Shared identity for one paired physical stop across its operators. */
+  jointGroupKey?: string
+  /** Other operators' stop ids at the same physical stop. */
+  siblingStopIds?: string[]
 }
 
 export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
@@ -199,6 +210,11 @@ export async function fetchKmbRouteStops(): Promise<KmbRouteStopLite[]> {
           stopId: entry.stop,
           gtfsId: String(entry.gtfsId ?? '').trim(),
           region: String(entry.region ?? '').trim(),
+          operators: entry.operators ?? [entry.co ?? 'kmb'],
+          routeGroupKey: String(entry.routeGroupKey ?? '').trim(),
+          jointVariantKey: String(entry.jointVariantKey ?? '').trim(),
+          jointGroupKey: String(entry.jointGroupKey ?? '').trim(),
+          siblingStopIds: entry.siblingStopIds ?? [],
         }))
         .filter((entry) => entry.route && entry.stopId)
     },
@@ -215,6 +231,12 @@ export type KmbRouteInfoLite = {
   gtfsId: string
   /** Region group `co|ROUTE|n` matching the index. Empty when unknown (legacy). */
   region: string
+  /** Operators serving this variant. More than one means jointly operated. */
+  operators?: string[]
+  /** Route-level key for a jointly operated route number, including specials. */
+  routeGroupKey?: string
+  /** Shared identity for one physical variant across its operators. */
+  jointVariantKey?: string
   origin: {
     en: string
     tc: string
@@ -248,6 +270,9 @@ export async function fetchKmbRouteInfo(params: {
     serviceType: String(info.service_type),
     gtfsId: String(info.gtfsId ?? '').trim(),
     region: String(info.region ?? '').trim(),
+    operators: info.operators ?? [info.co ?? params.co ?? 'kmb'],
+    routeGroupKey: String(info.routeGroupKey ?? '').trim(),
+    jointVariantKey: String(info.jointVariantKey ?? '').trim(),
     origin: {
       en: (info.orig_en ?? '').trim(),
       tc: (info.orig_tc ?? '').trim(),
@@ -283,12 +308,18 @@ export type KmbStopEtasResponse = {
 
 export async function fetchKmbStopEtas(
   stopIds: string[],
-  options?: { routeFilter?: string; signal?: AbortSignal; includeFares?: boolean }
+  options?: {
+    routeFilter?: string
+    signal?: AbortSignal
+    includeFares?: boolean
+    preferredJointOperator?: string | null
+  }
 ): Promise<KmbStopEtasResponse> {
   const keyPayload = {
     stopIds: normalizeStopIdsKey(stopIds),
     routeFilter: normalizeRouteFilterKey(options?.routeFilter),
     includeFares: options?.includeFares ?? false,
+    preferredJointOperator: options?.preferredJointOperator ?? null,
   }
 
   const key = `kmb:stop-etas:${JSON.stringify(keyPayload)}`
@@ -299,6 +330,7 @@ export async function fetchKmbStopEtas(
       fetchKmbStopEtasDirect(stopIds, {
         routeFilter: options?.routeFilter,
         includeFares: options?.includeFares ?? false,
+        preferredJointOperator: options?.preferredJointOperator,
         signal: options?.signal,
       }),
     { signal: options?.signal }
@@ -315,6 +347,8 @@ export type KmbFareVariant = {
   serviceType: string
   /** Region discriminator for same-number routes (GMB HKI/Kowloon/NT). Empty when unknown. */
   gtfsId?: string
+  /** Joint scope matching the grouped display base key (`jointv:`/`jointc:`). */
+  jointVariantKey?: string
   stopId: string
   destCandidates?: string[]
 }

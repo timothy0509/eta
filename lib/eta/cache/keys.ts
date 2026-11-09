@@ -1,14 +1,24 @@
 export const ETA_DB_CACHE_KEY = 'hk-bus-eta:db'
 export const ETA_DB_MD5_KEY = 'hk-bus-eta:md5'
-// v3: indexes carry the LWB company split (operator classification from TD GTFS).
-export const ETA_DB_INDEX_KEY = 'hk-bus-eta:db-index:v3'
-export const KMB_STOPS_CACHE_KEY = 'kmb:stops:v3'
-export const KMB_STOPS_MAPPED_CACHE_KEY = 'kmb:stops:mapped:v2'
-export const KMB_ROUTE_STOPS_MAPPED_CACHE_KEY = 'kmb:route-stops:mapped:v2'
-export const KMB_ROUTES_MAPPED_CACHE_KEY = 'kmb:routes:mapped:v2'
+// v6: indexes carry both the LWB company split (TD GTFS operator
+// classification) and the joint KMB/CTB route merge. Bumped past both v3
+// (main) and v5 (PR) so neither stale shape is read.
+export const ETA_DB_INDEX_KEY = 'hk-bus-eta:db-index:v6'
+export const KMB_STOPS_CACHE_KEY = 'kmb:stops:v4'
+export const KMB_STOPS_MAPPED_CACHE_KEY = 'kmb:stops:mapped:v3'
+// Direct-layer raw caches (lib/eta/direct/kmb.ts). The client layer wraps
+// these into the `:mapped:` keys below, so both layers must bump together.
+export const KMB_ROUTE_STOPS_CACHE_KEY = 'kmb:route-stops:v4'
+export const KMB_ROUTES_CACHE_KEY = 'kmb:routes:v4'
+export const KMB_ROUTE_STOPS_MAPPED_CACHE_KEY = 'kmb:route-stops:mapped:v5'
+export const KMB_ROUTES_MAPPED_CACHE_KEY = 'kmb:routes:mapped:v5'
 
-export function kmbStopEtaKey(stopId: string): string {
-  return `stop-eta:${String(stopId ?? '').trim()}`
+export function kmbStopEtaKey(stopId: string, preferredOperator?: string | null): string {
+  const stop = String(stopId ?? '').trim()
+  const preferred = String(preferredOperator ?? '')
+    .trim()
+    .toLowerCase()
+  return preferred ? `stop-eta:${stop}:${preferred}` : `stop-eta:${stop}`
 }
 
 export function mtrScheduleKey(params: { line: string; sta: string; lang: string }): string {

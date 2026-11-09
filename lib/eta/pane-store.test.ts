@@ -138,6 +138,23 @@ describe('setKmbRouteStops', () => {
     usePaneStore.getState().setKmbRouteStops([makeRouteStop('S1', { seq: 2 })])
     expect(usePaneStore.getState().kmbRouteStops).not.toBe(first)
   })
+
+  it('replaces when joint metadata arrives for the same stop row', () => {
+    usePaneStore.getState().setKmbRouteStops([makeRouteStop('S1')])
+    const first = usePaneStore.getState().kmbRouteStops
+    usePaneStore.getState().setKmbRouteStops([
+      makeRouteStop('S1', {
+        operators: ['kmb', 'ctb'],
+        routeGroupKey: 'joint|1A',
+        jointVariantKey: 'jointv:1',
+        jointGroupKey: 'jointv:1:0',
+        siblingStopIds: ['S2'],
+      }),
+    ])
+    const next = usePaneStore.getState().kmbRouteStops
+    expect(next).not.toBe(first)
+    expect(next[0]?.jointVariantKey).toBe('jointv:1')
+  })
 })
 
 describe('setKmbPaneState', () => {

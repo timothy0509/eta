@@ -424,6 +424,14 @@ const settings: Record<string, TranslationEntry> = {
     tc: '等候時結果自動更新的頻率。關閉則暫停背景更新。',
     sc: '等候时结果自动更新的频率。关闭则暂停后台更新。',
   },
+  routeInfoTitle: { en: 'Route information', tc: '路線資料', sc: '路线资料' },
+  routeInfoDesc: {
+    en: 'Choose which operator’s route details to show for jointly operated routes.',
+    tc: '選擇聯合營運路線顯示哪間營辦商的路線資料。',
+    sc: '选择联合营运路线显示哪间营办商的路线资料。',
+  },
+  routeInfoKmb: { en: 'Prefer KMB', tc: '優先九巴', sc: '优先九巴' },
+  routeInfoCtb: { en: 'Prefer Citybus', tc: '優先城巴', sc: '优先城巴' },
   nearbyDesc: {
     en: 'Default search distance for the Nearby tab.',
     tc: '「附近」分頁的預設搜尋距離。',

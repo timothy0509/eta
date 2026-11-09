@@ -36,18 +36,24 @@ function hasValidEta(items: KmbEtaEntryWithLeg[]): boolean {
 }
 
 export function buildDefaultKey(entry: KmbEtaEntryWithLeg): string {
-  const co = String(entry.co ?? 'kmb')
+  // Joint rows group under the primary operator so both operators' ETAs
+  // share one row. The actual operator stays on `entry.co` for the chip.
+  const co = String(entry.groupCo ?? entry.co ?? 'kmb')
   const route = (entry.route ?? '').toUpperCase()
   const dir = String(entry.dir ?? '')
   const serviceType = String(entry.service_type ?? '')
   // Region-aware: same number in different regions (GMB HKI/Kowloon/NT)
   // must not merge. The gtfsId scope segment is present only when upstream
   // provides one, so KMB rows keep their exact legacy 5-part shape while
-  // GMB rows gain a discriminator. baseKey is everything but the leg.
+  // GMB rows gain a discriminator. Joint cross-pairs (101R-style two
+  // entries) may carry different gtfsIds, so prefer the joint variant key
+  // as the scope when present. baseKey is everything but the leg.
+  const jointVariantKey = String(entry.jointVariantKey ?? '').trim()
   const gtfsId = String(entry.gtfsId ?? '').trim()
+  const scope = jointVariantKey || gtfsId
   const legSuffix = entry.leg ?? '_'
-  return gtfsId
-    ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${legSuffix}`
+  return scope
+    ? `${co}|${route}|${dir}|${serviceType}|${scope}|${legSuffix}`
     : `${co}|${route}|${dir}|${serviceType}|${legSuffix}`
 }
 
@@ -78,7 +84,13 @@ export function groupEtasByVariant(
   }
 
   const groups = Array.from(byVariant.entries()).map(([key, items]) => {
-    const sorted = [...items].sort((a, b) => a.eta_seq - b.eta_seq)
+    // Joint rows mix two operators, whose own eta_seq values restart. Sort
+    // by actual arrival time so the displayed ordinals follow the merged list.
+    const timeOf = (entry: KmbEtaEntryWithLeg) => {
+      const parsed = Date.parse(entry.eta)
+      return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
+    }
+    const sorted = [...items].sort((a, b) => timeOf(a) - timeOf(b) || a.eta_seq - b.eta_seq)
     const hasEta = hasValidEta(sorted)
 
     const baseKey = baseKeyOfKey(key)

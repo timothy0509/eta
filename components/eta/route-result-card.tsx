@@ -87,7 +87,8 @@ export function RouteResultCard({
       <span className="flex w-full items-center gap-2">
         {/* Joint badge follows the primary operator preference, so the same
         joint route can recolor when the preference flips. The left-edge
-        strip names the operator instead of a text pill. */}
+        strip shows the operator color instead of a text pill; the sr-only
+        span below keeps the operator name for assistive tech. */}
         <RouteBadge route={entry.route} company={entry.co} size="lg" />
         <span className="sr-only">{operatorName}</span>
         <span className="block min-w-0 flex-1 overflow-hidden">

@@ -82,6 +82,59 @@ export function formatFareHkd(hkd: unknown): string | null {
   return `HK$ ${hkd.toFixed(1)}`
 }
 
+let exactHmsFormatter: Intl.DateTimeFormat | null = null
+
+function getExactHmsFormatter(): Intl.DateTimeFormat {
+  if (!exactHmsFormatter) {
+    exactHmsFormatter = new Intl.DateTimeFormat('en-HK', {
+      timeZone: 'Asia/Hong_Kong',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+  }
+  return exactHmsFormatter
+}
+
+/** Format a Date as hh:mm:ss in Hong Kong time. */
+export function formatExactHms(date: Date): string {
+  return getExactHmsFormatter().format(date)
+}
+
+/** Parse an ISO ETA string and format it as hh:mm:ss (HK time). Null when invalid. */
+export function formatIsoToExactHms(iso: string): string | null {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return formatExactHms(date)
+}
+
+/**
+ * Format an MTR `time` field as hh:mm:ss (HK time). The API returns
+ * `YYYY-MM-DD HH:mm:ss`, which `new Date` cannot parse reliably, so the
+ * space form is interpreted as Hong Kong wall-clock time first.
+ */
+export function formatMtrTimeToExactHms(time: unknown): string | null {
+  if (typeof time !== 'string') return null
+  const raw = time.trim()
+  if (!raw) return null
+  const hkWallClock = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (hkWallClock) {
+    const [, y, mo, d, h, mi, s] = hkWallClock
+    const date = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s ?? '00'}+08:00`)
+    if (Number.isNaN(date.getTime())) return null
+    return formatExactHms(date)
+  }
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return null
+  return formatExactHms(date)
+}
+
+/** Minutes from now rendered as the arrival wall-clock hh:mm:ss (HK time). */
+export function formatMinutesFromNowToExactHms(minutes: number, now: number = Date.now()): string {
+  return formatExactHms(new Date(now + minutes * 60_000))
+}
+
 /** Minutes since midnight (may exceed 1440 for after-midnight windows) to HH:MM. */
 export function minsToDisplay(mins: number): string {
   const normalized = ((mins % 1440) + 1440) % 1440

@@ -473,9 +473,9 @@ const settings: Record<string, TranslationEntry> = {
   cacheCleared: { en: 'Cache cleared.', tc: '快取已清除。', sc: '缓存已清除。' },
   resetSettings: { en: 'Reset all settings', tc: '重設所有設定', sc: '重置所有设定' },
   resetSettingsDesc: {
-    en: 'Restores appearance, language, refresh, radius and timetable defaults. Saved stops stay.',
-    tc: '還原外觀、語言、刷新、半徑及時間表預設值，收藏不受影響。',
-    sc: '还原外观、语言、刷新、半径及时间表默认值，收藏不受影响。',
+    en: 'Restores appearance, language, refresh, radius, timetable and ETA display defaults. Saved stops stay.',
+    tc: '還原外觀、語言、刷新、半徑、時間表及到站顯示預設值，收藏不受影響。',
+    sc: '还原外观、语言、刷新、半径、时间表及到站显示默认值，收藏不受影响。',
   },
   settingsReset: {
     en: 'Settings reset to defaults.',
@@ -491,6 +491,14 @@ const settings: Record<string, TranslationEntry> = {
   timetableLevel: { en: 'Level {n} of 5', tc: '第 {n} 級（共 5 級）', sc: '第 {n} 级（共 5 级）' },
   timetableLeast: { en: 'Least', tc: '最簡', sc: '最简' },
   timetableMost: { en: 'Most detailed', tc: '最詳細', sc: '最详细' },
+  etaDisplayTitle: { en: 'ETA display', tc: '到站顯示', sc: '到站显示' },
+  etaDisplayDesc: {
+    en: 'Countdown shows minutes away. Exact time shows the predicted arrival as hh:mm:ss.',
+    tc: '倒數顯示距離到站分鐘數，準確時間顯示預計到站的 hh:mm:ss。',
+    sc: '倒数显示距离到站分钟数，准确时间显示预计到站的 hh:mm:ss。',
+  },
+  etaDisplayCountdown: { en: 'Countdown', tc: '倒數', sc: '倒数' },
+  etaDisplayExact: { en: 'Exact time', tc: '準確時間', sc: '准确时间' },
   about: { en: 'About', tc: '關於', sc: '关于' },
   dataSources: { en: 'Data sources', tc: '資料來源', sc: '资料来源' },
   dataSourcesNote: {

@@ -35,6 +35,7 @@ describe('SettingsView', () => {
       lang: 'en',
       autoRefreshSeconds: 15,
       nearbyRadiusKm: 2,
+      etaDisplayFormat: 'countdown',
       favorites: [],
       favoritesGroups: [],
       recents: [],
@@ -62,6 +63,16 @@ describe('SettingsView', () => {
     expect(screen.queryByRole('heading', { name: 'Appearance' })).toBeNull()
     expect(document.body.textContent).not.toMatch(/settings\.[a-zA-Z]+/)
     expect(document.body.textContent).not.toMatch(/common\.[a-zA-Z]+/)
+  })
+
+  it('switches the ETA display format between countdown and exact time', () => {
+    renderSettings()
+    fireEvent.click(screen.getByRole('tab', { name: 'ETA display' }))
+    expect(screen.getByRole('heading', { name: 'ETA display' })).not.toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'Exact time' }))
+    expect(useAppStore.getState().etaDisplayFormat).toBe('exact')
+    fireEvent.click(screen.getByRole('button', { name: 'Countdown' }))
+    expect(useAppStore.getState().etaDisplayFormat).toBe('countdown')
   })
 
   it('changes the persisted nearby radius', () => {

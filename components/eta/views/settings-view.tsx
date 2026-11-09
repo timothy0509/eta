@@ -4,6 +4,7 @@ import {
   Bookmark,
   Bus,
   CalendarDays,
+  Clock,
   Database,
   Download,
   Globe,
@@ -145,6 +146,8 @@ export function SettingsView({ lang }: Props) {
   const setTimetableDetail = useAppStore((s) => s.setTimetableDetail)
   const jointRouteInfoOperator = useAppStore((s) => s.jointRouteInfoOperator)
   const setJointRouteInfoOperator = useAppStore((s) => s.setJointRouteInfoOperator)
+  const etaDisplayFormat = useAppStore((s) => s.etaDisplayFormat)
+  const setEtaDisplayFormat = useAppStore((s) => s.setEtaDisplayFormat)
   const resetPrefs = useAppStore((s) => s.resetPrefs)
   const favorites = useAppStore((s) => s.favorites)
   const recents = useAppStore((s) => s.recents)
@@ -216,6 +219,7 @@ export function SettingsView({ lang }: Props) {
     { id: 'settings-appearance', icon: Palette, label: t('common.appearance') },
     { id: 'settings-language', icon: Globe, label: t('common.language') },
     { id: 'settings-refresh', icon: Timer, label: t('common.autoRefresh') },
+    { id: 'settings-eta-display', icon: Clock, label: t('settings.etaDisplayTitle') },
     { id: 'settings-route-info', icon: Bus, label: t('settings.routeInfoTitle') },
     { id: 'settings-nearby', icon: MapPin, label: t('common.nearby') },
     { id: 'settings-timetable', icon: CalendarDays, label: t('settings.timetableTitle') },
@@ -372,6 +376,37 @@ export function SettingsView({ lang }: Props) {
                     {s === 0 ? t('common.off') : `${s}s`}
                   </button>
                 ))}
+              </div>
+            </Section>
+          )}
+          {activeId === 'settings-eta-display' && (
+            <Section
+              icon={Clock}
+              title={t('settings.etaDisplayTitle')}
+              desc={t('settings.etaDisplayDesc')}
+            >
+              <div className="flex flex-wrap gap-2">
+                {(['countdown', 'exact'] as const).map((format) => {
+                  const active = etaDisplayFormat === format
+                  return (
+                    <button
+                      key={format}
+                      type="button"
+                      onClick={() => setEtaDisplayFormat(format)}
+                      aria-pressed={active}
+                      className={cn(
+                        'm3-label-lg min-h-[44px] rounded-full px-5 py-2 shadow-sm transition-colors',
+                        active
+                          ? 'bg-primary-container text-on-primary-container'
+                          : 'bg-surface-container-high text-on-surface-variant hover:bg-surface-container hover:text-on-surface'
+                      )}
+                    >
+                      {format === 'countdown'
+                        ? t('settings.etaDisplayCountdown')
+                        : t('settings.etaDisplayExact')}
+                    </button>
+                  )
+                })}
               </div>
             </Section>
           )}

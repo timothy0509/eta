@@ -14,14 +14,17 @@ import {
   getLrtDisplayTime,
   groupLrtEntriesByRoute,
   isLrtArrivingText,
+  parseLrtMinutes,
   type LrtRouteGroup,
   type LrtRouteListEntry,
 } from '@/lib/eta/lrt-eta-groups'
 import { getLineColor } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLangZh } from '@/lib/eta/pick-lang'
+import { formatMinutesFromNowToExactHms } from '@/lib/eta/format'
 import type { LrtScheduleResponse } from '@/lib/eta/direct/lrt'
-import type { UiLanguage } from '@/lib/eta/types'
+import type { EtaDisplayFormat, UiLanguage } from '@/lib/eta/types'
+import { useAppStore } from '@/lib/store'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 
@@ -38,6 +41,23 @@ function formatArrivalDeparture(code: string, t: (key: string) => string) {
 
 function isEntryArriving(entry: LrtRouteListEntry, lang: UiLanguage): boolean {
   return entry.arrival_departure === 'A' || isLrtArrivingText(getLrtDisplayTime(entry, lang))
+}
+
+/**
+ * Exact hh:mm:ss arrival for an LRT entry. The schedule only carries
+ * minute granularity, so the wall-clock is now plus those minutes.
+ * Null for arriving entries and entries without ETA minutes.
+ */
+function formatExactForLrtEntry(
+  entry: LrtRouteListEntry,
+  lang: UiLanguage,
+  format: EtaDisplayFormat,
+  now: number = Date.now()
+): string | null {
+  if (format !== 'exact' || isEntryArriving(entry, lang)) return null
+  const minutes = parseLrtMinutes(getLrtDisplayTime(entry, lang))
+  if (minutes === null || minutes <= 0) return null
+  return formatMinutesFromNowToExactHms(minutes, now)
 }
 
 function formatNoScheduledText(t: (key: string) => string) {
@@ -61,6 +81,7 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   onToggleExpand?: (key: string) => void
 }) {
   const { t, tWithParams } = useTranslations(lang)
+  const etaFormat = useAppStore((s) => s.etaDisplayFormat)
   const { routeNo, items, hasEta } = group
   const first = items[0]
   const routeColor = getLineColor(routeNo)
@@ -71,7 +92,9 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   const onToggle = onToggleExpand ? () => onToggleExpand(`${platformId}:${group.key}`) : undefined
 
   const firstArriving = first ? isEntryArriving(first, lang) : false
-  const firstTimeText = first ? getLrtDisplayTime(first, lang) : '—'
+  const firstCountdown = first ? getLrtDisplayTime(first, lang) : '—'
+  const firstExact = first ? formatExactForLrtEntry(first, lang, etaFormat) : null
+  const firstTimeText = firstExact ?? firstCountdown
 
   const firstEtaNode = firstArriving ? (
     <span className="bg-primary-container text-on-primary-container m3-label-md sm:m3-label-lg font-tabular flex shrink-0 items-center gap-1.5 rounded-full px-2 py-0.5 font-semibold sm:px-2.5">
@@ -152,7 +175,8 @@ const LrtRouteDepartureRow = React.memo(function LrtRouteDepartureRow({
   const visibleItems = items.slice(0, 3)
 
   const etaTile = (entry: LrtRouteListEntry, entryIdx: number) => {
-    const timeText = getLrtDisplayTime(entry, lang)
+    const timeText =
+      formatExactForLrtEntry(entry, lang, etaFormat) ?? getLrtDisplayTime(entry, lang)
     const arriving = isEntryArriving(entry, lang)
     const isFirst = entryIdx === 0
 

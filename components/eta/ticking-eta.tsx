@@ -3,10 +3,11 @@
 import * as React from 'react'
 
 import { EtaValue, LivePulse } from '@/components/m3/motion'
-import { formatRelativeMinutesWithDrift } from '@/lib/eta/format'
+import { formatIsoToExactHms, formatRelativeMinutesWithDrift } from '@/lib/eta/format'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickSoonestIsoEta } from '@/lib/eta/pick-soonest-eta'
-import type { UiLanguage } from '@/lib/eta/types'
+import type { EtaDisplayFormat, UiLanguage } from '@/lib/eta/types'
+import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 /**
@@ -84,6 +85,7 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   variant = 'header',
   className,
   active = true,
+  format: formatProp,
 }: {
   eta?: string | null
   dataTimestamp?: string | null
@@ -92,13 +94,20 @@ export const TickingKmbMinutes = React.memo(function TickingKmbMinutes({
   className?: string
   /** False inside collapsed panels: render the value without ticking. */
   active?: boolean
+  /** Overrides the stored ETA display format, mainly for tests. */
+  format?: EtaDisplayFormat
 }) {
   const now = useSharedTick(active)
   const { t, tWithParams } = useTranslations(lang)
+  const storedFormat = useAppStore((s) => s.etaDisplayFormat)
+  const format = formatProp ?? storedFormat
   const minutes =
     eta != null ? formatRelativeMinutesWithDrift(eta, dataTimestamp ?? undefined, now) : null
   const arriving = minutes !== null && !Number.isNaN(minutes) && minutes <= 0
-  const display = formatMinutesDisplay(minutes, t, tWithParams)
+  // Exact mode shows the arrival wall-clock; arriving stays on the Now pill
+  // and unparseable ETAs fall back to the countdown.
+  const exact = format === 'exact' && eta != null ? formatIsoToExactHms(eta) : null
+  const display = exact && !arriving ? exact : formatMinutesDisplay(minutes, t, tWithParams)
 
   if (variant === 'plain') {
     return (
@@ -143,13 +152,18 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
   etas,
   lang,
   className,
+  format: formatProp,
 }: {
   etas: Array<{ eta?: string; data_timestamp?: string }>
   lang: UiLanguage
   className?: string
+  /** Overrides the stored ETA display format, mainly for tests. */
+  format?: EtaDisplayFormat
 }) {
   const now = useSharedTick()
   const { t, tWithParams } = useTranslations(lang)
+  const storedFormat = useAppStore((s) => s.etaDisplayFormat)
+  const format = formatProp ?? storedFormat
   const soonest = pickSoonestIsoEta(etas, now)
   const minutes = soonest.minutes
 
@@ -158,7 +172,13 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
   }
 
   const isArriving = soonest.arriving || minutes <= 0
-  const display = isArriving ? t('common.now') : tWithParams('common.minutes', { count: minutes })
+  const exact = format === 'exact' && soonest.etaIso ? formatIsoToExactHms(soonest.etaIso) : null
+  const display =
+    exact && !isArriving
+      ? exact
+      : isArriving
+        ? t('common.now')
+        : tWithParams('common.minutes', { count: minutes })
 
   if (isArriving) {
     return (

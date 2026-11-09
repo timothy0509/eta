@@ -8,18 +8,23 @@ import { staggerClassForIndex } from '@/components/eta/stagger-list'
 import { EtaValue, LivePulse } from '@/components/m3/motion'
 import { useTranslations } from '@/lib/eta/i18n'
 import type { UiLanguage } from '@/lib/eta/types'
+import { useAppStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 
 export function SoonestEtaPill({
   minutes,
   lang,
   arriving,
+  exactText,
 }: {
   minutes: number | null
   lang: UiLanguage
   arriving?: boolean
+  /** hh:mm:ss arrival shown instead of the countdown when the exact format is on. */
+  exactText?: string | null
 }) {
   const { t } = useTranslations(lang)
+  const etaFormat = useAppStore((s) => s.etaDisplayFormat)
 
   if (minutes === null) {
     return <span className="text-on-surface-variant m3-label-md">—</span>
@@ -27,7 +32,8 @@ export function SoonestEtaPill({
 
   const isArriving = arriving ?? minutes <= 0
 
-  const display = isArriving ? t('common.now') : `${minutes} ${t('common.minutesUnit')}`
+  const exact = etaFormat === 'exact' && !isArriving ? exactText : null
+  const display = exact ?? (isArriving ? t('common.now') : `${minutes} ${t('common.minutesUnit')}`)
 
   if (isArriving) {
     return (

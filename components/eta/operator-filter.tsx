@@ -45,7 +45,7 @@ export function OperatorFilter({ operators, total, value, onChange, lang }: Prop
 
   const triggerLabel = allActive
     ? t('common.operator')
-    : tWithParams('kmb.operatorsSelected', { count: selected.size })
+    : tWithParams('common.operatorFilterActive', { count: selected.size })
 
   return (
     <Popover>
@@ -63,7 +63,10 @@ export function OperatorFilter({ operators, total, value, onChange, lang }: Prop
         >
           <ListFilter className="h-5 w-5" aria-hidden />
           {selected.size > 0 && (
-            <span className="bg-primary text-on-primary font-tabular m3-label-sm absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 font-semibold">
+            <span
+              aria-hidden="true"
+              className="bg-primary text-on-primary font-tabular m3-label-sm absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 font-semibold"
+            >
               {selected.size}
             </span>
           )}
@@ -119,7 +122,7 @@ export function OperatorFilter({ operators, total, value, onChange, lang }: Prop
                     className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/10"
                     style={{ backgroundColor: getOperatorColor(op.code) }}
                   />
-                  <span className="m3-label-lg min-w-0 flex-1 truncate uppercase">
+                  <span className="m3-label-lg min-w-0 flex-1 truncate">
                     {formatOperatorCode(op.code)}
                   </span>
                   <span className="text-on-surface-variant m3-label-sm font-tabular">

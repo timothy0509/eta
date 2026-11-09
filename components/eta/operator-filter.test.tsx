@@ -59,8 +59,8 @@ describe('OperatorFilter', () => {
     const { getByRole, getAllByRole, unmount } = render(
       <Harness initial={['kmb']} onChangeSpy={onChange} />
     )
-    expect(getByRole('button', { name: '1 operators' })).not.toBeNull()
-    fireEvent.click(getByRole('button', { name: '1 operators' }))
+    expect(getByRole('button', { name: 'Operator: 1 selected' })).not.toBeNull()
+    fireEvent.click(getByRole('button', { name: 'Operator: 1 selected' }))
     // Unchecking the active operator returns to All (empty value).
     fireEvent.click(getAllByRole('checkbox')[1]!)
     expect(onChange).toHaveBeenCalledWith([])

@@ -519,19 +519,25 @@ export async function fetchKmbStopEtas(
         dir: string
         serviceType: string
         gtfsId: string
+        jointVariantKey: string
         stopId: string
         destCandidates: string[]
       }
     >()
     for (const [stopId, entries] of Object.entries(byStopId)) {
       for (const entry of entries) {
-        const co = String(entry.co ?? 'kmb')
+        // Joint rows group under the primary operator with the joint scope,
+        // so key fares by the display base key instead of the actual
+        // operator/gtfsId pair that never matches it.
+        const co = String(entry.groupCo ?? entry.co ?? 'kmb')
         const route = String(entry.route ?? '').toUpperCase()
         const dir = String(entry.dir ?? '')
         const serviceType = String(entry.service_type ?? '')
         const gtfsId = String(entry.gtfsId ?? '').trim()
-        const vKey = gtfsId
-          ? `${co}|${route}|${dir}|${serviceType}|${gtfsId}`
+        const jointVariantKey = String(entry.jointVariantKey ?? '').trim()
+        const scope = jointVariantKey || gtfsId
+        const vKey = scope
+          ? `${co}|${route}|${dir}|${serviceType}|${scope}`
           : `${co}|${route}|${dir}|${serviceType}`
 
         if (fareVariants.has(vKey)) continue
@@ -539,7 +545,16 @@ export async function fetchKmbStopEtas(
         const destCandidates = [entry.dest_en, entry.dest_tc, entry.dest_sc]
           .filter(Boolean)
           .map(String)
-        fareVariants.set(vKey, { co, route, dir, serviceType, gtfsId, stopId, destCandidates })
+        fareVariants.set(vKey, {
+          co,
+          route,
+          dir,
+          serviceType,
+          gtfsId,
+          jointVariantKey,
+          stopId,
+          destCandidates,
+        })
       }
     }
 
@@ -580,6 +595,8 @@ export type KmbFareVariant = {
   dir: string
   serviceType: string
   gtfsId?: string
+  /** Joint scope matching the grouped display base key (`jointv:`/`jointc:`). */
+  jointVariantKey?: string
   stopId: string
   destCandidates?: string[]
 }
@@ -614,14 +631,17 @@ export async function fetchKmbFares(variants: KmbFareVariant[]): Promise<KmbFare
     getEtaDbIndexes(),
   ])
 
-  // Deduplicate by variant key
+  // Deduplicate by display key: joint rows share the joint scope under
+  // the grouping operator, so the stored key must match the grouped row.
   const uniqueVariants = new Map<string, KmbFareVariant>()
   for (const v of variants) {
     const co = String(v.co ?? 'kmb')
     const route = v.route.toUpperCase()
     const gtfsId = String(v.gtfsId ?? '').trim()
-    const vKey = gtfsId
-      ? `${co}|${route}|${v.dir}|${v.serviceType}|${gtfsId}`
+    const jointVariantKey = String(v.jointVariantKey ?? '').trim()
+    const scope = jointVariantKey || gtfsId
+    const vKey = scope
+      ? `${co}|${route}|${v.dir}|${v.serviceType}|${scope}`
       : `${co}|${route}|${v.dir}|${v.serviceType}`
     if (!uniqueVariants.has(vKey)) {
       uniqueVariants.set(vKey, v)

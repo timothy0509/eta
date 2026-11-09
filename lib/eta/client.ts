@@ -58,13 +58,14 @@ function normalizeFareVariantKey(variant: KmbFareVariant) {
   const dir = String(variant.dir ?? '')
   const serviceType = String(variant.serviceType ?? '')
   const gtfsId = String(variant.gtfsId ?? '').trim()
+  const jointVariantKey = String(variant.jointVariantKey ?? '').trim()
   const stopId = String(variant.stopId ?? '').trim()
   const destCandidates = (variant.destCandidates ?? [])
     .map((dest) => String(dest ?? '').trim())
     .filter(Boolean)
     .sort()
     .join('~')
-  return `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${stopId}|${destCandidates}`
+  return `${co}|${route}|${dir}|${serviceType}|${gtfsId}|${jointVariantKey}|${stopId}|${destCandidates}`
 }
 
 function isAbortError(error: unknown): boolean {
@@ -346,6 +347,8 @@ export type KmbFareVariant = {
   serviceType: string
   /** Region discriminator for same-number routes (GMB HKI/Kowloon/NT). Empty when unknown. */
   gtfsId?: string
+  /** Joint scope matching the grouped display base key (`jointv:`/`jointc:`). */
+  jointVariantKey?: string
   stopId: string
   destCandidates?: string[]
 }

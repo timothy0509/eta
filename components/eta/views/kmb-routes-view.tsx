@@ -1715,27 +1715,27 @@ export function KmbRoutesView({
         {!isRouteSelected ? (
           <div className="card-m3 p-4">
             <div className="m3-title-md mb-3">{t('common.routes')}</div>
-            <div className="relative">
-              <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
-              <Input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t('kmb.searchRouteNumberAndPlace')}
-                aria-label={t('kmb.searchBusRoutes')}
-                className="bg-surface-container h-12 rounded-full pr-10 pl-10"
-              />
-              {query.trim() !== '' && (
-                <button
-                  type="button"
-                  onClick={handleClearSearch}
-                  aria-label={t('kmb.clearSearch')}
-                  className="text-on-surface-variant hover:text-on-surface ui-press absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                >
-                  <X className="h-4 w-4" aria-hidden />
-                </button>
-              )}
-            </div>
-            <div className="mt-3">
+            <div className="flex items-center gap-2">
+              <div className="relative min-w-0 flex-1">
+                <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={t('kmb.searchRouteNumberAndPlace')}
+                  aria-label={t('kmb.searchBusRoutes')}
+                  className="bg-surface-container h-12 rounded-full pr-10 pl-10"
+                />
+                {query.trim() !== '' && (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    aria-label={t('kmb.clearSearch')}
+                    className="text-on-surface-variant hover:text-on-surface ui-press absolute top-1/2 right-2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                  >
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                )}
+              </div>
               <OperatorFilter
                 operators={operatorOptions}
                 total={searchIndex.length}
@@ -2066,8 +2066,8 @@ export function KmbRoutesView({
             {!isRouteSelected ? (
               <>
                 <div className="m3-title-md mb-3">{t('common.routes')}</div>
-                <div>
-                  <div className="relative">
+                <div className="flex items-center gap-2">
+                  <div className="relative min-w-0 flex-1">
                     <Search className="text-on-surface-variant absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2" />
                     <Input
                       value={query}
@@ -2087,15 +2087,13 @@ export function KmbRoutesView({
                       </button>
                     )}
                   </div>
-                  <div className="mt-3">
-                    <OperatorFilter
-                      operators={operatorOptions}
-                      total={searchIndex.length}
-                      value={operators}
-                      onChange={handleOperatorChange}
-                      lang={lang}
-                    />
-                  </div>
+                  <OperatorFilter
+                    operators={operatorOptions}
+                    total={searchIndex.length}
+                    value={operators}
+                    onChange={handleOperatorChange}
+                    lang={lang}
+                  />
                 </div>
 
                 <div className="mt-3 min-h-0 flex-1 overflow-y-auto">

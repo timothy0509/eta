@@ -57,20 +57,39 @@ export function RouteResultCard({
     matchReason.kind !== 'number' &&
     !visibleText.includes(matchReason.text.toLowerCase())
 
+  const operators = entry.operators.length > 0 ? entry.operators : [entry.co]
+  const operatorColor =
+    operators.length > 1
+      ? `linear-gradient(180deg, ${operators
+          .map((op, opIndex) => {
+            const start = Math.round((opIndex / operators.length) * 10000) / 100
+            const end = Math.round(((opIndex + 1) / operators.length) * 10000) / 100
+            return `${getOperatorColor(op)} ${start}% ${end}%`
+          })
+          .join(', ')})`
+      : getOperatorColor(operators[0] ?? entry.co)
+  const operatorName = operators.map((op) => formatOperatorCode(op)).join(' + ')
+
   return (
     <button
       type="button"
       onClick={onSelect}
       className={cn(
-        'ui-press bg-surface-container hover:bg-surface-container-high flex min-h-[64px] w-full rounded-2xl p-4 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
+        'ui-press bg-surface-container hover:bg-surface-container-high relative flex min-h-[64px] w-full overflow-hidden rounded-2xl py-4 pr-4 pl-5 text-left transition-colors focus-visible:ring-2 focus-visible:outline-none',
         staggerClassForIndex(index)
       )}
     >
+      <span
+        className="absolute inset-y-2.5 left-0 w-1 rounded-full shadow-[inset_0_0_0_1px_rgb(0_0_0/0.08)] dark:shadow-[inset_0_0_0_1px_rgb(255_255_255/0.12)]"
+        style={{ background: operatorColor }}
+        aria-hidden
+      />
       <span className="flex w-full items-center gap-2">
         {/* Joint badge follows the primary operator preference, so the same
-        joint route can recolor when the preference flips. The joint pill
-        next to it always names both operators. */}
+        joint route can recolor when the preference flips. The left-edge
+        strip names the operator instead of a text pill. */}
         <RouteBadge route={entry.route} company={entry.co} size="lg" />
+        <span className="sr-only">{operatorName}</span>
         <span className="block min-w-0 flex-1 overflow-hidden">
           <Marquee
             title={`${origin} ${entry.directions.length > 1 ? '↔' : '→'} ${destination}`}
@@ -94,18 +113,6 @@ export function RouteResultCard({
               • {matchReason.text}
             </span>
           )}
-        </span>
-        <span className="text-on-surface-variant m3-label-md flex shrink-0 items-center gap-1.5 font-semibold uppercase">
-          {(entry.operators.length > 0 ? entry.operators : [entry.co]).map((op) => (
-            <span key={op} className="inline-flex items-center gap-1">
-              <span
-                aria-hidden
-                className="h-1.5 w-1.5 shrink-0 rounded-full"
-                style={{ backgroundColor: getOperatorColor(op) }}
-              />
-              {formatOperatorCode(op)}
-            </span>
-          ))}
         </span>
         <ChevronRight aria-hidden className="text-on-surface-variant h-4 w-4 shrink-0" />
       </span>

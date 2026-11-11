@@ -19,7 +19,7 @@ import { findMtrStationBySta } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLangZh } from '@/lib/eta/pick-lang'
-import { formatMinutesFromNowToExactHms, formatMtrTimeToExactHms } from '@/lib/eta/format'
+import { formatMtrExactForTrain } from '@/lib/eta/format'
 import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
 import type { EtaDisplayFormat, UiLanguage } from '@/lib/eta/types'
 import { useAppStore } from '@/lib/store'
@@ -108,20 +108,6 @@ function formatMinutes(ttnt: unknown, arrivingText: string, minutesUnit: string)
   }
 }
 
-/**
- * Exact hh:mm:ss arrival for an MTR train. Prefers the API `time` field,
- * falling back to now plus `ttnt` minutes. Null when neither resolves.
- */
-function formatExactForTrain(train: MtrTrainEntry, now: number = Date.now()): string | null {
-  const fromTime = formatMtrTimeToExactHms(train.time)
-  if (fromTime) return fromTime
-  const minutes = Number(String(train.ttnt ?? '').trim())
-  if (!Number.isNaN(minutes) && minutes > 0) {
-    return formatMinutesFromNowToExactHms(minutes, now)
-  }
-  return null
-}
-
 function formatPlatform(plat: unknown) {
   const raw = String(plat ?? '').trim()
   if (!raw) return ''
@@ -159,7 +145,7 @@ function buildRowModel(
   const countdown = formatMinutes(train.ttnt, ctx.arrivingText, ctx.minutesUnit)
   // Exact mode shows the arrival wall-clock; arriving and unresolvable
   // trains keep the countdown text.
-  const exact = ctx.format === 'exact' && !countdown.arriving ? formatExactForTrain(train) : null
+  const exact = ctx.format === 'exact' && !countdown.arriving ? formatMtrExactForTrain(train) : null
   return {
     dest: formatDestWithRacecourse(
       train.dest,

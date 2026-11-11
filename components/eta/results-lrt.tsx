@@ -45,8 +45,8 @@ function isEntryArriving(entry: LrtRouteListEntry, lang: UiLanguage): boolean {
 
 /**
  * Exact hh:mm:ss arrival for an LRT entry. The schedule only carries
- * minute granularity, so the wall-clock is now plus those minutes.
- * Null for arriving entries and entries without ETA minutes.
+ * minute granularity, so the wall-clock is now plus those minutes with
+ * seconds zeroed. Null for arriving entries and entries without ETA minutes.
  */
 function formatExactForLrtEntry(
   entry: LrtRouteListEntry,

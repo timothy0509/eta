@@ -97,7 +97,13 @@ function getExactHmsFormatter(): Intl.DateTimeFormat {
   return exactHmsFormatter
 }
 
-/** Format a Date as hh:mm:ss in Hong Kong time. */
+/**
+ * Format a Date as hh:mm:ss in Hong Kong time.
+ * The date must be valid; an Invalid Date throws a RangeError from
+ * `Intl.DateTimeFormat`. Nullable wrappers below (`formatIsoToExactHms`,
+ * `formatMtrTimeToExactHms`, `formatMinutesFromNowToExactHms`,
+ * `formatMtrExactForTrain`) guard their inputs and return null instead.
+ */
 export function formatExactHms(date: Date): string {
   return getExactHmsFormatter().format(date)
 }
@@ -130,9 +136,35 @@ export function formatMtrTimeToExactHms(time: unknown): string | null {
   return formatExactHms(date)
 }
 
-/** Minutes from now rendered as the arrival wall-clock hh:mm:ss (HK time). */
-export function formatMinutesFromNowToExactHms(minutes: number, now: number = Date.now()): string {
-  return formatExactHms(new Date(now + minutes * 60_000))
+/**
+ * Minutes from now rendered as the arrival wall-clock hh:mm:ss (HK time).
+ * Null for non-finite input. `now` is floored to the minute first so
+ * minute-granularity sources do not leak the current seconds into the
+ * display as false precision.
+ */
+export function formatMinutesFromNowToExactHms(
+  minutes: number,
+  now: number = Date.now()
+): string | null {
+  if (!Number.isFinite(minutes) || !Number.isFinite(now)) return null
+  const flooredNow = Math.floor(now / 60_000) * 60_000
+  return formatExactHms(new Date(flooredNow + minutes * 60_000))
+}
+
+/**
+ * Exact hh:mm:ss arrival for an MTR train entry. Prefers the API `time`
+ * field, falling back to `now` plus `ttnt` minutes. Null when neither
+ * resolves. Shared by the MTR stop and route views.
+ */
+export function formatMtrExactForTrain(
+  train: { time?: unknown; ttnt?: unknown },
+  now: number = Date.now()
+): string | null {
+  const fromTime = formatMtrTimeToExactHms(train.time)
+  if (fromTime) return fromTime
+  const minutes = Number(String(train.ttnt ?? '').trim())
+  if (!Number.isFinite(minutes) || minutes <= 0) return null
+  return formatMinutesFromNowToExactHms(minutes, now)
 }
 
 /** Minutes since midnight (may exceed 1440 for after-midnight windows) to HH:MM. */

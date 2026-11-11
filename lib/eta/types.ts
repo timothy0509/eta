@@ -5,6 +5,12 @@ export type UiLanguage = 'en' | 'tc' | 'sc'
 /** Operator whose route details are shown for jointly operated routes. */
 export type JointRouteInfoOperator = 'kmb' | 'ctb'
 
+/**
+ * ETA display format. `countdown` shows minutes away, `exact` shows the
+ * predicted arrival as hh:mm:ss.
+ */
+export type EtaDisplayFormat = 'countdown' | 'exact'
+
 export type SubView = 'routes' | 'stops' | 'nearby' | 'saved' | 'settings'
 
 export function isLanguageSupported(mode: TransportMode, lang: UiLanguage) {

@@ -2,6 +2,7 @@
 
 import { describe, expect, it } from 'vitest'
 
+import { formatIsoToExactHms } from '@/lib/eta/format'
 import { render } from '@/lib/test-utils'
 import { TickingKmbMinutes, TickingSoonestPill } from '@/components/eta/ticking-eta'
 
@@ -41,6 +42,31 @@ describe('TickingKmbMinutes', () => {
     expect(container.querySelector('.ui-eta-tick')).not.toBeNull()
   })
 
+  it('shows the exact hh:mm:ss arrival time in exact format', () => {
+    const eta = etaIso(5)
+    const { container } = render(
+      <TickingKmbMinutes
+        eta={eta}
+        dataTimestamp={new Date(NOW).toISOString()}
+        lang="en"
+        format="exact"
+      />
+    )
+    expect(container.textContent).toMatch(formatIsoToExactHms(eta) as string)
+  })
+
+  it('keeps the arriving pill in exact format', () => {
+    const { container } = render(
+      <TickingKmbMinutes
+        eta={etaIso(0)}
+        dataTimestamp={new Date(NOW).toISOString()}
+        lang="en"
+        format="exact"
+      />
+    )
+    expect(container.querySelector('.live-pulse')).not.toBeNull()
+  })
+
   it('plain variant renders tick text without pill classes', () => {
     const { container } = render(
       <TickingKmbMinutes
@@ -73,5 +99,14 @@ describe('TickingSoonestPill', () => {
     )
     expect(container.querySelector('.ui-eta-tick')).not.toBeNull()
     expect(container.querySelector('.live-pulse')).not.toBeNull()
+  })
+
+  it('shows the exact hh:mm:ss arrival time in exact format', () => {
+    const stamp = new Date(NOW).toISOString()
+    const eta = etaIso(5)
+    const { container } = render(
+      <TickingSoonestPill etas={[{ eta, data_timestamp: stamp }]} lang="en" format="exact" />
+    )
+    expect(container.textContent).toMatch(formatIsoToExactHms(eta) as string)
   })
 })

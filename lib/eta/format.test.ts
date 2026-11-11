@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  formatExactHms,
   formatFareHkd,
+  formatIsoToExactHms,
+  formatMinutesFromNowToExactHms,
+  formatMtrExactForTrain,
+  formatMtrTimeToExactHms,
   formatRelativeMinutes,
   formatRelativeMinutesWithDrift,
   formatUiLanguageLabel,
@@ -69,6 +74,68 @@ describe('formatFareHkd', () => {
     expect(formatFareHkd(undefined)).toBeNull()
     expect(formatFareHkd('5.2')).toBeNull()
     expect(formatFareHkd(NaN)).toBeNull()
+  })
+})
+
+describe('exact ETA time', () => {
+  it('formats an ISO ETA as hh:mm:ss in Hong Kong time', () => {
+    // 08:05:06 HKT is 00:05:06 UTC.
+    expect(formatIsoToExactHms('2024-01-01T00:05:06.000Z')).toBe('08:05:06')
+  })
+
+  it('returns null for invalid ISO input', () => {
+    expect(formatIsoToExactHms('not-a-date')).toBeNull()
+  })
+
+  it('parses the MTR space-separated wall-clock form', () => {
+    expect(formatMtrTimeToExactHms('2024-01-01 08:05:06')).toBe('08:05:06')
+    expect(formatMtrTimeToExactHms('2024-01-01 08:05')).toBe('08:05:00')
+  })
+
+  it('rejects missing MTR time input', () => {
+    expect(formatMtrTimeToExactHms(undefined)).toBeNull()
+    expect(formatMtrTimeToExactHms('')).toBeNull()
+    expect(formatMtrTimeToExactHms('tomorrow-ish')).toBeNull()
+  })
+
+  it('renders minutes-from-now as an hh:mm:ss wall clock', () => {
+    const now = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatMinutesFromNowToExactHms(5, now)).toBe('08:05:00')
+  })
+
+  it('zeroes seconds for minute-granularity sources', () => {
+    // 37 seconds past the minute must not leak into the display.
+    const now = new Date('2024-01-01T00:00:37.000Z').getTime()
+    expect(formatMinutesFromNowToExactHms(5, now)).toBe('08:05:00')
+  })
+
+  it('returns null for non-finite minutes-from-now input', () => {
+    const now = new Date('2024-01-01T00:00:00.000Z').getTime()
+    expect(formatMinutesFromNowToExactHms(Number.NaN, now)).toBeNull()
+    expect(formatMinutesFromNowToExactHms(Number.POSITIVE_INFINITY, now)).toBeNull()
+    expect(formatMinutesFromNowToExactHms(5, Number.NaN)).toBeNull()
+  })
+
+  it('pads single digits in hh:mm:ss output', () => {
+    expect(formatExactHms(new Date('2024-01-01T00:01:02.000Z'))).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+  })
+})
+
+describe('formatMtrExactForTrain', () => {
+  it('prefers the API time field over ttnt', () => {
+    expect(formatMtrExactForTrain({ time: '2024-01-01 08:05:06', ttnt: '3' })).toBe('08:05:06')
+  })
+
+  it('falls back to now plus ttnt minutes with zeroed seconds', () => {
+    const now = new Date('2024-01-01T00:00:37.000Z').getTime()
+    expect(formatMtrExactForTrain({ ttnt: '5' }, now)).toBe('08:05:00')
+  })
+
+  it('returns null when neither time nor ttnt resolves', () => {
+    expect(formatMtrExactForTrain({})).toBeNull()
+    expect(formatMtrExactForTrain({ ttnt: '0' })).toBeNull()
+    expect(formatMtrExactForTrain({ ttnt: 'soon' })).toBeNull()
+    expect(formatMtrExactForTrain({ time: 'tomorrow-ish', ttnt: '' })).toBeNull()
   })
 })
 

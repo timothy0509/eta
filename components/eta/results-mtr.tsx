@@ -19,8 +19,10 @@ import { findMtrStationBySta } from '@/lib/data/mtr-stations'
 import { getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLangZh } from '@/lib/eta/pick-lang'
+import { formatMtrExactForTrain } from '@/lib/eta/format'
 import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
-import type { UiLanguage } from '@/lib/eta/types'
+import type { EtaDisplayFormat, UiLanguage } from '@/lib/eta/types'
+import { useAppStore } from '@/lib/store'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 import { ExpandableEtaRow } from '@/components/eta/expandable-eta-row'
@@ -125,6 +127,7 @@ type MtrDirectionContext = {
   viaRacecourseSuffix: string
   arrivingText: string
   minutesUnit: string
+  format: EtaDisplayFormat
 }
 
 function buildRowModel(
@@ -139,6 +142,10 @@ function buildRowModel(
     dir,
     route: route || undefined,
   })
+  const countdown = formatMinutes(train.ttnt, ctx.arrivingText, ctx.minutesUnit)
+  // Exact mode shows the arrival wall-clock; arriving and unresolvable
+  // trains keep the countdown text.
+  const exact = ctx.format === 'exact' && !countdown.arriving ? formatMtrExactForTrain(train) : null
   return {
     dest: formatDestWithRacecourse(
       train.dest,
@@ -147,7 +154,7 @@ function buildRowModel(
       showViaRacecourse
     ),
     platform: formatPlatform(train.plat),
-    eta: formatMinutes(train.ttnt, ctx.arrivingText, ctx.minutesUnit),
+    eta: exact ? { text: exact, arriving: false } : countdown,
   }
 }
 
@@ -189,6 +196,7 @@ function MtrLineCard({
   const downTrains = payload.DOWN ?? []
   const totalTrains = upTrains.length + downTrains.length
   const expandable = totalTrains > 1
+  const etaFormat = useAppStore((s) => s.etaDisplayFormat)
 
   const rowFor = (train: MtrTrainEntry, dir: MtrDirection): TrainRowModel =>
     buildRowModel(train, dir, {
@@ -198,6 +206,7 @@ function MtrLineCard({
       viaRacecourseSuffix,
       arrivingText,
       minutesUnit,
+      format: etaFormat,
     })
 
   // Collapsed summary: dedupe within each direction, so the same destination

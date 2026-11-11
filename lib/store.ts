@@ -1,6 +1,12 @@
 'use client'
 
-import type { JointRouteInfoOperator, SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
+import type {
+  EtaDisplayFormat,
+  JointRouteInfoOperator,
+  SubView,
+  TransportMode,
+  UiLanguage,
+} from '@/lib/eta/types'
 import { resolveAppCompany } from '@/lib/eta/companies'
 import { clampNearbyRadiusKm, NEARBY_RADIUS_DEFAULT_KM } from '@/lib/eta/nearby-radius'
 import { clampTimetableDetail, TIMETABLE_DETAIL_DEFAULT } from '@/lib/eta/timetable-detail'
@@ -115,6 +121,8 @@ type PrefsSlice = {
   timetableDetail: number
   /** Route details shown for jointly operated KMB+CTB routes. */
   jointRouteInfoOperator: JointRouteInfoOperator
+  /** Countdown in minutes or exact hh:mm:ss arrival time. */
+  etaDisplayFormat: EtaDisplayFormat
 
   favorites: FavoritesItem[]
   favoritesGroups: FavoritesGroup[]
@@ -125,6 +133,7 @@ type PrefsSlice = {
   setNearbyRadiusKm: (km: number) => void
   setTimetableDetail: (detail: number) => void
   setJointRouteInfoOperator: (operator: JointRouteInfoOperator) => void
+  setEtaDisplayFormat: (format: EtaDisplayFormat) => void
   /** Restore display and update prefs to defaults. Saved data is untouched. */
   resetPrefs: () => void
   addFavorite: (item: FavoritesItem) => void
@@ -246,6 +255,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
   timetableDetail: TIMETABLE_DETAIL_DEFAULT,
   jointRouteInfoOperator: 'kmb',
+  etaDisplayFormat: 'countdown',
 
   favorites: [],
   favoritesGroups: [],
@@ -256,6 +266,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   setNearbyRadiusKm: (km) => set({ nearbyRadiusKm: clampNearbyRadiusKm(km) }),
   setTimetableDetail: (detail) => set({ timetableDetail: clampTimetableDetail(detail) }),
   setJointRouteInfoOperator: (operator) => set({ jointRouteInfoOperator: operator }),
+  setEtaDisplayFormat: (format) => set({ etaDisplayFormat: format }),
   resetPrefs: () =>
     set({
       lang: 'tc',
@@ -263,6 +274,7 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
       nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
       timetableDetail: TIMETABLE_DETAIL_DEFAULT,
       jointRouteInfoOperator: 'kmb',
+      etaDisplayFormat: 'countdown',
     }),
 
   addFavorite: (item) =>
@@ -412,6 +424,7 @@ export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
 // are ignored, saved route text and direction selections keep working.
 // v8 adds the timetable detail level; older entries fall back to full detail.
 // v9 adds the joint route-info operator preference, defaulting to KMB.
+// v10 adds the ETA display format, defaulting to the minutes countdown.
 export function migratePersistedState(persistedState: unknown) {
   const state = persistedState as Partial<AppState> | undefined
   const favorites = capFavorites(
@@ -432,6 +445,7 @@ export function migratePersistedState(persistedState: unknown) {
         ? clampTimetableDetail(state.timetableDetail)
         : TIMETABLE_DETAIL_DEFAULT,
     jointRouteInfoOperator: state?.jointRouteInfoOperator === 'ctb' ? 'ctb' : 'kmb',
+    etaDisplayFormat: state?.etaDisplayFormat === 'exact' ? 'exact' : 'countdown',
     favorites,
     favoritesGroups: state?.favoritesGroups ?? [],
     recents: state?.recents ?? [],
@@ -446,7 +460,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 9,
+      version: 10,
       // Direct persist write. The previous 300 ms debounced localStorage
       // wrapper plus beforeunload flush could lose the last write on
       // mobile, where beforeunload often never fires. Zustand now writes
@@ -460,6 +474,7 @@ export const useAppStore = create<AppState>()(
         nearbyRadiusKm: state.nearbyRadiusKm,
         timetableDetail: state.timetableDetail,
         jointRouteInfoOperator: state.jointRouteInfoOperator,
+        etaDisplayFormat: state.etaDisplayFormat,
         favorites: state.favorites,
         favoritesGroups: state.favoritesGroups,
         recents: state.recents,

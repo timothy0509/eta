@@ -692,6 +692,7 @@ describe('settings prefs', () => {
       nearbyRadiusKm: 2,
       timetableDetail: 5,
       jointRouteInfoOperator: 'kmb',
+      etaDisplayFormat: 'countdown',
       favorites: [],
       favoritesGroups: [],
       recents: [],
@@ -715,7 +716,7 @@ describe('settings prefs', () => {
       version: number
       state: { nearbyRadiusKm: number }
     }
-    expect(parsed.version).toBe(9)
+    expect(parsed.version).toBe(10)
     expect(parsed.state.nearbyRadiusKm).toBe(3)
   })
 
@@ -742,6 +743,7 @@ describe('settings prefs', () => {
       nearbyRadiusKm: 4,
       timetableDetail: 1,
       jointRouteInfoOperator: 'ctb',
+      etaDisplayFormat: 'exact',
       favorites: [mtrFavorite('fav-1')],
     })
     useAppStore.getState().resetPrefs()
@@ -751,7 +753,18 @@ describe('settings prefs', () => {
     expect(state.nearbyRadiusKm).toBe(2)
     expect(state.timetableDetail).toBe(5)
     expect(state.jointRouteInfoOperator).toBe('kmb')
+    expect(state.etaDisplayFormat).toBe('countdown')
     expect(state.favorites).toHaveLength(1)
+  })
+
+  it('persists the ETA display format alongside the other prefs', () => {
+    useAppStore.getState().setEtaDisplayFormat('exact')
+    expect(useAppStore.getState().etaDisplayFormat).toBe('exact')
+    const raw = localStorage.getItem('hk-eta')
+    const parsed = JSON.parse(raw as string) as {
+      state: { etaDisplayFormat: string }
+    }
+    expect(parsed.state.etaDisplayFormat).toBe('exact')
   })
 
   it('clearFavorites empties the list', () => {
@@ -860,5 +873,17 @@ describe('migratePersistedState', () => {
     expect(migratePersistedState({ timetableDetail: -1 }).timetableDetail).toBe(1)
     expect(migratePersistedState({ timetableDetail: '3' }).timetableDetail).toBe(5)
     expect(migratePersistedState({ timetableDetail: 3 }).timetableDetail).toBe(3)
+  })
+
+  it('defaults old payloads to the countdown ETA format', () => {
+    expect(migratePersistedState(undefined).etaDisplayFormat).toBe('countdown')
+    expect(migratePersistedState({}).etaDisplayFormat).toBe('countdown')
+    expect(migratePersistedState({ etaDisplayFormat: 'minutes' }).etaDisplayFormat).toBe(
+      'countdown'
+    )
+  })
+
+  it('keeps a stored exact ETA format', () => {
+    expect(migratePersistedState({ etaDisplayFormat: 'exact' }).etaDisplayFormat).toBe('exact')
   })
 })

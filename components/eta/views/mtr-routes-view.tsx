@@ -17,8 +17,10 @@ import { fetchMtrRouteSchedules, listMtrRoutes } from '@/lib/eta/client'
 import { LINE_COLOR_FALLBACK, getLineColor, getMtrLineName } from '@/lib/eta/line-colors'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLangZh } from '@/lib/eta/pick-lang'
+import { formatMtrExactForTrain } from '@/lib/eta/format'
 import type { MtrScheduleResponse, MtrTrainEntry } from '@/lib/eta/mtr'
 import type { UiLanguage } from '@/lib/eta/types'
+import { useAppStore } from '@/lib/store'
 import { getReadableForeground } from '@/lib/ui/color'
 import { cn } from '@/lib/utils'
 import type { RouteListEntry } from 'hk-bus-eta'
@@ -44,6 +46,22 @@ function getRouteDestination(dest: { en: string; zh: string }, lang: UiLanguage)
 
 function variantKey(entry: RouteListEntry): string {
   return `${entry.route}|${entry.serviceType}|${entry.bound.mtr ?? ''}`
+}
+
+/**
+ * Plain MTR ETA text that swaps to the exact hh:mm:ss arrival when the
+ * exact format is on. Arriving trains keep the countdown text.
+ */
+function ExactMtrEtaText({
+  eta,
+  exactText,
+}: {
+  eta: { text: string; arriving: boolean }
+  exactText: string | null
+}) {
+  const etaFormat = useAppStore((s) => s.etaDisplayFormat)
+  const text = etaFormat === 'exact' && !eta.arriving && exactText ? exactText : eta.text
+  return <span className="text-on-surface font-tabular m3-body-md font-semibold">{text}</span>
 }
 
 /**
@@ -100,8 +118,8 @@ function MtrRouteStopCard({
     })
   }, [schedule, selectedLine, sta, downstreamStas])
 
-  const trainLine = (ttnt: unknown) => {
-    const raw = String(ttnt ?? '').trim()
+  const trainLine = (train: MtrTrainEntry) => {
+    const raw = String(train.ttnt ?? '').trim()
     if (!raw) return { text: '—', arriving: false }
     const minutes = Number(raw)
     if (Number.isNaN(minutes)) return { text: raw, arriving: false }
@@ -109,19 +127,19 @@ function MtrRouteStopCard({
     return { text: `${minutes} ${t('common.minutesUnit')}`, arriving: false }
   }
 
-  const soonestText =
-    soonestTrains.length > 0 ? trainLine(soonestTrains[0]?.ttnt) : { text: '—', arriving: false }
+  const soonest = soonestTrains[0]
+  const soonestText = soonest ? trainLine(soonest) : { text: '—', arriving: false }
 
-  const etaNode =
-    soonestTrains.length > 0 ? (
-      <SoonestEtaPill
-        minutes={soonestText.arriving ? 0 : Number(String(soonestTrains[0]?.ttnt ?? ''))}
-        arriving={soonestText.arriving}
-        lang={lang}
-      />
-    ) : (
-      <SoonestEtaPill minutes={null} lang={lang} />
-    )
+  const etaNode = soonest ? (
+    <SoonestEtaPill
+      minutes={soonestText.arriving ? 0 : Number(String(soonest.ttnt ?? ''))}
+      arriving={soonestText.arriving}
+      lang={lang}
+      exactText={formatMtrExactForTrain(soonest)}
+    />
+  ) : (
+    <SoonestEtaPill minutes={null} lang={lang} />
+  )
 
   const renderTrains = (list: MtrTrainEntry[]) => (
     <div className="space-y-1">
@@ -135,7 +153,7 @@ function MtrRouteStopCard({
             ? formatMtrStationName(destStation, toMtrLang(lang))
             : destRaw || '—'
           const platform = String(train.plat ?? '').trim()
-          const eta = trainLine(train.ttnt)
+          const eta = trainLine(train)
           return (
             <div
               key={`${trainIdx}:${destRaw}:${String(train.ttnt ?? '')}`}
@@ -148,9 +166,7 @@ function MtrRouteStopCard({
                 {platform ? (
                   <span className="text-on-surface-variant m3-label-md font-mono">P{platform}</span>
                 ) : null}
-                <span className="text-on-surface font-tabular m3-body-md font-semibold">
-                  {eta.text}
-                </span>
+                <ExactMtrEtaText eta={eta} exactText={formatMtrExactForTrain(train)} />
               </div>
             </div>
           )

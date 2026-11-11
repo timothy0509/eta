@@ -82,6 +82,91 @@ export function formatFareHkd(hkd: unknown): string | null {
   return `HK$ ${hkd.toFixed(1)}`
 }
 
+let exactHmsFormatter: Intl.DateTimeFormat | null = null
+
+function getExactHmsFormatter(): Intl.DateTimeFormat {
+  if (!exactHmsFormatter) {
+    exactHmsFormatter = new Intl.DateTimeFormat('en-HK', {
+      timeZone: 'Asia/Hong_Kong',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+  }
+  return exactHmsFormatter
+}
+
+/**
+ * Format a Date as hh:mm:ss in Hong Kong time.
+ * The date must be valid; an Invalid Date throws a RangeError from
+ * `Intl.DateTimeFormat`. Nullable wrappers below (`formatIsoToExactHms`,
+ * `formatMtrTimeToExactHms`, `formatMinutesFromNowToExactHms`,
+ * `formatMtrExactForTrain`) guard their inputs and return null instead.
+ */
+export function formatExactHms(date: Date): string {
+  return getExactHmsFormatter().format(date)
+}
+
+/** Parse an ISO ETA string and format it as hh:mm:ss (HK time). Null when invalid. */
+export function formatIsoToExactHms(iso: string): string | null {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return null
+  return formatExactHms(date)
+}
+
+/**
+ * Format an MTR `time` field as hh:mm:ss (HK time). The API returns
+ * `YYYY-MM-DD HH:mm:ss`, which `new Date` cannot parse reliably, so the
+ * space form is interpreted as Hong Kong wall-clock time first.
+ */
+export function formatMtrTimeToExactHms(time: unknown): string | null {
+  if (typeof time !== 'string') return null
+  const raw = time.trim()
+  if (!raw) return null
+  const hkWallClock = raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/)
+  if (hkWallClock) {
+    const [, y, mo, d, h, mi, s] = hkWallClock
+    const date = new Date(`${y}-${mo}-${d}T${h}:${mi}:${s ?? '00'}+08:00`)
+    if (Number.isNaN(date.getTime())) return null
+    return formatExactHms(date)
+  }
+  const date = new Date(raw)
+  if (Number.isNaN(date.getTime())) return null
+  return formatExactHms(date)
+}
+
+/**
+ * Minutes from now rendered as the arrival wall-clock hh:mm:ss (HK time).
+ * Null for non-finite input. `now` is floored to the minute first so
+ * minute-granularity sources do not leak the current seconds into the
+ * display as false precision.
+ */
+export function formatMinutesFromNowToExactHms(
+  minutes: number,
+  now: number = Date.now()
+): string | null {
+  if (!Number.isFinite(minutes) || !Number.isFinite(now)) return null
+  const flooredNow = Math.floor(now / 60_000) * 60_000
+  return formatExactHms(new Date(flooredNow + minutes * 60_000))
+}
+
+/**
+ * Exact hh:mm:ss arrival for an MTR train entry. Prefers the API `time`
+ * field, falling back to `now` plus `ttnt` minutes. Null when neither
+ * resolves. Shared by the MTR stop and route views.
+ */
+export function formatMtrExactForTrain(
+  train: { time?: unknown; ttnt?: unknown },
+  now: number = Date.now()
+): string | null {
+  const fromTime = formatMtrTimeToExactHms(train.time)
+  if (fromTime) return fromTime
+  const minutes = Number(String(train.ttnt ?? '').trim())
+  if (!Number.isFinite(minutes) || minutes <= 0) return null
+  return formatMinutesFromNowToExactHms(minutes, now)
+}
+
 /** Minutes since midnight (may exceed 1440 for after-midnight windows) to HH:MM. */
 export function minsToDisplay(mins: number): string {
   const normalized = ((mins % 1440) + 1440) % 1440

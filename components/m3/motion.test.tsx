@@ -1,33 +1,55 @@
 'use client'
 
+import { beforeEach, describe, expect, it } from 'vitest'
+
+import {
+  __resetLivePulseSlotsForTests,
+  LivePulse,
+  MAX_ANIMATED_LIVE_PULSES,
+} from '@/components/m3/motion'
 import { render } from '@/lib/test-utils'
-import { describe, expect, it } from 'vitest'
 
-import { EtaValue, PaneEnter } from '@/components/m3/motion'
+describe('LivePulse', () => {
+  beforeEach(() => {
+    __resetLivePulseSlotsForTests()
+  })
 
-describe('PaneEnter', () => {
-  it('applies the pane entrance class', () => {
-    const { container } = render(<PaneEnter>view</PaneEnter>)
-    expect((container.firstChild as HTMLElement | null)?.classList.contains('ui-pane-enter')).toBe(
-      true
+  it('animates at most the capped number of dots concurrently', () => {
+    const { container } = render(
+      <div>
+        {Array.from({ length: MAX_ANIMATED_LIVE_PULSES + 2 }, (_, i) => (
+          <LivePulse key={i} />
+        ))}
+      </div>
+    )
+    // Overflow dots still render the solid dot, just without animation.
+    expect(container.querySelectorAll('.live-pulse')).toHaveLength(MAX_ANIMATED_LIVE_PULSES)
+    expect(container.querySelectorAll('.bg-primary.relative')).toHaveLength(
+      MAX_ANIMATED_LIVE_PULSES + 2
     )
   })
-})
 
-describe('EtaValue', () => {
-  it('renders the value with the tick class', () => {
-    const { container } = render(<EtaValue key="5 min" value="5 min" />)
-    const node = container.querySelector('.ui-eta-tick')
-    expect(node?.textContent).toBe('5 min')
+  it('renders a static dot when animate is false', () => {
+    const { container } = render(<LivePulse animate={false} />)
+    expect(container.querySelector('.live-pulse')).toBeNull()
+    expect(container.querySelector('.bg-primary.relative')).not.toBeNull()
   })
 
-  it('replaces the node when the key changes and keeps it when identical', () => {
-    const { container, rerender } = render(<EtaValue key="5 min" value="5 min" />)
-    const first = container.querySelector('.ui-eta-tick')
-    rerender(<EtaValue key="5 min" value="5 min" />)
-    expect(container.querySelector('.ui-eta-tick')).toBe(first)
-    rerender(<EtaValue key="4 min" value="4 min" />)
-    expect(container.querySelector('.ui-eta-tick')).not.toBe(first)
-    expect(container.querySelector('.ui-eta-tick')?.textContent).toBe('4 min')
+  it('releases slots on unmount so later dots animate', () => {
+    const first = render(
+      <div>
+        {Array.from({ length: MAX_ANIMATED_LIVE_PULSES }, (_, i) => (
+          <LivePulse key={i} />
+        ))}
+      </div>
+    )
+    expect(first.container.querySelectorAll('.live-pulse')).toHaveLength(MAX_ANIMATED_LIVE_PULSES)
+    first.unmount()
+    const second = render(
+      <div>
+        <LivePulse />
+      </div>
+    )
+    expect(second.container.querySelectorAll('.live-pulse')).toHaveLength(1)
   })
 })

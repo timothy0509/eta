@@ -107,10 +107,108 @@ export const MotionCard = React.forwardRef<HTMLDivElement, MotionCardProps>(
 )
 MotionCard.displayName = 'MotionCard'
 
-export function LivePulse({ className }: { className?: string }) {
+/**
+ * Cap on concurrently animated LivePulse dots. Each arriving ETA row renders
+ * one, and every instance runs two infinite animations (the Tailwind ping plus
+ * the outer live-pulse), which keeps mobile GPUs busy during scroll. Only the
+ * first mounts animate; the rest render the same solid dot without animation.
+ */
+export const MAX_ANIMATED_LIVE_PULSES = 3
+
+// Claimed-slot set plus a version bumped on every claim change. LivePulse
+// instances subscribe to the version and read their own membership during
+// render, so queued waiters promote without refs-in-render or
+// setState-in-effect.
+const pulseStore = {
+  held: 0,
+  version: 0,
+  listeners: new Set<() => void>(),
+}
+const heldPulseIds = new Set<string>()
+
+function subscribePulseStore(listener: () => void): () => void {
+  pulseStore.listeners.add(listener)
+  return () => {
+    pulseStore.listeners.delete(listener)
+  }
+}
+
+function notifyPulseStore(): void {
+  pulseStore.version += 1
+  for (const listener of Array.from(pulseStore.listeners)) listener()
+}
+
+// Overflow instances waiting for a slot. Invoked FIFO when a holder
+// releases; a promoted waiter claims the freed slot and notifies.
+const pulseWaiters = new Set<() => void>()
+
+function releasePulseClaim(): void {
+  pulseStore.held = Math.max(0, pulseStore.held - 1)
+  const next = pulseWaiters.values().next().value as (() => void) | undefined
+  if (next) {
+    pulseWaiters.delete(next)
+    next()
+  } else {
+    notifyPulseStore()
+  }
+}
+
+/** Test-only reset for the module-level slot counter. */
+export function __resetLivePulseSlotsForTests(): void {
+  pulseStore.held = 0
+  pulseStore.version = 0
+  pulseStore.listeners.clear()
+  heldPulseIds.clear()
+  pulseWaiters.clear()
+}
+
+export function LivePulse({
+  className,
+  animate = true,
+}: {
+  className?: string
+  /** False renders the static dot, skipping the slot claim entirely. */
+  animate?: boolean
+}) {
+  const id = React.useId()
+  // Re-renders this instance when slots change hands. Server snapshot is
+  // always false so SSR emits the static dot and hydration matches.
+  const holdsSlot = React.useSyncExternalStore(
+    subscribePulseStore,
+    () => heldPulseIds.has(id),
+    () => false
+  )
+  const animated = animate && holdsSlot
+
+  React.useEffect(() => {
+    if (!animate) return
+    function promote(): void {
+      if (pulseStore.held < MAX_ANIMATED_LIVE_PULSES) {
+        pulseStore.held += 1
+        heldPulseIds.add(id)
+        notifyPulseStore()
+      } else {
+        pulseWaiters.add(promote)
+      }
+    }
+    if (pulseStore.held < MAX_ANIMATED_LIVE_PULSES) {
+      pulseStore.held += 1
+      heldPulseIds.add(id)
+      notifyPulseStore()
+    } else {
+      pulseWaiters.add(promote)
+    }
+    return () => {
+      pulseWaiters.delete(promote)
+      if (heldPulseIds.delete(id)) releasePulseClaim()
+    }
+  }, [animate, id])
+
   return (
-    <span className={cn('live-pulse relative inline-flex h-2.5 w-2.5', className)}>
-      <span className="bg-primary absolute inline-flex h-full w-full rounded-full opacity-75 motion-safe:animate-ping motion-reduce:hidden" />
+    <span className={cn('relative inline-flex h-2.5 w-2.5', animated && 'live-pulse', className)}>
+      {animated ? (
+        <span className="bg-primary absolute inline-flex h-full w-full rounded-full opacity-75 motion-safe:animate-ping motion-reduce:hidden" />
+      ) : null}
       <span className="bg-primary relative inline-flex h-2.5 w-2.5 rounded-full" />
     </span>
   )

@@ -118,7 +118,7 @@ export function TopAppBar({ lang, mode, onModeChange }: TopAppBarProps) {
   const { containerRef, buttonRefs, indicator } = useSlidingIndicator<HTMLDivElement>(mode, lang)
 
   return (
-    <header className="bg-surface-container-low/90 supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 backdrop-blur">
+    <header className="bg-surface-container-low sm:bg-surface-container-low/90 sm:supports-[backdrop-filter]:bg-surface-container-low/80 sticky top-0 z-40 border-b border-[var(--outline-variant)]/15 sm:backdrop-blur">
       <div className="mx-auto flex h-[3.5rem] max-w-[var(--app-max)] items-center justify-between gap-2 px-3 sm:h-14 sm:gap-3 sm:px-6">
         <div className="flex shrink-0 items-center gap-2">
           <div className="bg-primary text-on-primary flex h-8 w-8 items-center justify-center rounded-xl text-[15px] font-bold shadow-sm sm:h-9 sm:w-9 sm:text-lg">

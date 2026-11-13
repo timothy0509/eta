@@ -1,25 +1,46 @@
 'use client'
 
+import { Clock } from 'lucide-react'
 import * as React from 'react'
 
-import { RouteBadge } from '@/components/eta/route-badge'
-import { fetchKmbStopEtas, fetchKmbStops, type KmbEtaEntryWithLeg } from '@/lib/eta/client'
-import { formatRelativeMinutesWithDrift, formatUiTime } from '@/lib/eta/format'
+import { EmptyState } from '@/components/eta/empty-state'
+import { PaneSkeleton } from '@/components/eta/pane-skeleton'
+import { ResultsHeader } from '@/components/eta/results-header'
+import { KmbResults, RouteDepartureRow, type StopChips } from '@/components/eta/results-kmb'
+import { StaggerList, staggerClassForIndex } from '@/components/eta/stagger-list'
+import {
+  fetchKmbFares,
+  fetchKmbRouteInfo,
+  fetchKmbStopEtas,
+  fetchKmbStops,
+  type KmbEtaEntryWithLeg,
+  type KmbFareVariant,
+  type KmbRouteInfoLite,
+} from '@/lib/eta/client'
+import { parseVariantKey } from '@/lib/eta/eta-db-index'
+import { useHeadwaySchedules } from '@/lib/eta/headway/use-headway-schedule'
+import { useTranslations } from '@/lib/eta/i18n'
+import {
+  buildDefaultKey,
+  groupEtasByVariant,
+  precomputeRenderGroups,
+} from '@/lib/eta/kmb-eta-groups'
+import { parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { pickLang } from '@/lib/eta/pick-lang'
 import {
   SCHOOL_ALL_STOP_IDS,
   SCHOOL_GROUPS,
   groupSchoolEtasByDestination,
-  groupSchoolStopEtas,
   pickSchoolText,
 } from '@/lib/eta/school'
-import type { UiLanguage } from '@/lib/eta/types'
+import { isKmbStop, type KmbStopSearchItem, type UiLanguage } from '@/lib/eta/types'
 import { cn } from '@/lib/utils'
+import type { Company } from 'hk-bus-eta'
 
 type View = 'stops' | 'destination'
 
 const STRINGS: Record<
-  string,
+  UiLanguage,
   {
     title: string
     subtitle: string
@@ -27,38 +48,16 @@ const STRINGS: Record<
     byDestination: string
     viewLabel: string
     langLabel: string
-    refresh: string
-    refreshing: string
-    updatedJustNow: string
-    updatedMinutesAgo: string
-    loading: string
-    loadFailed: string
-    retry: string
-    noEtas: string
-    noDepartures: string
-    moreDepartures: string
-    fromStop: string
     dataNote: string
   }
 > = {
   tc: {
-    title: '校車站到站時間',
+    title: '校巴站到站時間',
     subtitle: '彩雲邨、白虹樓、啟業邨及彩興苑附近車站',
     byStops: '按車站',
     byDestination: '按目的地',
     viewLabel: '顯示方式',
     langLabel: '語言',
-    refresh: '重新整理',
-    refreshing: '更新中…',
-    updatedJustNow: '剛剛更新',
-    updatedMinutesAgo: '{n} 分鐘前更新',
-    loading: '載入班次中…',
-    loadFailed: '載入失敗，請再試一次。',
-    retry: '重試',
-    noEtas: '暫時沒有預定班次',
-    noDepartures: '暫時沒有班次',
-    moreDepartures: '尚有 {n} 班次',
-    fromStop: '由 {stop} 開出',
     dataNote: '資料來源：九巴及城巴開放數據，每 15 秒自動更新。',
   },
   en: {
@@ -68,17 +67,6 @@ const STRINGS: Record<
     byDestination: 'By destination',
     viewLabel: 'View',
     langLabel: 'Language',
-    refresh: 'Refresh',
-    refreshing: 'Updating…',
-    updatedJustNow: 'Updated just now',
-    updatedMinutesAgo: 'Updated {n} min ago',
-    loading: 'Loading departures…',
-    loadFailed: 'Failed to load. Please try again.',
-    retry: 'Retry',
-    noEtas: 'No scheduled buses',
-    noDepartures: 'No departures',
-    moreDepartures: '{n} more departures',
-    fromStop: 'from {stop}',
     dataNote: 'Source: KMB and Citybus open data. Auto-refreshes every 15 seconds.',
   },
   sc: {
@@ -88,139 +76,149 @@ const STRINGS: Record<
     byDestination: '按目的地',
     viewLabel: '显示方式',
     langLabel: '语言',
-    refresh: '刷新',
-    refreshing: '更新中…',
-    updatedJustNow: '刚刚更新',
-    updatedMinutesAgo: '{n} 分钟前更新',
-    loading: '载入班次中…',
-    loadFailed: '载入失败，请再试一次。',
-    retry: '重试',
-    noEtas: '暂时没有预定班次',
-    noDepartures: '暂时没有班次',
-    moreDepartures: '尚有 {n} 班次',
-    fromStop: '由 {stop} 开出',
     dataNote: '资料来源：九巴及城巴开放数据，每 15 秒自动更新。',
   },
 }
 
-function formatUpdatedLabel(lastUpdatedAt: number | null, now: number, lang: UiLanguage): string {
-  const t = STRINGS[lang]
-  if (!lastUpdatedAt) return ''
-  const diffMin = Math.floor((now - lastUpdatedAt) / 60000)
-  if (diffMin < 1) return t.updatedJustNow
-  return t.updatedMinutesAgo.replace('{n}', String(diffMin))
+type BoardData = {
+  byStopId: Record<string, KmbEtaEntryWithLeg[]>
+  stops: KmbStopSearchItem[]
+  routeInfos: Record<string, KmbRouteInfoLite>
+  faresByVariantKey: Record<string, { hkd: number; dayCode?: number; source: 'hk-bus-eta' }>
+  staleByStopId?: Record<string, { stale: boolean; ageMs: number | null }>
 }
 
-function EtaTimes({
-  items,
-  lang,
-  now,
-}: {
-  items: KmbEtaEntryWithLeg[]
-  lang: UiLanguage
-  now: number
-}) {
-  return (
-    <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
-      {items.slice(0, 3).map((item, index) => {
-        const minutes = item.eta
-          ? formatRelativeMinutesWithDrift(item.eta, item.data_timestamp ?? undefined, now)
-          : null
-        const label =
-          minutes === null || Number.isNaN(minutes)
-            ? '—'
-            : minutes <= 0
-              ? minutesLabel(lang)
-              : minutesLabel(lang, minutes)
-        const clock = item.eta ? formatUiTime(new Date(item.eta), lang) : ''
-        return (
-          <span
-            key={`${item.route}-${item.eta_seq}-${index}`}
-            className="flex items-baseline gap-1.5"
-          >
-            <span className={cn('text-lg font-bold tabular-nums', index === 0 && 'text-xl')}>
-              {label}
-            </span>
-            {clock ? (
-              <span className="text-muted-foreground text-xs tabular-nums">{clock}</span>
-            ) : null}
-          </span>
-        )
-      })}
-    </div>
-  )
-}
-
-function minutesLabel(lang: UiLanguage, minutes?: number): string {
-  if (minutes === undefined) {
-    if (lang === 'en') return 'Arriving'
-    if (lang === 'sc') return '即将到达'
-    return '即將到達'
-  }
-  if (lang === 'en') return minutes === 1 ? '1 min' : `${minutes} mins`
-  if (lang === 'sc') return `${minutes} 分钟`
-  return `${minutes} 分鐘`
-}
-
-async function fetchSchoolBoard(signal?: AbortSignal) {
+async function fetchBoardEtas(signal?: AbortSignal) {
   const [etas, stops] = await Promise.all([
     fetchKmbStopEtas(SCHOOL_ALL_STOP_IDS, signal ? { signal } : undefined),
     fetchKmbStops(),
   ])
-  const names: Record<string, { en: string; tc: string; sc: string }> = {}
-  for (const stop of stops) {
-    names[stop.stopId] = { en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }
+  return {
+    byStopId: etas.byStopId,
+    staleByStopId: etas.staleByStopId,
+    stops,
   }
-  return { byStopId: etas.byStopId, names }
+}
+
+/** Deferred route details and fares, mirroring the main KMB pane. */
+async function fetchBoardExtras(
+  byStopId: Record<string, KmbEtaEntryWithLeg[]>,
+  signal: AbortSignal,
+  infoCache: Map<string, KmbRouteInfoLite>
+): Promise<Pick<BoardData, 'routeInfos' | 'faresByVariantKey'>> {
+  const seenBaseKeys = new Set<string>()
+  const fareVariants: KmbFareVariant[] = []
+  for (const eta of Object.values(byStopId).flat()) {
+    const baseKey = groupEtasByVariant([eta], {})[0]?.baseKey
+    if (!baseKey || seenBaseKeys.has(baseKey)) continue
+    seenBaseKeys.add(baseKey)
+    fareVariants.push({
+      co: String(eta.groupCo ?? eta.co ?? 'kmb') as Company,
+      route: (eta.route ?? '').toUpperCase(),
+      dir: String(eta.dir ?? ''),
+      serviceType: String(eta.service_type ?? ''),
+      gtfsId: String(eta.gtfsId ?? '').trim() || undefined,
+      jointVariantKey: String(eta.jointVariantKey ?? '').trim() || undefined,
+      stopId: String(eta.stop ?? ''),
+      destCandidates: [eta.dest_en, eta.dest_tc, eta.dest_sc].filter(Boolean) as string[],
+    })
+  }
+
+  const missingInfoKeys = Array.from(seenBaseKeys).filter((key) => !infoCache.has(key))
+  const settledInfos = await Promise.allSettled(
+    missingInfoKeys.slice(0, 30).map(async (key) => {
+      const parsed = parseVariantKey(key)
+      const info = await fetchKmbRouteInfo({
+        co: (parsed.co || 'kmb') as Company,
+        route: parsed.route,
+        direction: parsed.bound,
+        serviceType: parsed.serviceType,
+        gtfsId: parsed.gtfsId || undefined,
+      })
+      return { key, info }
+    })
+  )
+  if (signal.aborted) throw new DOMException('The operation was aborted.', 'AbortError')
+  const routeInfos: Record<string, KmbRouteInfoLite> = {}
+  for (const item of settledInfos) {
+    if (item.status !== 'fulfilled') continue
+    infoCache.set(item.value.key, item.value.info)
+    routeInfos[item.value.key] = item.value.info
+  }
+
+  let faresByVariantKey: BoardData['faresByVariantKey'] = {}
+  if (fareVariants.length > 0 && !signal.aborted) {
+    try {
+      faresByVariantKey = (await fetchKmbFares(fareVariants, { signal })).faresByVariantKey
+    } catch {
+      // Fares stay hidden when the deferred lookup fails, same as the main pane.
+    }
+  }
+  return { routeInfos, faresByVariantKey }
 }
 
 export function SchoolClient() {
   const [view, setView] = React.useState<View>('stops')
   const [lang, setLang] = React.useState<UiLanguage>('tc')
-  const [byStopId, setByStopId] = React.useState<Record<string, KmbEtaEntryWithLeg[]>>({})
-  const [stopNames, setStopNames] = React.useState<
-    Record<string, { en: string; tc: string; sc: string }>
-  >({})
+  const [data, setData] = React.useState<BoardData>({
+    byStopId: {},
+    stops: [],
+    routeInfos: {},
+    faresByVariantKey: {},
+  })
   const [loading, setLoading] = React.useState(true)
   const [refreshing, setRefreshing] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [lastUpdatedAt, setLastUpdatedAt] = React.useState<number | null>(null)
-  const [now, setNow] = React.useState(() => Date.now())
+  const [expandedKey, setExpandedKey] = React.useState<string | null>(null)
   const abortRef = React.useRef<AbortController | null>(null)
+  const infoCacheRef = React.useRef(new Map<string, KmbRouteInfoLite>())
 
   const t = STRINGS[lang]
-  const loadFailedMessage = t.loadFailed
+  const { t: tc } = useTranslations(lang)
 
-  const refresh = React.useCallback(
-    async (isInitial: boolean) => {
-      abortRef.current?.abort()
-      const controller = new AbortController()
-      abortRef.current = controller
-      if (isInitial) {
-        setLoading(true)
-      } else {
-        setRefreshing(true)
+  const onToggleExpand = React.useCallback((key: string) => {
+    setExpandedKey((prev) => (prev === key ? null : key))
+  }, [])
+
+  const refresh = React.useCallback(async (isInitial: boolean) => {
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
+    if (isInitial) {
+      setLoading(true)
+    } else {
+      setRefreshing(true)
+    }
+    setError(null)
+    try {
+      const etas = await fetchBoardEtas(controller.signal)
+      if (controller.signal.aborted) return
+      setData((prev) => ({
+        byStopId: etas.byStopId,
+        stops: etas.stops,
+        routeInfos: prev.routeInfos,
+        faresByVariantKey: prev.faresByVariantKey,
+        staleByStopId: etas.staleByStopId,
+      }))
+      setLastUpdatedAt(Date.now())
+      const extras = await fetchBoardExtras(etas.byStopId, controller.signal, infoCacheRef.current)
+      if (controller.signal.aborted) return
+      setData((prev) => ({
+        ...prev,
+        routeInfos: { ...prev.routeInfos, ...extras.routeInfos },
+        faresByVariantKey: { ...prev.faresByVariantKey, ...extras.faresByVariantKey },
+      }))
+    } catch (err) {
+      if (controller.signal.aborted) return
+      setError(err instanceof Error ? err.message : 'Failed to load ETAs')
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false)
+        setRefreshing(false)
       }
-      setError(null)
-      try {
-        const data = await fetchSchoolBoard(controller.signal)
-        if (controller.signal.aborted) return
-        setByStopId(data.byStopId)
-        setStopNames(data.names)
-        setLastUpdatedAt(Date.now())
-        setNow(Date.now())
-      } catch (err) {
-        if (controller.signal.aborted) return
-        setError(err instanceof Error ? err.message : loadFailedMessage)
-      } finally {
-        if (!controller.signal.aborted) {
-          setLoading(false)
-          setRefreshing(false)
-        }
-      }
-    },
-    [loadFailedMessage]
-  )
+    }
+  }, [])
 
   React.useEffect(() => {
     let cancelled = false
@@ -229,14 +227,29 @@ export function SchoolClient() {
       setLoading(true)
       setError(null)
       try {
-        const data = await fetchSchoolBoard()
+        const etas = await fetchBoardEtas()
         if (cancelled) return
-        setByStopId(data.byStopId)
-        setStopNames(data.names)
+        setData((prev) => ({
+          byStopId: etas.byStopId,
+          stops: etas.stops,
+          routeInfos: prev.routeInfos,
+          faresByVariantKey: prev.faresByVariantKey,
+          staleByStopId: etas.staleByStopId,
+        }))
         setLastUpdatedAt(Date.now())
-        setNow(Date.now())
+        const extras = await fetchBoardExtras(
+          etas.byStopId,
+          AbortSignal.timeout(30000),
+          infoCacheRef.current
+        )
+        if (cancelled) return
+        setData((prev) => ({
+          ...prev,
+          routeInfos: { ...prev.routeInfos, ...extras.routeInfos },
+          faresByVariantKey: { ...prev.faresByVariantKey, ...extras.faresByVariantKey },
+        }))
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : loadFailedMessage)
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Failed to load ETAs')
       } finally {
         if (!cancelled) setLoading(false)
       }
@@ -244,60 +257,66 @@ export function SchoolClient() {
 
     void initialLoad()
     const timer = setInterval(() => {
-      setNow(Date.now())
       void refresh(false)
     }, 15000)
     return () => {
       cancelled = true
       clearInterval(timer)
+      abortRef.current?.abort()
     }
-  }, [refresh, loadFailedMessage])
+  }, [refresh])
+
+  const stopChipsById = React.useMemo(() => {
+    const next = new Map<string, StopChips>()
+    for (const stop of data.stops) {
+      const fullName = pickLang({ en: stop.nameEn, tc: stop.nameTc, sc: stop.nameSc }, lang)
+      const parsed = parseKmbStopNameCached(fullName, { isKmb: isKmbStop(stop), lang })
+      next.set(stop.stopId, {
+        stopId: stop.stopId,
+        fullName,
+        name: parsed.name ?? fullName,
+        platform: parsed.platform ?? null,
+        stopCode: parsed.stopCode ?? null,
+      })
+    }
+    return next
+  }, [data.stops, lang])
 
   const destinationGroups = React.useMemo(
-    () => groupSchoolEtasByDestination(byStopId, lang),
-    [byStopId, lang]
+    () => groupSchoolEtasByDestination(data.byStopId, lang),
+    [data.byStopId, lang]
   )
 
-  const stopDisplayName = React.useCallback(
-    (stopId: string) => {
-      const name = stopNames[stopId]
-      if (name) {
-        const picked = pickLang(name, lang)
-        if (picked) return picked
+  const destinationBaseKeys = React.useMemo(() => {
+    const keys = new Set<string>()
+    for (const group of destinationGroups) {
+      for (const g of groupEtasByVariant(
+        group.departures.map((row) => row.entry),
+        data.faresByVariantKey,
+        buildStopKey,
+        baseKeyOfStopKey
+      )) {
+        keys.add(g.baseKey)
       }
-      return stopId.length > 12 ? `${stopId.slice(0, 6)}…${stopId.slice(-4)}` : stopId
-    },
-    [stopNames, lang]
-  )
+    }
+    return Array.from(keys)
+  }, [destinationGroups, data.faresByVariantKey])
+  const destinationSchedules = useHeadwaySchedules(destinationBaseKeys)
 
   return (
-    <main className="bg-background text-foreground mx-auto w-full max-w-3xl px-4 pt-6 pb-16">
-      <header className="border-b pb-4">
-        <h1 className="text-2xl font-bold tracking-tight">{t.title}</h1>
-        <p className="text-muted-foreground mt-1 text-sm">{t.subtitle}</p>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-          <button
-            type="button"
-            onClick={() => void refresh(false)}
-            disabled={loading || refreshing}
-            className="bg-primary text-primary-foreground rounded-md px-3 py-1.5 font-medium disabled:opacity-60"
-          >
-            {loading || refreshing ? t.refreshing : t.refresh}
-          </button>
-          {lastUpdatedAt ? (
-            <span className="text-muted-foreground text-xs" aria-live="polite">
-              {formatUpdatedLabel(lastUpdatedAt, now, lang)}
-            </span>
-          ) : null}
-          {error ? (
-            <span className="text-destructive text-xs" role="alert">
-              {t.loadFailed}
-            </span>
-          ) : null}
-        </div>
-      </header>
+    <main className="mx-auto w-full max-w-3xl px-4 pt-6 pb-16">
+      <ResultsHeader
+        lang={lang}
+        mode="kmb"
+        title={t.title}
+        icon={<Clock className="h-3.5 w-3.5 shrink-0" />}
+        subtitle={t.subtitle}
+        lastUpdatedAt={lastUpdatedAt ?? undefined}
+        loading={loading || refreshing}
+        onRefresh={() => void refresh(false)}
+      />
 
-      <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+      <div className="mt-1 mb-5 flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex items-center gap-2" role="group" aria-label={t.viewLabel}>
           <div className="bg-muted inline-flex rounded-lg p-1">
             <button
@@ -344,134 +363,66 @@ export function SchoolClient() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="mt-6 space-y-3" aria-busy="true" aria-label={t.loading}>
-          {[0, 1, 2, 3].map((index) => (
-            <div key={index} className="border-muted rounded-lg border p-4">
-              <div className="bg-muted h-4 w-1/3 rounded motion-safe:animate-pulse" />
-              <div className="bg-muted mt-3 h-6 w-2/3 rounded motion-safe:animate-pulse" />
-            </div>
-          ))}
-        </div>
-      ) : error && Object.keys(byStopId).length === 0 ? (
-        <div className="mt-6 rounded-lg border p-6 text-center">
-          <p className="text-sm">{t.loadFailed}</p>
-          <button
-            type="button"
-            onClick={() => void refresh(true)}
-            className="bg-primary text-primary-foreground mt-3 rounded-md px-3 py-1.5 text-sm font-medium"
-          >
-            {t.retry}
-          </button>
-        </div>
-      ) : view === 'stops' ? (
-        <div className="mt-6 space-y-8">
+      {view === 'stops' ? (
+        <div className="space-y-8">
           {SCHOOL_GROUPS.map((group) => (
             <section key={group.id} aria-label={pickSchoolText(group.title, lang)}>
               <h2 className="text-lg font-bold">{pickSchoolText(group.title, lang)}</h2>
               <div className="mt-3 space-y-6">
                 {group.subgroups.map((sub) => (
-                  <div key={`${group.id}-${sub.heading.en}`}>
-                    <h3 className="text-muted-foreground text-sm font-semibold">
-                      {pickSchoolText(sub.heading, lang)}
-                    </h3>
-                    <div className="mt-2 space-y-3">
-                      {sub.stopIds.map((stopId) => {
-                        const entries = byStopId[stopId] ?? []
-                        const routeGroups = groupSchoolStopEtas(entries, lang)
-                        return (
-                          <article key={stopId} className="rounded-lg border p-3">
-                            <h4 className="text-sm font-semibold">{stopDisplayName(stopId)}</h4>
-                            {routeGroups.length === 0 ? (
-                              <p className="text-muted-foreground mt-2 text-sm">{t.noEtas}</p>
-                            ) : (
-                              <ul className="mt-2 space-y-3">
-                                {routeGroups.map((routeGroup) => (
-                                  <li
-                                    key={routeGroup.key}
-                                    className="flex items-start justify-between gap-3"
-                                  >
-                                    <div className="flex min-w-0 items-start gap-2">
-                                      <RouteBadge route={routeGroup.route} size="sm" />
-                                      <span className="min-w-0">
-                                        <span className="block truncate text-sm font-medium">
-                                          {routeGroup.destination || t.noDepartures}
-                                        </span>
-                                        <span className="text-muted-foreground block text-xs">
-                                          {routeGroup.co.toUpperCase()}
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <EtaTimes items={routeGroup.items} lang={lang} now={now} />
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </article>
-                        )
-                      })}
-                    </div>
-                  </div>
+                  <SchoolStopsResults
+                    key={`${group.id}-${sub.heading.en}`}
+                    title={pickSchoolText(sub.heading, lang)}
+                    stopIds={sub.stopIds}
+                    data={data}
+                    lang={lang}
+                    loading={loading}
+                    error={error}
+                    lastUpdatedAt={lastUpdatedAt ?? undefined}
+                    onRefresh={() => void refresh(false)}
+                  />
                 ))}
               </div>
             </section>
           ))}
         </div>
+      ) : loading && destinationGroups.length === 0 ? (
+        <PaneSkeleton />
+      ) : destinationGroups.length === 0 ? (
+        <EmptyState title={tc('common.noScheduledBuses')} />
       ) : (
-        <div className="mt-6 space-y-6">
-          {destinationGroups.length === 0 ? (
-            <p className="text-muted-foreground text-sm">{t.noDepartures}</p>
-          ) : (
-            destinationGroups.map((group) => (
-              <section key={group.destination} aria-label={group.destination}>
-                <h2 className="text-lg font-bold">{group.destination}</h2>
-                <ul className="mt-2 space-y-2">
-                  {group.departures.slice(0, 12).map((row, index) => {
-                    const minutes = row.entry.eta
-                      ? formatRelativeMinutesWithDrift(
-                          row.entry.eta,
-                          row.entry.data_timestamp ?? undefined,
-                          now
-                        )
-                      : null
-                    const label =
-                      minutes === null || Number.isNaN(minutes)
-                        ? '—'
-                        : minutes <= 0
-                          ? minutesLabel(lang)
-                          : minutesLabel(lang, minutes)
-                    return (
-                      <li
-                        key={`${row.stopId}-${row.entry.route}-${row.entry.eta_seq}-${index}`}
-                        className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
-                      >
-                        <span className="flex min-w-0 items-center gap-2">
-                          <RouteBadge route={(row.entry.route ?? '').toUpperCase()} size="sm" />
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium">
-                              {t.fromStop.replace('{stop}', stopDisplayName(row.stopId))}
-                            </span>
-                            <span className="text-muted-foreground block text-xs">
-                              {pickSchoolText(row.location, lang)}
-                              {pickSchoolText(row.subgroup, lang)
-                                ? ` · ${pickSchoolText(row.subgroup, lang)}`
-                                : ''}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="text-lg font-bold tabular-nums">{label}</span>
-                      </li>
-                    )
-                  })}
-                </ul>
-                {group.departures.length > 12 ? (
-                  <p className="text-muted-foreground mt-1 text-xs">
-                    {t.moreDepartures.replace('{n}', String(group.departures.length - 12))}
-                  </p>
-                ) : null}
-              </section>
-            ))
-          )}
+        <div className="space-y-8">
+          {destinationGroups.map((group) => (
+            <section key={group.destination} aria-label={group.destination}>
+              <h2 className="text-lg font-bold">{group.destination}</h2>
+              <StaggerList className="mt-3">
+                {groupEtasByVariant(
+                  group.departures.map((row) => row.entry),
+                  data.faresByVariantKey,
+                  buildStopKey,
+                  baseKeyOfStopKey
+                ).map((g, idx) => (
+                  <RouteDepartureRow
+                    key={g.key}
+                    variantKey={g.key}
+                    baseKey={g.baseKey}
+                    items={g.items}
+                    hasEta={g.hasEta}
+                    hasFare={g.hasFare}
+                    isArrivingLeg={g.isArrivingLeg}
+                    routeInfos={data.routeInfos}
+                    faresByVariantKey={data.faresByVariantKey}
+                    lang={lang}
+                    staggerClass={cn('ui-cv-row', staggerClassForIndex(idx))}
+                    stopChips={stopChipsForGroup(g.items, group, stopChipsById)}
+                    expanded={expandedKey === g.key}
+                    onToggleExpand={onToggleExpand}
+                    scheduled={destinationSchedules[g.baseKey] ?? null}
+                  />
+                ))}
+              </StaggerList>
+            </section>
+          ))}
         </div>
       )}
 
@@ -479,5 +430,112 @@ export function SchoolClient() {
         <p>{t.dataNote}</p>
       </footer>
     </main>
+  )
+}
+
+/** One row per stop for the same variant, mirroring the main results list. */
+function buildStopKey(entry: KmbEtaEntryWithLeg): string {
+  const key = buildDefaultKey(entry)
+  const parts = key.split('|')
+  const leg = parts.pop() ?? '_'
+  return [...parts, entry.stop ?? '', leg].join('|')
+}
+
+function baseKeyOfStopKey(key: string): string {
+  return key.split('|').slice(0, -2).join('|')
+}
+
+function stopChipsForGroup(
+  items: KmbEtaEntryWithLeg[],
+  group: { departures: { entry: KmbEtaEntryWithLeg; stopId: string }[] },
+  stopChipsById: Map<string, StopChips>
+): StopChips {
+  for (const item of items) {
+    const stopId = group.departures.find((row) => row.entry === item)?.stopId
+    const chips = stopId ? stopChipsById.get(stopId) : undefined
+    if (chips) return chips
+  }
+  const fallbackId = items[0]?.stop ? String(items[0].stop).trim() : null
+  return {
+    stopId: fallbackId,
+    fullName: null,
+    name: null,
+    platform: null,
+    stopCode: null,
+  }
+}
+
+function SchoolStopsResults({
+  title,
+  stopIds,
+  data,
+  lang,
+  loading,
+  error,
+  lastUpdatedAt,
+  onRefresh,
+}: {
+  title: string
+  stopIds: string[]
+  data: BoardData
+  lang: UiLanguage
+  loading: boolean
+  error: string | null
+  lastUpdatedAt?: number
+  onRefresh: () => void
+}) {
+  const etaByStopId = React.useMemo(() => {
+    const subset: Record<string, KmbEtaEntryWithLeg[]> = {}
+    for (const stopId of stopIds) subset[stopId] = data.byStopId[stopId] ?? []
+    return subset
+  }, [data.byStopId, stopIds])
+  const stops = React.useMemo(
+    () =>
+      stopIds
+        .map((stopId) => data.stops.find((s) => s.stopId === stopId))
+        .filter((s): s is KmbStopSearchItem => s !== undefined),
+    [data.stops, stopIds]
+  )
+  const eta = React.useMemo(
+    () => stopIds.flatMap((stopId) => etaByStopId[stopId] ?? []),
+    [etaByStopId, stopIds]
+  )
+  const staleByStopId = React.useMemo(() => {
+    if (!data.staleByStopId) return undefined
+    const subset: Record<string, { stale: boolean; ageMs: number | null }> = {}
+    for (const stopId of stopIds) {
+      const entry = data.staleByStopId[stopId]
+      if (entry) subset[stopId] = entry
+    }
+    return subset
+  }, [data.staleByStopId, stopIds])
+  const precomputedGroups = React.useMemo(
+    () =>
+      precomputeRenderGroups(etaByStopId, stopIds, data.faresByVariantKey, {
+        byStop: true,
+        flat: false,
+      }),
+    [etaByStopId, stopIds, data.faresByVariantKey]
+  )
+
+  return (
+    <KmbResults
+      lang={lang}
+      title={title}
+      onRefresh={onRefresh}
+      eta={eta}
+      routeInfos={data.routeInfos}
+      faresByVariantKey={data.faresByVariantKey}
+      hasQuery
+      lastUpdatedAt={lastUpdatedAt}
+      staleByStopId={staleByStopId}
+      error={error}
+      loading={loading}
+      stops={stops}
+      isKeyphraseMode
+      etaByStopId={etaByStopId}
+      loadedStopIds={stopIds}
+      precomputedGroups={precomputedGroups}
+    />
   )
 }

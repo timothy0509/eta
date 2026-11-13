@@ -7,7 +7,6 @@ import {
   SCHOOL_STOP_LOCATION,
   getSchoolEtaDestination,
   groupSchoolEtasByDestination,
-  groupSchoolStopEtas,
 } from '@/lib/eta/school'
 
 function makeEntry(overrides: Partial<KmbEtaEntryWithLeg> = {}): KmbEtaEntryWithLeg {
@@ -60,22 +59,6 @@ describe('getSchoolEtaDestination', () => {
     expect(getSchoolEtaDestination(entry, 'en')).toBe('Central')
     expect(getSchoolEtaDestination(entry, 'tc')).toBe('中環')
     expect(getSchoolEtaDestination(entry, 'sc')).toBe('中环')
-  })
-})
-
-describe('groupSchoolStopEtas', () => {
-  it('groups one stop by route and destination, soonest first', () => {
-    const entries = [
-      makeEntry({ route: '2X', eta: '2026-11-13T08:10:00+08:00', eta_seq: 1 }),
-      makeEntry({ route: '1A', eta: '2026-11-13T08:05:00+08:00', eta_seq: 1 }),
-      makeEntry({ route: '1A', eta: '2026-11-13T08:03:00+08:00', eta_seq: 2 }),
-    ]
-    const groups = groupSchoolStopEtas(entries, 'tc')
-    expect(groups.map((group) => group.route)).toEqual(['1A', '2X'])
-    expect(groups[0].items.map((item) => item.eta)).toEqual([
-      '2026-11-13T08:03:00+08:00',
-      '2026-11-13T08:05:00+08:00',
-    ])
   })
 })
 

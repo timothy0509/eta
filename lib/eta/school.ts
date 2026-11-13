@@ -125,48 +125,6 @@ export function schoolEtaTimeMs(entry: Pick<KmbEtaEntryWithLeg, 'eta'>): number 
   return Number.isNaN(parsed) ? Number.POSITIVE_INFINITY : parsed
 }
 
-export type SchoolStopRouteGroup = {
-  key: string
-  route: string
-  co: string
-  destination: string
-  items: KmbEtaEntryWithLeg[]
-}
-
-export function groupSchoolStopEtas(
-  entries: KmbEtaEntryWithLeg[],
-  lang: UiLanguage
-): SchoolStopRouteGroup[] {
-  const byKey = new Map<string, SchoolStopRouteGroup>()
-  for (const entry of entries) {
-    const destination = getSchoolEtaDestination(entry, lang)
-    const route = (entry.route ?? '').toUpperCase()
-    const key = `${String(entry.groupCo ?? entry.co ?? 'kmb')}|${route}|${String(entry.dir ?? '')}|${String(entry.service_type ?? '')}|${destination}|${entry.leg ?? '_'}`
-    const group = byKey.get(key)
-    if (group) {
-      group.items.push(entry)
-    } else {
-      byKey.set(key, {
-        key,
-        route,
-        co: String(entry.groupCo ?? entry.co ?? ''),
-        destination,
-        items: [entry],
-      })
-    }
-  }
-  const groups = Array.from(byKey.values())
-  for (const group of groups) {
-    group.items.sort((a, b) => schoolEtaTimeMs(a) - schoolEtaTimeMs(b) || a.eta_seq - b.eta_seq)
-  }
-  groups.sort((a, b) => {
-    const timeDiff = schoolEtaTimeMs(a.items[0]) - schoolEtaTimeMs(b.items[0])
-    if (timeDiff !== 0) return timeDiff
-    return a.route.localeCompare(b.route) || a.destination.localeCompare(b.destination)
-  })
-  return groups
-}
-
 export type SchoolDestinationGroup = {
   destination: string
   soonestMs: number

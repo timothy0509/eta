@@ -1,33 +1,34 @@
 'use client'
 
 import * as React from 'react'
-import { Loader2, RefreshCw } from 'lucide-react'
+import { Clock, Loader2, RefreshCw } from 'lucide-react'
 
+import { EmptyState } from '@/components/eta/empty-state'
 import { RouteBadge } from '@/components/eta/route-badge'
+import { TickingKmbMinutes } from '@/components/eta/ticking-eta'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { fetchKmbStopEtas, type KmbEtaEntryWithLeg } from '@/lib/eta/client'
-import { formatRelativeMinutesWithDrift, formatUiTime } from '@/lib/eta/format'
+import { formatUiTime } from '@/lib/eta/format'
 import { pickLang } from '@/lib/eta/pick-lang'
 import {
   collectSchoolEtas,
   groupSchoolEtasByDestination,
   groupSchoolEtasByStop,
-  SCHOOL_DEPARTURE_LIMIT,
   SCHOOL_LOCATIONS,
   SCHOOL_STOP_IDS,
-  type SchoolDeparture,
-  type SchoolRouteRow,
+  schoolDepartures,
   type SchoolText,
 } from '@/lib/eta/school'
 import type { UiLanguage } from '@/lib/eta/types'
 import { useAutoRefresh } from '@/lib/eta/use-auto-refresh'
-import { useTickingNow } from '@/lib/eta/use-ticking-now'
 import { cn } from '@/lib/utils'
 
 type ViewMode = 'stop' | 'destination'
 type PageLanguage = 'tc' | 'en'
 
 const REFRESH_MS = 30_000
-const TICK_MS = 15_000
 
 const COPY = {
   title: { en: 'School ETAs', tc: '學校到站時間', sc: '学校到站时间' } satisfies SchoolText,
@@ -44,8 +45,6 @@ const COPY = {
   } satisfies SchoolText,
   view: { en: 'View', tc: '檢視', sc: '查看' } satisfies SchoolText,
   language: { en: 'Language', tc: '語言', sc: '语言' } satisfies SchoolText,
-  now: { en: 'Now', tc: '即將到達', sc: '即将到达' } satisfies SchoolText,
-  minutes: { en: '{count} min', tc: '{count} 分', sc: '{count} 分' } satisfies SchoolText,
   noBuses: { en: 'No upcoming buses', tc: '暫無班次', sc: '暂无班次' } satisfies SchoolText,
   updated: { en: 'Updated {time}', tc: '更新於 {time}', sc: '更新于 {time}' } satisfies SchoolText,
   updating: { en: 'Updating…', tc: '更新中…', sc: '更新中…' } satisfies SchoolText,
@@ -73,63 +72,22 @@ const COPY = {
   } satisfies SchoolText,
 }
 
-function formatMinutes(departure: SchoolDeparture, now: number, lang: UiLanguage): string {
-  const minutes = formatRelativeMinutesWithDrift(departure.eta, departure.dataTimestamp, now)
-  if (!Number.isFinite(minutes)) return '—'
-  if (minutes <= 0) return pickLang(COPY.now, lang)
-  return pickLang(COPY.minutes, lang).replace('{count}', String(minutes))
-}
-
-function TimePills({
-  departures,
-  now,
-  lang,
-}: {
-  departures: SchoolDeparture[]
-  now: number
-  lang: UiLanguage
-}) {
+function renderDepartureTimes(items: KmbEtaEntryWithLeg[], lang: UiLanguage) {
   return (
     <div className="flex shrink-0 items-center gap-1">
-      {departures.slice(0, SCHOOL_DEPARTURE_LIMIT).map((departure, index) => (
-        <span
-          key={`${departure.eta}-${index}`}
+      {schoolDepartures(items).map((entry, index) => (
+        <TickingKmbMinutes
+          key={`${entry.eta}-${index}`}
+          eta={entry.eta}
+          dataTimestamp={entry.data_timestamp}
+          lang={lang}
+          variant="plain"
           className={cn(
-            'font-tabular rounded-md px-1.5 py-1 text-[11px] font-semibold whitespace-nowrap sm:text-xs',
+            'rounded-md px-1.5 py-1 text-[11px] font-semibold whitespace-nowrap sm:text-xs',
             index === 0 ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
           )}
-        >
-          {formatMinutes(departure, now, lang)}
-        </span>
+        />
       ))}
-    </div>
-  )
-}
-
-function StopRouteRow({ row, now, lang }: { row: SchoolRouteRow; now: number; lang: UiLanguage }) {
-  return (
-    <div className="flex items-center gap-3 py-2">
-      <RouteBadge route={row.route} company={row.company} size="sm" />
-      <p className="text-foreground min-w-0 flex-1 truncate text-sm">
-        {pickLang(row.destination, lang)}
-      </p>
-      <TimePills departures={row.departures} now={now} lang={lang} />
-    </div>
-  )
-}
-
-function LoadingState({ label }: { label: string }) {
-  return (
-    <div className="border-border bg-card mt-6 space-y-3 rounded-xl border p-4" aria-busy="true">
-      <p className="text-muted-foreground flex items-center gap-2 text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        {label}
-      </p>
-      <div className="space-y-2">
-        <div className="bg-muted h-8 animate-pulse rounded-lg" />
-        <div className="bg-muted h-8 animate-pulse rounded-lg" />
-        <div className="bg-muted h-8 animate-pulse rounded-lg" />
-      </div>
     </div>
   )
 }
@@ -145,7 +103,6 @@ export default function SchoolClient() {
   const [view, setView] = React.useState<ViewMode>('stop')
   const [language, setLanguage] = React.useState<PageLanguage>('tc')
   const loadedOnce = React.useRef(false)
-  const now = useTickingNow(TICK_MS)
   const lang: UiLanguage = language
 
   const refresh = React.useCallback(() => {
@@ -195,6 +152,7 @@ export default function SchoolClient() {
   const entries = React.useMemo(() => collectSchoolEtas(byStopId), [byStopId])
   const stopSections = React.useMemo(() => groupSchoolEtasByStop(entries), [entries])
   const destinationSections = React.useMemo(() => groupSchoolEtasByDestination(entries), [entries])
+  const hasData = lastUpdated !== null
 
   const statusText = error
     ? pickLang(COPY.error, lang)
@@ -215,84 +173,45 @@ export default function SchoolClient() {
             <p className="text-muted-foreground mt-1 text-sm">{pickLang(COPY.subtitle, lang)}</p>
           </div>
           <div className="flex items-center gap-1.5">
-            <div
-              className="bg-muted text-muted-foreground inline-flex rounded-lg p-0.5 text-xs font-medium"
-              role="group"
+            <ToggleGroup
+              type="single"
+              value={language}
+              onValueChange={(value) => value && setLanguage(value as PageLanguage)}
+              variant="outline"
+              size="sm"
               aria-label={pickLang(COPY.language, lang)}
             >
-              <button
-                type="button"
-                aria-pressed={language === 'tc'}
-                onClick={() => setLanguage('tc')}
-                className={cn(
-                  'rounded-md px-2 py-1 transition-colors',
-                  language === 'tc'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'hover:text-foreground'
-                )}
-              >
-                中
-              </button>
-              <button
-                type="button"
-                aria-pressed={language === 'en'}
-                onClick={() => setLanguage('en')}
-                className={cn(
-                  'rounded-md px-2 py-1 transition-colors',
-                  language === 'en'
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'hover:text-foreground'
-                )}
-              >
-                EN
-              </button>
-            </div>
-            <button
+              <ToggleGroupItem value="tc">中</ToggleGroupItem>
+              <ToggleGroupItem value="en">EN</ToggleGroupItem>
+            </ToggleGroup>
+            <Button
               type="button"
+              variant="outline"
+              size="icon-sm"
               onClick={refresh}
               disabled={refreshing}
               aria-label={pickLang(COPY.refresh, lang)}
               title={pickLang(COPY.refresh, lang)}
-              className="border-border bg-background hover:bg-muted inline-flex h-8 w-8 items-center justify-center rounded-lg border transition-colors disabled:opacity-50"
             >
-              <RefreshCw className={cn('h-4 w-4', refreshing && 'animate-spin')} />
-            </button>
+              <RefreshCw className={cn(refreshing && 'animate-spin')} />
+            </Button>
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
-          <div
-            className="bg-muted inline-flex rounded-lg p-0.5 text-xs font-medium"
-            role="group"
+          <ToggleGroup
+            type="single"
+            value={view}
+            onValueChange={(value) => value && setView(value as ViewMode)}
+            variant="outline"
+            size="sm"
             aria-label={pickLang(COPY.view, lang)}
           >
-            <button
-              type="button"
-              aria-pressed={view === 'stop'}
-              onClick={() => setView('stop')}
-              className={cn(
-                'rounded-md px-3 py-1.5 transition-colors',
-                view === 'stop'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              {pickLang(COPY.byStop, lang)}
-            </button>
-            <button
-              type="button"
-              aria-pressed={view === 'destination'}
-              onClick={() => setView('destination')}
-              className={cn(
-                'rounded-md px-3 py-1.5 transition-colors',
-                view === 'destination'
-                  ? 'bg-background text-foreground shadow-sm'
-                  : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
+            <ToggleGroupItem value="stop">{pickLang(COPY.byStop, lang)}</ToggleGroupItem>
+            <ToggleGroupItem value="destination">
               {pickLang(COPY.byDestination, lang)}
-            </button>
-          </div>
+            </ToggleGroupItem>
+          </ToggleGroup>
           <p className="text-muted-foreground flex items-center gap-1.5 text-xs">
             {refreshing ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
             {statusText}
@@ -300,92 +219,95 @@ export default function SchoolClient() {
         </div>
 
         {error ? (
-          <div className="border-destructive/30 bg-destructive/5 text-destructive mt-3 flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
-            <span>{pickLang(COPY.error, lang)}</span>
-            <button
-              type="button"
-              onClick={refresh}
-              className="border-destructive/30 hover:bg-destructive/10 shrink-0 rounded-md border px-2 py-1 text-xs font-medium transition-colors"
-            >
-              {pickLang(COPY.retry, lang)}
-            </button>
-          </div>
+          <EmptyState
+            title={pickLang(COPY.error, lang)}
+            action={
+              <Button type="button" variant="outline" size="sm" onClick={refresh}>
+                {pickLang(COPY.retry, lang)}
+              </Button>
+            }
+            className="mt-4"
+          />
         ) : null}
         {!error && failedStops.length > 0 ? (
           <p className="text-muted-foreground mt-3 text-xs">{pickLang(COPY.partial, lang)}</p>
         ) : null}
       </header>
 
-      {loading ? <LoadingState label={pickLang(COPY.loading, lang)} /> : null}
+      {loading ? (
+        <EmptyState
+          icon={Loader2}
+          title={pickLang(COPY.loading, lang)}
+          className="mt-6 [&_svg]:animate-spin"
+        />
+      ) : null}
 
-      {!loading && view === 'stop' ? (
+      {!loading && (!error || hasData) && view === 'stop' ? (
         <div className="mt-6 space-y-4">
           {SCHOOL_LOCATIONS.map((location) => {
             const sections = stopSections.filter((section) => section.locationId === location.id)
             return (
-              <section
-                key={location.id}
-                className="border-border bg-card overflow-hidden rounded-xl border"
-              >
-                <h2 className="border-border border-b px-4 py-3 text-sm font-semibold">
-                  {pickLang(location.name, lang)}
-                </h2>
-                {sections.map((section) => (
-                  <div
-                    key={section.groupId}
-                    className="border-border border-b px-4 py-3 last:border-b-0"
-                  >
-                    <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
-                      {pickLang(section.groupLabel, lang)}
-                    </h3>
-                    {section.routes.length > 0 ? (
-                      <div className="divide-border/60 mt-2 divide-y">
-                        {section.routes.map((row) => (
-                          <StopRouteRow key={row.key} row={row} now={now} lang={lang} />
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-muted-foreground mt-2 text-sm">
-                        {pickLang(COPY.noBuses, lang)}
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </section>
+              <Card key={location.id} className="gap-0 overflow-hidden py-0">
+                <CardHeader className="border-border border-b px-4 py-3">
+                  <CardTitle className="text-sm">{pickLang(location.name, lang)}</CardTitle>
+                </CardHeader>
+                <CardContent className="px-0">
+                  {sections.map((section) => (
+                    <div
+                      key={section.groupId}
+                      className="border-border border-b px-4 py-3 last:border-b-0"
+                    >
+                      <h3 className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+                        {pickLang(section.groupLabel, lang)}
+                      </h3>
+                      {section.routes.length > 0 ? (
+                        <div className="divide-border/60 mt-2 divide-y">
+                          {section.routes.map((row) => (
+                            <div key={row.key} className="flex items-center gap-3 py-2">
+                              <RouteBadge route={row.route} company={row.company} size="sm" />
+                              <p className="text-foreground min-w-0 flex-1 truncate text-sm">
+                                {pickLang(row.destination, lang)}
+                              </p>
+                              {renderDepartureTimes(row.items, lang)}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <EmptyState title={pickLang(COPY.noBuses, lang)} className="py-2" />
+                      )}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
             )
           })}
         </div>
       ) : null}
 
-      {!loading && view === 'destination' ? (
+      {!loading && (!error || hasData) && view === 'destination' ? (
         destinationSections.length > 0 ? (
           <div className="mt-6 space-y-4">
             {destinationSections.map((section) => (
-              <section
-                key={section.key}
-                className="border-border bg-card overflow-hidden rounded-xl border"
-              >
-                <h2 className="border-border border-b px-4 py-3 text-sm font-semibold">
-                  {pickLang(section.destination, lang)}
-                </h2>
-                <div className="divide-border/60 divide-y">
+              <Card key={section.key} className="gap-0 overflow-hidden py-0">
+                <CardHeader className="border-border border-b px-4 py-3">
+                  <CardTitle className="text-sm">{pickLang(section.destination, lang)}</CardTitle>
+                </CardHeader>
+                <CardContent className="divide-border/60 divide-y px-0">
                   {section.rows.map((row) => (
                     <div key={row.key} className="flex items-center gap-3 px-4 py-2.5">
                       <RouteBadge route={row.route} company={row.company} size="sm" />
                       <p className="text-muted-foreground min-w-0 flex-1 truncate text-xs">
                         {pickLang(row.locationName, lang)} · {pickLang(row.groupLabel, lang)}
                       </p>
-                      <TimePills departures={row.departures} now={now} lang={lang} />
+                      {renderDepartureTimes(row.items, lang)}
                     </div>
                   ))}
-                </div>
-              </section>
+                </CardContent>
+              </Card>
             ))}
           </div>
         ) : (
-          <p className="text-muted-foreground mt-6 text-sm">
-            {pickLang(COPY.noDestinations, lang)}
-          </p>
+          <EmptyState icon={Clock} title={pickLang(COPY.noDestinations, lang)} className="mt-6" />
         )
       ) : null}
     </div>

@@ -1,4 +1,5 @@
 import type { KmbEtaEntryWithLeg } from '@/lib/eta/client'
+import { groupEtasByVariant, type EtaGroup } from '@/lib/eta/kmb-eta-groups'
 
 /** Bilingual copy shared by the standalone school page. */
 export type SchoolText = {
@@ -114,17 +115,10 @@ export type SchoolEtaEntry = {
   entry: KmbEtaEntryWithLeg
 }
 
-export type SchoolDeparture = {
-  eta: string
-  dataTimestamp: string
-}
-
-export type SchoolRouteRow = {
-  key: string
+export type SchoolRouteRow = EtaGroup & {
   route: string
   company: string
   destination: SchoolText
-  departures: SchoolDeparture[]
 }
 
 export type SchoolStopSection = {
@@ -157,25 +151,16 @@ function compareRoutes(a: { route: string }, b: { route: string }): number {
   return a.route.localeCompare(b.route, undefined, { numeric: true })
 }
 
-function destinationOf(entry: KmbEtaEntryWithLeg): SchoolText {
+function destinationOf(entry: KmbEtaEntryWithLeg | undefined): SchoolText {
   return {
-    en: entry.dest_en ?? '',
-    tc: entry.dest_tc ?? '',
-    sc: entry.dest_sc ?? '',
+    en: entry?.dest_en ?? '',
+    tc: entry?.dest_tc ?? '',
+    sc: entry?.dest_sc ?? '',
   }
 }
 
 function destinationKey(destination: SchoolText): string {
   return (destination.tc || destination.en || destination.sc).trim()
-}
-
-function routeRowKey(entry: KmbEtaEntryWithLeg, destination: SchoolText): string {
-  return [
-    (entry.route ?? '').toUpperCase(),
-    String(entry.dir ?? ''),
-    String(entry.service_type ?? ''),
-    destinationKey(destination),
-  ].join('|')
 }
 
 /**
@@ -201,45 +186,32 @@ export function collectSchoolEtas(
   return entries
 }
 
+/** The first few real departures from an existing ETA group. */
+export function schoolDepartures(
+  items: KmbEtaEntryWithLeg[],
+  limit = SCHOOL_DEPARTURE_LIMIT
+): KmbEtaEntryWithLeg[] {
+  return items.filter((entry) => entry.eta && !Number.isNaN(Date.parse(entry.eta))).slice(0, limit)
+}
+
 function buildRouteRows(entries: SchoolEtaEntry[]): SchoolRouteRow[] {
-  const rows = new Map<string, SchoolRouteRow>()
-  const seenDepartures = new Map<string, Set<string>>()
-
-  for (const { entry } of entries) {
-    const destination = destinationOf(entry)
-    const key = routeRowKey(entry, destination)
-    let row = rows.get(key)
-    if (!row) {
-      row = {
-        key,
-        route: entry.route,
-        company: entry.groupCo ?? entry.co,
-        destination,
-        departures: [],
+  // Reuse the app's existing variant grouping so joint operators, leg
+  // suffixes, fare keys and route ordering all behave exactly like the
+  // normal results view. Only the display destination is added here.
+  return groupEtasByVariant(
+    entries.map((entry) => entry.entry),
+    {}
+  )
+    .filter((group) => group.hasEta)
+    .map((group) => {
+      const first = group.items[0]
+      return {
+        ...group,
+        route: String(first?.route ?? ''),
+        company: String(first?.groupCo ?? first?.co ?? 'kmb'),
+        destination: destinationOf(first),
       }
-      rows.set(key, row)
-      seenDepartures.set(key, new Set())
-    }
-
-    // The same physical bus can be returned by a joint operator's row or
-    // by a sibling stop id in the same group. Keep one copy of each arrival.
-    const seen = seenDepartures.get(key)!
-    const departureKey = `${entry.eta}|${String(entry.dir ?? '')}`
-    if (seen.has(departureKey)) continue
-    seen.add(departureKey)
-    row.departures.push({
-      eta: entry.eta,
-      dataTimestamp: entry.data_timestamp,
     })
-  }
-
-  const result = Array.from(rows.values())
-  for (const row of result) {
-    row.departures.sort((a, b) => etaTime(a.eta) - etaTime(b.eta))
-    row.departures = row.departures.slice(0, SCHOOL_DEPARTURE_LIMIT)
-  }
-  result.sort((a, b) => compareRoutes(a, b))
-  return result
 }
 
 export function groupSchoolEtasByStop(entries: SchoolEtaEntry[]): SchoolStopSection[] {
@@ -301,11 +273,11 @@ export function groupSchoolEtasByDestination(
   return result
 }
 
-function sortByNextDeparture(
-  a: { departures: SchoolDeparture[] } | undefined,
-  b: { departures: SchoolDeparture[] } | undefined
-): number {
-  const aTime = a?.departures[0] ? etaTime(a.departures[0].eta) : Number.POSITIVE_INFINITY
-  const bTime = b?.departures[0] ? etaTime(b.departures[0].eta) : Number.POSITIVE_INFINITY
-  return aTime - bTime
+function nextDepartureTime(row: SchoolRouteRow | undefined): number {
+  const first = row ? schoolDepartures(row.items, 1)[0] : undefined
+  return first ? etaTime(first.eta) : Number.POSITIVE_INFINITY
+}
+
+function sortByNextDeparture(a: SchoolRouteRow | undefined, b: SchoolRouteRow | undefined): number {
+  return nextDepartureTime(a) - nextDepartureTime(b)
 }

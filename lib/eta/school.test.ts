@@ -7,6 +7,7 @@ import {
   groupSchoolEtasByStop,
   SCHOOL_LOCATIONS,
   SCHOOL_STOP_IDS,
+  schoolDepartures,
 } from '@/lib/eta/school'
 
 const PAK_HUNG_EAST = '29740CCBBD82FC33'
@@ -73,15 +74,20 @@ describe('collectSchoolEtas', () => {
 })
 
 describe('groupSchoolEtasByStop', () => {
-  it('merges operators, sorts departures, and caps them at three', () => {
+  it('reuses variant grouping, merges joint operators, and caps departures at three', () => {
+    const joint = {
+      groupCo: 'kmb',
+      jointVariantKey: 'joint-19',
+      operators: ['kmb', 'ctb'],
+    }
     const entries = collectSchoolEtas({
       [PAK_HUNG_EAST]: [
-        eta({ route: '19', eta: '2026-01-01T10:09:00.000Z' }),
+        eta({ route: '19', eta: '2026-01-01T10:09:00.000Z', ...joint }),
         eta({ route: '290', eta: '2026-01-01T10:03:00.000Z' }),
-        eta({ route: '19', eta: '2026-01-01T10:05:00.000Z' }),
-        eta({ co: 'ctb', route: '19', eta: '2026-01-01T10:06:00.000Z' }),
-        eta({ route: '19', eta: '2026-01-01T10:07:00.000Z' }),
-        eta({ route: '19', eta: '2026-01-01T10:11:00.000Z' }),
+        eta({ route: '19', eta: '2026-01-01T10:05:00.000Z', ...joint }),
+        eta({ co: 'ctb', route: '19', eta: '2026-01-01T10:06:00.000Z', ...joint }),
+        eta({ route: '19', eta: '2026-01-01T10:07:00.000Z', ...joint }),
+        eta({ route: '19', eta: '2026-01-01T10:11:00.000Z', ...joint }),
       ],
       [PAK_HUNG_CITYBUS_WEST]: [eta({ co: 'ctb', route: 'A28', eta: '2026-01-01T10:02:00.000Z' })],
     })
@@ -95,7 +101,7 @@ describe('groupSchoolEtasByStop', () => {
       SCHOOL_LOCATIONS.find((location) => location.id === 'pak-hung-house')!.groups.length
     )
     expect(eastbound?.routes.map((row) => row.route)).toEqual(['19', '290'])
-    expect(eastbound?.routes[0].departures.map((departure) => departure.eta)).toEqual([
+    expect(schoolDepartures(eastbound!.routes[0].items).map((entry) => entry.eta)).toEqual([
       '2026-01-01T10:05:00.000Z',
       '2026-01-01T10:06:00.000Z',
       '2026-01-01T10:07:00.000Z',
@@ -151,7 +157,7 @@ describe('groupSchoolEtasByDestination', () => {
 
     expect(sections.map((section) => section.destination.tc)).toEqual(['九龍灣', '坪石'])
     expect(sections[0].rows).toHaveLength(1)
-    expect(sections[0].rows[0].departures.map((departure) => departure.eta)).toEqual([
+    expect(schoolDepartures(sections[0].rows[0].items).map((entry) => entry.eta)).toEqual([
       '2026-01-01T10:02:00.000Z',
       '2026-01-01T10:04:00.000Z',
     ])

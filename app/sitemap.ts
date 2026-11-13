@@ -10,5 +10,11 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'daily',
       priority: 1,
     },
+    {
+      url: 'https://eta.hkjc.uk/school',
+      lastModified,
+      changeFrequency: 'daily',
+      priority: 0.6,
+    },
   ]
 }

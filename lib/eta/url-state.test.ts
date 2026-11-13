@@ -186,8 +186,13 @@ describe('decodeUrlState', () => {
   })
 
   it('decodes sub view parameter', () => {
+    const result = decodeUrlState('v=map')
+    expect(result.state.subView).toBe('map')
+  })
+
+  it('maps the legacy nearby sub view to the map tab', () => {
     const result = decodeUrlState('v=nearby')
-    expect(result.state.subView).toBe('nearby')
+    expect(result.state.subView).toBe('map')
   })
 
   it('encodes non-default sub view', () => {

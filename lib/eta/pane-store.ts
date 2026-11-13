@@ -58,7 +58,7 @@ export const usePaneStore = create<PaneStore>()((set) => ({
   kmbStops: [],
   // The full stop list is ~6k entries. Only replace it when the contents
   // actually changed so refetches never rewrite the last query's list
-  // and rerender every kmbStops subscriber (favorites, nearby).
+  // and rerender every kmbStops subscriber (favorites, map).
   setKmbStops: (stops) =>
     set((prev) => {
       const prevStops = prev.kmbStops

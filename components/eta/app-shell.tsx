@@ -3,8 +3,8 @@
 import {
   Bus,
   Heart,
+  Map as MapIcon,
   MapPin,
-  Navigation,
   Route,
   Settings,
   TrainFront,
@@ -50,12 +50,12 @@ const SUB_VIEWS: Array<{
 }> = [
   { id: 'routes', icon: Route },
   { id: 'stops', icon: MapPin },
-  { id: 'nearby', icon: Navigation },
+  { id: 'map', icon: MapIcon },
   { id: 'saved', icon: Heart },
   { id: 'settings', icon: Settings },
 ]
 
-// Preload the MapLibre map chunk on hover/focus of the nearby tab so the
+// Preload the MapLibre map chunk on hover/focus of the map tab so the
 // chunk arrives before the tap, without paying for it on startup.
 let mapPreloadStarted = false
 function preloadTransitMap(): void {
@@ -214,7 +214,7 @@ export function SideRail({ lang, subView, onSubViewChange }: SideRailProps) {
           const Icon = sv.icon
           const active = subView === sv.id
           const preloadProps =
-            sv.id === 'nearby'
+            sv.id === 'map'
               ? {
                   onMouseEnter: preloadTransitMap,
                   onFocus: preloadTransitMap,
@@ -280,7 +280,7 @@ export function BottomNav({ lang, subView, onSubViewChange }: BottomNavProps) {
           const Icon = sv.icon
           const active = subView === sv.id
           const preloadProps =
-            sv.id === 'nearby'
+            sv.id === 'map'
               ? {
                   onMouseEnter: preloadTransitMap,
                   onFocus: preloadTransitMap,

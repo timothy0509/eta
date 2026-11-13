@@ -1,7 +1,7 @@
 import type { SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import type { FavoritesItem } from '@/lib/store'
 
-const SUB_VIEWS = new Set<SubView>(['routes', 'stops', 'nearby', 'saved', 'settings'])
+const SUB_VIEWS = new Set<SubView>(['routes', 'stops', 'map', 'saved', 'settings'])
 
 export type KmbQuerySummary =
   | {
@@ -68,6 +68,8 @@ function parseTransportMode(value: string | null): TransportMode | null {
 }
 
 function parseSubView(value: string | null): SubView | null {
+  // The nearby tab became the map tab; old links land on the map.
+  if (value === 'nearby') return 'map'
   if (value && SUB_VIEWS.has(value as SubView)) return value as SubView
   return null
 }

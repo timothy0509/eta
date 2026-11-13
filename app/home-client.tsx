@@ -80,8 +80,8 @@ const LrtRoutesView = dynamic(
     })),
   { loading: () => <ResultsSkeleton />, ssr: false }
 )
-const NearbyView = dynamic(
-  () => import('@/components/eta/views/nearby-view').then((mod) => ({ default: mod.NearbyView })),
+const MapView = dynamic(
+  () => import('@/components/eta/views/map-view').then((mod) => ({ default: mod.MapView })),
   { loading: () => <ResultsSkeleton />, ssr: false }
 )
 const SettingsView = dynamic(
@@ -555,10 +555,10 @@ export default function HomeClient() {
         return renderRoutes()
       case 'stops':
         return renderStops()
-      case 'nearby':
+      case 'map':
         return (
-          <PaneEnter key={`nearby:${mode}`}>
-            <NearbyView
+          <PaneEnter key={`map:${mode}`}>
+            <MapView
               lang={lang}
               mode={mode}
               onSelectStopGroup={onSelectStopGroupFromRoute}

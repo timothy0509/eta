@@ -350,7 +350,7 @@ function samePosition(
 
 /**
  * MapLibre GL map over our own Hong Kong PMTiles vector archive. One
- * component serves the nearby and route views; markers and route lines are
+ * component serves the map and route views; markers and route lines are
  * GeoJSON sources, so pin styling (selected stop, direction arrows, accuracy
  * ring) is declarative property-driven styling instead of one DOM node per pin.
  */

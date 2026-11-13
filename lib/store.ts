@@ -2,7 +2,6 @@
 
 import type { JointRouteInfoOperator, SubView, TransportMode, UiLanguage } from '@/lib/eta/types'
 import { resolveAppCompany } from '@/lib/eta/companies'
-import { clampNearbyRadiusKm, NEARBY_RADIUS_DEFAULT_KM } from '@/lib/eta/nearby-radius'
 import { clampTimetableDetail, TIMETABLE_DETAIL_DEFAULT } from '@/lib/eta/timetable-detail'
 import { create } from 'zustand'
 import type { StateCreator } from 'zustand'
@@ -104,14 +103,13 @@ type NavSlice = {
   setSubView: (subView: SubView) => void
 }
 
-// Persisted prefs slice: language, refresh interval and nearby radius
+// Persisted prefs slice: language, refresh interval, timetable detail
 // plus favorites, groups and recents. Field names stay backward compatible
 // so old favorites still decode after the v6 to v7 bump, which dropped the
 // route filter mode: one unified filter replaced the simple/advanced split.
 type PrefsSlice = {
   lang: UiLanguage
   autoRefreshSeconds: number
-  nearbyRadiusKm: number
   timetableDetail: number
   /** Route details shown for jointly operated KMB+CTB routes. */
   jointRouteInfoOperator: JointRouteInfoOperator
@@ -122,7 +120,6 @@ type PrefsSlice = {
 
   setLang: (lang: UiLanguage) => void
   setAutoRefreshSeconds: (seconds: number) => void
-  setNearbyRadiusKm: (km: number) => void
   setTimetableDetail: (detail: number) => void
   setJointRouteInfoOperator: (operator: JointRouteInfoOperator) => void
   /** Restore display and update prefs to defaults. Saved data is untouched. */
@@ -243,7 +240,6 @@ const createNavSlice: StateCreator<AppState, [], [], NavSlice> = (set) => ({
 const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
   lang: 'tc',
   autoRefreshSeconds: 15,
-  nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
   timetableDetail: TIMETABLE_DETAIL_DEFAULT,
   jointRouteInfoOperator: 'kmb',
 
@@ -253,14 +249,12 @@ const createPrefsSlice: StateCreator<AppState, [], [], PrefsSlice> = (set) => ({
 
   setLang: (lang) => set({ lang }),
   setAutoRefreshSeconds: (seconds) => set({ autoRefreshSeconds: seconds }),
-  setNearbyRadiusKm: (km) => set({ nearbyRadiusKm: clampNearbyRadiusKm(km) }),
   setTimetableDetail: (detail) => set({ timetableDetail: clampTimetableDetail(detail) }),
   setJointRouteInfoOperator: (operator) => set({ jointRouteInfoOperator: operator }),
   resetPrefs: () =>
     set({
       lang: 'tc',
       autoRefreshSeconds: 15,
-      nearbyRadiusKm: NEARBY_RADIUS_DEFAULT_KM,
       timetableDetail: TIMETABLE_DETAIL_DEFAULT,
       jointRouteInfoOperator: 'kmb',
     }),
@@ -412,6 +406,8 @@ export function capFavorites(favorites: FavoritesItem[]): FavoritesItem[] {
 // are ignored, saved route text and direction selections keep working.
 // v8 adds the timetable detail level; older entries fall back to full detail.
 // v9 adds the joint route-info operator preference, defaulting to KMB.
+// v10 drops the nearby radius: the nearby tab became the map tab, which
+// shows every stop. Stored radius values are ignored.
 export function migratePersistedState(persistedState: unknown) {
   const state = persistedState as Partial<AppState> | undefined
   const favorites = capFavorites(
@@ -423,10 +419,6 @@ export function migratePersistedState(persistedState: unknown) {
     subView: state?.subView ?? 'stops',
     lang: state?.lang ?? 'tc',
     autoRefreshSeconds: state?.autoRefreshSeconds ?? 15,
-    nearbyRadiusKm:
-      typeof state?.nearbyRadiusKm === 'number'
-        ? clampNearbyRadiusKm(state.nearbyRadiusKm)
-        : NEARBY_RADIUS_DEFAULT_KM,
     timetableDetail:
       typeof state?.timetableDetail === 'number'
         ? clampTimetableDetail(state.timetableDetail)
@@ -446,7 +438,7 @@ export const useAppStore = create<AppState>()(
     }),
     {
       name: 'hk-eta',
-      version: 9,
+      version: 10,
       // Direct persist write. The previous 300 ms debounced localStorage
       // wrapper plus beforeunload flush could lose the last write on
       // mobile, where beforeunload often never fires. Zustand now writes
@@ -457,7 +449,6 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         lang: state.lang,
         autoRefreshSeconds: state.autoRefreshSeconds,
-        nearbyRadiusKm: state.nearbyRadiusKm,
         timetableDetail: state.timetableDetail,
         jointRouteInfoOperator: state.jointRouteInfoOperator,
         favorites: state.favorites,

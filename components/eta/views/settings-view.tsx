@@ -8,7 +8,6 @@ import {
   Download,
   Globe,
   Info,
-  MapPin,
   Monitor,
   Moon,
   Palette,
@@ -25,11 +24,6 @@ import { FadeIn } from '@/components/m3/motion'
 import { LANG_LABELS, useTranslations } from '@/lib/eta/i18n'
 import { idbClear } from '@/lib/eta/cache/idb'
 import { getOperatorColor } from '@/lib/eta/operator-colors'
-import {
-  NEARBY_RADIUS_MAX_KM,
-  NEARBY_RADIUS_MIN_KM,
-  NEARBY_RADIUS_STEP_KM,
-} from '@/lib/eta/nearby-radius'
 import { TIMETABLE_DETAIL_MAX, TIMETABLE_DETAIL_MIN } from '@/lib/eta/timetable-detail'
 import { isLanguageSupported } from '@/lib/eta/types'
 import type { UiLanguage } from '@/lib/eta/types'
@@ -139,8 +133,6 @@ export function SettingsView({ lang }: Props) {
   const setLang = useAppStore((s) => s.setLang)
   const autoRefreshSeconds = useAppStore((s) => s.autoRefreshSeconds)
   const setAutoRefreshSeconds = useAppStore((s) => s.setAutoRefreshSeconds)
-  const nearbyRadiusKm = useAppStore((s) => s.nearbyRadiusKm)
-  const setNearbyRadiusKm = useAppStore((s) => s.setNearbyRadiusKm)
   const timetableDetail = useAppStore((s) => s.timetableDetail)
   const setTimetableDetail = useAppStore((s) => s.setTimetableDetail)
   const jointRouteInfoOperator = useAppStore((s) => s.jointRouteInfoOperator)
@@ -217,7 +209,6 @@ export function SettingsView({ lang }: Props) {
     { id: 'settings-language', icon: Globe, label: t('common.language') },
     { id: 'settings-refresh', icon: Timer, label: t('common.autoRefresh') },
     { id: 'settings-route-info', icon: Bus, label: t('settings.routeInfoTitle') },
-    { id: 'settings-nearby', icon: MapPin, label: t('common.nearby') },
     { id: 'settings-timetable', icon: CalendarDays, label: t('settings.timetableTitle') },
     { id: 'settings-saved', icon: Bookmark, label: t('settings.savedData') },
     { id: 'settings-storage', icon: Database, label: t('settings.storage') },
@@ -406,32 +397,6 @@ export function SettingsView({ lang }: Props) {
                     </button>
                   )
                 })}
-              </div>
-            </Section>
-          )}
-          {activeId === 'settings-nearby' && (
-            <Section icon={MapPin} title={t('common.nearby')} desc={t('settings.nearbyDesc')}>
-              <div className="flex items-center gap-3">
-                <label
-                  className="text-on-surface-variant m3-label-md whitespace-nowrap"
-                  htmlFor="settings-radius"
-                >
-                  {t('common.searchRadius')}
-                </label>
-                <input
-                  id="settings-radius"
-                  type="range"
-                  min={NEARBY_RADIUS_MIN_KM}
-                  max={NEARBY_RADIUS_MAX_KM}
-                  step={NEARBY_RADIUS_STEP_KM}
-                  value={nearbyRadiusKm}
-                  onChange={(event) => setNearbyRadiusKm(Number(event.target.value))}
-                  className="text-primary ui-press w-full min-w-32"
-                  aria-label={t('common.searchRadius')}
-                />
-                <span className="text-on-surface-variant m3-label-md w-14 shrink-0 text-right tabular-nums">
-                  {`${Math.round(nearbyRadiusKm * 10) / 10} km`}
-                </span>
               </div>
             </Section>
           )}

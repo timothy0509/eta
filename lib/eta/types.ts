@@ -5,7 +5,7 @@ export type UiLanguage = 'en' | 'tc' | 'sc'
 /** Operator whose route details are shown for jointly operated routes. */
 export type JointRouteInfoOperator = 'kmb' | 'ctb'
 
-export type SubView = 'routes' | 'stops' | 'nearby' | 'saved' | 'settings'
+export type SubView = 'routes' | 'stops' | 'map' | 'saved' | 'settings'
 
 export function isLanguageSupported(mode: TransportMode, lang: UiLanguage) {
   if (lang === 'sc') {

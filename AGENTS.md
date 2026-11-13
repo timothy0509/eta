@@ -58,7 +58,7 @@ If you are a review agent on GitHub, none of this applies to you. You don't need
 app/                 # App Router: page.tsx, layout.tsx, home-client.tsx, error/loading/not-found, robots, sitemap
 components/eta/      # Feature UI: panes/, views/, results-*.tsx, search, filters, favorites, app-shell
 components/eta/panes/  # kmb-pane, mtr-pane, lrt-pane plus kmb hooks and reducer
-components/eta/views/  # routes, nearby, settings views
+components/eta/views/  # routes, map, settings views
 components/m3/       # Small motion/search primitives
 components/ui/       # shadcn/ui only, do not hand-edit styling patterns here
 lib/eta/             # All domain logic: direct/, cache/, providers, hooks, utils

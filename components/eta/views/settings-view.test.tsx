@@ -34,7 +34,6 @@ describe('SettingsView', () => {
     useAppStore.setState({
       lang: 'en',
       autoRefreshSeconds: 15,
-      nearbyRadiusKm: 2,
       favorites: [],
       favoritesGroups: [],
       recents: [],
@@ -47,7 +46,8 @@ describe('SettingsView', () => {
       'Appearance',
       'Language',
       'Auto Refresh',
-      'Nearby',
+      'Route information',
+      'Timetable detail',
       'Saved data',
       'Storage',
       'About',
@@ -62,14 +62,6 @@ describe('SettingsView', () => {
     expect(screen.queryByRole('heading', { name: 'Appearance' })).toBeNull()
     expect(document.body.textContent).not.toMatch(/settings\.[a-zA-Z]+/)
     expect(document.body.textContent).not.toMatch(/common\.[a-zA-Z]+/)
-  })
-
-  it('changes the persisted nearby radius', () => {
-    renderSettings()
-    fireEvent.click(screen.getByRole('tab', { name: 'Nearby' }))
-    const slider = screen.getByLabelText('Search radius') as HTMLInputElement
-    fireEvent.change(slider, { target: { value: '3.5' } })
-    expect(useAppStore.getState().nearbyRadiusKm).toBe(3.5)
   })
 
   it('clears search history after a confirm tap', () => {

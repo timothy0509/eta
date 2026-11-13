@@ -16,7 +16,7 @@ const common: Record<string, TranslationEntry> = {
   settings: { en: 'Settings', tc: '設定', sc: '设定' },
   routes: { en: 'Routes', tc: '路線', sc: '路线' },
   stops: { en: 'Stops', tc: '車站', sc: '车站' },
-  nearby: { en: 'Nearby', tc: '附近', sc: '附近' },
+
   theme: { en: 'Theme', tc: '主題', sc: '主题' },
   appearance: { en: 'Appearance', tc: '外觀', sc: '外观' },
   language: { en: 'Language', tc: '語言', sc: '语言' },
@@ -117,13 +117,6 @@ const common: Record<string, TranslationEntry> = {
     sc: '此浏览器不支持定位，请使用新版 Chrome 或 Safari。',
   },
   enableLocation: { en: 'Enable location', tc: '開啟定位', sc: '开启定位' },
-  noStopsNearby: {
-    en: 'No stops found nearby.',
-    tc: '附近沒有找到車站。',
-    sc: '附近没有找到车站。',
-  },
-  nearbyStops: { en: 'Nearby stops', tc: '附近車站', sc: '附近车站' },
-  searchRadius: { en: 'Search radius', tc: '搜尋半徑', sc: '搜索半径' },
   followLocation: { en: 'Follow location', tc: '跟隨位置', sc: '跟随位置' },
   stopFollowing: { en: 'Stop following', tc: '停止跟隨', sc: '停止跟随' },
   mapInteractive: {
@@ -437,11 +430,6 @@ const settings: Record<string, TranslationEntry> = {
   },
   routeInfoKmb: { en: 'Prefer KMB', tc: '優先九巴', sc: '优先九巴' },
   routeInfoCtb: { en: 'Prefer Citybus', tc: '優先城巴', sc: '优先城巴' },
-  nearbyDesc: {
-    en: 'Default search distance for the Nearby tab.',
-    tc: '「附近」分頁的預設搜尋距離。',
-    sc: '“附近”分页的默认搜索距离。',
-  },
   savedData: { en: 'Saved data', tc: '已儲存資料', sc: '已储存资料' },
   favoritesCount: { en: '{count} saved', tc: '已收藏 {count} 項', sc: '已收藏 {count} 项' },
   recentsCount: { en: '{count} recent', tc: '{count} 項最近記錄', sc: '最近记录 {count} 项' },
@@ -473,9 +461,9 @@ const settings: Record<string, TranslationEntry> = {
   cacheCleared: { en: 'Cache cleared.', tc: '快取已清除。', sc: '缓存已清除。' },
   resetSettings: { en: 'Reset all settings', tc: '重設所有設定', sc: '重置所有设定' },
   resetSettingsDesc: {
-    en: 'Restores appearance, language, refresh, radius and timetable defaults. Saved stops stay.',
-    tc: '還原外觀、語言、刷新、半徑及時間表預設值，收藏不受影響。',
-    sc: '还原外观、语言、刷新、半径及时间表默认值，收藏不受影响。',
+    en: 'Restores appearance, language, refresh and timetable defaults. Saved stops stay.',
+    tc: '還原外觀、語言、刷新及時間表預設值，收藏不受影響。',
+    sc: '还原外观、语言、刷新及时间表默认值，收藏不受影响。',
   },
   settingsReset: {
     en: 'Settings reset to defaults.',

@@ -607,7 +607,7 @@ describe('store migration', () => {
     expect(migrated.mode).toBe('kmb')
     expect(migrated.lang).toBe('tc')
     expect(migrated.autoRefreshSeconds).toBe(15)
-    expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated).not.toHaveProperty('nearbyRadiusKm')
     expect(migrated.favorites).toEqual([])
     expect(migrated.favoritesGroups).toEqual([])
     expect(migrated.recents).toEqual([])
@@ -689,7 +689,6 @@ describe('settings prefs', () => {
     useAppStore.setState({
       lang: 'tc',
       autoRefreshSeconds: 15,
-      nearbyRadiusKm: 2,
       timetableDetail: 5,
       jointRouteInfoOperator: 'kmb',
       favorites: [],
@@ -698,25 +697,17 @@ describe('settings prefs', () => {
     })
   })
 
-  it('clamps the nearby radius into the slider band', () => {
-    useAppStore.getState().setNearbyRadiusKm(99)
-    expect(useAppStore.getState().nearbyRadiusKm).toBe(5)
-    useAppStore.getState().setNearbyRadiusKm(-1)
-    expect(useAppStore.getState().nearbyRadiusKm).toBe(0.5)
-    useAppStore.getState().setNearbyRadiusKm(1.26)
-    expect(useAppStore.getState().nearbyRadiusKm).toBe(1.25)
-  })
-
-  it('persists the nearby radius alongside the other prefs', () => {
-    useAppStore.getState().setNearbyRadiusKm(3)
+  it('persists prefs without the removed nearby radius', () => {
+    useAppStore.getState().setTimetableDetail(3)
     const raw = localStorage.getItem('hk-eta')
     expect(raw).not.toBeNull()
     const parsed = JSON.parse(raw as string) as {
       version: number
-      state: { nearbyRadiusKm: number }
+      state: { timetableDetail: number }
     }
-    expect(parsed.version).toBe(9)
-    expect(parsed.state.nearbyRadiusKm).toBe(3)
+    expect(parsed.version).toBe(10)
+    expect(parsed.state.timetableDetail).toBe(3)
+    expect(parsed.state).not.toHaveProperty('nearbyRadiusKm')
   })
 
   it('persists the joint route-info operator preference', () => {
@@ -739,7 +730,6 @@ describe('settings prefs', () => {
     useAppStore.setState({
       lang: 'en',
       autoRefreshSeconds: 60,
-      nearbyRadiusKm: 4,
       timetableDetail: 1,
       jointRouteInfoOperator: 'ctb',
       favorites: [mtrFavorite('fav-1')],
@@ -748,7 +738,6 @@ describe('settings prefs', () => {
     const state = useAppStore.getState()
     expect(state.lang).toBe('tc')
     expect(state.autoRefreshSeconds).toBe(15)
-    expect(state.nearbyRadiusKm).toBe(2)
     expect(state.timetableDetail).toBe(5)
     expect(state.jointRouteInfoOperator).toBe('kmb')
     expect(state.favorites).toHaveLength(1)
@@ -810,16 +799,17 @@ describe('settings prefs', () => {
 })
 
 describe('migratePersistedState', () => {
-  it('falls back to the default radius for v6 payloads without one', () => {
+  it('drops the removed nearby radius during migration', () => {
     const migrated = migratePersistedState({
       lang: 'en',
       routeFilterMode: 'advanced',
       autoRefreshSeconds: 30,
+      nearbyRadiusKm: 3.5,
       favorites: [],
       favoritesGroups: [],
       recents: [],
     })
-    expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated).not.toHaveProperty('nearbyRadiusKm')
     expect(migrated.timetableDetail).toBe(5)
     expect(migrated.jointRouteInfoOperator).toBe('kmb')
     expect(migrated.lang).toBe('en')
@@ -835,21 +825,9 @@ describe('migratePersistedState', () => {
     )
   })
 
-  it('clamps out-of-range radii and rejects non-numbers', () => {
-    expect(migratePersistedState({ nearbyRadiusKm: 99 }).nearbyRadiusKm).toBe(5)
-    expect(migratePersistedState({ nearbyRadiusKm: -1 }).nearbyRadiusKm).toBe(0.5)
-    expect(migratePersistedState({ nearbyRadiusKm: Number.NaN }).nearbyRadiusKm).toBe(2)
-    expect(migratePersistedState({ nearbyRadiusKm: '3' }).nearbyRadiusKm).toBe(2)
-    expect(migratePersistedState({ nearbyRadiusKm: null }).nearbyRadiusKm).toBe(2)
-  })
-
-  it('keeps a valid radius untouched', () => {
-    expect(migratePersistedState({ nearbyRadiusKm: 3.5 }).nearbyRadiusKm).toBe(3.5)
-  })
-
   it('handles undefined state with full defaults', () => {
     const migrated = migratePersistedState(undefined)
-    expect(migrated.nearbyRadiusKm).toBe(2)
+    expect(migrated).not.toHaveProperty('nearbyRadiusKm')
     expect(migrated.timetableDetail).toBe(5)
     expect(migrated.favorites).toEqual([])
     expect(migrated.recents).toEqual([])

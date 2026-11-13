@@ -41,13 +41,29 @@ class MemoryStorage implements Storage {
   }
 }
 
+function isUsableStorage(value: unknown): value is Storage {
+  if (!value || typeof value !== 'object') return false
+  const candidate = value as Partial<Storage>
+  return (
+    typeof candidate.getItem === 'function' &&
+    typeof candidate.setItem === 'function' &&
+    typeof candidate.removeItem === 'function' &&
+    typeof candidate.clear === 'function'
+  )
+}
+
 function storageMissing(name: 'localStorage' | 'sessionStorage'): boolean {
   try {
     if (typeof window === 'undefined') {
       return true
     }
-    const value = window[name]
-    return value === undefined || value === null
+    const fromWindow = window[name] as unknown
+    const fromGlobal = (globalThis as Record<string, unknown>)[name]
+    // Node 25 exposes an experimental Web Storage global whose methods are
+    // unavailable without --localstorage-file. It is defined but unusable,
+    // so checking only for undefined leaves tests with a storage object that
+    // has no getItem/setItem. Validate the methods instead.
+    return !isUsableStorage(fromWindow) || !isUsableStorage(fromGlobal)
   } catch {
     return true
   }

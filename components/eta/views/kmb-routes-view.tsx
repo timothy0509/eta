@@ -1419,16 +1419,18 @@ export function KmbRoutesView({
   // Merged joint variants need no operator tag, but rows missing their
   // `jointVariantKey` (stale cache) would render identical variant buttons
   // with no way to tell them apart. Show the operator when two variants
-  // share the same visible label.
-  const showOperatorInVariants = (() => {
+  // share the same visible label. The key mirrors the dropdown's localized
+  // destination text: keying on English would miss duplicates that only
+  // collide in tc/sc (or vice versa).
+  const showOperatorInVariants = React.useMemo(() => {
     const seen = new Set<string>()
     for (const v of variantsForRoute) {
-      const label = `${v.bound}|${v.destination.en}|${v.serviceType}`
+      const label = `${v.bound}|${formatKmbRouteEndpointName(pickLang(v.destination, lang), { co: v.co, lang })}|${v.serviceType}`
       if (seen.has(label)) return true
       seen.add(label)
     }
     return false
-  })()
+  }, [variantsForRoute, lang])
 
   const currentVariant = React.useMemo(() => {
     if (!selectedRouteKey) return null

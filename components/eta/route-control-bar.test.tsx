@@ -106,6 +106,11 @@ describe('RouteControlBar', () => {
     )
     const trigger = getByRole('button', { name: 'Outbound Choi Hung' })
     expect(trigger.className).toContain('flex-[2_1_0%]')
+    // No headway index loads in tests, so the timetable holds its 1-share
+    // slot as a disabled placeholder instead of vanishing.
+    const schedule = getByRole('button', { name: 'Timetable' })
+    expect(schedule.getAttribute('disabled')).not.toBeNull()
+    expect(schedule.className).toContain('flex-[1_1_0%]')
     const save = getByRole('button', { name: 'Save' })
     expect(save.className).toContain('flex-[1_1_0%]')
     const label = Array.from(save.querySelectorAll('span')).find((span) =>

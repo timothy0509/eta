@@ -31,7 +31,8 @@ const DAY_LABEL_KEYS: Record<DayType, string> = {
  * collapsed row (title plus today's day type) and the dialog reuses the
  * stop-mode FullTimetable with day tabs, so alternate days work the same
  * way in both places. Renders null while the index loads (or fails) and
- * when the variant is unknown.
+ * when the variant is unknown; in bar mode a disabled placeholder holds
+ * the slot instead so the control row never shifts.
  */
 export function RouteScheduleSection({
   variantKey,
@@ -69,7 +70,28 @@ export function RouteScheduleSection({
     return available.includes(today) ? today : (available[0] ?? 'weekday')
   }, [index, variantKey])
 
-  if (!dayType) return null
+  if (!dayType) {
+    // In the control bar the timetable holds a fixed 1-share slot, so a
+    // missing timetable renders as a disabled placeholder instead of null:
+    // vanishing would stretch the save button and shift the row every time
+    // the variant changes. The full-width row keeps the old null behavior.
+    if (!bar) return null
+    return (
+      <button
+        type="button"
+        disabled
+        aria-disabled="true"
+        title={t('kmb.scheduleNoData')}
+        className={cn(
+          'bg-primary-container text-on-primary-container m3-label-lg inline-flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 overflow-hidden rounded-full px-3 opacity-40 focus-visible:outline-none',
+          className
+        )}
+      >
+        <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
+        <span className={cn('whitespace-nowrap', labelClassName)}>{t('kmb.scheduleTitle')}</span>
+      </button>
+    )
+  }
 
   return (
     <Dialog>

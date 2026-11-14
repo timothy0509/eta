@@ -168,7 +168,6 @@ type BarProps<T extends RouteControlOption> = SelectProps<T> & {
   /** Base variant key for the timetable lookup: co|route|bound|serviceType. */
   variantKey: string
   onSave: () => void
-  saveDisabled?: boolean
 }
 
 /**
@@ -188,7 +187,6 @@ export function RouteControlBar<T extends RouteControlOption>({
   showOperator = false,
   variantKey,
   onSave,
-  saveDisabled = false,
   className,
 }: BarProps<T>) {
   const { t } = useTranslations(lang)
@@ -212,7 +210,6 @@ export function RouteControlBar<T extends RouteControlOption>({
       <FavoriteSaveButton
         onSave={onSave}
         label={t('common.save')}
-        disabled={saveDisabled}
         className="min-w-11 flex-[1_1_0%] overflow-hidden px-3"
         labelClassName={cn('whitespace-nowrap', COLLAPSED_LABEL)}
       />

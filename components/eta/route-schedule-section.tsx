@@ -37,10 +37,19 @@ export function RouteScheduleSection({
   variantKey,
   lang,
   className,
+  bar = false,
+  labelClassName,
 }: {
   variantKey: string
   lang: UiLanguage
   className?: string
+  /**
+   * Compact pill trigger for the route control bar (icon plus a short
+   * label, no chevron) instead of the full-width details row.
+   */
+  bar?: boolean
+  /** Extra classes for the trigger label, e.g. container-query collapsing. */
+  labelClassName?: string
 }) {
   const index = useHeadwayIndex()
   const { t } = useTranslations(lang)
@@ -65,20 +74,38 @@ export function RouteScheduleSection({
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            'card-m3 text-on-surface m3-title-md ui-press inline-flex min-h-[48px] w-full items-center gap-2 px-4 py-3 text-left transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none',
-            className
-          )}
-        >
-          <CalendarDays className="text-on-surface-variant h-4 w-4 shrink-0" aria-hidden />
-          {t('kmb.scheduleTitle')}
-          <span className="text-on-surface-variant m3-label-md font-normal">
-            {t(DAY_LABEL_KEYS[dayType])}
-          </span>
-          <ChevronRight className="text-on-surface-variant ml-auto h-4 w-4 shrink-0" aria-hidden />
-        </button>
+        {bar ? (
+          <button
+            type="button"
+            className={cn(
+              'bg-primary-container text-on-primary-container m3-label-lg ui-press inline-flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 overflow-hidden rounded-full px-3 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none',
+              className
+            )}
+          >
+            <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
+            <span className={cn('whitespace-nowrap', labelClassName)}>
+              {t('kmb.scheduleTitle')}
+            </span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={cn(
+              'card-m3 text-on-surface m3-title-md ui-press inline-flex min-h-[48px] w-full items-center gap-2 px-4 py-3 text-left transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none',
+              className
+            )}
+          >
+            <CalendarDays className="text-on-surface-variant h-4 w-4 shrink-0" aria-hidden />
+            {t('kmb.scheduleTitle')}
+            <span className="text-on-surface-variant m3-label-md font-normal">
+              {t(DAY_LABEL_KEYS[dayType])}
+            </span>
+            <ChevronRight
+              className="text-on-surface-variant ml-auto h-4 w-4 shrink-0"
+              aria-hidden
+            />
+          </button>
+        )}
       </DialogTrigger>
       <DialogContent className="bg-surface-container-low max-h-[85dvh] gap-0 overflow-x-hidden overflow-y-auto rounded-3xl border-0 p-0 sm:max-w-xl">
         <div className="min-w-0 space-y-4 p-5 sm:p-6">

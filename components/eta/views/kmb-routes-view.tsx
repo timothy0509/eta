@@ -1,14 +1,15 @@
 'use client'
 
-import { ChevronDown, ChevronLeft, Clock, Info, Search, X } from 'lucide-react'
+import { ChevronLeft, Clock, Info, Search, X } from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
 import { RouteBadge } from '@/components/eta/route-badge'
 import { Marquee } from '@/components/ui/marquee'
 import { EmptyState } from '@/components/eta/empty-state'
-import { FavoriteSaveButton } from '@/components/eta/favorite-save-button'
+import { FareViewToggle, type FareViewMode } from '@/components/eta/fare-view-toggle'
 import { OperatorFilter } from '@/components/eta/operator-filter'
+import { RouteControlBar, RouteVariantSelect } from '@/components/eta/route-control-bar'
 import { formatScheduledLine } from '@/components/eta/results-kmb'
 import {
   SpecialDeparturesLine,
@@ -17,7 +18,6 @@ import {
 } from '@/components/eta/route-details-dialog'
 import { ResultsSkeleton } from '@/components/eta/results-skeleton'
 import { RouteResultCard } from '@/components/eta/route-result-card'
-import { RouteScheduleSection } from '@/components/eta/route-schedule-section'
 import {
   Dialog,
   DialogContent,
@@ -56,6 +56,7 @@ import {
   resolveFareVariantForStop,
 } from '@/lib/eta/fares/lookup'
 import { useFareIndex } from '@/lib/eta/fares/use-fare-index'
+import type { VariantFares } from '@/lib/eta/fares/types'
 import { getFaresBySeq, groupIntoFareSections } from '@/lib/eta/kmb-fare-sections'
 import {
   FARE_UNKNOWN_COLOR,
@@ -418,7 +419,7 @@ function RailPill({
       style={{ backgroundColor: color, ...style }}
     >
       {label ? (
-        <div className="sticky top-16 flex justify-center">
+        <div className="sticky top-0 flex justify-center">
           <span
             aria-hidden
             className={cn(
@@ -462,6 +463,43 @@ function SectionRail({
   )
 }
 
+/**
+ * Origin/destination matrix from the TD GTFS fare tables for one variant. The
+ * boarding stop fare from hk-bus-eta stays as the fallback when the variant
+ * has no compiled table. Shared by the header fare toggle (visibility) and
+ * the stop list (display) so both read the same table.
+ */
+function useVariantFareTable(
+  currentVariant: RouteVariant | null,
+  variantStops: KmbRouteStopLite[]
+) {
+  const listVariantKey = currentVariant
+    ? routeVariantKey({
+        co: currentVariant.co as Company,
+        route: currentVariant.route,
+        bound: currentVariant.bound,
+        serviceType: currentVariant.serviceType,
+        gtfsId: currentVariant.gtfsId,
+      })
+    : null
+  const fareIndex = useFareIndex()
+  const fareTable = React.useMemo(
+    () => resolveFareVariantForStop(fareIndex, listVariantKey, variantStops[0]?.stopId),
+    [fareIndex, listVariantKey, variantStops]
+  )
+  const fareStopIndices = React.useMemo(
+    () => (fareTable ? mapRouteStopsToFareIndices(fareTable, variantStops) : null),
+    [fareTable, variantStops]
+  )
+  const hasFareData = Boolean(
+    fareTable?.fares.some((ranges) => ranges !== null && ranges.length > 0)
+  )
+  const showFareToggle = Boolean(
+    currentVariant && fareTable && fareStopIndices && hasFareData && variantStops.length > 1
+  )
+  return { fareTable, fareStopIndices, showFareToggle }
+}
+
 function KmbRouteStopList({
   currentVariant,
   variantStops,
@@ -472,6 +510,11 @@ function KmbRouteStopList({
   listKey,
   expandedKey,
   onToggleStop,
+  fareTable,
+  fareStopIndices,
+  fareViewMode,
+  fareFromIndex,
+  onFareFromChange,
 }: {
   listKey: string
   currentVariant: RouteVariant
@@ -482,14 +525,12 @@ function KmbRouteStopList({
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
   expandedKey: string | null
   onToggleStop: (cardKey: string) => void
+  fareTable: VariantFares | null
+  fareStopIndices: number[] | null
+  fareViewMode: FareViewMode
+  fareFromIndex: number
+  onFareFromChange: (index: number) => void
 }) {
-  const variantKey = routeVariantKey({
-    co: currentVariant.co as Company,
-    route: currentVariant.route,
-    bound: currentVariant.bound,
-    serviceType: currentVariant.serviceType,
-    gtfsId: currentVariant.gtfsId,
-  })
   const [faresBySeqByCo, setFaresBySeqByCo] = React.useState<
     Record<string, Record<number, number>>
   >({})
@@ -547,35 +588,7 @@ function KmbRouteStopList({
     (op) => normalizeOperator(op) === 'ctb'
   )
 
-  // Origin/destination matrix from the TD GTFS fare tables. The boarding
-  // stop fare from hk-bus-eta stays as the fallback when this variant has no
-  // compiled table.
-  const fareIndex = useFareIndex()
-  const fareTable = React.useMemo(
-    () => resolveFareVariantForStop(fareIndex, variantKey, variantStops[0]?.stopId),
-    [fareIndex, variantKey, variantStops]
-  )
-  const fareStopIndices = React.useMemo(
-    () => (fareTable ? mapRouteStopsToFareIndices(fareTable, variantStops) : null),
-    [fareTable, variantStops]
-  )
-  const [fareView, setFareView] = React.useState<{
-    listKey: string
-    mode: 'sections' | 'byStop'
-  } | null>(null)
-  const fareViewMode = fareView?.listKey === listKey ? fareView.mode : 'sections'
-  const [fareFrom, setFareFrom] = React.useState<{ listKey: string; index: number } | null>(null)
-  const fareFromIndex =
-    fareFrom?.listKey === listKey
-      ? Math.min(fareFrom.index, Math.max(0, variantStops.length - 2))
-      : 0
   const terminusIndex = Math.max(0, variantStops.length - 1)
-  const hasFareData = Boolean(
-    fareTable?.fares.some((ranges) => ranges !== null && ranges.length > 0)
-  )
-  const showFareToggle = Boolean(
-    fareTable && fareStopIndices && hasFareData && variantStops.length > 1
-  )
 
   // Original section rail: boarding stop fare to the terminus. The GTFS
   // matrix is authoritative here; hk-bus-eta stays as the fallback. The
@@ -816,62 +829,24 @@ function KmbRouteStopList({
 
   return (
     <div key={listKey} className="space-y-3">
-      {showFareToggle ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="bg-surface-container flex w-fit items-center gap-1 rounded-full p-1"
-            role="group"
-            aria-label={t('kmb.fareDisplay')}
+      {fareViewMode === 'byStop' && fareTable && fareStopIndices ? (
+        <label className="bg-surface-container flex min-h-[44px] min-w-[12rem] flex-1 items-center gap-2 rounded-full px-3 py-1.5">
+          <span className="text-on-surface-variant m3-label-md shrink-0">{t('kmb.fareFrom')}</span>
+          <select
+            aria-label={t('kmb.fareFromStop')}
+            value={fareFromIndex}
+            onChange={(event) => onFareFromChange(Number(event.target.value))}
+            className="text-on-surface m3-body-md min-w-0 flex-1 truncate bg-transparent focus-visible:outline-none"
           >
-            <button
-              type="button"
-              aria-pressed={fareViewMode === 'sections'}
-              onClick={() => setFareView({ listKey, mode: 'sections' })}
-              className={cn(
-                'ui-press m3-label-lg inline-flex min-h-[36px] items-center rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                fareViewMode === 'sections'
-                  ? 'bg-primary-container text-on-primary-container'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              )}
-            >
-              {t('kmb.fareSections')}
-            </button>
-            <button
-              type="button"
-              aria-pressed={fareViewMode === 'byStop'}
-              onClick={() => setFareView({ listKey, mode: 'byStop' })}
-              className={cn(
-                'ui-press m3-label-lg inline-flex min-h-[36px] items-center rounded-full px-3 transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                fareViewMode === 'byStop'
-                  ? 'bg-primary-container text-on-primary-container'
-                  : 'text-on-surface-variant hover:text-on-surface'
-              )}
-            >
-              {t('kmb.fareByStop')}
-            </button>
-          </div>
-          {fareViewMode === 'byStop' ? (
-            <label className="bg-surface-container flex min-h-[44px] min-w-[12rem] flex-1 items-center gap-2 rounded-full px-3 py-1.5">
-              <span className="text-on-surface-variant m3-label-md shrink-0">
-                {t('kmb.fareFrom')}
-              </span>
-              <select
-                aria-label={t('kmb.fareFromStop')}
-                value={fareFromIndex}
-                onChange={(event) => setFareFrom({ listKey, index: Number(event.target.value) })}
-                className="text-on-surface m3-body-md min-w-0 flex-1 truncate bg-transparent focus-visible:outline-none"
-              >
-                {variantStops.map((rs, index) =>
-                  index === variantStops.length - 1 ? null : (
-                    <option key={`${rs.stopId}:${rs.seq}`} value={index}>
-                      {index + 1}. {formatStop(rs).name}
-                    </option>
-                  )
-                )}
-              </select>
-            </label>
-          ) : null}
-        </div>
+            {variantStops.map((rs, index) =>
+              index === variantStops.length - 1 ? null : (
+                <option key={`${rs.stopId}:${rs.seq}`} value={index}>
+                  {index + 1}. {formatStop(rs).name}
+                </option>
+              )
+            )}
+          </select>
+        </label>
       ) : null}
       {timeline ? (
         <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2">
@@ -1094,7 +1069,6 @@ export function KmbRoutesView({
   const [query, setQuery] = React.useState('')
   const [debouncedQuery, setDebouncedQuery] = React.useState('')
   const [operators, setOperators] = React.useState<string[]>([])
-  const [controlsOpen, setControlsOpen] = React.useState(true)
   const isDesktop = useMediaQuery('(min-width: 1024px)')
   const routeStopsAll = usePaneStore((s) => s.kmbRouteStops)
   const setRouteStopsAll = usePaneStore((s) => s.setKmbRouteStops)
@@ -1445,16 +1419,18 @@ export function KmbRoutesView({
   // Merged joint variants need no operator tag, but rows missing their
   // `jointVariantKey` (stale cache) would render identical variant buttons
   // with no way to tell them apart. Show the operator when two variants
-  // share the same visible label.
-  const showOperatorInVariants = (() => {
+  // share the same visible label. The key mirrors the dropdown's localized
+  // destination text: keying on English would miss duplicates that only
+  // collide in tc/sc (or vice versa).
+  const showOperatorInVariants = React.useMemo(() => {
     const seen = new Set<string>()
     for (const v of variantsForRoute) {
-      const label = `${v.bound}|${v.destination.en}|${v.serviceType}`
+      const label = `${v.bound}|${formatKmbRouteEndpointName(pickLang(v.destination, lang), { co: v.co, lang })}|${v.serviceType}`
       if (seen.has(label)) return true
       seen.add(label)
     }
     return false
-  })()
+  }, [variantsForRoute, lang])
 
   const currentVariant = React.useMemo(() => {
     if (!selectedRouteKey) return null
@@ -1469,6 +1445,38 @@ export function KmbRoutesView({
     }
     return variantsForRoute[0] ?? null
   }, [selectedRouteKey, selectedVariant, variantsForRoute])
+
+  // Fare display state lives here (not in the stop list) so the compact
+  // header toggle and the list read and write the same mode. Entries are
+  // keyed by variant so switching routes never leaks another variant's mode.
+  const { fareTable, fareStopIndices, showFareToggle } = useVariantFareTable(
+    currentVariant,
+    variantStops
+  )
+  const activeFareKey = currentVariant?.key ?? null
+  const [fareView, setFareView] = React.useState<{
+    listKey: string
+    mode: FareViewMode
+  } | null>(null)
+  const [fareFrom, setFareFrom] = React.useState<{ listKey: string; index: number } | null>(null)
+  const fareViewMode: FareViewMode =
+    fareView?.listKey === activeFareKey ? fareView.mode : 'sections'
+  const fareFromIndex =
+    fareFrom?.listKey === activeFareKey
+      ? Math.min(fareFrom.index, Math.max(0, variantStops.length - 2))
+      : 0
+  const handleFareViewModeChange = React.useCallback(
+    (mode: FareViewMode) => {
+      if (activeFareKey) setFareView({ listKey: activeFareKey, mode })
+    },
+    [activeFareKey]
+  )
+  const handleFareFromChange = React.useCallback(
+    (index: number) => {
+      if (activeFareKey) setFareFrom({ listKey: activeFareKey, index })
+    },
+    [activeFareKey]
+  )
 
   React.useEffect(() => {
     if (!currentVariant) return
@@ -1887,108 +1895,30 @@ export function KmbRoutesView({
                           {t('common.routeDetails')}
                         </DialogTitle>
                       </DialogHeader>
-                      {variantsForRoute.length > 1 && (
-                        <div
-                          className="flex gap-2 overflow-x-auto pb-1"
-                          role="group"
-                          aria-label={t('common.route')}
-                        >
-                          {variantsForRoute.map((v) => (
-                            <button
-                              key={v.key}
-                              type="button"
-                              aria-pressed={currentVariant?.key === v.key}
-                              onClick={() => setSelectedVariant(v)}
-                              className={cn(
-                                'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                                currentVariant?.key === v.key
-                                  ? 'bg-primary-container text-on-primary-container'
-                                  : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
-                              )}
-                            >
-                              <span>
-                                {v.bound === 'I'
-                                  ? t('common.inbound')
-                                  : v.bound === 'O'
-                                    ? t('common.outbound')
-                                    : v.bound || null}
-                              </span>
-                              <span>
-                                {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
-                                  co: v.co,
-                                  lang,
-                                })}
-                              </span>
-                              {showOperatorInVariants && (
-                                <span className="m3-label-sm uppercase opacity-80">
-                                  {normalizeOperator(v.co)}
-                                </span>
-                              )}
-                              {v.serviceType !== '1' ? (
-                                <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
-                              ) : null}
-                            </button>
-                          ))}
-                        </div>
-                      )}
                       {currentVariant && (
-                        <div className="flex items-center gap-2">
-                          <div className="min-w-0 flex-1">
-                            <RouteScheduleSection
-                              variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
-                              lang={lang}
-                            />
-                          </div>
-                          <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
-                        </div>
+                        <RouteControlBar
+                          lang={lang}
+                          options={variantsForRoute}
+                          currentKey={currentVariant.key}
+                          onSelect={setSelectedVariant}
+                          showOperator={showOperatorInVariants}
+                          variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
+                          onSave={onSaveRoute}
+                        />
                       )}
                     </div>
                   </DialogContent>
                 </Dialog>
               </div>
-              {variantsForRoute.length > 1 && (
-                <div
-                  className="mt-1.5 flex gap-2 overflow-x-auto pb-1"
-                  role="group"
-                  aria-label={t('common.route')}
-                >
-                  {variantsForRoute.map((v) => (
-                    <button
-                      key={v.key}
-                      type="button"
-                      aria-pressed={currentVariant?.key === v.key}
-                      onClick={() => setSelectedVariant(v)}
-                      className={cn(
-                        'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                        currentVariant?.key === v.key
-                          ? 'bg-primary-container text-on-primary-container'
-                          : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
-                      )}
-                    >
-                      <span>
-                        {v.bound === 'I'
-                          ? t('common.inbound')
-                          : v.bound === 'O'
-                            ? t('common.outbound')
-                            : v.bound || null}
-                      </span>
-                      <span>
-                        {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
-                          co: v.co,
-                          lang,
-                        })}
-                      </span>
-                      {showOperatorInVariants && (
-                        <span className="m3-label-sm uppercase opacity-80">
-                          {normalizeOperator(v.co)}
-                        </span>
-                      )}
-                      {v.serviceType !== '1' ? (
-                        <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
-                      ) : null}
-                    </button>
-                  ))}
-                </div>
+              {currentVariant && (
+                <RouteVariantSelect
+                  lang={lang}
+                  options={variantsForRoute}
+                  currentKey={currentVariant.key}
+                  onSelect={setSelectedVariant}
+                  showOperator={showOperatorInVariants}
+                  className="mt-1.5 w-full"
+                />
               )}
             </div>
 
@@ -2008,11 +1938,18 @@ export function KmbRoutesView({
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col px-3 pt-2 pb-3">
-              <div className="m3-title-md mb-2 flex shrink-0 items-center gap-2 px-1">
-                <Clock className="h-5 w-5" />
+              <div className="m3-title-md mb-2 flex shrink-0 flex-wrap items-center gap-2 px-1">
+                <Clock className="h-5 w-5 shrink-0" />
                 {t('kmb.routeStops')}
+                {showFareToggle ? (
+                  <FareViewToggle
+                    lang={lang}
+                    mode={fareViewMode}
+                    onChange={handleFareViewModeChange}
+                  />
+                ) : null}
                 {variantStops.length > 0 && (
-                  <span className="text-on-surface-variant m3-body-md ml-auto">
+                  <span className="text-on-surface-variant m3-body-md ml-auto shrink-0">
                     {variantStops.length}
                   </span>
                 )}
@@ -2032,6 +1969,11 @@ export function KmbRoutesView({
                       onSelectStopGroup={onSelectStopGroup}
                       expandedKey={expandedStopKey}
                       onToggleStop={handleToggleStop}
+                      fareTable={fareTable}
+                      fareStopIndices={fareStopIndices}
+                      fareViewMode={fareViewMode}
+                      fareFromIndex={fareFromIndex}
+                      onFareFromChange={handleFareFromChange}
                     />
                   )
                 )}
@@ -2217,99 +2159,31 @@ export function KmbRoutesView({
                   }
                 >
                   {currentVariant && (
-                    <button
-                      type="button"
-                      onClick={() => setControlsOpen((v) => !v)}
-                      aria-expanded={controlsOpen}
-                      className="text-on-surface-variant hover:text-on-surface ui-press inline-flex min-h-[36px] items-center gap-1.5 self-start rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
-                    >
-                      <span className="m3-label-lg">{t('common.routeDetails')}</span>
-                      {!controlsOpen && (
-                        <span className="m3-label-md max-w-44 truncate font-normal">
-                          {formatKmbRouteEndpointName(pickLang(currentVariant.destination, lang), {
-                            co: currentVariant.co,
-                            lang,
-                          })}
-                        </span>
-                      )}
-                      <ChevronDown
-                        className={cn(
-                          'h-4 w-4 transition-transform',
-                          !controlsOpen && '-rotate-90'
-                        )}
-                        aria-hidden
-                      />
-                    </button>
-                  )}
-
-                  {controlsOpen && (
-                    <>
-                      {variantsForRoute.length > 1 && (
-                        <div
-                          className="flex gap-2 overflow-x-auto pb-1"
-                          role="group"
-                          aria-label={t('common.route')}
-                        >
-                          {variantsForRoute.map((v) => (
-                            <button
-                              key={v.key}
-                              type="button"
-                              aria-pressed={currentVariant?.key === v.key}
-                              onClick={() => setSelectedVariant(v)}
-                              className={cn(
-                                'ui-press inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-colors focus-visible:ring-2 focus-visible:outline-none',
-                                currentVariant?.key === v.key
-                                  ? 'bg-primary-container text-on-primary-container'
-                                  : 'bg-surface-container-high text-on-surface-variant hover:text-on-surface'
-                              )}
-                            >
-                              <span>
-                                {v.bound === 'I'
-                                  ? t('common.inbound')
-                                  : v.bound === 'O'
-                                    ? t('common.outbound')
-                                    : v.bound || null}
-                              </span>
-                              <span>
-                                {formatKmbRouteEndpointName(pickLang(v.destination, lang), {
-                                  co: v.co,
-                                  lang,
-                                })}
-                              </span>
-                              {showOperatorInVariants && (
-                                <span className="m3-label-sm uppercase opacity-80">
-                                  {normalizeOperator(v.co)}
-                                </span>
-                              )}
-                              {v.serviceType !== '1' ? (
-                                <span className="m3-label-sm opacity-80">· {v.serviceType}</span>
-                              ) : null}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-
-                      {currentVariant && (
-                        <div className="flex items-center gap-2">
-                          <div className="min-w-0 flex-1">
-                            <RouteScheduleSection
-                              variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
-                              lang={lang}
-                            />
-                          </div>
-                          <FavoriteSaveButton onSave={onSaveRoute} label={t('common.save')} />
-                        </div>
-                      )}
-                    </>
+                    <RouteControlBar
+                      lang={lang}
+                      options={variantsForRoute}
+                      currentKey={currentVariant.key}
+                      onSelect={setSelectedVariant}
+                      showOperator={showOperatorInVariants}
+                      variantKey={`${normalizeOperator(currentVariant.co)}|${currentVariant.route.toUpperCase()}|${currentVariant.bound}|${currentVariant.serviceType}`}
+                      onSave={onSaveRoute}
+                    />
                   )}
                 </RouteDrilldown>
 
                 <div className="mt-3 flex min-h-0 flex-1 flex-col overflow-hidden">
-                  <div className="m3-title-md mb-3 flex items-center gap-2">
-                    <Clock className="h-5 w-5" />
+                  <div className="m3-title-md mb-3 flex flex-wrap items-center gap-2">
+                    <Clock className="h-5 w-5 shrink-0" />
                     {t('kmb.routeStops')}
+                    {showFareToggle ? (
+                      <FareViewToggle
+                        lang={lang}
+                        mode={fareViewMode}
+                        onChange={handleFareViewModeChange}
+                      />
+                    ) : null}
                     {variantStops.length > 0 && (
-                      <span className="text-on-surface-variant m3-body-md ml-auto">
+                      <span className="text-on-surface-variant m3-body-md ml-auto shrink-0">
                         {variantStops.length}
                       </span>
                     )}
@@ -2329,6 +2203,11 @@ export function KmbRoutesView({
                           onSelectStopGroup={onSelectStopGroup}
                           expandedKey={expandedStopKey}
                           onToggleStop={handleToggleStop}
+                          fareTable={fareTable}
+                          fareStopIndices={fareStopIndices}
+                          fareViewMode={fareViewMode}
+                          fareFromIndex={fareFromIndex}
+                          onFareFromChange={handleFareFromChange}
                         />
                       )
                     )}

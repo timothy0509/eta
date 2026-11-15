@@ -419,7 +419,7 @@ function RailPill({
       style={{ backgroundColor: color, ...style }}
     >
       {label ? (
-        <div className="sticky top-16 flex justify-center">
+        <div className="sticky top-0 flex justify-center">
           <span
             aria-hidden
             className={cn(

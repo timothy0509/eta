@@ -43,6 +43,7 @@ import {
   searchStopsByContains,
   type StopSearchIndex,
 } from '@/components/eta/panes/kmb-stop-search'
+import { buildStopRoutesIndex } from '@/lib/eta/stop-routes'
 import { useKmbSave } from '@/components/eta/panes/use-kmb-save'
 import { setKmbPaneState, usePaneStore } from '@/lib/eta/pane-store'
 import {
@@ -224,6 +225,13 @@ export function KmbPane({
   // ========== OPTIMIZATION: Build route-stop index once when routeStops load ==========
   const routeStopIndex = React.useMemo<RouteStopIndex>(() => {
     return buildRouteStopIndex(kmbRouteStops)
+  }, [kmbRouteStops])
+
+  // stopId -> distinct routes for the search dropdown badges. Built once per
+  // route-stop load (the table itself is cached 24h in memory + IDB), so
+  // per-keystroke lookups are Map gets, not fetches or rescans.
+  const stopRoutesById = React.useMemo(() => {
+    return buildStopRoutesIndex(kmbRouteStops)
   }, [kmbRouteStops])
 
   // Compute all stop IDs for the current query
@@ -1079,6 +1087,7 @@ export function KmbPane({
         lang={lang}
         stops={kmbStops}
         searchIndex={stopSearchIndex}
+        stopRoutesById={stopRoutesById}
         value={kmbDraftStopSelection}
         onSelectStop={(stop) => {
           setKmbDraftStopSelection({ type: 'stop', stopId: stop.stopId })

@@ -7,19 +7,19 @@ export type StopRouteBadge = {
 }
 
 type RouteStopRow = {
-  stopId: string
-  route: string
-  co: string
+  stopId?: string | null
+  route?: string | null
+  co?: string | null
 }
 
 /** Max badges shown on a stop row. More than this collapses to 4 + a +N pill. */
-export const MAX_STOP_ROUTE_BADGES = 5
+const MAX_STOP_ROUTE_BADGES = 5
 
 /** Visible badges when the list overflows; the rest fold into the +N pill. */
-export const MAX_VISIBLE_BEFORE_OVERFLOW = 4
+const MAX_VISIBLE_BEFORE_OVERFLOW = 4
 
 function compareBadges(a: StopRouteBadge, b: StopRouteBadge): number {
-  return a.route.localeCompare(b.route, undefined, { numeric: true }) || a.co.localeCompare(b.co)
+  return a.route.localeCompare(b.route, 'en', { numeric: true }) || a.co.localeCompare(b.co, 'en')
 }
 
 /**
@@ -30,7 +30,10 @@ function compareBadges(a: StopRouteBadge, b: StopRouteBadge): number {
  * Each list is sorted for stable display. The returned Map is the cache:
  * build it once per route-stop load and reuse it for every keystroke.
  */
-export function buildStopRoutesIndex(rows: RouteStopRow[]): Map<string, StopRouteBadge[]> {
+export function buildStopRoutesIndex(
+  rows: RouteStopRow[],
+  preferred?: string | null
+): Map<string, StopRouteBadge[]> {
   const operatorsByStopRoute = new Map<string, Map<string, Set<string>>>()
   for (const row of rows) {
     const stopId = String(row.stopId ?? '').trim()
@@ -59,7 +62,7 @@ export function buildStopRoutesIndex(rows: RouteStopRow[]): Map<string, StopRout
   for (const [stopId, byRoute] of operatorsByStopRoute) {
     const badges: StopRouteBadge[] = []
     for (const [route, operators] of byRoute) {
-      badges.push({ route, co: pickPrimaryOperator(operators) })
+      badges.push({ route, co: pickPrimaryOperator(operators, preferred) })
     }
     badges.sort(compareBadges)
     out.set(stopId, badges)
@@ -74,7 +77,8 @@ export function buildStopRoutesIndex(rows: RouteStopRow[]): Map<string, StopRout
  */
 export function getRoutesForStopIds(
   index: Map<string, StopRouteBadge[]>,
-  stopIds: string[]
+  stopIds: string[],
+  preferred?: string | null
 ): StopRouteBadge[] {
   const byRoute = new Map<string, StopRouteBadge>()
   for (const stopId of stopIds) {
@@ -89,7 +93,7 @@ export function getRoutesForStopIds(
       if (existing.co !== badge.co) {
         byRoute.set(badge.route, {
           route: badge.route,
-          co: pickPrimaryOperator([existing.co, badge.co]),
+          co: pickPrimaryOperator([existing.co, badge.co], preferred),
         })
       }
     }

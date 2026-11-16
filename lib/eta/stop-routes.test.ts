@@ -38,6 +38,12 @@ describe('buildStopRoutesIndex', () => {
     expect(index.get('S1')).toEqual([{ route: '102', co: 'kmb' }])
   })
 
+  it('honors the preferred joint operator', () => {
+    const rows = [row('S1', '102', 'ctb'), row('S1', '102', 'kmb')]
+    expect(buildStopRoutesIndex(rows, 'ctb').get('S1')).toEqual([{ route: '102', co: 'ctb' }])
+    expect(buildStopRoutesIndex(rows).get('S1')).toEqual([{ route: '102', co: 'kmb' }])
+  })
+
   it('returns an empty map for empty input', () => {
     expect(buildStopRoutesIndex([]).size).toBe(0)
   })
@@ -57,6 +63,7 @@ describe('getRoutesForStopIds', () => {
   it('resolves one operator when grouped stops disagree', () => {
     const index = buildStopRoutesIndex([row('S1', '102', 'ctb'), row('S2', '102', 'kmb')])
     expect(getRoutesForStopIds(index, ['S1', 'S2'])).toEqual([{ route: '102', co: 'kmb' }])
+    expect(getRoutesForStopIds(index, ['S1', 'S2'], 'ctb')).toEqual([{ route: '102', co: 'ctb' }])
   })
 
   it('ignores unknown stop ids', () => {

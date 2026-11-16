@@ -32,6 +32,8 @@ type Props = {
   onSelectContains: (query: string) => void
   /** stopId -> distinct routes, built once per route-stop load in the pane. */
   stopRoutesById?: Map<string, StopRouteBadge[]>
+  /** Settings operator for joint-route badge colors. */
+  preferredJointOperator?: string | null
 }
 
 type StopComputed = {
@@ -229,15 +231,17 @@ function groupStopsByName(stops: StopComputed[]): StopGroup[] {
 function StopRouteBadges({
   stopIds,
   stopRoutesById,
+  preferredJointOperator,
 }: {
   stopIds: string[]
   stopRoutesById?: Map<string, StopRouteBadge[]>
+  preferredJointOperator?: string | null
 }) {
   if (!stopRoutesById) return null
   // Unioning a few stops' badge lists is microseconds; the full-table
   // index above is what stays memoized.
   const { visible, overflow } = sliceStopRoutesForDisplay(
-    getRoutesForStopIds(stopRoutesById, stopIds)
+    getRoutesForStopIds(stopRoutesById, stopIds, preferredJointOperator)
   )
   if (!visible.length) return null
   return (
@@ -268,6 +272,7 @@ export function StopSearch({
   onSelectContains,
   searchIndex,
   stopRoutesById,
+  preferredJointOperator,
 }: Props & { searchIndex?: StopSearchIndex }) {
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
@@ -576,6 +581,7 @@ export function StopSearch({
             <StopRouteBadges
               stopIds={group.stops.map((s) => s.stopId)}
               stopRoutesById={stopRoutesById}
+              preferredJointOperator={preferredJointOperator}
             />
           </div>
         </CommandItem>

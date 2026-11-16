@@ -229,10 +229,11 @@ export function KmbPane({
 
   // stopId -> distinct routes for the search dropdown badges. Built once per
   // route-stop load (the table itself is cached 24h in memory + IDB), so
-  // per-keystroke lookups are Map gets, not fetches or rescans.
+  // per-keystroke lookups are Map gets, not fetches or rescans. Joint
+  // badges follow the settings operator, matching the rest of the app.
   const stopRoutesById = React.useMemo(() => {
-    return buildStopRoutesIndex(kmbRouteStops)
-  }, [kmbRouteStops])
+    return buildStopRoutesIndex(kmbRouteStops, jointRouteInfoOperator)
+  }, [kmbRouteStops, jointRouteInfoOperator])
 
   // Compute all stop IDs for the current query
   const allStopIds = React.useMemo(() => {
@@ -1088,6 +1089,7 @@ export function KmbPane({
         stops={kmbStops}
         searchIndex={stopSearchIndex}
         stopRoutesById={stopRoutesById}
+        preferredJointOperator={jointRouteInfoOperator}
         value={kmbDraftStopSelection}
         onSelectStop={(stop) => {
           setKmbDraftStopSelection({ type: 'stop', stopId: stop.stopId })

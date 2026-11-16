@@ -245,7 +245,7 @@ function StopRouteBadges({
   )
   if (!visible.length) return null
   return (
-    <div className="mt-1.5 flex flex-wrap gap-1">
+    <div className="flex max-w-[55%] flex-wrap content-start justify-end gap-1">
       {visible.map((badge) => (
         <RouteBadge
           key={`${badge.co}:${badge.route}`}
@@ -578,12 +578,12 @@ export function StopSearch({
             <div className="text-on-surface-variant m3-label-md truncate">
               {group.displaySecondary}
             </div>
-            <StopRouteBadges
-              stopIds={group.stops.map((s) => s.stopId)}
-              stopRoutesById={stopRoutesById}
-              preferredJointOperator={preferredJointOperator}
-            />
           </div>
+          <StopRouteBadges
+            stopIds={group.stops.map((s) => s.stopId)}
+            stopRoutesById={stopRoutesById}
+            preferredJointOperator={preferredJointOperator}
+          />
         </CommandItem>
       ))}
     </StationSearchCombobox>

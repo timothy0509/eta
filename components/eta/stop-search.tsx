@@ -245,7 +245,7 @@ function StopRouteBadges({
   )
   if (!visible.length) return null
   return (
-    <div className="flex max-w-[55%] flex-wrap content-start justify-end gap-1">
+    <div className="flex basis-full flex-wrap gap-1 pl-12 sm:mt-0 sm:max-w-[55%] sm:basis-auto sm:content-start sm:justify-end sm:pl-0">
       {visible.map((badge) => (
         <RouteBadge
           key={`${badge.co}:${badge.route}`}
@@ -563,7 +563,7 @@ export function StopSearch({
           key={group.id}
           value={group.id}
           onSelect={() => handleSelectGroup(group)}
-          className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
+          className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex flex-wrap items-start gap-3 rounded-2xl px-3 py-3 sm:flex-nowrap"
         >
           <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
             <MapPin className="h-4 w-4" />

@@ -5,10 +5,16 @@ import * as React from 'react'
 
 import { CommandItem } from '@/components/ui/command'
 import { StationSearchCombobox } from '@/components/eta/station-search-combobox'
+import { RouteBadge } from '@/components/eta/route-badge'
 import type { StopSearchIndex } from '@/components/eta/panes/kmb-stop-search'
 import { formatKmbStopSecondary, parseKmbStopNameCached } from '@/lib/eta/kmb-stop-name'
 import { useTranslations } from '@/lib/eta/i18n'
 import { pickLang } from '@/lib/eta/pick-lang'
+import {
+  getRoutesForStopIds,
+  sliceStopRoutesForDisplay,
+  type StopRouteBadge,
+} from '@/lib/eta/stop-routes'
 import { isKmbStop } from '@/lib/eta/types'
 import type { KmbStopSearchItem, UiLanguage } from '@/lib/eta/types'
 
@@ -24,6 +30,10 @@ type Props = {
   onSelectStop: (stop: KmbStopSearchItem) => void
   onSelectStops: (stops: KmbStopSearchItem[]) => void
   onSelectContains: (query: string) => void
+  /** stopId -> distinct routes, built once per route-stop load in the pane. */
+  stopRoutesById?: Map<string, StopRouteBadge[]>
+  /** Settings operator for joint-route badge colors. */
+  preferredJointOperator?: string | null
 }
 
 type StopComputed = {
@@ -218,6 +228,41 @@ function groupStopsByName(stops: StopComputed[]): StopGroup[] {
   return result
 }
 
+function StopRouteBadges({
+  stopIds,
+  stopRoutesById,
+  preferredJointOperator,
+}: {
+  stopIds: string[]
+  stopRoutesById?: Map<string, StopRouteBadge[]>
+  preferredJointOperator?: string | null
+}) {
+  if (!stopRoutesById) return null
+  // Unioning a few stops' badge lists is microseconds; the full-table
+  // index above is what stays memoized.
+  const { visible, overflow } = sliceStopRoutesForDisplay(
+    getRoutesForStopIds(stopRoutesById, stopIds, preferredJointOperator)
+  )
+  if (!visible.length) return null
+  return (
+    <div className="flex basis-full flex-wrap gap-1 pl-12 sm:mt-0 sm:max-w-[55%] sm:basis-auto sm:content-start sm:justify-end sm:pl-0">
+      {visible.map((badge) => (
+        <RouteBadge
+          key={`${badge.co}:${badge.route}`}
+          route={badge.route}
+          company={badge.co}
+          size="sm"
+        />
+      ))}
+      {overflow > 0 ? (
+        <span className="border-outline-variant/30 bg-surface-container text-on-surface-variant inline-flex shrink-0 items-center justify-center rounded-lg border px-2 py-0.5 text-xs font-semibold whitespace-nowrap">
+          +{overflow}
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 export function StopSearch({
   lang,
   stops,
@@ -226,6 +271,8 @@ export function StopSearch({
   onSelectStops,
   onSelectContains,
   searchIndex,
+  stopRoutesById,
+  preferredJointOperator,
 }: Props & { searchIndex?: StopSearchIndex }) {
   const [open, setOpen] = React.useState(false)
   const [query, setQuery] = React.useState('')
@@ -516,12 +563,12 @@ export function StopSearch({
           key={group.id}
           value={group.id}
           onSelect={() => handleSelectGroup(group)}
-          className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex items-start gap-3 rounded-2xl px-3 py-3"
+          className="m3-body-md hover:bg-surface-container-high data-[selected=true]:bg-primary-container/20 mx-2 flex flex-wrap items-start gap-3 rounded-2xl px-3 py-3 sm:flex-nowrap"
         >
           <div className="bg-surface text-on-surface-variant mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full">
             <MapPin className="h-4 w-4" />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="text-on-surface truncate font-medium">
               {group.displayName}{' '}
               {group.displayCodes ? (
@@ -532,6 +579,11 @@ export function StopSearch({
               {group.displaySecondary}
             </div>
           </div>
+          <StopRouteBadges
+            stopIds={group.stops.map((s) => s.stopId)}
+            stopRoutesById={stopRoutesById}
+            preferredJointOperator={preferredJointOperator}
+          />
         </CommandItem>
       ))}
     </StationSearchCombobox>

@@ -43,6 +43,7 @@ import {
 } from '@/lib/eta/client'
 import type { Company } from 'hk-bus-eta'
 
+import { filterRouteStopEtas, type RouteVariantRef } from '@/lib/eta/route-eta-filter'
 import { getEtaDbIndexes } from '@/lib/eta/direct/eta-db'
 import {
   findRouteEntryByFamily,
@@ -1480,23 +1481,32 @@ export function KmbRoutesView({
 
   React.useEffect(() => {
     if (!currentVariant) return
+    const variantSnapshot = currentVariant
+    const variantRef: RouteVariantRef = {
+      co: variantSnapshot.co,
+      route: variantSnapshot.route,
+      bound: variantSnapshot.bound,
+      serviceType: variantSnapshot.serviceType,
+      gtfsId: String(variantSnapshot.gtfsId ?? '').trim(),
+      jointVariantKey: String(variantSnapshot.jointVariantKey ?? '').trim(),
+    }
     let cancelled = false
+    const controller = new AbortController()
     const load = async () => {
-      const co = normalizeOperator(currentVariant.co)
-      const variantKey = variantBaseKey(currentVariant)
-      const currentGtfsId = String(currentVariant.gtfsId ?? '').trim()
+      const co = normalizeOperator(variantSnapshot.co)
+      const currentGtfsId = variantRef.gtfsId
       const allRouteStops = routeStopsAll.length > 0 ? routeStopsAll : await fetchKmbRouteStops()
-      if (cancelled) return
-      const currentJointKey = String(currentVariant.jointVariantKey ?? '').trim()
+      if (cancelled || controller.signal.aborted) return
+      const currentJointKey = variantRef.jointVariantKey
       const variantOperators = new Set(
-        (currentVariant.operators ?? [currentVariant.co]).map((op) => normalizeOperator(op))
+        (variantSnapshot.operators ?? [variantSnapshot.co]).map((op) => normalizeOperator(op))
       )
       const primaryFiltered = allRouteStops.filter(
         (rs) =>
-          rs.route === currentVariant.route &&
+          rs.route === variantSnapshot.route &&
           normalizeOperator(rs.co) === co &&
-          rs.bound === currentVariant.bound &&
-          rs.serviceType === currentVariant.serviceType &&
+          rs.bound === variantSnapshot.bound &&
+          rs.serviceType === variantSnapshot.serviceType &&
           (currentGtfsId ? String(rs.gtfsId ?? '').trim() === currentGtfsId : true)
       )
       // Joint detail keeps the primary stop order, then appends partner-only
@@ -1509,7 +1519,7 @@ export function KmbRoutesView({
         )
         const extras = allRouteStops.filter(
           (rs) =>
-            rs.route === currentVariant.route &&
+            rs.route === variantSnapshot.route &&
             String(rs.jointVariantKey ?? '').trim() === currentJointKey &&
             variantOperators.has(normalizeOperator(rs.co)) &&
             normalizeOperator(rs.co) !== co &&
@@ -1520,7 +1530,7 @@ export function KmbRoutesView({
         // rows sharing a primary group are the same physical stop.
         const pairedExtras = allRouteStops.filter(
           (rs) =>
-            rs.route === currentVariant.route &&
+            rs.route === variantSnapshot.route &&
             String(rs.jointVariantKey ?? '').trim() === currentJointKey &&
             variantOperators.has(normalizeOperator(rs.co)) &&
             normalizeOperator(rs.co) !== co &&
@@ -1532,33 +1542,40 @@ export function KmbRoutesView({
         filtered = primaryFiltered.sort((a, b) => a.seq - b.seq)
       }
       setVariantStops(filtered)
-      setStopsVariantKey(currentVariant.key)
+      setStopsVariantKey(variantSnapshot.key)
+      // Stale ETAs from the previous variant must not linger while the new
+      // variant loads in batches below.
+      setEtas({})
 
-      const stopIds = filtered.map((rs) => rs.stopId)
+      // One stop id per physical stop; circular routes list some twice.
+      const stopIds = Array.from(new Set(filtered.map((rs) => rs.stopId)))
       if (!stopIds.length) return
-      const res = await fetchKmbStopEtas(stopIds, {
-        routeFilter: currentVariant.route,
-        includeFares: false,
-        preferredJointOperator: jointRouteInfoOperator,
-      })
-      if (cancelled) return
-      const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
-      for (const [stopId, entries] of Object.entries(res.byStopId)) {
-        filteredEtas[stopId] = (entries ?? []).filter((eta) => {
-          // Joint rows carry a shared variant identity across operators.
-          if (currentJointKey) return eta.jointVariantKey === currentJointKey
-          if (variantBaseKey(eta) !== variantKey) return false
-          // Same-number regions share the number filter: keep only the
-          // selected region's gtfsId when the variant has one.
-          if (!currentGtfsId) return true
-          return String(eta.gtfsId ?? '').trim() === currentGtfsId
+      // Batches stream in: the first cards fill after the first batch
+      // instead of waiting for the slowest of all stops.
+      const batchSize = 5
+      for (let i = 0; i < stopIds.length; i += batchSize) {
+        if (cancelled || controller.signal.aborted) return
+        const chunk = stopIds.slice(i, i + batchSize)
+        const res = await fetchKmbStopEtas(chunk, {
+          routeFilter: variantSnapshot.route,
+          route: variantSnapshot.route,
+          serviceType: variantSnapshot.serviceType,
+          includeFares: false,
+          preferredJointOperator: jointRouteInfoOperator,
+          signal: controller.signal,
         })
+        if (cancelled || controller.signal.aborted) return
+        const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
+        for (const [stopId, entries] of Object.entries(res.byStopId)) {
+          filteredEtas[stopId] = filterRouteStopEtas(entries ?? [], variantRef)
+        }
+        setEtas((prev) => ({ ...prev, ...filteredEtas }))
       }
-      setEtas(filteredEtas)
     }
     void load().catch(() => {})
     return () => {
       cancelled = true
+      controller.abort()
     }
   }, [currentVariant, routeStopsAll, jointRouteInfoOperator])
 

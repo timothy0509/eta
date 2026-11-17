@@ -316,6 +316,10 @@ export async function fetchKmbStopEtas(
   stopIds: string[],
   options?: {
     routeFilter?: string
+    /** Single-route hint narrowing per-stop candidate fetches to this route. */
+    route?: string
+    /** Service-type hint narrowing per-stop candidate fetches. */
+    serviceType?: string
     includeFares?: boolean
     preferredJointOperator?: string | null
     signal?: AbortSignal
@@ -374,7 +378,12 @@ export async function fetchKmbStopEtas(
     uniqueStopIds,
     concurrency,
     async (stopId) => {
-      const cacheKey = kmbStopEtaKey(stopId, options?.preferredJointOperator)
+      const cacheKey = kmbStopEtaKey(
+        stopId,
+        options?.preferredJointOperator,
+        options?.route,
+        options?.serviceType
+      )
 
       const cachedValue = await getCachedValue<KmbEtaEntryWithLeg[]>({
         key: cacheKey,
@@ -386,6 +395,8 @@ export async function fetchKmbStopEtas(
         fetcher: async () => {
           const results = await fetchKmbEtasForStop({
             stopId,
+            route: options?.route,
+            serviceType: options?.serviceType,
             language: 'tc',
             preferredOperator: options?.preferredJointOperator,
             signal,

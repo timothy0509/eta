@@ -17,6 +17,14 @@ describe('kmbStopEtaKey', () => {
     expect(kmbStopEtaKey('S1')).toBe('stop-eta:S1')
     expect(kmbStopEtaKey('S1', null)).toBe('stop-eta:S1')
   })
+
+  it('keys route-scoped fetches apart from the full stop fetch', () => {
+    const full = kmbStopEtaKey('S1')
+    const scoped = kmbStopEtaKey('S1', null, '213M', '1')
+    expect(scoped).not.toBe(full)
+    expect(kmbStopEtaKey('S1', null, '213m', '1')).toBe(scoped)
+    expect(kmbStopEtaKey('S1', null, '213M', '2')).not.toBe(scoped)
+  })
 })
 
 describe('kmb static cache layers', () => {

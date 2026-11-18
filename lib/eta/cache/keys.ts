@@ -25,13 +25,17 @@ export function kmbStopEtaKey(
     .toLowerCase()
   const base = preferred ? `stop-eta:${stop}:${preferred}` : `stop-eta:${stop}`
   // Narrowed per-variant fetches cache separately from the full stop fetch
-  // so a route-scoped result never serves an unscoped reader.
+  // so a route-scoped result never serves an unscoped reader. Segments are
+  // named so a numeric route (e.g. "1") can never collide with a service
+  // type, and absent hints leave no empty `:` segments behind.
   const routeSegment = String(route ?? '')
     .trim()
     .toUpperCase()
   const serviceSegment = String(serviceType ?? '').trim()
-  if (!routeSegment && !serviceSegment) return base
-  return `${base}:${routeSegment}:${serviceSegment}`
+  let key = base
+  if (routeSegment) key += `:r:${routeSegment}`
+  if (serviceSegment) key += `:s:${serviceSegment}`
+  return key
 }
 
 export function mtrScheduleKey(params: { line: string; sta: string; lang: string }): string {

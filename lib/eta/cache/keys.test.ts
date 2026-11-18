@@ -25,6 +25,21 @@ describe('kmbStopEtaKey', () => {
     expect(kmbStopEtaKey('S1', null, '213m', '1')).toBe(scoped)
     expect(kmbStopEtaKey('S1', null, '213M', '2')).not.toBe(scoped)
   })
+
+  it('keys single-hint scopes without empty segments', () => {
+    const routeOnly = kmbStopEtaKey('S1', null, '213M', null)
+    expect(routeOnly).toContain('213M')
+    expect(routeOnly.endsWith(':')).toBe(false)
+    expect(routeOnly).not.toBe(kmbStopEtaKey('S1'))
+    const serviceOnly = kmbStopEtaKey('S1', null, null, '1')
+    expect(serviceOnly).not.toBe(kmbStopEtaKey('S1'))
+    expect(serviceOnly).not.toContain('::')
+    expect(routeOnly).not.toBe(serviceOnly)
+  })
+
+  it('does not confuse a numeric route with a service type', () => {
+    expect(kmbStopEtaKey('S1', null, '1', null)).not.toBe(kmbStopEtaKey('S1', null, null, '1'))
+  })
 })
 
 describe('kmb static cache layers', () => {

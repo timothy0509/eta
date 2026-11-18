@@ -1,11 +1,12 @@
-import type { Company } from 'hk-bus-eta'
+import type { AppCompany } from '@/lib/eta/companies'
+import { resolveAppCompany } from '@/lib/eta/companies'
 
 import type { KmbEtaEntryWithLeg } from '@/lib/eta/direct/kmb'
 import { routeVariantKey, variantKeyMatches } from '@/lib/eta/eta-db-index'
 
 /** Minimal variant identity for post-fetch ETA filtering in route views. */
 export type RouteVariantRef = {
-  co: string
+  co: AppCompany
   route: string
   bound: string
   serviceType: string
@@ -32,7 +33,7 @@ export function filterRouteStopEtas(
     return entries.filter((eta) => String(eta.jointVariantKey ?? '').trim() === jointKey)
   }
   const filterKey = routeVariantKey({
-    co: variant.co as Company,
+    co: variant.co,
     route: variant.route,
     bound: variant.bound,
     serviceType: variant.serviceType,
@@ -40,7 +41,7 @@ export function filterRouteStopEtas(
   })
   return entries.filter((eta) => {
     const entryKey = routeVariantKey({
-      co: String(eta.co ?? 'kmb') as Company,
+      co: resolveAppCompany(eta.co, eta.route),
       route: (eta.route ?? '').toUpperCase(),
       bound: eta.dir,
       serviceType: String(eta.service_type),

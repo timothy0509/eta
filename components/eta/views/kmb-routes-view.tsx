@@ -1483,7 +1483,7 @@ export function KmbRoutesView({
     if (!currentVariant) return
     const variantSnapshot = currentVariant
     const variantRef: RouteVariantRef = {
-      co: variantSnapshot.co,
+      co: resolveAppCompany(variantSnapshot.co, variantSnapshot.route),
       route: variantSnapshot.route,
       bound: variantSnapshot.bound,
       serviceType: variantSnapshot.serviceType,
@@ -1556,20 +1556,27 @@ export function KmbRoutesView({
       for (let i = 0; i < stopIds.length; i += batchSize) {
         if (cancelled || controller.signal.aborted) return
         const chunk = stopIds.slice(i, i + batchSize)
-        const res = await fetchKmbStopEtas(chunk, {
-          routeFilter: variantSnapshot.route,
-          route: variantSnapshot.route,
-          serviceType: variantSnapshot.serviceType,
-          includeFares: false,
-          preferredJointOperator: jointRouteInfoOperator,
-          signal: controller.signal,
-        })
-        if (cancelled || controller.signal.aborted) return
-        const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
-        for (const [stopId, entries] of Object.entries(res.byStopId)) {
-          filteredEtas[stopId] = filterRouteStopEtas(entries ?? [], variantRef)
+        try {
+          const res = await fetchKmbStopEtas(chunk, {
+            routeFilter: variantSnapshot.route,
+            route: variantSnapshot.route,
+            serviceType: variantSnapshot.serviceType,
+            includeFares: false,
+            preferredJointOperator: jointRouteInfoOperator,
+            signal: controller.signal,
+          })
+          if (cancelled || controller.signal.aborted) return
+          const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
+          for (const [stopId, entries] of Object.entries(res.byStopId)) {
+            filteredEtas[stopId] = filterRouteStopEtas(entries ?? [], variantRef)
+          }
+          setEtas((prev) => ({ ...prev, ...filteredEtas }))
+        } catch {
+          if (cancelled || controller.signal.aborted) return
+          // One failed batch must not starve the rest: its stops keep
+          // empty ETAs and the next chunk still loads.
+          continue
         }
-        setEtas((prev) => ({ ...prev, ...filteredEtas }))
       }
     }
     void load().catch(() => {})

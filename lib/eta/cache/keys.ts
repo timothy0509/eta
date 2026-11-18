@@ -13,12 +13,29 @@ export const KMB_ROUTES_CACHE_KEY = 'kmb:routes:v4'
 export const KMB_ROUTE_STOPS_MAPPED_CACHE_KEY = 'kmb:route-stops:mapped:v5'
 export const KMB_ROUTES_MAPPED_CACHE_KEY = 'kmb:routes:mapped:v5'
 
-export function kmbStopEtaKey(stopId: string, preferredOperator?: string | null): string {
+export function kmbStopEtaKey(
+  stopId: string,
+  preferredOperator?: string | null,
+  route?: string | null,
+  serviceType?: string | null
+): string {
   const stop = String(stopId ?? '').trim()
   const preferred = String(preferredOperator ?? '')
     .trim()
     .toLowerCase()
-  return preferred ? `stop-eta:${stop}:${preferred}` : `stop-eta:${stop}`
+  const base = preferred ? `stop-eta:${stop}:${preferred}` : `stop-eta:${stop}`
+  // Narrowed per-variant fetches cache separately from the full stop fetch
+  // so a route-scoped result never serves an unscoped reader. Segments are
+  // named so a numeric route (e.g. "1") can never collide with a service
+  // type, and absent hints leave no empty `:` segments behind.
+  const routeSegment = String(route ?? '')
+    .trim()
+    .toUpperCase()
+  const serviceSegment = String(serviceType ?? '').trim()
+  let key = base
+  if (routeSegment) key += `:r:${routeSegment}`
+  if (serviceSegment) key += `:s:${serviceSegment}`
+  return key
 }
 
 export function mtrScheduleKey(params: { line: string; sta: string; lang: string }): string {

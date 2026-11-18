@@ -310,6 +310,10 @@ export async function fetchKmbStopEtas(
   stopIds: string[],
   options?: {
     routeFilter?: string
+    /** Single-route hint narrowing per-stop candidate fetches to this route. */
+    route?: string
+    /** Service-type hint narrowing per-stop candidate fetches. */
+    serviceType?: string
     signal?: AbortSignal
     includeFares?: boolean
     preferredJointOperator?: string | null
@@ -318,6 +322,11 @@ export async function fetchKmbStopEtas(
   const keyPayload = {
     stopIds: normalizeStopIdsKey(stopIds),
     routeFilter: normalizeRouteFilterKey(options?.routeFilter),
+    route:
+      String(options?.route ?? '')
+        .trim()
+        .toUpperCase() || undefined,
+    serviceType: String(options?.serviceType ?? '').trim() || undefined,
     includeFares: options?.includeFares ?? false,
     preferredJointOperator: options?.preferredJointOperator ?? null,
   }
@@ -329,6 +338,8 @@ export async function fetchKmbStopEtas(
     async () =>
       fetchKmbStopEtasDirect(stopIds, {
         routeFilter: options?.routeFilter,
+        route: keyPayload.route,
+        serviceType: keyPayload.serviceType,
         includeFares: options?.includeFares ?? false,
         preferredJointOperator: options?.preferredJointOperator,
         signal: options?.signal,

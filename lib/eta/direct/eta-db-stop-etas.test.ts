@@ -511,6 +511,166 @@ describe('fetchKmbEtasForStop hybrid', () => {
   })
 })
 
+describe('fetchKmbEtasForStop route narrowing', () => {
+  it('narrows official stop-eta rows by route and serviceType', async () => {
+    const entry213M1 = makeRouteEntry({
+      route: '213M',
+      co: ['kmb'],
+      bound: { kmb: 'O' },
+      stops: { kmb: ['SHARED'] },
+      serviceType: '1',
+    })
+    const entry213M2 = makeRouteEntry({
+      route: '213M',
+      co: ['kmb'],
+      bound: { kmb: 'O' },
+      stops: { kmb: ['SHARED'] },
+      serviceType: '2',
+    })
+    const ctbEntry = makeRouteEntry({
+      route: '99',
+      co: ['ctb'],
+      bound: { ctb: 'O' },
+      stops: { ctb: ['SHARED'] },
+    })
+    const indexes = emptyIndexes()
+    indexes.stopRoutesIndex.set('SHARED', [
+      {
+        stopId: 'SHARED',
+        co: 'kmb',
+        route: '213M',
+        bound: 'O',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '',
+        region: '',
+      },
+      {
+        stopId: 'SHARED',
+        co: 'kmb',
+        route: '213M',
+        bound: 'O',
+        serviceType: '2',
+        seq: 1,
+        gtfsId: '',
+        region: '',
+      },
+      {
+        stopId: 'SHARED',
+        co: 'ctb',
+        route: '99',
+        bound: 'O',
+        serviceType: '1',
+        seq: 2,
+        gtfsId: '',
+        region: '',
+      },
+    ])
+    indexes.routeVariantIndex.set('kmb|213M|O|1|', entry213M1)
+    indexes.routeVariantIndex.set('kmb|213M|O|2|', entry213M2)
+    indexes.routeVariantIndex.set('ctb|99|O|1|', ctbEntry)
+
+    const row = (serviceType: number) => ({
+      co: 'KMB',
+      route: '213M',
+      dir: 'O',
+      service_type: serviceType,
+      seq: 1,
+      dest_tc: '安達',
+      dest_sc: '安达',
+      dest_en: 'On Tat',
+      eta_seq: 1,
+      eta: '2026-08-02T15:20:00+08:00',
+      rmk_tc: '',
+      rmk_sc: '',
+      rmk_en: '',
+      data_timestamp: '2026-08-02T15:10:00+08:00',
+    })
+    const fetchOfficialStopEta = vi.fn().mockResolvedValue({ data: [row(1), row(2)] })
+    const fetchVariantEtas = vi.fn()
+
+    const result = await fetchKmbEtasForStop(
+      { stopId: 'SHARED', route: '213M', serviceType: '1', language: 'tc' },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta,
+        fetchVariantEtas,
+      }
+    )
+
+    expect(fetchOfficialStopEta).toHaveBeenCalledTimes(1)
+    // The CTB candidate is narrowed out, so no per-variant fetch runs.
+    expect(fetchVariantEtas).not.toHaveBeenCalled()
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ route: '213M', serviceType: '1' })
+  })
+
+  it('fetches only the requested route variants for non-KMB stops', async () => {
+    const entry5B = makeRouteEntry({
+      route: '5B',
+      co: ['ctb'],
+      bound: { ctb: 'O' },
+      stops: { ctb: ['SHARED'] },
+    })
+    const entry6 = makeRouteEntry({
+      route: '6',
+      co: ['ctb'],
+      bound: { ctb: 'O' },
+      stops: { ctb: ['SHARED'] },
+    })
+    const indexes = emptyIndexes()
+    indexes.stopRoutesIndex.set('SHARED', [
+      {
+        stopId: 'SHARED',
+        co: 'ctb',
+        route: '5B',
+        bound: 'O',
+        serviceType: '1',
+        seq: 0,
+        gtfsId: '',
+        region: '',
+      },
+      {
+        stopId: 'SHARED',
+        co: 'ctb',
+        route: '6',
+        bound: 'O',
+        serviceType: '1',
+        seq: 1,
+        gtfsId: '',
+        region: '',
+      },
+    ])
+    indexes.routeVariantIndex.set('ctb|5B|O|1|', entry5B)
+    indexes.routeVariantIndex.set('ctb|6|O|1|', entry6)
+
+    const fetchOfficialStopEta = vi.fn()
+    const fetchVariantEtas = vi.fn().mockResolvedValue([
+      {
+        eta: '2026-08-02T15:26:00+08:00',
+        dest: { en: 'Kennedy Town', zh: '堅尼地城' },
+        remark: { en: '', zh: '' },
+        co: 'ctb',
+      },
+    ])
+
+    const result = await fetchKmbEtasForStop(
+      { stopId: 'SHARED', route: '5B', serviceType: '1', language: 'tc' },
+      {
+        getIndexes: async () => indexes,
+        fetchOfficialStopEta,
+        fetchVariantEtas,
+      }
+    )
+
+    expect(fetchOfficialStopEta).not.toHaveBeenCalled()
+    expect(fetchVariantEtas).toHaveBeenCalledTimes(1)
+    expect(fetchVariantEtas).toHaveBeenCalledWith(expect.objectContaining({ route: '5B' }))
+    expect(result.length).toBeGreaterThan(0)
+    for (const eta of result) expect(eta.route).toBe('5B')
+  })
+})
+
 describe('fetchLrtEtasForStop cache', () => {
   function makeLrtEntry(overrides?: { route?: string; stops?: string[] }): RouteListEntry {
     return makeRouteEntry({

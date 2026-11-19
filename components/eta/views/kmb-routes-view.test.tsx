@@ -157,11 +157,14 @@ async function settle() {
 }
 
 describe('KmbRoutesView auto-refresh', () => {
+  let visibilityState: 'visible' | 'hidden' = 'visible'
+
   beforeEach(() => {
     vi.useFakeTimers()
+    visibilityState = 'visible'
     Object.defineProperty(document, 'visibilityState', {
       configurable: true,
-      get: () => 'visible',
+      get: () => visibilityState,
     })
     usePaneStore.setState({ kmbStops: [], kmbRouteStops: [] })
     vi.mocked(fetchKmbRoutes).mockResolvedValue([ROUTE_ENTRY] as never)
@@ -189,6 +192,24 @@ describe('KmbRoutesView auto-refresh', () => {
     expect(baseline).toBeGreaterThan(0)
 
     await vi.advanceTimersByTimeAsync(16_000)
+    expect(vi.mocked(fetchKmbStopEtas).mock.calls.length).toBeGreaterThan(baseline)
+  })
+
+  it('skips interval ticks while hidden but reloads on tab-visible', async () => {
+    render(<KmbRoutesView lang="en" initialSelection={INITIAL_SELECTION} autoRefreshSeconds={15} />)
+    await settle()
+    expect(screen.getAllByText('Chung Wa Road').length).toBeGreaterThan(0)
+
+    const baseline = vi.mocked(fetchKmbStopEtas).mock.calls.length
+    expect(baseline).toBeGreaterThan(0)
+
+    visibilityState = 'hidden'
+    await vi.advanceTimersByTimeAsync(16_000)
+    expect(vi.mocked(fetchKmbStopEtas).mock.calls.length).toBe(baseline)
+
+    visibilityState = 'visible'
+    document.dispatchEvent(new Event('visibilitychange'))
+    await vi.advanceTimersByTimeAsync(500)
     expect(vi.mocked(fetchKmbStopEtas).mock.calls.length).toBeGreaterThan(baseline)
   })
 

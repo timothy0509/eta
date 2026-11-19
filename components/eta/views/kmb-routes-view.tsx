@@ -1555,13 +1555,17 @@ export function KmbRoutesView({
     return () => {
       cancelled = true
     }
-  }, [currentVariant, routeStopsAll, jointRouteInfoOperator])
+  }, [currentVariant, routeStopsAll])
 
   // ETA batches for the current stop list, re-polled on the global refresh
   // setting. Mirrors the MTR/LRT route views: off (0) still loads once and
   // still reloads on tab-visible.
   React.useEffect(() => {
     if (!currentVariant || variantStops.length === 0) return
+    // The stop list resolves async after a variant switch. Skip the window
+    // where it still holds the previous variant's stops so the new
+    // variant never issues one wasted fetch against old stop ids.
+    if (stopsVariantKey !== currentVariant.key) return
     const variantSnapshot = currentVariant
     const variantRef: RouteVariantRef = {
       co: resolveAppCompany(variantSnapshot.co, variantSnapshot.route),
@@ -1641,7 +1645,7 @@ export function KmbRoutesView({
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [currentVariant, variantStops, jointRouteInfoOperator, autoRefreshSeconds])
+  }, [currentVariant, variantStops, stopsVariantKey, jointRouteInfoOperator, autoRefreshSeconds])
 
   const routePath = React.useMemo(() => {
     return variantStops

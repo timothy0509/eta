@@ -46,8 +46,17 @@ function storageMissing(name: 'localStorage' | 'sessionStorage'): boolean {
     if (typeof window === 'undefined') {
       return true
     }
-    const value = window[name]
-    return value === undefined || value === null
+    const value = window[name] as Partial<Storage> | undefined | null
+    // Newer Node majors expose a present-but-unusable storage object under
+    // jsdom (e.g. an object with no setItem), so check usability, not just
+    // presence. On Node 22 jsdom provides the real thing and this is a no-op.
+    return (
+      value === undefined ||
+      value === null ||
+      typeof value.getItem !== 'function' ||
+      typeof value.setItem !== 'function' ||
+      typeof value.removeItem !== 'function'
+    )
   } catch {
     return true
   }

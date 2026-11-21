@@ -103,7 +103,7 @@ const TransitMap = dynamic(
   () => import('@/components/eta/transit-map').then((mod) => mod.TransitMap),
   {
     ssr: false,
-    loading: () => <div className="bg-surface-container ui-shimmer h-56 rounded-2xl" />,
+    loading: () => <div className="bg-surface-container ui-shimmer h-44 rounded-2xl sm:h-56" />,
   }
 )
 
@@ -441,7 +441,9 @@ function RailPill({
 /**
  * Vertical section rail copied from the fare display: a colored pill with a
  * sticky vertical label. Used for both the fare rail and the CTB street rail.
- * Sections without data render the neutral rail with no label.
+ * Sections without data render the neutral rail with no label. Hidden below
+ * sm so the stop list gets the full pane width; the mobile fare/street chips
+ * replace it inline.
  */
 function SectionRail({
   label,
@@ -458,7 +460,7 @@ function SectionRail({
   flip?: boolean
 }) {
   return (
-    <div className="flex w-7 shrink-0 flex-col">
+    <div className="hidden w-7 shrink-0 flex-col sm:flex">
       <RailPill label={label} color={color} flip={flip} className="flex-1" />
     </div>
   )
@@ -776,6 +778,23 @@ function KmbRouteStopList({
     }
   }, [streetSections, sections, sectionColors])
 
+  // Mobile drops the vertical rails so the stop list gets the full pane
+  // width; these chips carry the same fare/street boundaries inline at each
+  // run's first row. Rows are 1-based to match the grid placement above.
+  const runChipsByRow = React.useMemo(() => {
+    const fare = new Map<number, { label: string; color: string }>()
+    const street = new Map<number, { label: string; color: string }>()
+    if (timeline) {
+      for (const run of timeline.fareRuns) {
+        if (run.label !== null) fare.set(run.start, { label: run.label, color: run.color })
+      }
+      for (const run of timeline.streetRuns) {
+        if (run.label !== null) street.set(run.start, { label: run.label, color: run.color })
+      }
+    }
+    return { fare, street }
+  }, [timeline])
+
   const formatStop = (rs: KmbRouteStopLite) => {
     const stop = stopsById.get(rs.stopId)
     const fullName = stop
@@ -850,13 +869,13 @@ function KmbRouteStopList({
         </label>
       ) : null}
       {timeline ? (
-        <div className="grid grid-cols-[auto_auto_minmax(0,1fr)] gap-x-2">
+        <div className="grid grid-cols-[minmax(0,1fr)] gap-x-2 sm:grid-cols-[auto_auto_minmax(0,1fr)]">
           {timeline.fareRuns.map((run) => (
             <RailPill
               key={run.key}
               label={run.label}
               color={run.color}
-              className="w-7"
+              className="hidden w-7 sm:flex"
               style={{ gridColumn: 1, gridRow: `${run.start} / span ${run.span}` }}
             />
           ))}
@@ -866,20 +885,52 @@ function KmbRouteStopList({
               label={run.label}
               color={run.color}
               flip={lang === 'en'}
-              className="w-7"
+              className="hidden w-7 sm:flex"
               style={{ gridColumn: 2, gridRow: `${run.start} / span ${run.span}` }}
             />
           ))}
-          {variantStops.map((rs, index) => (
-            <div
-              key={`${rs.stopId}:${rs.seq}`}
-              id={`kmb-route-stop-${rs.stopId}:${rs.seq}`}
-              className={cn('ui-cv-row min-w-0 scroll-mt-4 py-1', staggerClassForIndex(index))}
-              style={{ gridColumn: 3, gridRow: index + 1 }}
-            >
-              {renderStopCard(rs)}
-            </div>
-          ))}
+          {variantStops.map((rs, index) => {
+            const fareChip = runChipsByRow.fare.get(index + 1)
+            const streetChip = runChipsByRow.street.get(index + 1)
+            return (
+              <div
+                key={`${rs.stopId}:${rs.seq}`}
+                id={`kmb-route-stop-${rs.stopId}:${rs.seq}`}
+                className={cn(
+                  'ui-cv-row min-w-0 scroll-mt-4 py-1 sm:col-start-3',
+                  staggerClassForIndex(index)
+                )}
+                style={{ gridRow: index + 1 }}
+              >
+                {fareChip || streetChip ? (
+                  <div className="flex flex-wrap items-center gap-1.5 pb-1 sm:hidden">
+                    {fareChip ? (
+                      <span
+                        className={cn(
+                          'm3-label-md inline-flex items-center rounded-full px-2 py-0.5 font-semibold',
+                          getReadableForeground(fareChip.color)
+                        )}
+                        style={{ backgroundColor: fareChip.color }}
+                      >
+                        {fareChip.label}
+                      </span>
+                    ) : null}
+                    {streetChip ? (
+                      <span className="bg-surface-container-high text-on-surface-variant m3-label-md inline-flex min-w-0 items-center gap-1.5 rounded-full px-2 py-0.5">
+                        <span
+                          aria-hidden
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ backgroundColor: streetChip.color }}
+                        />
+                        <span className="truncate">{streetChip.label}</span>
+                      </span>
+                    ) : null}
+                  </div>
+                ) : null}
+                {renderStopCard(rs)}
+              </div>
+            )
+          })}
         </div>
       ) : (
         sections.map((section, sectionIdx) => {
@@ -893,6 +944,19 @@ function KmbRouteStopList({
             >
               <SectionRail label={fareLabel} color={sectionColor} />
               <div className="min-w-0 flex-1 space-y-2">
+                {fareLabel ? (
+                  <div className="flex sm:hidden">
+                    <span
+                      className={cn(
+                        'm3-label-md inline-flex items-center rounded-full px-2 py-0.5 font-semibold',
+                        getReadableForeground(sectionColor)
+                      )}
+                      style={{ backgroundColor: sectionColor }}
+                    >
+                      {fareLabel}
+                    </span>
+                  </div>
+                ) : null}
                 {section.items.map((rs, itemIdx) => (
                   <div
                     key={`${rs.stopId}:${rs.seq}`}
@@ -1881,6 +1945,7 @@ export function KmbRoutesView({
                   route={selectedRouteKey.route}
                   company={currentVariant?.co ?? selectedRouteKey.co}
                   size="lg"
+                  className="px-2 text-sm sm:px-3 sm:text-base"
                 />
                 <JointOperatorPill
                   operators={currentVariant?.operators ?? selectedRouteKey.operators}
@@ -1907,9 +1972,9 @@ export function KmbRoutesView({
                       type="button"
                       aria-label={t('common.routeDetails')}
                       title={t('common.routeDetails')}
-                      className="text-on-surface-variant hover:text-on-surface ui-press inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none"
+                      className="text-on-surface-variant hover:text-on-surface ui-press inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition-colors focus-visible:ring-2 focus-visible:outline-none sm:h-11 sm:w-11"
                     >
-                      <Info className="h-5 w-5" aria-hidden />
+                      <Info className="h-4 w-4 sm:h-5 sm:w-5" aria-hidden />
                     </button>
                   </DialogTrigger>
                   <DialogContent className="bg-surface-container-low max-h-[85dvh] gap-0 overflow-y-auto rounded-3xl border-0 p-0">
@@ -1946,7 +2011,7 @@ export function KmbRoutesView({
               )}
             </div>
 
-            <div className="relative h-56 shrink-0 sm:h-64">
+            <div className="relative h-44 shrink-0 sm:h-64">
               <TransitMap
                 lang={lang}
                 center={mapCenter}
@@ -1970,6 +2035,7 @@ export function KmbRoutesView({
                     lang={lang}
                     mode={fareViewMode}
                     onChange={handleFareViewModeChange}
+                    className="order-last basis-full sm:order-none sm:basis-auto"
                   />
                 ) : null}
                 {variantStops.length > 0 && (

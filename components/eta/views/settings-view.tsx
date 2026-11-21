@@ -625,7 +625,6 @@ export function SettingsView({ lang }: Props) {
             role="tabpanel"
             id="settings-panel"
             aria-labelledby={`${desktopActiveId}-tab`}
-            aria-label={desktopActive?.label ?? ''}
           >
             {desktopActive && (
               <Section

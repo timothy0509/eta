@@ -40,13 +40,13 @@ export function FareViewToggle({
           aria-pressed={mode === option.mode}
           onClick={() => onChange(option.mode)}
           className={cn(
-            'ui-press m3-label-md inline-flex min-h-[32px] min-w-0 flex-1 items-center justify-center rounded-full px-2 transition-colors focus-visible:ring-2 focus-visible:outline-none sm:flex-none sm:justify-start sm:px-2.5',
+            'ui-press m3-label-md inline-flex min-h-[32px] items-center rounded-full px-2.5 whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:outline-none',
             mode === option.mode
               ? 'bg-surface-container-lowest text-on-surface font-medium shadow-sm'
               : 'text-on-surface-variant hover:text-on-surface'
           )}
         >
-          <span className="truncate">{option.label}</span>
+          {option.label}
         </button>
       ))}
     </div>

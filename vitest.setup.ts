@@ -59,10 +59,20 @@ function storageMissing(name: 'localStorage' | 'sessionStorage'): boolean {
     ) {
       return true
     }
-    const probeKey = '__vitest-storage-probe__'
-    value.setItem(probeKey, '1')
-    value.removeItem(probeKey)
-    return false
+    const probeKey = `__vitest-storage-probe-${Math.random().toString(36).slice(2)}`
+    try {
+      value.setItem(probeKey, '1')
+      const readable = value.getItem(probeKey) === '1'
+      try {
+        value.removeItem(probeKey)
+      } catch {
+        // A stub that writes but never cleans up is still unusable.
+        return true
+      }
+      return !readable
+    } catch {
+      return true
+    }
   } catch {
     return true
   }

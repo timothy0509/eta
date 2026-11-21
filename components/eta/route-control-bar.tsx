@@ -106,7 +106,7 @@ export function RouteVariantSelect<T extends RouteControlOption>({
           aria-expanded={open}
           title={optionTitle(current, lang, t, showOperator)}
           className={cn(
-            'bg-primary text-on-primary m3-label-lg ui-press inline-flex min-h-[44px] min-w-0 items-center gap-1 rounded-full px-3 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-default disabled:hover:opacity-100 sm:px-3.5',
+            'bg-primary text-on-primary m3-label-lg ui-press inline-flex min-h-[44px] min-w-0 items-center gap-1 rounded-full px-3.5 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none disabled:cursor-default disabled:hover:opacity-100',
             className
           )}
         >

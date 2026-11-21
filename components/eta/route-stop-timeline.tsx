@@ -31,7 +31,7 @@ export function SoonestEtaPill({
 
   if (isArriving) {
     return (
-      <div className="bg-primary-container text-on-primary-container flex items-center gap-1 rounded-full px-2 py-0.5 sm:gap-1.5 sm:px-3 sm:py-1">
+      <div className="bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1">
         <LivePulse />
         <span className="m3-title-md">
           <EtaValue key={display} value={display} />
@@ -106,7 +106,7 @@ export function RouteStopCard({
   const hasSelect = Boolean(onSelect) && Boolean(selectLabel)
 
   const header = (
-    <div className="flex items-center gap-2 sm:gap-3">
+    <div className="flex items-center gap-3">
       {seq !== undefined && seq !== null ? (
         <span
           aria-hidden
@@ -116,14 +116,12 @@ export function RouteStopCard({
         </span>
       ) : null}
       <div className="min-w-0 flex-1 overflow-hidden">
-        <div className="m3-body-md text-on-surface font-medium max-sm:line-clamp-2 sm:truncate">
-          {name}
-        </div>
+        <div className="m3-body-md text-on-surface truncate font-medium">{name}</div>
         {subtitle && !isExpanded ? (
           <div className="text-on-surface-variant m3-label-md truncate font-mono">{subtitle}</div>
         ) : null}
       </div>
-      <div className="flex shrink-0 items-center gap-1.5 sm:gap-1">
+      <div className="flex shrink-0 items-center gap-1">
         {!isExpanded ? eta : null}
         <ChevronDown
           className={cn('text-on-surface-variant ui-chevron h-4 w-4', isExpanded && 'rotate-180')}

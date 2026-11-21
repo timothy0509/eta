@@ -164,7 +164,7 @@ export const TickingSoonestPill = React.memo(function TickingSoonestPill({
     return (
       <span
         className={cn(
-          'bg-primary-container text-on-primary-container flex items-center gap-1 rounded-full px-2 py-0.5 sm:gap-1.5 sm:px-3 sm:py-1',
+          'bg-primary-container text-on-primary-container flex items-center gap-1.5 rounded-full px-3 py-1',
           className
         )}
       >

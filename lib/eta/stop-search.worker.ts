@@ -5,11 +5,12 @@
 
 import type {
   StopGroup,
+  StopSearchDoc,
   StopSearchWorkerEvent,
   StopSearchWorkerInit,
   StopSearchWorkerQuery,
 } from './stop-search-pipeline'
-import { createStopSearchSession } from './stop-search-pipeline'
+import { createStopSearchSession, searchStopGroups } from './stop-search-pipeline'
 
 const scope = self as unknown as {
   postMessage: (msg: StopSearchWorkerEvent) => void
@@ -18,6 +19,8 @@ const scope = self as unknown as {
 
 let activeSession = 0
 let search: ((rawQuery: string) => StopGroup[]) | null = null
+/** Docs of the active session, backing the prefix-only fallback. */
+let activeDocs: StopSearchDoc[] = []
 /** Collapsed to the newest entry: only the latest query matters. */
 const pending: StopSearchWorkerQuery[] = []
 let running = false
@@ -29,7 +32,14 @@ function pump(): void {
   if (!next || next.session !== activeSession) return
   running = true
   try {
-    const groups = search(next.query)
+    // A throwing search must still answer so the UI never waits forever;
+    // the prefix-only fallback matches the old `fuse === null` branch.
+    let groups: StopGroup[]
+    try {
+      groups = search(next.query)
+    } catch {
+      groups = searchStopGroups(activeDocs, null, next.query)
+    }
     if (next.session === activeSession) {
       scope.postMessage({
         type: 'results',
@@ -53,12 +63,23 @@ scope.onmessage = (event: MessageEvent<StopSearchWorkerInit | StopSearchWorkerQu
     search = null
     pending.length = 0
     const docs = msg.docs
+    activeDocs = docs
     const session = msg.session
-    void createStopSearchSession(docs).then((created) => {
-      if (session !== activeSession) return
-      search = created.search
-      pump()
-    })
+    void createStopSearchSession(docs).then(
+      (created) => {
+        if (session !== activeSession) return
+        search = created.search
+        pump()
+      },
+      () => {
+        // Fuse chunk failed to load: install the prefix-only fallback so
+        // queued and future queries are still answered, exactly like the
+        // old `fuse === null` branch.
+        if (session !== activeSession) return
+        search = (rawQuery: string) => searchStopGroups(docs, null, rawQuery)
+        pump()
+      }
+    )
     return
   }
   if (msg.session !== activeSession) return

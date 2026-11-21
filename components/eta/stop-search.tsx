@@ -236,8 +236,11 @@ export function StopSearch({
   const workerSessionRef = React.useRef(0)
   const queryIdRef = React.useRef(0)
   const fallbackSessionRef = React.useRef<Promise<StopSearchSession> | null>(null)
-  // Docs the live worker session was built from, for tagging responses.
-  const docsRef = React.useRef(stopComputed)
+  // Docs captured at send time, for tagging the matching response.
+  const sendDocsRef = React.useRef<StopComputed[]>(stopComputed)
+  // Docs the worker session was last built from. Compared by identity so
+  // reopening with unchanged docs reuses the warm index.
+  const initDocsRef = React.useRef<StopComputed[] | null>(null)
 
   // A response is live when it answers the current query over the current
   // docs. Docs identity is render-safe; the session counter stays inside
@@ -259,7 +262,7 @@ export function StopSearch({
     worker.onmessage = (event: MessageEvent<StopSearchWorkerEvent>) => {
       const msg = event.data
       if (msg.session !== workerSessionRef.current || msg.id !== queryIdRef.current) return
-      setResolved({ query: msg.query, docs: docsRef.current, groups: msg.groups })
+      setResolved({ query: msg.query, docs: sendDocsRef.current, groups: msg.groups })
     }
     return () => {
       worker.terminate()
@@ -267,13 +270,16 @@ export function StopSearch({
     }
   }, [])
 
-  // Rebuild the search session when the docs change. The worker rebuilds
-  // off-thread; the fallback session is rebuilt lazily on the next search
-  // so closed-popover doc loads never block the main thread.
+  // Build the search session lazily on first open and rebuild it when the
+  // docs change while open, matching the old Fuse lifecycle (never built
+  // until the popover opens). The worker builds off-thread; the fallback
+  // session is rebuilt lazily on the next search instead.
   React.useEffect(() => {
+    if (!isOpen) return
+    if (initDocsRef.current === stopComputed) return
+    initDocsRef.current = stopComputed
     workerSessionRef.current += 1
     fallbackSessionRef.current = null
-    docsRef.current = stopComputed
     const worker = workerRef.current
     if (worker) {
       worker.postMessage({
@@ -282,7 +288,7 @@ export function StopSearch({
         docs: stopComputed,
       })
     }
-  }, [stopComputed])
+  }, [stopComputed, isOpen])
 
   // Ask the worker (or the fallback) for full results. Render already
   // shows the interim rows, so this effect only sends and never sets
@@ -294,6 +300,7 @@ export function StopSearch({
     queryIdRef.current += 1
     const id = queryIdRef.current
     const query = debouncedQuery
+    sendDocsRef.current = stopComputed
 
     const worker = workerRef.current
     if (worker) {
@@ -306,10 +313,16 @@ export function StopSearch({
     }
     const docs = stopComputed
     let cancelled = false
-    void fallbackSessionRef.current.then((fallback) => {
+    const answer = (groups: StopGroup[]): void => {
       if (cancelled || session !== workerSessionRef.current || id !== queryIdRef.current) return
-      setResolved({ query, docs, groups: fallback.search(query) })
-    })
+      setResolved({ query, docs, groups })
+    }
+    void fallbackSessionRef.current.then(
+      (fallback) => answer(fallback.search(query)),
+      // Fuse chunk failed to load: prefix-only results, like the old
+      // `fuse === null` branch, so the UI never waits forever.
+      () => answer(searchStopGroups(docs, null, query))
+    )
     return () => {
       cancelled = true
     }

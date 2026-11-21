@@ -47,7 +47,14 @@ function storageMissing(name: 'localStorage' | 'sessionStorage'): boolean {
       return true
     }
     const value = window[name]
-    return value === undefined || value === null
+    if (value === undefined || value === null) {
+      return true
+    }
+    // Node 25's experimental Web Storage can expose a husk object whose
+    // methods are all undefined when the backing-file flag has no valid
+    // path (the mise shim on this machine does exactly that). Treat a
+    // method-less storage as missing so the stand-in replaces it.
+    return typeof value.setItem !== 'function'
   } catch {
     return true
   }

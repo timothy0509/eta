@@ -47,7 +47,22 @@ function storageMissing(name: 'localStorage' | 'sessionStorage'): boolean {
       return true
     }
     const value = window[name]
-    return value === undefined || value === null
+    if (value === undefined || value === null) {
+      return true
+    }
+    // Newer Node majors expose a placeholder Storage global without working
+    // methods; treat it as missing unless a write round-trip succeeds.
+    if (
+      typeof value.getItem !== 'function' ||
+      typeof value.setItem !== 'function' ||
+      typeof value.removeItem !== 'function'
+    ) {
+      return true
+    }
+    const probeKey = '__vitest-storage-probe__'
+    value.setItem(probeKey, '1')
+    value.removeItem(probeKey)
+    return false
   } catch {
     return true
   }

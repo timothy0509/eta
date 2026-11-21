@@ -46,17 +46,33 @@ function storageMissing(name: 'localStorage' | 'sessionStorage'): boolean {
     if (typeof window === 'undefined') {
       return true
     }
-    const value = window[name] as Partial<Storage> | undefined | null
-    // Newer Node majors expose a present-but-unusable storage object under
-    // jsdom (e.g. an object with no setItem), so check usability, not just
-    // presence. On Node 22 jsdom provides the real thing and this is a no-op.
-    return (
-      value === undefined ||
-      value === null ||
+    const value = window[name]
+    if (value === undefined || value === null) {
+      return true
+    }
+    // Newer Node majors expose a placeholder Storage global without working
+    // methods; treat it as missing unless a write round-trip succeeds.
+    if (
       typeof value.getItem !== 'function' ||
       typeof value.setItem !== 'function' ||
       typeof value.removeItem !== 'function'
-    )
+    ) {
+      return true
+    }
+    const probeKey = `__vitest-storage-probe-${Math.random().toString(36).slice(2)}`
+    try {
+      value.setItem(probeKey, '1')
+      const readable = value.getItem(probeKey) === '1'
+      try {
+        value.removeItem(probeKey)
+      } catch {
+        // A stub that writes but never cleans up is still unusable.
+        return true
+      }
+      return !readable
+    } catch {
+      return true
+    }
   } catch {
     return true
   }

@@ -1,6 +1,15 @@
 'use client'
 
-import { ChevronLeft, Clock, Info, Search, X } from 'lucide-react'
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronUp,
+  Clock,
+  Info,
+  Map as MapIcon,
+  Search,
+  X,
+} from 'lucide-react'
 import dynamic from 'next/dynamic'
 import * as React from 'react'
 
@@ -1458,6 +1467,9 @@ export function KmbRoutesView({
     variantStops
   )
   const activeFareKey = currentVariant?.key ?? null
+  // Compact (non-desktop) drilldown only: hiding the map gives the stop list
+  // the full column height. Persists across route switches within the pane.
+  const [mapCollapsed, setMapCollapsed] = React.useState(false)
   const [fareView, setFareView] = React.useState<{
     listKey: string
     mode: FareViewMode
@@ -2007,20 +2019,42 @@ export function KmbRoutesView({
               )}
             </div>
 
-            <div className="relative h-56 shrink-0 sm:h-64">
-              <TransitMap
-                lang={lang}
-                center={mapCenter}
-                markers={mapMarkers}
-                polylines={mapPolylines}
-                zoom={13}
-                fitKey={currentVariant?.key ?? null}
-                focusPoint={focusPoint}
-                onMarkerClick={handleMapStopClick}
-                ariaLabel={t('common.mapInteractive')}
-                className="h-full w-full rounded-none"
-              />
-            </div>
+            {mapCollapsed ? (
+              <button
+                type="button"
+                onClick={() => setMapCollapsed(false)}
+                aria-expanded={false}
+                className="bg-surface-container-lowest ui-press mx-3 mt-2 inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--outline-variant)]/40 px-4 transition-colors focus-visible:ring-2 focus-visible:outline-none"
+              >
+                <MapIcon className="h-5 w-5 shrink-0" aria-hidden />
+                <span className="m3-label-lg">{t('kmb.showMap')}</span>
+                <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
+              </button>
+            ) : (
+              <div className="relative h-56 shrink-0 sm:h-64">
+                <TransitMap
+                  lang={lang}
+                  center={mapCenter}
+                  markers={mapMarkers}
+                  polylines={mapPolylines}
+                  zoom={13}
+                  fitKey={currentVariant?.key ?? null}
+                  focusPoint={focusPoint}
+                  onMarkerClick={handleMapStopClick}
+                  ariaLabel={t('common.mapInteractive')}
+                  className="h-full w-full rounded-none"
+                />
+                <button
+                  type="button"
+                  onClick={() => setMapCollapsed(true)}
+                  aria-expanded={true}
+                  className="bg-surface-container-high/95 text-on-surface ui-press absolute right-2 bottom-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-full py-2 pr-4 pl-3 shadow-md transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
+                >
+                  <ChevronUp className="h-4 w-4 shrink-0" aria-hidden />
+                  <span className="m3-label-lg">{t('kmb.hideMap')}</span>
+                </button>
+              </div>
+            )}
 
             <div className="flex min-h-0 flex-1 flex-col px-3 pt-2 pb-3">
               <div className="m3-title-md mb-2 flex shrink-0 flex-wrap items-center gap-2 px-1">

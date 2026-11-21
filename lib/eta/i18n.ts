@@ -233,6 +233,8 @@ const kmb: Record<string, TranslationEntry> = {
   fareUpTo: { en: 'Up to {stop}', tc: '至 {stop}', sc: '至 {stop}' },
   showList: { en: 'Show list', tc: '顯示列表', sc: '显示列表' },
   hideList: { en: 'Hide list', tc: '隱藏列表', sc: '隐藏列表' },
+  showMap: { en: 'Show map', tc: '顯示地圖', sc: '显示地图' },
+  hideMap: { en: 'Hide map', tc: '隱藏地圖', sc: '隐藏地图' },
   operatorsSelected: { en: '{count} operators', tc: '{count} 個營辦商', sc: '{count} 个营办商' },
   selectedStops: { en: 'Selected stops', tc: '已選車站', sc: '已选车站' },
   bus: { en: 'Bus', tc: '巴士', sc: '巴士' },

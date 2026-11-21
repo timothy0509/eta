@@ -3,27 +3,46 @@
 import { ThemeProvider } from 'next-themes'
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 
-import { fireEvent, render, screen } from '@/lib/test-utils'
+import { act, fireEvent, render, screen } from '@/lib/test-utils'
 import { SettingsView } from '@/components/eta/views/settings-view'
 import { useAppStore } from '@/lib/store'
 
 // The settings view switches layouts at the Tailwind lg breakpoint via
-// matchMedia. jsdom has no real media queries, so tests pick a side.
-function mockMatchMedia(desktop: boolean) {
+// matchMedia. jsdom has no real media queries, so tests pick a side and can
+// flip it to exercise breakpoint-change behavior.
+const DESKTOP_QUERY = '(min-width: 1024px)'
+
+type MediaController = {
+  setDesktop: (desktop: boolean) => void
+}
+
+function mockMatchMedia(desktop = false): MediaController {
+  let matchesDesktop = desktop
+  const changeHandlers: Array<() => void> = []
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     configurable: true,
     value: vi.fn().mockImplementation((query: string) => ({
-      matches: desktop && query === '(min-width: 1024px)',
+      get matches() {
+        return matchesDesktop && query === DESKTOP_QUERY
+      },
       media: query,
       onchange: null,
       addListener: vi.fn(),
       removeListener: vi.fn(),
-      addEventListener: vi.fn(),
+      addEventListener: (_event: string, handler: () => void) => {
+        if (query === DESKTOP_QUERY) changeHandlers.push(handler)
+      },
       removeEventListener: vi.fn(),
       dispatchEvent: vi.fn(),
     })),
   })
+  return {
+    setDesktop(value: boolean) {
+      matchesDesktop = value
+      for (const handler of changeHandlers) handler()
+    },
+  }
 }
 
 function renderSettings() {
@@ -94,6 +113,20 @@ describe('SettingsView', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Saved data' }))
     expect(screen.queryByRole('region', { name: 'Saved data' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Clear search history' })).toBeNull()
+  })
+
+  it('falls back to the first category when a collapsed mobile view grows to desktop', () => {
+    const media = mockMatchMedia()
+    renderSettings()
+    // Collapse the open section so no category stays active.
+    fireEvent.click(screen.getByRole('button', { name: 'Appearance' }))
+    expect(screen.queryByRole('region')).toBeNull()
+    // Grow past the lg breakpoint: the desktop panel must not stay empty.
+    act(() => media.setDesktop(true))
+    const appearanceTab = screen.getByRole('tab', { name: 'Appearance' })
+    expect(appearanceTab.getAttribute('aria-selected')).toBe('true')
+    expect(screen.getByRole('heading', { name: 'Appearance' })).not.toBeNull()
+    expect(screen.queryByRole('heading', { name: 'Storage' })).toBeNull()
   })
 
   it('changes the persisted nearby radius', () => {

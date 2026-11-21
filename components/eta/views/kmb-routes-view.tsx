@@ -2024,6 +2024,7 @@ export function KmbRoutesView({
                 type="button"
                 onClick={() => setMapCollapsed(false)}
                 aria-expanded={false}
+                aria-controls="kmb-route-map"
                 className="bg-surface-container-lowest ui-press mx-3 mt-2 inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-2xl border border-dashed border-[var(--outline-variant)]/40 px-4 transition-colors focus-visible:ring-2 focus-visible:outline-none"
               >
                 <MapIcon className="h-5 w-5 shrink-0" aria-hidden />
@@ -2031,7 +2032,7 @@ export function KmbRoutesView({
                 <ChevronDown className="h-4 w-4 shrink-0" aria-hidden />
               </button>
             ) : (
-              <div className="relative h-56 shrink-0 sm:h-64">
+              <div id="kmb-route-map" className="relative h-56 shrink-0 sm:h-64">
                 <TransitMap
                   lang={lang}
                   center={mapCenter}
@@ -2048,6 +2049,7 @@ export function KmbRoutesView({
                   type="button"
                   onClick={() => setMapCollapsed(true)}
                   aria-expanded={true}
+                  aria-controls="kmb-route-map"
                   className="bg-surface-container-high/95 text-on-surface ui-press absolute right-2 bottom-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-full py-2 pr-4 pl-3 shadow-md transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none"
                 >
                   <ChevronUp className="h-4 w-4 shrink-0" aria-hidden />

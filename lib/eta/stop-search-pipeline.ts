@@ -222,10 +222,17 @@ export function searchStopGroups(
   // Fast path: exact and prefix matches run without Fuse so short
   // queries stay instant while the fuzzy index loads.
   const fast = prefixMatches(docs, needle)
-  const hits =
-    fast.length >= 20 || !fuse
-      ? fast.map((item) => ({ item, score: 0 }))
-      : fuse.search(needle).slice(0, 80)
+  let hits: Array<{ item: StopSearchDoc; score?: number }>
+  if (fast.length >= 20 || !fuse) {
+    hits = fast.map((item) => ({ item, score: 0 }))
+  } else {
+    const fused = fuse.search(needle).slice(0, 80)
+    const seen = new Set(fast.map((f) => f.stopId))
+    hits = [
+      ...fast.map((item) => ({ item, score: 0 })),
+      ...fused.filter((h) => !seen.has(h.item.stopId)),
+    ].slice(0, 80)
+  }
 
   // Prefer exact/prefix matches (stop code or name) over generic fuzzy score.
   // This improves accuracy for common user behavior:

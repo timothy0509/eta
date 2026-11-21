@@ -233,6 +233,7 @@ export function StopSearch({
     groups: StopGroup[]
   } | null>(null)
   const workerRef = React.useRef<Worker | null>(null)
+  const [workerFailed, setWorkerFailed] = React.useState(false)
   const workerSessionRef = React.useRef(0)
   const queryIdRef = React.useRef(0)
   const fallbackSessionRef = React.useRef<Promise<StopSearchSession> | null>(null)
@@ -257,16 +258,35 @@ export function StopSearch({
 
   React.useEffect(() => {
     if (typeof Worker === 'undefined') return
-    const worker = new Worker(new URL('../../lib/eta/stop-search.worker', import.meta.url))
+    let worker: Worker | null = null
+    try {
+      worker = new Worker(new URL('../../lib/eta/stop-search.worker', import.meta.url))
+    } catch {
+      // No worker: the search effect below already falls back to the
+      // main-thread session when workerRef is null.
+      workerRef.current = null
+      return
+    }
     workerRef.current = worker
     worker.onmessage = (event: MessageEvent<StopSearchWorkerEvent>) => {
       const msg = event.data
       if (msg.session !== workerSessionRef.current || msg.id !== queryIdRef.current) return
       setResolved({ query: msg.query, docs: sendDocsRef.current, groups: msg.groups })
     }
+    worker.onerror = () => {
+      try {
+        worker?.terminate()
+      } catch {
+        // Termination is best effort; the fallback covers the query.
+      }
+      if (workerRef.current === worker) workerRef.current = null
+      workerSessionRef.current += 1
+      setWorkerFailed(true)
+    }
+    const active = worker
     return () => {
-      worker.terminate()
-      workerRef.current = null
+      active.terminate()
+      if (workerRef.current === active) workerRef.current = null
     }
   }, [])
 
@@ -302,10 +322,16 @@ export function StopSearch({
     const query = debouncedQuery
     sendDocsRef.current = stopComputed
 
-    const worker = workerRef.current
+    const worker = workerFailed ? null : workerRef.current
     if (worker) {
-      worker.postMessage({ type: 'search', session, id, query })
-      return
+      try {
+        worker.postMessage({ type: 'search', session, id, query })
+        return
+      } catch {
+        // Posting failed: drop the dead worker and fall through to the
+        // main-thread session with the same session id.
+        if (workerRef.current === worker) workerRef.current = null
+      }
     }
 
     if (!fallbackSessionRef.current) {
@@ -326,7 +352,7 @@ export function StopSearch({
     return () => {
       cancelled = true
     }
-  }, [isOpen, debouncedQuery, stopComputed])
+  }, [isOpen, debouncedQuery, stopComputed, workerFailed])
 
   const trimmedQuery = query.trim()
   const canSearchContains = trimmedQuery.length >= 3

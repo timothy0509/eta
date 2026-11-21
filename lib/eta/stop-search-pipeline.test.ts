@@ -74,6 +74,21 @@ describe('searchStopGroups', () => {
     expect(ids).toContain('stop:WTT1')
   })
 
+  it('keeps prefix rows when Fuse returns only other rows', () => {
+    const prefixDocs = [
+      doc('P1', 'Abc Central Station', 'Abc Central', 'AB001'),
+      doc('P2', 'Abc East Station', 'Abc East', 'AB002'),
+    ]
+    const distractor = doc('X1', 'Xyz Terminal', 'Xyz', null)
+    const fakeFuse = {
+      search: () => [{ item: distractor, score: 0.1 }],
+    }
+    const groups = searchStopGroups([...prefixDocs, distractor], fakeFuse, 'abc')
+    const stopIds = groups.flatMap((g) => g.stops.map((s) => s.stopId))
+    expect(stopIds).toContain('P1')
+    expect(stopIds).toContain('P2')
+  })
+
   it('matches the no-fuse branch once the prefix page is full', async () => {
     const many = Array.from({ length: 25 }, (_, i) =>
       doc(`AB${i}`, `Abc Stop Number ${i}`, `ABC車站${i}`, `AB${String(i).padStart(3, '0')}`)

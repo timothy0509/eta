@@ -1046,6 +1046,7 @@ export function KmbRoutesView({
   lang,
   initialSelection,
   onSelectStopGroup,
+  autoRefreshSeconds,
 }: {
   lang: UiLanguage
   initialSelection?: {
@@ -1058,6 +1059,8 @@ export function KmbRoutesView({
     routeGroupKey?: string
   }
   onSelectStopGroup?: (payload: { stopIds: string[]; title: string; route: string }) => void
+  /** Honours the global refresh setting, including off (0). */
+  autoRefreshSeconds?: number
 }) {
   const { t, tWithParams } = useTranslations(lang)
   const { routes, loading, error, retry } = useKmbRouteList()
@@ -1479,6 +1482,8 @@ export function KmbRoutesView({
     [activeFareKey]
   )
 
+  // Variant stop list for the current selection. ETA batches live in the
+  // effect below so the list and the refresh loop stay independent.
   React.useEffect(() => {
     if (!currentVariant) return
     const variantSnapshot = currentVariant
@@ -1491,12 +1496,11 @@ export function KmbRoutesView({
       jointVariantKey: String(variantSnapshot.jointVariantKey ?? '').trim(),
     }
     let cancelled = false
-    const controller = new AbortController()
     const load = async () => {
       const co = normalizeOperator(variantSnapshot.co)
       const currentGtfsId = variantRef.gtfsId
       const allRouteStops = routeStopsAll.length > 0 ? routeStopsAll : await fetchKmbRouteStops()
-      if (cancelled || controller.signal.aborted) return
+      if (cancelled) return
       const currentJointKey = variantRef.jointVariantKey
       const variantOperators = new Set(
         (variantSnapshot.operators ?? [variantSnapshot.co]).map((op) => normalizeOperator(op))
@@ -1546,45 +1550,102 @@ export function KmbRoutesView({
       // Stale ETAs from the previous variant must not linger while the new
       // variant loads in batches below.
       setEtas({})
-
-      // One stop id per physical stop; circular routes list some twice.
-      const stopIds = Array.from(new Set(filtered.map((rs) => rs.stopId)))
-      if (!stopIds.length) return
-      // Batches stream in: the first cards fill after the first batch
-      // instead of waiting for the slowest of all stops.
-      const batchSize = 5
-      for (let i = 0; i < stopIds.length; i += batchSize) {
-        if (cancelled || controller.signal.aborted) return
-        const chunk = stopIds.slice(i, i + batchSize)
-        try {
-          const res = await fetchKmbStopEtas(chunk, {
-            routeFilter: variantSnapshot.route,
-            route: variantSnapshot.route,
-            serviceType: variantSnapshot.serviceType,
-            includeFares: false,
-            preferredJointOperator: jointRouteInfoOperator,
-            signal: controller.signal,
-          })
-          if (cancelled || controller.signal.aborted) return
-          const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
-          for (const [stopId, entries] of Object.entries(res.byStopId)) {
-            filteredEtas[stopId] = filterRouteStopEtas(entries ?? [], variantRef)
-          }
-          setEtas((prev) => ({ ...prev, ...filteredEtas }))
-        } catch {
-          if (cancelled || controller.signal.aborted) return
-          // One failed batch must not starve the rest: its stops keep
-          // empty ETAs and the next chunk still loads.
-          continue
-        }
-      }
     }
     void load().catch(() => {})
     return () => {
       cancelled = true
-      controller.abort()
     }
-  }, [currentVariant, routeStopsAll, jointRouteInfoOperator])
+  }, [currentVariant, routeStopsAll])
+
+  // ETA batches for the current stop list, re-polled on the global refresh
+  // setting. Mirrors the MTR/LRT route views: off (0) still loads once and
+  // still reloads on tab-visible.
+  React.useEffect(() => {
+    if (!currentVariant || variantStops.length === 0) return
+    // The stop list resolves async after a variant switch. Skip the window
+    // where it still holds the previous variant's stops so the new
+    // variant never issues one wasted fetch against old stop ids.
+    if (stopsVariantKey !== currentVariant.key) return
+    const variantSnapshot = currentVariant
+    const variantRef: RouteVariantRef = {
+      co: resolveAppCompany(variantSnapshot.co, variantSnapshot.route),
+      route: variantSnapshot.route,
+      bound: variantSnapshot.bound,
+      serviceType: variantSnapshot.serviceType,
+      gtfsId: String(variantSnapshot.gtfsId ?? '').trim(),
+      jointVariantKey: String(variantSnapshot.jointVariantKey ?? '').trim(),
+    }
+    // One stop id per physical stop; circular routes list some twice.
+    const stopIds = Array.from(new Set(variantStops.map((rs) => rs.stopId)))
+    if (stopIds.length === 0) return
+    let cancelled = false
+    const controller = new AbortController()
+    let inFlight = false
+    const load = async () => {
+      if (cancelled || inFlight) return
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return
+      inFlight = true
+      try {
+        // Batches stream in: the first cards fill after the first batch
+        // instead of waiting for the slowest of all stops.
+        const batchSize = 5
+        for (let i = 0; i < stopIds.length; i += batchSize) {
+          if (cancelled || controller.signal.aborted) return
+          const chunk = stopIds.slice(i, i + batchSize)
+          try {
+            const res = await fetchKmbStopEtas(chunk, {
+              routeFilter: variantSnapshot.route,
+              route: variantSnapshot.route,
+              serviceType: variantSnapshot.serviceType,
+              includeFares: false,
+              preferredJointOperator: jointRouteInfoOperator,
+              signal: controller.signal,
+            })
+            if (cancelled || controller.signal.aborted) return
+            const filteredEtas: Record<string, KmbEtaEntryWithLeg[]> = {}
+            for (const [stopId, entries] of Object.entries(res.byStopId)) {
+              filteredEtas[stopId] = filterRouteStopEtas(entries ?? [], variantRef)
+            }
+            setEtas((prev) => ({ ...prev, ...filteredEtas }))
+          } catch {
+            if (cancelled || controller.signal.aborted) return
+            // One failed batch must not starve the rest: its stops keep
+            // empty ETAs and the next chunk still loads.
+            continue
+          }
+        }
+      } finally {
+        inFlight = false
+      }
+    }
+    void load().catch(() => {})
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') void load().catch(() => {})
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    // Follow the global refresh setting instead of a hardcoded interval.
+    // Off (0) still loads once and still reloads on tab-visible.
+    const intervalMs = (autoRefreshSeconds ?? 30) * 1000
+    if (intervalMs <= 0) {
+      return () => {
+        cancelled = true
+        controller.abort()
+        document.removeEventListener('visibilitychange', onVisibility)
+      }
+    }
+    const interval = window.setInterval(() => {
+      void load().catch(() => {})
+    }, intervalMs)
+
+    return () => {
+      cancelled = true
+      controller.abort()
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [currentVariant, variantStops, stopsVariantKey, jointRouteInfoOperator, autoRefreshSeconds])
 
   const routePath = React.useMemo(() => {
     return variantStops

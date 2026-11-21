@@ -525,6 +525,7 @@ export default function HomeClient() {
             lang={lang}
             initialSelection={kmbRouteInitialSelection}
             onSelectStopGroup={onSelectStopGroupFromRoute}
+            autoRefreshSeconds={autoRefreshSeconds}
           />
         </PaneEnter>
       )

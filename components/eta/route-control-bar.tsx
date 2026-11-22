@@ -204,8 +204,8 @@ export function RouteControlBar<T extends RouteControlOption>({
     const bar = barRef.current
     const destination = destinationRef.current
     if (!bar || !destination) return
-    const sides = Array.from(bar.querySelectorAll('[data-collapsible-button]')).map(
-      (el) => el as HTMLElement
+    const sides = Array.from(bar.querySelectorAll('[data-collapsible-button]')).filter(
+      (el): el is HTMLElement => el instanceof HTMLElement
     )
     const spare = destination.clientWidth - destination.scrollWidth
     if (spare < -1) {
@@ -230,11 +230,12 @@ export function RouteControlBar<T extends RouteControlOption>({
   }, [])
 
   // Text changes (variant, language) do not resize the constrained span, so
-  // the observer below would miss them: re-check after every render. Setting
-  // the same value bails out, so a settled bar renders no extra pass.
-  React.useLayoutEffect(() => {
+  // the observer below would miss them: re-check when that identity changes.
+  // A passive effect is enough here. One expanded frame before collapse beats
+  // blocking paint, and there is no server render warning.
+  React.useEffect(() => {
     checkTruncation()
-  })
+  }, [checkTruncation, currentKey, lang, options])
 
   // Window resizes, font loads, and panel width changes resize the bar or the
   // destination span and land here.

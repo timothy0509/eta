@@ -48,6 +48,7 @@ RSTOP_BUS.mdb
 
 .opencode/
 feedback.md
+.scratch/
 
 package-lock.json
 

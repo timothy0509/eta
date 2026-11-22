@@ -24,15 +24,6 @@ export type RouteControlOption = {
   destination: { en: string; tc: string; sc: string }
 }
 
-/**
- * Container width at or below which the timetable and save buttons collapse
- * to icons. The row marks itself `@container`, so this only reacts to the
- * bar's own width, not the viewport. Set above the buttons' full-label width
- * so the switch happens before any squeezing: labels are either fully shown
- * or fully hidden, never truncated.
- */
-const COLLAPSED_LABEL = '@max-[22.5rem]:hidden'
-
 function directionLabel(bound: string, t: (key: string) => string): string | null {
   if (bound === 'I') return t('common.inbound')
   if (bound === 'O') return t('common.outbound')
@@ -72,6 +63,8 @@ type SelectProps<T extends RouteControlOption> = {
   onSelect: (option: T) => void
   showOperator?: boolean
   className?: string
+  /** Ref to the trigger's destination span, so the bar can detect truncation. */
+  destinationRef?: React.Ref<HTMLSpanElement>
 }
 
 /**
@@ -86,6 +79,7 @@ export function RouteVariantSelect<T extends RouteControlOption>({
   onSelect,
   showOperator = false,
   className,
+  destinationRef,
 }: SelectProps<T>) {
   const { t } = useTranslations(lang)
   const [open, setOpen] = React.useState(false)
@@ -111,7 +105,9 @@ export function RouteVariantSelect<T extends RouteControlOption>({
           )}
         >
           {direction ? <span className="shrink-0 font-semibold">{direction}</span> : null}{' '}
-          <span className="min-w-0 flex-1 truncate text-left">{destination}</span>
+          <span ref={destinationRef} className="min-w-0 flex-1 truncate text-left">
+            {destination}
+          </span>
           {suffix ? <span className="m3-label-md shrink-0 opacity-80">{suffix}</span> : null}
           {single ? null : <ChevronDown className="h-4 w-4 shrink-0 opacity-80" aria-hidden />}
         </button>
@@ -174,10 +170,10 @@ type BarProps<T extends RouteControlOption> = SelectProps<T> & {
  * Route-view control row: variant dropdown, timetable, and save buttons at
  * 2:1:1 flex weights. All three start from a zero basis so extra room splits
  * proportionally, while `min-w` floors let a button that needs more room
- * take it when space allows. When the bar itself narrows, the timetable and
- * save labels hide first (icons stay), so the variant button keeps its
- * direction and destination fully visible until the very last resort, when
- * its own destination truncates.
+ * take it when space allows. When the destination would truncate, the
+ * timetable and save labels hide first (icons stay, names kept in
+ * `aria-label`), freeing that width for the variant button on any screen
+ * size. Only when the destination still does not fit does it truncate.
  */
 export function RouteControlBar<T extends RouteControlOption>({
   lang,
@@ -190,28 +186,92 @@ export function RouteControlBar<T extends RouteControlOption>({
   className,
 }: BarProps<T>) {
   const { t } = useTranslations(lang)
+  const barRef = React.useRef<HTMLDivElement>(null)
+  const destinationRef = React.useRef<HTMLSpanElement>(null)
+  const sideWidthsRef = React.useRef<number[]>([])
+  const compactRef = React.useRef(false)
+  const [compact, setCompact] = React.useState(false)
+
+  // Collapse the side buttons to icons exactly while the destination
+  // overflows: hiding the labels and dropping the 1-share flex claim hands
+  // that width to the variant button, down to the 44px min-width floor.
+  // Labels come back once the destination would still fit with that exact
+  // width handed back, so excess room re-expands the buttons on any screen
+  // size. Width conservation makes this unable to flap: collapsing grows
+  // spare by precisely the reclaimed amount, which is what the restore test
+  // then demands on top, so a freshly collapsed bar never qualifies.
+  const checkTruncation = React.useCallback(() => {
+    const bar = barRef.current
+    const destination = destinationRef.current
+    if (!bar || !destination) return
+    const sides = Array.from(bar.querySelectorAll('[data-collapsible-button]')).map(
+      (el) => el as HTMLElement
+    )
+    const spare = destination.clientWidth - destination.scrollWidth
+    if (spare < -1) {
+      // Record the expanded widths before collapsing: once compact, these
+      // read the 44px floor instead.
+      if (!compactRef.current && sides.length > 0) {
+        sideWidthsRef.current = sides.map((el) => el.offsetWidth)
+      }
+      compactRef.current = true
+      setCompact(true)
+      return
+    }
+    const current = sides.map((el) => el.offsetWidth)
+    const reclaimed = sideWidthsRef.current.reduce(
+      (total, expanded, i) => total + Math.max(0, expanded - (current[i] ?? 0)),
+      0
+    )
+    if (spare > reclaimed + 1) {
+      compactRef.current = false
+      setCompact(false)
+    }
+  }, [])
+
+  // Text changes (variant, language) do not resize the constrained span, so
+  // the observer below would miss them: re-check after every render. Setting
+  // the same value bails out, so a settled bar renders no extra pass.
+  React.useLayoutEffect(() => {
+    checkTruncation()
+  })
+
+  // Window resizes, font loads, and panel width changes resize the bar or the
+  // destination span and land here.
+  React.useEffect(() => {
+    if (typeof ResizeObserver === 'undefined') return
+    const bar = barRef.current
+    const destination = destinationRef.current
+    if (!bar || !destination) return
+    const observer = new ResizeObserver(checkTruncation)
+    observer.observe(bar)
+    observer.observe(destination)
+    return () => observer.disconnect()
+  }, [checkTruncation])
+
   return (
-    <div className={cn('@container flex min-w-0 items-center gap-2', className)}>
+    <div ref={barRef} className={cn('flex min-w-0 items-center gap-2', className)}>
       <RouteVariantSelect
         lang={lang}
         options={options}
         currentKey={currentKey}
         onSelect={onSelect}
         showOperator={showOperator}
+        destinationRef={destinationRef}
         className="min-w-0 flex-[2_1_0%]"
       />
       <RouteScheduleSection
         variantKey={variantKey}
         lang={lang}
         bar
-        labelClassName={COLLAPSED_LABEL}
-        className="min-w-11 flex-[1_1_0%] overflow-hidden"
+        labelClassName={compact ? 'hidden' : undefined}
+        className={cn('min-w-11 overflow-hidden', compact ? 'flex-none' : 'flex-[1_1_0%]')}
       />
       <FavoriteSaveButton
         onSave={onSave}
         label={t('common.save')}
-        className="min-w-11 flex-[1_1_0%] overflow-hidden px-3"
-        labelClassName={cn('whitespace-nowrap', COLLAPSED_LABEL)}
+        className={cn('min-w-11 overflow-hidden px-3', compact ? 'flex-none' : 'flex-[1_1_0%]')}
+        labelClassName={cn('whitespace-nowrap', compact && 'hidden')}
       />
     </div>
   )

@@ -11,7 +11,7 @@ type Props = {
   label: string
   disabled?: boolean
   className?: string
-  /** Extra classes for the label wrapper, e.g. container-query collapsing. */
+  /** Extra classes for the label wrapper, e.g. hiding it for icon-only. */
   labelClassName?: string
 }
 
@@ -26,6 +26,8 @@ export function FavoriteSaveButton({ onSave, label, disabled, className, labelCl
   return (
     <Button
       size="sm"
+      data-collapsible-button
+      aria-label={label}
       className={cn('ui-press min-h-[44px] rounded-full shadow-sm', className)}
       disabled={disabled}
       onClick={() => {

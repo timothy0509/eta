@@ -49,7 +49,7 @@ export function RouteScheduleSection({
    * label, no chevron) instead of the full-width details row.
    */
   bar?: boolean
-  /** Extra classes for the trigger label, e.g. container-query collapsing. */
+  /** Extra classes for the trigger label, e.g. hiding it for icon-only. */
   labelClassName?: string
 }) {
   const index = useHeadwayIndex()
@@ -80,7 +80,9 @@ export function RouteScheduleSection({
       <button
         type="button"
         disabled
+        data-collapsible-button
         aria-disabled="true"
+        aria-label={t('kmb.scheduleTitle')}
         title={t('kmb.scheduleNoData')}
         className={cn(
           'bg-primary-container text-on-primary-container m3-label-lg inline-flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 overflow-hidden rounded-full px-3 opacity-40 focus-visible:outline-none',
@@ -99,6 +101,8 @@ export function RouteScheduleSection({
         {bar ? (
           <button
             type="button"
+            data-collapsible-button
+            aria-label={t('kmb.scheduleTitle')}
             className={cn(
               'bg-primary-container text-on-primary-container m3-label-lg ui-press inline-flex min-h-[44px] min-w-0 items-center justify-center gap-1.5 overflow-hidden rounded-full px-3 transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:outline-none',
               className
